@@ -180,7 +180,7 @@ function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIp
   // Yakuhai
   for(const g of tris){
     const k=g.k[0];
-    if(DRAGONS.has(k)){const nm={5:'Haku',6:'Hatsu',7:'Chun'}[getVal(k)];yl.push({name:nm,jp:{5:'白',6:'発',7:'中'}[getVal(k)],han:1});han++;}
+    if(DRAGONS.has(k)){const nm={5:'Haku',6:'Hatsu',7:'Chun'}[getVal(k)];yl.push({name:nm,jp:{5:'白',6:'發',7:'中'}[getVal(k)],han:1});han++;}
     if(k===`${seatWind}z`){yl.push({name:'Seat Wind',jp:'自風',han:1});han++;}
     if(k===`${roundWind}z`&&seatWind!==roundWind){yl.push({name:'Round Wind',jp:'場風',han:1});han++;}
   }

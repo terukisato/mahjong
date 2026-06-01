@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3QgeD0iMSIgeT0iMSIgd2lkdGg9IjMwIiBoZWlnaHQ9IjMwIiByeD0iNCIgZmlsbD0iI2Y4ZWRkOCIvPjxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIzMCIgaGVpZ2h0PSIzMCIgcng9IjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2M4YTg0YSIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48cmVjdCB4PSIxIiB5PSIyNyIgd2lkdGg9IjMwIiBoZWlnaHQ9IjQiIHJ4PSIyIiBmaWxsPSIjN2E1YzEwIi8+PHRleHQgeD0iMTYiIHk9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0ic2VyaWYiIGZvbnQtc2l6ZT0iMjIiIGZvbnQtd2VpZ2h0PSI5MDAiIGZpbGw9IiNjMDIwMjAiPuS4rTwvdGV4dD48L3N2Zz4=">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>雀魂 Mahjong Online</title>
+<title>雀心 Mahjong Online</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Cinzel+Decorative:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -189,12 +189,46 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .bpas{background:rgba(30,30,30,.9);color:rgba(245,237,216,.65);border:1px solid rgba(255,255,255,.15);}
 
 /* Chat */
-.chat-bar{position:fixed;bottom:56px;right:8px;display:flex;gap:5px;z-index:70;}
-.chat-input{width:clamp(120px,35vw,180px);padding:5px 8px;background:rgba(5,15,8,.9);border:1px solid rgba(201,168,76,.25);border-radius:8px;color:var(--cream);font-size:12px;outline:none;font-family:'Noto Sans JP',sans-serif;}
+/* Toggle button */
+.chat-toggle{position:fixed;bottom:60px;right:10px;width:36px;height:36px;
+  background:rgba(26,107,69,.85);border:1px solid var(--jl);border-radius:50%;
+  color:var(--cream);font-size:16px;cursor:pointer;z-index:75;
+  display:none;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(0,0,0,.5);transition:all .2s;}
+.chat-toggle:hover{background:rgba(42,158,103,.9);}
+.chat-toggle.has-unread{border-color:#ffdd44;box-shadow:0 0 10px rgba(255,221,68,.5);}
+
+/* History panel */
+.chat-panel{position:fixed;bottom:60px;right:10px;width:clamp(240px,40vw,320px);
+  background:rgba(5,14,8,.96);border:1px solid rgba(201,168,76,.3);border-radius:12px;
+  z-index:74;display:none;flex-direction:column;overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,.7);}
+.chat-panel.open{display:flex;}
+.chat-panel-header{padding:8px 12px;background:rgba(26,107,69,.3);border-bottom:1px solid rgba(201,168,76,.2);
+  font-size:11px;letter-spacing:2px;color:var(--gold);font-family:'Cinzel Decorative',serif;
+  display:flex;justify-content:space-between;align-items:center;}
+.chat-close{background:none;border:none;color:rgba(245,237,216,.5);font-size:16px;cursor:pointer;line-height:1;padding:0 2px;}
+.chat-close:hover{color:var(--cream);}
+.chat-history{flex:1;overflow-y:auto;max-height:200px;padding:8px;display:flex;flex-direction:column;gap:5px;}
+.chat-history::-webkit-scrollbar{width:4px;}
+.chat-history::-webkit-scrollbar-track{background:transparent;}
+.chat-history::-webkit-scrollbar-thumb{background:rgba(201,168,76,.3);border-radius:2px;}
+.chat-entry{display:flex;flex-direction:column;gap:1px;}
+.chat-entry-who{font-size:9px;letter-spacing:1px;font-weight:700;}
+.chat-entry-text{font-size:12px;color:var(--cream);background:rgba(255,255,255,.05);
+  border-radius:6px;padding:4px 8px;line-height:1.4;word-break:break-word;}
+.chat-entry-time{font-size:8px;color:rgba(245,237,216,.3);margin-top:1px;}
+.chat-input-row{display:flex;gap:5px;padding:8px;border-top:1px solid rgba(201,168,76,.15);}
+.chat-input{flex:1;padding:5px 8px;background:rgba(0,0,0,.4);border:1px solid rgba(201,168,76,.2);
+  border-radius:7px;color:var(--cream);font-size:12px;outline:none;font-family:'Noto Sans JP',sans-serif;}
 .chat-input:focus{border-color:var(--jl);}
-.chat-send{padding:0 10px;height:28px;background:rgba(26,107,69,.7);border:1px solid var(--jl);border-radius:8px;color:var(--cream);font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;}
-.chat-send:hover{background:rgba(42,158,103,.7);}
-.chat-float{position:fixed;left:50%;transform:translateX(-50%);z-index:180;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:8px;bottom:140px;width:92%;}
+.chat-send{padding:0 10px;height:28px;background:rgba(26,107,69,.7);border:1px solid var(--jl);
+  border-radius:7px;color:var(--cream);font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;}
+.chat-send:hover{background:rgba(42,158,103,.9);}
+
+/* Floating big message (unchanged) */
+.chat-float{position:fixed;left:50%;transform:translateX(-50%);z-index:180;pointer-events:none;
+  display:flex;flex-direction:column;align-items:center;gap:8px;bottom:140px;width:92%;}
 .chat-msg{font-family:'Noto Serif JP',serif;font-size:clamp(20px,5vw,44px);font-weight:900;
   text-shadow:0 0 20px rgba(201,168,76,.9),0 2px 8px rgba(0,0,0,.9),0 0 40px rgba(201,168,76,.5);
   text-align:center;letter-spacing:2px;animation:chatFloat 5s ease forwards;white-space:nowrap;line-height:1.2;}
@@ -228,7 +262,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
 <!-- ════ LOBBY ════ -->
 <div class="screen" id="s-lobby">
-  <div class="logo"><div class="logo-k">雀 魂</div><div class="logo-s">Mahjong Online</div></div>
+  <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Mahjong Online</div></div>
   <div class="card">
     <h2>Enter the Hall</h2>
     <div class="ig"><label>Your Name</label><input type="text" id="iname" placeholder="Player" maxlength="20" value="Player"></div>
@@ -249,7 +283,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 <!-- ════ GAME ════ -->
 <div class="screen hidden" id="s-game">
   <div class="topbar">
-    <div class="tb-title">雀魂 Mahjong</div>
+    <div class="tb-title">雀心 Mahjong</div>
     <div class="tb-st" id="tst">—</div>
     <button class="bl" id="bleave">✕ Leave</button>
   </div>
@@ -321,12 +355,23 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
   <div class="actbar" id="actbar"><span class="hint">Waiting...</span></div>
 
-  <!-- Chat bar -->
-  <div class="chat-bar" id="chat-bar" style="display:none;">
-    <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off">
-    <button class="chat-send" id="chat-send">Send</button>
+  <!-- Chat toggle button -->
+  <button class="chat-toggle" id="chat-toggle" title="Chat">💬</button>
+
+  <!-- Chat panel with history -->
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-panel-header">
+      <span>Chat</span>
+      <button class="chat-close" id="chat-close">✕</button>
+    </div>
+    <div class="chat-history" id="chat-history"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off">
+      <button class="chat-send" id="chat-send">Send</button>
+    </div>
   </div>
-  <!-- Floating chat messages container -->
+
+  <!-- Floating big chat messages -->
   <div class="chat-float" id="chat-float"></div>
 </div>
 
@@ -343,50 +388,166 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
 <script>
 // ══ SVG Tile Renderer ═══════════════════════════════════════════════════════
+// ══ Japanese Mahjong Tile Renderer ═══════════════════════════════════════════
+// Man: large kanji + 萬 label  (red)
+// Pin: concentric circle rings arranged in patterns  (blue/red)
+// Sou: distinct bamboo sticks per value with unique color bands  (green + accent)
+//      1-sou = special bird on stick design
+// Honor: large kanji, colour-coded
+
 const MK=['','一','二','三','四','五','六','七','八','九'];
-const HK={1:'東',2:'南',3:'西',4:'北',5:'白',6:'発',7:'中'};
-const HC={1:'#1a5fa0',2:'#1a5fa0',3:'#1a5fa0',4:'#1a5fa0',5:'#555',6:'#1a7a30',7:'#c02020'};
 
 function tsvg(t,w,h){
   if(!t) return '';
-  if(t.s==='m'){
-    const fs=Math.round(h*.45),sf=Math.round(h*.18);
-    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><text x="${w/2}" y="${h*.28}" text-anchor="middle" font-family="'Noto Serif JP'" font-size="${sf}" font-weight="700" fill="#c02020">萬</text><text x="${w/2}" y="${h*.82}" text-anchor="middle" font-family="'Noto Serif JP'" font-size="${fs}" font-weight="900" fill="#c02020">${MK[t.v]}</text></svg>`;
-  }
-  if(t.s==='p'){
-    const dots=pdots(t.v,w,h),r=Math.round(Math.min(w,h)*(t.v===1?.28:t.v<=4?.17:.145));
-    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${dots.map(([cx,cy])=>`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1457a0" stroke-width="${Math.max(1.5,r*.28)}"/><circle cx="${cx}" cy="${cy}" r="${r*.42}" fill="#c02020"/>`).join('')}</svg>`;
-  }
-  if(t.s==='s'){
-    if(t.v===1) return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><rect x="${w*.42}" y="${h*.15}" width="${w*.16}" height="${h*.7}" rx="3" fill="#1a7a30"/><ellipse cx="${w*.5}" cy="${h*.28}" rx="${w*.22}" ry="${h*.14}" fill="#c02020"/></svg>`;
-    const rods=srods(t.v,w,h),bw=w*.18,bh=h*(t.v<=3?.7:t.v<=6?.42:.3);
-    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${rods.map(([rx,ry])=>`<rect x="${rx-bw/2}" y="${ry-bh/2}" width="${bw}" height="${bh}" rx="${bw*.35}" fill="none" stroke="#1a7a30" stroke-width="${bw*.18}"/><rect x="${rx-bw*.28}" y="${ry-bh*.3}" width="${bw*.56}" height="${bh*.6}" rx="${bw*.2}" fill="#1a7a30" opacity="0.35"/>`).join('')}</svg>`;
-  }
-  if(t.s==='z'){
-    if(t.v===5) return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><rect x="${w*.15}" y="${h*.15}" width="${w*.7}" height="${h*.7}" rx="3" fill="none" stroke="#555" stroke-width="2.5"/></svg>`;
-    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><text x="${w/2}" y="${h*.73}" text-anchor="middle" font-family="'Noto Serif JP'" font-size="${Math.round(h*.5)}" font-weight="900" fill="${HC[t.v]}">${HK[t.v]}</text></svg>`;
-  }
+  const s=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
+  const e=`</svg>`;
+  if(t.s==='m') return s+svgMan(t.v,w,h)+e;
+  if(t.s==='p') return s+svgPin(t.v,w,h)+e;
+  if(t.s==='s') return s+svgSou(t.v,w,h)+e;
+  if(t.s==='z') return s+svgHon(t.v,w,h)+e;
   return '';
 }
-function pdots(v,w,h){
-  const cx=w/2,cy=h/2,dx=w*.28,dy=h*.24;
-  return ({1:[[cx,cy]],2:[[cx,cy-dy],[cx,cy+dy]],3:[[cx,cy-dy],[cx,cy],[cx,cy+dy]],
-    4:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
-    5:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx,cy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
-    6:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx-dx,cy],[cx+dx,cy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
-    7:[[cx-dx,cy-dy*1.25],[cx+dx,cy-dy*1.25],[cx-dx,cy],[cx+dx,cy],[cx,cy-dy*.1],[cx-dx,cy+dy*1.15],[cx+dx,cy+dy*1.15]],
-    8:[[cx-dx,cy-dy*1.2],[cx,cy-dy*1.2],[cx+dx,cy-dy*1.2],[cx-dx,cy],[cx+dx,cy],[cx-dx,cy+dy*1.2],[cx,cy+dy*1.2],[cx+dx,cy+dy*1.2]],
-    9:[[cx-dx,cy-dy*1.2],[cx,cy-dy*1.2],[cx+dx,cy-dy*1.2],[cx-dx,cy],[cx,cy],[cx+dx,cy],[cx-dx,cy+dy*1.2],[cx,cy+dy*1.2],[cx+dx,cy+dy*1.2]]})[v]||[];
+
+// ── Man (Characters) ─────────────────────────────────────────────────────────
+// Clean kanji numeral + 萬 label, authentic red
+function svgMan(v,w,h){
+  const kanji=['','一','二','三','四','五','六','七','八','九'][v];
+  const fs=Math.round(h*.46), sf=Math.round(h*.17);
+  return `<text x="${w/2}" y="${h*.27}" text-anchor="middle" font-family="'Noto Serif JP',serif" font-size="${sf}" font-weight="700" fill="#b81c1c">萬</text>`+
+         `<text x="${w/2}" y="${h*.82}" text-anchor="middle" font-family="'Noto Serif JP',serif" font-size="${fs}" font-weight="900" fill="#c02020">${kanji}</text>`;
 }
-function srods(v,w,h){
-  const cx=w/2,cy=h/2,dx=w*.3,dy=h*(v<=3?0:v<=6?.26:.2);
-  return ({2:[[cx,cy-dy],[cx,cy+dy]],3:[[cx,cy-dy],[cx,cy],[cx,cy+dy]],
+
+// ── Pin (Circles) ─────────────────────────────────────────────────────────────
+// Each circle = outer blue ring + white gap + inner red dot
+// Sizes and layouts match Japanese tile conventions
+function svgPin(v,w,h){
+  const positions=pinPos(v,w,h);
+  // Radius scales with count: fewer = bigger circles
+  const base=Math.min(w,h);
+  const r=base*(v===1?.30:v<=4?.185:.155);
+  return positions.map(([cx,cy])=>pinCircle(cx,cy,r)).join('');
+}
+
+function pinCircle(cx,cy,r){
+  const sw=Math.max(1.5,r*.32);
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fdf0e0" stroke="#1050a0" stroke-width="${sw}"/>`+
+         `<circle cx="${cx}" cy="${cy}" r="${r*.38}" fill="#c82020"/>`;
+}
+
+function pinPos(v,w,h){
+  const cx=w/2,cy=h/2,dx=w*.285,dy=h*.235;
+  const G={
+    1:[[cx,cy]],
+    2:[[cx,cy-dy*1.05],[cx,cy+dy*1.05]],
+    3:[[cx,cy-dy*1.05],[cx,cy],[cx,cy+dy*1.05]],
     4:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
     5:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx,cy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
     6:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx-dx,cy],[cx+dx,cy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
-    7:[[cx-dx,cy-dy*1.3],[cx+dx,cy-dy*1.3],[cx-dx,cy-dy*.1],[cx+dx,cy-dy*.1],[cx,cy-dy*.7],[cx-dx,cy+dy*1.1],[cx+dx,cy+dy*1.1]],
-    8:[[cx-dx,cy-dy*1.3],[cx+dx,cy-dy*1.3],[cx-dx,cy-dy*.35],[cx+dx,cy-dy*.35],[cx-dx,cy+dy*.6],[cx+dx,cy+dy*.6],[cx-dx,cy+dy*1.4],[cx+dx,cy+dy*1.4]],
-    9:[[cx-dx,cy-dy*1.4],[cx,cy-dy*1.4],[cx+dx,cy-dy*1.4],[cx-dx,cy-dy*.2],[cx,cy-dy*.2],[cx+dx,cy-dy*.2],[cx-dx,cy+dy],[cx,cy+dy],[cx+dx,cy+dy]]})[v]||[];
+    7:[[cx-dx,cy-dy*1.3],[cx+dx,cy-dy*1.3],[cx-dx,cy-dy*.02],[cx+dx,cy-dy*.02],[cx,cy-dy*.66],[cx-dx,cy+dy*1.2],[cx+dx,cy+dy*1.2]],
+    8:[[cx-dx,cy-dy*1.3],[cx,cy-dy*1.3],[cx+dx,cy-dy*1.3],[cx-dx,cy],[cx+dx,cy],[cx-dx,cy+dy*1.3],[cx,cy+dy*1.3],[cx+dx,cy+dy*1.3]],
+    9:[[cx-dx,cy-dy*1.3],[cx,cy-dy*1.3],[cx+dx,cy-dy*1.3],[cx-dx,cy],[cx,cy],[cx+dx,cy],[cx-dx,cy+dy*1.3],[cx,cy+dy*1.3],[cx+dx,cy+dy*1.3]]
+  };
+  return G[v]||[];
+}
+
+// ── Sou (Bamboo) ─────────────────────────────────────────────────────────────
+// Each bamboo stick is a proper segmented stalk:
+//   - dark green body with lighter green highlight stripe
+//   - gold/brown joint bands at top and bottom
+//   - distinct height and column layout per value
+// 1-sou = bird on single stick (traditional design)
+function svgSou(v,w,h){
+  if(v===1) return souBird(w,h);
+  const positions=souPos(v,w,h);
+  // Stick dimensions scale by count
+  const bw=w*(v<=2?.22:v<=5?.19:.16);
+  const bh=h*(v<=2?.7:v<=5?.44:v<=7?.33:.27);
+  return positions.map(([rx,ry],i)=>souStick(rx,ry,bw,bh,i)).join('');
+}
+
+// Single bamboo stick at (cx,cy) — detailed with joints and highlight
+function souStick(cx,cy,bw,bh,idx){
+  const x=cx-bw/2, y=cy-bh/2;
+  const r=bw*.3;
+  // Alternate two shades of green for adjacent sticks so they're visually distinct
+  const body=idx%2===0?'#1a7830':'#1d8f38';
+  const hi=idx%2===0?'#26a845':'#2dbd52';
+  const joint='#c8a020'; // gold band
+  const jh=bh*.09; // joint band height
+  return (
+    // Main body
+    `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="${r}" fill="${body}"/>`+
+    // Highlight stripe (left edge)
+    `<rect x="${x+bw*.1}" y="${y+bh*.06}" width="${bw*.22}" height="${bh*.88}" rx="${r*.4}" fill="${hi}" opacity="0.55"/>`+
+    // Top joint band
+    `<rect x="${x}" y="${y+bh*.1}" width="${bw}" height="${jh}" rx="1" fill="${joint}" opacity="0.85"/>`+
+    // Bottom joint band
+    `<rect x="${x}" y="${y+bh*.81}" width="${bw}" height="${jh}" rx="1" fill="${joint}" opacity="0.85"/>`+
+    // Node dot in center
+    `<circle cx="${cx}" cy="${cy}" r="${bw*.14}" fill="${joint}" opacity="0.7"/>`
+  );
+}
+
+// 1-sou: single green stick + stylised bird perched on top
+function souBird(w,h){
+  const cx=w/2,stickX=cx-w*.08,stickW=w*.16,stickY=h*.22,stickH=h*.62,r=stickW*.35;
+  const bh=stickH,bw=stickW;
+  const joint='#c8a020';const jh=bh*.09;
+  const stick=(
+    `<rect x="${stickX}" y="${stickY}" width="${stickW}" height="${stickH}" rx="${r}" fill="#1a7830"/>`+
+    `<rect x="${stickX+stickW*.1}" y="${stickY+stickH*.06}" width="${stickW*.22}" height="${stickH*.88}" rx="${r*.4}" fill="#26a845" opacity="0.55"/>`+
+    `<rect x="${stickX}" y="${stickY+bh*.1}" width="${stickW}" height="${jh}" rx="1" fill="${joint}" opacity="0.85"/>`+
+    `<rect x="${stickX}" y="${stickY+bh*.81}" width="${stickW}" height="${jh}" rx="1" fill="${joint}" opacity="0.7"/>`
+  );
+  // Bird: round body, beak, tail, eye
+  const bx=cx, by=h*.18;
+  const br=w*.19;
+  const bird=(
+    // Body
+    `<ellipse cx="${bx}" cy="${by}" rx="${br}" ry="${br*.75}" fill="#c03010"/>`+
+    // Wing highlight
+    `<ellipse cx="${bx-br*.2}" cy="${by}" rx="${br*.65}" ry="${br*.55}" fill="#d84020" opacity="0.6"/>`+
+    // Beak
+    `<polygon points="${bx+br*.85},${by-br*.1} ${bx+br*1.35},${by} ${bx+br*.85},${by+br*.1}" fill="#e8a020"/>`+
+    // Eye
+    `<circle cx="${bx+br*.35}" cy="${by-br*.2}" r="${br*.16}" fill="#fff"/>`+
+    `<circle cx="${bx+br*.38}" cy="${by-br*.18}" r="${br*.09}" fill="#111"/>`+
+    // Tail
+    `<polygon points="${bx-br*.9},${by-br*.1} ${bx-br*1.5},${by-br*.5} ${bx-br*.9},${by+br*.2}" fill="#b02808"/>`
+  );
+  return stick+bird;
+}
+
+// Column/row layout for each bamboo value
+function souPos(v,w,h){
+  const cx=w/2,cy=h/2;
+  // dx = column spacing, dy = row spacing
+  const dx=w*.32,dy=h*(v<=3?.0:v<=6?.3:.23);
+  const G={
+    2:[[cx,cy-dy*1.1],[cx,cy+dy*1.1]],
+    3:[[cx,cy-dy*1.2],[cx,cy],[cx,cy+dy*1.2]],
+    4:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
+    5:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx,cy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
+    6:[[cx-dx,cy-dy*1.1],[cx+dx,cy-dy*1.1],[cx-dx,cy],[cx+dx,cy],[cx-dx,cy+dy*1.1],[cx+dx,cy+dy*1.1]],
+    7:[[cx-dx,cy-dy*1.4],[cx+dx,cy-dy*1.4],[cx-dx,cy-dy*.3],[cx+dx,cy-dy*.3],[cx,cy-dy*.85],[cx-dx,cy+dy*1.1],[cx+dx,cy+dy*1.1]],
+    8:[[cx-dx,cy-dy*1.5],[cx+dx,cy-dy*1.5],[cx-dx,cy-dy*.45],[cx+dx,cy-dy*.45],[cx-dx,cy+dy*.55],[cx+dx,cy+dy*.55],[cx-dx,cy+dy*1.55],[cx+dx,cy+dy*1.55]],
+    9:[[cx-dx,cy-dy*1.5],[cx,cy-dy*1.5],[cx+dx,cy-dy*1.5],[cx-dx,cy-dy*.3],[cx,cy-dy*.3],[cx+dx,cy-dy*.3],[cx-dx,cy+dy*.9],[cx,cy+dy*.9],[cx+dx,cy+dy*.9]]
+  };
+  return G[v]||[];
+}
+
+// ── Honours ───────────────────────────────────────────────────────────────────
+// Winds: blue kanji.  Haku: empty bordered rect.  Hatsu: green 發.  Chun: red 中.
+function svgHon(v,w,h){
+  const fs=Math.round(h*.52);
+  if(v===5){
+    // Haku — blank rectangle border only
+    const pad=w*.15;
+    return `<rect x="${pad}" y="${h*.12}" width="${w-pad*2}" height="${h*.76}" rx="3" fill="none" stroke="#888" stroke-width="${Math.max(1.5,w*.05)}"/>`;
+  }
+  const colors={1:'#1a50a0',2:'#1a50a0',3:'#1a50a0',4:'#1a50a0',6:'#1a7a30',7:'#c02020'};
+  const chars={1:'東',2:'南',3:'西',4:'北',6:'發',7:'中'};
+  return `<text x="${w/2}" y="${h*.74}" text-anchor="middle" font-family="'Noto Serif JP',serif" font-size="${fs}" font-weight="900" fill="${colors[v]}">${chars[v]}</text>`;
 }
 
 // ══ App ═══════════════════════════════════════════════════════════════════════
@@ -395,15 +556,19 @@ const W=['東','南','西','北'];
 // 0=bottom(me), 1=right, 2=top, 3=left
 const P=['b','r','t','l'];
 
-let ws=null, mySeat=-1, inGame=false, selId=null, cdInt=null, lastState=null, isReady=false;
+let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false;
 
 function show(id){['s-lobby','s-game','s-end'].forEach(s=>$(s).classList.toggle('hidden',s!==id));}
 function $(id){return document.getElementById(id);}
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 function connect(){
+  if(!location.host){
+    console.warn('No server host — open via http://localhost:3000');
+    return;
+  }
   const url=(location.protocol==='https:'?'wss':'ws')+'://'+location.host;
-  ws=new WebSocket(url);
+  try{ ws=new WebSocket(url); } catch(e){ setTimeout(connect,3000); return; }
   ws.onopen=()=>{};
   ws.onmessage=e=>{try{onMsg(JSON.parse(e.data));}catch(ex){console.error(ex);}};
   ws.onclose=()=>{setTimeout(connect,2000);};
@@ -431,12 +596,7 @@ function findMatch(){
 function showWaiting(){
   $('wa').style.display='block';
   $('bfind').style.display='none';
-  let s=30; clearInterval(cdInt);
-  cdInt=setInterval(()=>{
-    s--;
-    if(s>0) $('cdiv').textContent=`Press Ready to start · AI fills in ${s}s`;
-    else{$('cdiv').textContent='Starting with AI...';clearInterval(cdInt);}
-  },1000);
+  $('cdiv').textContent='Press Ready when you are set to start';
 }
 
 function updateSlots(seats){
@@ -465,7 +625,6 @@ function pressReady(){
 }
 
 function resetLobby(){
-  clearInterval(cdInt);
   mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;
   $('wa').style.display='none';
   $('bfind').style.display='block';
@@ -487,7 +646,6 @@ function goLobby(){
 
 // ── Game Start ─────────────────────────────────────────────────────────────────
 function startGame(m){
-  clearInterval(cdInt);
   inGame=true;selId=null;lastState=null;
   const seats=m.seats;
   for(let i=0;i<4;i++){
@@ -497,7 +655,7 @@ function startGame(m){
     if(i>0&&p?.isBot){const bt=$('bt'+id);if(bt)bt.textContent='CPU';}
     $('rs'+id).style.display='none';
   }
-  $('chat-bar').style.display='flex';
+  $('chat-toggle').style.display='flex'; chatOpen=false; unreadCount=0; $('chat-history').innerHTML='';
   show('s-game');
 }
 
@@ -660,6 +818,23 @@ function mkElDora(tile){
 }
 
 // ── Chat ───────────────────────────────────────────────────────────────────────
+const SEAT_COLORS=['#ffdd44','#ff8844','#44ddff','#88ff88'];
+let chatOpen=false, unreadCount=0;
+
+function toggleChat(){
+  chatOpen=!chatOpen;
+  $('chat-panel').classList.toggle('open',chatOpen);
+  if(chatOpen){
+    unreadCount=0;
+    $('chat-toggle').classList.remove('has-unread');
+    $('chat-toggle').textContent='💬';
+    // Scroll history to bottom
+    const h=$('chat-history');
+    h.scrollTop=h.scrollHeight;
+    $('chat-input').focus();
+  }
+}
+
 function sendChat(){
   const inp=$('chat-input');
   const text=inp.value.trim();
@@ -669,17 +844,37 @@ function sendChat(){
 }
 
 function showChatMsg(seat,name,text){
+  const relSeat=(seat-mySeat+4)%4;
+  const color=SEAT_COLORS[relSeat]||'#fff';
+
+  // ── Floating big message ──
   const container=$('chat-float');
   const div=document.createElement('div');
   div.className='chat-msg';
-  // Color by seat position
-  const colors=['#ffdd44','#ff8844','#44ddff','#88ff88'];
-  const relSeat=(seat-mySeat+4)%4;
-  div.style.color=colors[relSeat]||'#fff';
-  div.innerHTML=`<span class="chat-who">${name}</span>${escHtml(text)}`;
+  div.style.color=color;
+  div.innerHTML=`<span class="chat-who">${escHtml(name)}</span>${escHtml(text)}`;
   container.appendChild(div);
-  // Remove after animation ends (5s)
   setTimeout(()=>div.remove(),5200);
+
+  // ── History entry ──
+  const history=$('chat-history');
+  const now=new Date();
+  const time=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  const entry=document.createElement('div');
+  entry.className='chat-entry';
+  entry.innerHTML=
+    `<span class="chat-entry-who" style="color:${color}">${escHtml(name)}</span>`+
+    `<span class="chat-entry-text">${escHtml(text)}</span>`+
+    `<span class="chat-entry-time">${time}</span>`;
+  history.appendChild(entry);
+  history.scrollTop=history.scrollHeight;
+
+  // ── Unread badge ──
+  if(!chatOpen){
+    unreadCount++;
+    $('chat-toggle').classList.add('has-unread');
+    $('chat-toggle').textContent=`💬${unreadCount}`;
+  }
 }
 
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -695,7 +890,7 @@ function toast(msg){
 // ── Round End ──────────────────────────────────────────────────────────────────
 function onEnd(m){
   inGame=false;
-  $('chat-bar').style.display='none';
+  $('chat-toggle').style.display='none'; $('chat-panel').classList.remove('open'); chatOpen=false;
   const T={tsumo:'🀄 TSUMO!',ron:'🀄 RON!',draw:'流局 — Draw'};
   $('ret').textContent=T[m.reason]||'Round Over';
   $('rehn').textContent=m.handLabel?`${m.handLabel} · ${m.han||0}飜${m.fu?' · '+m.fu+'符':''}` :'';
@@ -748,6 +943,8 @@ $('bleave').onclick=goLobby;
 $('iname').onkeydown=e=>{if(e.key==='Enter')findMatch();};
 $('chat-send').onclick=sendChat;
 $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};
+$('chat-toggle').onclick=toggleChat;
+$('chat-close').onclick=toggleChat;
 connect();
 </script>
 </body>
