@@ -5,7 +5,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3QgeD0iMSIgeT0iMSIgd2lkdGg9IjMwIiBoZWlnaHQ9IjMwIiByeD0iNCIgZmlsbD0iI2Y4ZWRkOCIvPjxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSIzMCIgaGVpZ2h0PSIzMCIgcng9IjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2M4YTg0YSIgc3Ryb2tlLXdpZHRoPSIxLjUiLz48cmVjdCB4PSIxIiB5PSIyNyIgd2lkdGg9IjMwIiBoZWlnaHQ9IjQiIHJ4PSIyIiBmaWxsPSIjN2E1YzEwIi8+PHRleHQgeD0iMTYiIHk9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0ic2VyaWYiIGZvbnQtc2l6ZT0iMjIiIGZvbnQtd2VpZ2h0PSI5MDAiIGZpbGw9IiNjMDIwMjAiPuS4rTwvdGV4dD48L3N2Zz4=">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>雀心 Mahjong Online</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Cinzel+Decorative:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Cinzel+Decorative:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&family=Yuji+Syuku&display=swap" rel="stylesheet">
 <style>
 :root{
   --jade:#1a6b45;--jl:#2a9e67;--jd:#0d3d28;
@@ -123,6 +123,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .dora-slot{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:5px;border:1px dashed rgba(201,168,76,.25);
   background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;}
 .dora-slot.filled{border:none;background:none;padding:0;}
+/* Ankan face-down tiles */
+.kan-back{width:var(--tmd-w,26px);height:var(--tmd-h,36px);background:linear-gradient(135deg,#1a3a6a,#0d1f3a);border:1px solid #2a4a8a;border-radius:3px;}
 .tarrow{position:absolute;bottom:max(16vmin,108px);left:50%;transform:translateX(-50%);font-size:clamp(14px,3vmin,20px);z-index:20;pointer-events:none;filter:drop-shadow(0 0 6px rgba(255,220,50,.9));animation:bounce .7s ease-in-out infinite;}
 @keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-5px)}}
 
@@ -262,10 +264,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* Action bar hidden — actions float above hand */
 .actbar{display:none;}
 /* Floating action overlay — appears above the hand */
-.act-overlay{position:absolute;bottom:calc(2% + var(--tlg-h,64px) + 50px);
-  left:50%;transform:translateX(-50%);
-  display:flex;gap:8px;align-items:center;justify-content:center;
-  z-index:40;pointer-events:none;flex-wrap:wrap;}
+.act-overlay{display:flex;gap:6px;align-items:center;
+  z-index:40;pointer-events:none;flex-wrap:nowrap;flex-shrink:0;}
 .act-overlay.visible{pointer-events:auto;}
 .ba{padding:0 clamp(10px,2vw,20px);height:38px;border:none;border-radius:8px;
   font-family:'Cinzel Decorative',serif;font-size:clamp(10px,2vw,12px);
@@ -281,6 +281,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .bron{background:#aa1010;color:#fff;border:2px solid #f66;box-shadow:0 0 16px rgba(220,50,50,.6);font-weight:900;}
 .bchi{background:#145a14;color:#c0ffc0;border:2px solid #4d4;}
 .bpon{background:#6a3800;color:#ffe0b0;border:2px solid #ca0;}
+.bkan{background:linear-gradient(135deg,#3a0a5a,#6a1a9a);color:#e8d0ff;border:2px solid #a060d0;}
 .bpas{background:rgba(40,40,40,.95);color:rgba(245,237,216,.7);border:1px solid rgba(255,255,255,.2);}
 
 /* Chat — compact bottom-right corner widget */
@@ -444,19 +445,18 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
       <div class="dz dzl" id="dzl"></div>
       <div class="dz dzr" id="dzr"></div>
 
-      <!-- Floating action overlay -->
-      <div class="act-overlay" id="actbar"></div>
-
       <!-- BOTTOM (me): nameplate above hand, tiles at bottom rim -->
       <div class="pa pa-b" id="pa-b">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;position:relative;z-index:20;">
+        <div style="display:flex;align-items:center;justify-content:center;margin-bottom:6px;gap:6px;">
           <div class="np" id="npb"><div class="wb" id="wbb">東</div><div><div class="pname" id="pnb">—</div></div></div>
+          <div class="act-overlay" id="actbar"></div>
           <span id="rsb" style="display:none" class="rs"></span>
           <span id="tpb" style="display:none" class="tenpai">TENPAI</span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:6px;">
-          <div class="mr" id="mlb"></div>
+        <!-- Hand tiles left, melds right — in one row so melds don't cause recentring -->
+        <div style="display:flex;align-items:flex-end;gap:8px;">
           <div class="hr" id="hdb"></div>
+          <div class="mr" id="mlb"></div>
         </div>
       </div>
 
@@ -579,256 +579,237 @@ function tsvg(t,w,h){
 // ══════════════════════════════════════════════════════════════
 const MAN_K=['','一','二','三','四','伍','六','七','八','九'];
 function svgMan(v,w,h){
-  const nfs=Math.round(h*.48);
-  const lfs=Math.round(h*.16);
-  // Numeral sits in upper zone, 萬 tight to bottom
+  // Same font size for numeral and 萬, both centred in their half
+  const fs=Math.round(h*.36);
+  const numColor=v===5?'#c82020':'#1a1a1a';
   return (
-    `<text x="${w*.5}" y="${h*.58}" text-anchor="middle" dominant-baseline="middle" `+
-    `font-family="'Noto Serif JP',serif" font-size="${nfs}px" font-weight="900" fill="#c82020">`+
+    `<text x="${w*.5}" y="${h*.30}" text-anchor="middle" dominant-baseline="central" `+
+    `font-family="'Yuji Syuku',serif" font-size="${fs}px" font-weight="400" fill="${numColor}">`+
     MAN_K[v]+`</text>`+
-    `<text x="${w*.5}" y="${h*.88}" text-anchor="middle" dominant-baseline="middle" `+
-    `font-family="'Noto Serif JP',serif" font-size="${lfs}px" font-weight="700" fill="#c82020">萬</text>`
+    `<text x="${w*.5}" y="${h*.70}" text-anchor="middle" dominant-baseline="central" `+
+    `font-family="'Yuji Syuku',serif" font-size="${fs}px" font-weight="400" fill="#c82020">萬</text>`
   );
 }
 
 // ══════════════════════════════════════════════════════════════
 // PIN (ピンズ) — Circles
-// Each circle: thick red stroke ring (outer), white gap, thick dark-green stroke ring (inner), cream centre fill
-// From image: rings are stroke-based NOT filled discs
-// 1-pin: single large circle ~55% of min dimension
-// 2–9: tightly packed grid, circles slightly smaller
+// From image: thick dark navy outer ring, white gap, thinner inner ring, white centre with flower
+// 1-pin: large decorative circle (bigger rings, inner flower)
+// 5-pin: red circles instead of navy
+// ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// PIN (ピンズ) — Circles with flower/petal design from image
+// Each circle: outer ring, 6-petal inner ring, small centre dot
+// Colours: 1=red outer+blue inner, 2-4=blue, 5=red, 6-9=blue with red accent
 // ══════════════════════════════════════════════════════════════
 function svgPin(v,w,h){
   const pos=pinPos(v,w,h);
   const base=Math.min(w,h);
-  // Radius table — larger for low counts, tighter for high
-  const rMap={1:.28,2:.22,3:.195,4:.165,5:.155,6:.142,7:.135,8:.125,9:.118};
-  const r=base*(rMap[v]||.13);
-  return pos.map(([cx,cy])=>pinCircle(cx,cy,r)).join('');
+  const rMap={1:.30,2:.22,3:.20,4:.17,5:.155,6:.14,7:.128,8:.118,9:.110};
+  const r=base*(rMap[v]||.11);
+  const isRed=(v===5);
+  const hasRedOuter=false;
+  const hasRedInner=(v===1);
+  return pos.map(([cx,cy,forceRed])=>pinCircle(cx,cy,r,isRed,hasRedOuter,hasRedInner,forceRed)).join('');
 }
 
-function pinCircle(cx,cy,r){
-  // Outer red ring (stroke)
-  const outerSW=Math.max(1.2, r*.38);
-  // Inner dark-green ring (stroke), sits inside the red gap
-  const innerR=r*.58;
-  const innerSW=Math.max(1.0, innerR*.42);
+function pinCircle(cx,cy,r,isRed,hasRedOuter,hasRedInner,forceRedInner){
+  const ringCol=(isRed||hasRedInner||forceRedInner)?'#c82020':'#1a3a8a';
+  const outerCol=hasRedOuter?'#c82020':'#1a3a8a';
+  const outerSW=Math.max(1.2,r*.25);
+  const petalR=r*.60;
+  const petalCount=6;
+  let petals='';
+  for(let i=0;i<petalCount;i++){
+    const angle=(i/petalCount)*Math.PI*2 - Math.PI/2;
+    const px=cx+Math.cos(angle)*petalR*.52;
+    const py=cy+Math.sin(angle)*petalR*.52;
+    const pr=petalR*.38;
+    petals+=`<circle cx="${px}" cy="${py}" r="${pr}" fill="${ringCol}" opacity="0.85"/>`;
+  }
   return (
-    // Cream background disc
-    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#f4eedc"/>`+
-    // Outer red ring
-    `<circle cx="${cx}" cy="${cy}" r="${r-(outerSW/2)}" fill="none" stroke="#c82020" stroke-width="${outerSW}"/>`+
-    // Inner dark-green ring
-    `<circle cx="${cx}" cy="${cy}" r="${innerR}" fill="none" stroke="#1a5c28" stroke-width="${innerSW}"/>`
+    // White background
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff"/>`+
+    // Outer ring
+    `<circle cx="${cx}" cy="${cy}" r="${r-outerSW*.5}" fill="none" stroke="${outerCol}" stroke-width="${outerSW}"/>`+
+    // Petal circles
+    petals+
+    // Centre dot
+    `<circle cx="${cx}" cy="${cy}" r="${r*.18}" fill="${ringCol}"/>`+
+    // White centre hole
+    `<circle cx="${cx}" cy="${cy}" r="${r*.10}" fill="#ffffff"/>`
   );
 }
 
 function pinPos(v,w,h){
+  const pw=w*.84, ph=h*.88;
+  const ox=(w-pw)/2, oy=(h-ph)/2;
   const cx=w/2, cy=h/2;
-  // dx/dy: column/row spacing. Tighter for more circles.
-  const spacing={
-    1:{dx:0,  dy:0,   rows:[[0,0]]},
-    2:{dx:0,  dy:.28, rows:[[0,-1],[0,1]]},
-    3:{dx:0,  dy:.26, rows:[[0,-1],[0,0],[0,1]]},
-    4:{dx:.22,dy:.26, rows:[[-1,-1],[1,-1],[-1,1],[1,1]]},
-    5:{dx:.22,dy:.26, rows:[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]]},
-    6:{dx:.22,dy:.22, rows:[[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]]},
-    7:{dx:.22,dy:.2,  rows:[[-1,-1.4],[1,-1.4],[-1,-.35],[1,-.35],[0,-.87],[-1,.75],[1,.75]]},
-    8:{dx:.22,dy:.2,  rows:[[-1,-1.5],[0,-1.5],[1,-1.5],[-1,-.5],[1,-.5],[-1,.5],[0,.5],[1,.5]]},
-    9:{dx:.2, dy:.19, rows:[[-1,-1.5],[0,-1.5],[1,-1.5],[-1,-.5],[0,-.5],[1,-.5],[-1,.5],[0,.5],[1,.5]]},
-  };
-  const sp=spacing[v];
-  if(!sp) return [];
-  return sp.rows.map(([gx,gy])=>[cx+gx*sp.dx*w, cy+gy*sp.dy*h]);
+
+  function col1(n){
+    if(n===1) return [[cx,cy]];
+    const step=ph/(n+0.4);
+    return Array.from({length:n},(_,i)=>([cx, oy+step*(i+0.7)]));
+  }
+  function col2(nL,nR){
+    const lx=ox+pw*.27, rx=ox+pw*.73;
+    const stepL=ph/(nL+0.4), stepR=ph/(nR+0.4);
+    const L=Array.from({length:nL},(_,i)=>([lx,oy+stepL*(i+0.7)]));
+    const R=Array.from({length:nR},(_,i)=>([rx,oy+stepR*(i+0.7)]));
+    return [...L,...R];
+  }
+  function col3(n){
+    const lx=ox+pw*.17, mx=cx, rx=ox+pw*.83;
+    const step=ph/(n+0.4);
+    const pts=[];
+    for(let i=0;i<n;i++) for(const x of[lx,mx,rx]) pts.push([x,oy+step*(i+0.7)]);
+    return pts;
+  }
+
+  if(v===1) return [[cx,cy]];
+  if(v===2) return col1(2);
+  if(v===3){
+    // Diagonal: top-left, centre (red), bottom-right
+    const r3=Math.min(w,h)*.20;
+    const off=Math.min(pw,ph)*.26;
+    return [[cx-off,cy-off,false],[cx,cy,true],[cx+off,cy+off,false]];
+  }
+  if(v===4) return col2(2,2);
+  if(v===5){ const g=col2(2,2); g.push([cx,cy]); return g; }
+  if(v===6) return col2(3,3);
+  if(v===7){
+    const lx=ox+pw*.27, rx=ox+pw*.73;
+    const L=Array.from({length:3},(_,i)=>([lx,oy+ph/(3+.4)*(i+.7)]));
+    const R=Array.from({length:4},(_,i)=>([rx,oy+ph/(4+.4)*(i+.7)]));
+    return [...L,...R];
+  }
+  if(v===8) return col2(4,4);
+  if(v===9) return col3(3);
+  return [];
 }
 
 // ══════════════════════════════════════════════════════════════
-// SOU (ソウズ) — Bamboo
-// From image: sticks are VERY THIN and TALL relative to tile
-// Each stick has: dark-green rounded rect body, lighter green fill,
-// one thin RED band exactly at the centre joint
-// 5-sou: centre stick is RED (not green)
-// Columns: 1 col for 2–3, 2 cols for 4–9, 3 cols for 9
+// SOU (ソウズ) — Bamboo hourglass/bobbin sticks
+// From image: wider top+bottom, narrow waist — like a bobbin/spool
+// Green with red band at waist. 5-sou centre = red.
 // ══════════════════════════════════════════════════════════════
 function svgSou(v,w,h){
   if(v===1) return souBird(w,h);
-  const sticks=souLayout(v,w,h);
-  return sticks.map(([cx,cy,sw,sh,isRed])=>souStick(cx,cy,sw,sh,isRed)).join('');
+  return souLayout(v,w,h).map(([cx,cy,sw,sh,isRed])=>souStick(cx,cy,sw,sh,isRed)).join('');
 }
 
-// Draw one bamboo stick
-// isRed: entire stick is red (used for 5-sou centre stick)
 function souStick(cx,cy,sw,sh,isRed){
   const x=cx-sw/2, y=cy-sh/2;
-  const rx=sw*.35;
-  if(isRed){
-    // Red stick (5-sou centre)
-    return (
-      `<rect x="${x}" y="${y}" width="${sw}" height="${sh}" rx="${rx}" fill="#c82020" stroke="#8a1010" stroke-width="0.6"/>`+
-      `<rect x="${x+sw*.15}" y="${y+sh*.06}" width="${sw*.22}" height="${sh*.5}" rx="${sw*.1}" fill="#e84040" opacity="0.5"/>`
-    );
-  }
-  // Green stick — body, highlight, centre band
-  const bandH=Math.max(2, sh*.10);
-  const halfSH=(sh-bandH)/2;
+  const capH=sh*.22;   // top/bottom cap height
+  const waistW=sw*.62; // narrow waist width
+  const waistY=y+capH;
+  const waistH=sh-capH*2;
+  const bandH=Math.max(1.5,sh*.10);
+  const bandY=cy-bandH/2;
+  const fill=isRed?'#c82020':'#1c7530';
+  const stroke=isRed?'#8a1010':'#0e4018';
+  const hlCol=isRed?'#e86060':'#2db848';
+
+  // Hourglass shape via path: wide top cap, narrow waist, wide bottom cap
+  const tw=sw/2, ww=waistW/2;
+  const path=`M${cx-tw},${y} Q${cx-tw},${waistY} ${cx-ww},${waistY} L${cx-ww},${waistY+waistH} Q${cx-tw},${waistY+waistH} ${cx-tw},${y+sh} L${cx+tw},${y+sh} Q${cx+tw},${waistY+waistH} ${cx+ww},${waistY+waistH} L${cx+ww},${waistY} Q${cx+tw},${waistY} ${cx+tw},${y} Z`;
+
   return (
-    // Dark outline + body
-    `<rect x="${x}" y="${y}" width="${sw}" height="${sh}" rx="${rx}" fill="#1c7530" stroke="#0e4018" stroke-width="0.7"/>`+
-    // Light green fill (top half)
-    `<rect x="${x+.5}" y="${y+.5}" width="${sw-1}" height="${halfSH-.5}" rx="${rx*.8}" fill="#2db848"/>`+
-    // Light green fill (bottom half)
-    `<rect x="${x+.5}" y="${y+halfSH+bandH}" width="${sw-1}" height="${halfSH-.5}" rx="${rx*.4}" fill="#2db848"/>`+
-    // Red centre band (joint)
-    `<rect x="${x}" y="${y+halfSH}" width="${sw}" height="${bandH}" fill="#c82020"/>`+
-    // Thin gleam stripe
-    `<rect x="${x+sw*.12}" y="${y+sh*.07}" width="${sw*.14}" height="${halfSH*.5}" rx="${sw*.05}" fill="#70f090" opacity="0.4"/>`
+    `<path d="${path}" fill="${fill}" stroke="${stroke}" stroke-width="0.8"/>`+
+    // Highlight on top cap
+    `<rect x="${cx-sw*.28}" y="${y+sh*.04}" width="${sw*.22}" height="${capH*.55}" rx="${sw*.08}" fill="${hlCol}" opacity="0.5"/>`+
+    // Red centre band
+    (!isRed?`<rect x="${cx-ww}" y="${bandY}" width="${waistW}" height="${bandH}" fill="#c82020"/>`:'')
   );
 }
 
-// souLayout: returns array of [cx, cy, stickW, stickH, isRed]
-// Core rule: stickH < rowGap so sticks never overlap
-// Stick aspect ratio from image ≈ width:height = 1:3.5 to 1:5
 function souLayout(v,w,h){
-  const pad=w*.04; // edge padding
-  const usableW=w-pad*2;
-  const usableH=h-pad*2;
-  const top=pad, bottom=h-pad;
-  const midY=h/2;
-
-  // Helper: distribute n items evenly across usableH
-  // Returns array of y centres
-  function rows(n, spanH){
-    if(n===1) return [midY];
-    const step=spanH/(n-1);
-    return Array.from({length:n},(_,i)=>midY-spanH/2+i*step);
-  }
-
+  const pad=w*.07;
+  const uw=w-pad*2, uh=h-pad*2;
+  const midX=w/2;
   const out=[];
 
-  if(v===2||v===3){
-    // Single column, tall sticks
-    const sw=usableW*.38;
-    const n=v; const span=usableH*.62;
-    const step=n>1?span/(n-1):0;
-    const sh=n>1?(step*.78):(usableH*.7);
-    const ys=rows(n,span);
-    ys.forEach(y=>out.push([w/2,y,sw,sh,false]));
-  } else if(v===4||v===5||v===6){
-    // Two columns
-    const sw=usableW*.20;
-    const lx=w/2-usableW*.22, rx=w/2+usableW*.22;
-    const n=v===4?2:v===5?2:3;
-    const span=usableH*(v===6?.68:.6);
-    const step=n>1?span/(n-1):0;
-    const sh=n>1?(step*.80):(usableH*.65);
-    const ys=rows(n,span);
-    if(v===4){
-      ys.forEach(y=>{out.push([lx,y,sw,sh,false]);out.push([rx,y,sw,sh,false]);});
-    } else if(v===5){
-      // 5: 2 top pair, 1 centre RED, 2 bottom pair
-      const topYs=rows(2,span*.6);
-      const botYs=topYs.map(y=>y+span*.6);
-      // Actually: 2 cols × 2 rows + 1 centre
-      const span2=usableH*.55;
-      const s2=rows(2,span2);
-      const sh2=span2/(2-1)*.80;
-      s2.forEach(y=>{out.push([lx,y,sw,sh2,false]);out.push([rx,y,sw,sh2,false]);});
-      out.push([w/2,midY,sw,sh2,true]); // RED centre
-    } else {
-      // 6: 2 cols × 3 rows
-      const span3=usableH*.68;
-      const sh3=span3/2*.80;
-      const ys3=rows(3,span3);
-      ys3.forEach(y=>{out.push([lx,y,sw,sh3,false]);out.push([rx,y,sw,sh3,false]);});
-    }
-  } else if(v===7){
-    // 2 cols × 3 rows + 1 extra on left = 7
-    // From image: 3+4 or 2×3+1 centre top
-    const sw=usableW*.17;
-    const lx=w/2-usableW*.22, rx=w/2+usableW*.22;
-    const span=usableH*.74; const n=4;
-    const step=span/(n-1); const sh=step*.78;
-    const allY=rows(4,span);
-    // Left col: 4, right col: 3 (skip one)
-    allY.forEach((y,i)=>out.push([lx,y,sw,sh,false]));
-    [allY[0],allY[1],allY[3]].forEach(y=>out.push([rx,y,sw,sh,false]));
-  } else if(v===8){
-    // 2 cols × 4 rows
-    const sw=usableW*.17;
-    const lx=w/2-usableW*.22, rx=w/2+usableW*.22;
-    const span=usableH*.76; const step=span/3; const sh=step*.78;
-    rows(4,span).forEach(y=>{out.push([lx,y,sw,sh,false]);out.push([rx,y,sw,sh,false]);});
-  } else if(v===9){
-    // 3 cols × 3 rows
-    const sw=usableW*.15;
-    const lx=w/2-usableW*.28, cx2=w/2, rx=w/2+usableW*.28;
-    const span=usableH*.66; const step=span/2; const sh=step*.78;
-    rows(3,span).forEach(y=>{
-      out.push([lx,y,sw,sh,false]);
-      out.push([cx2,y,sw,sh,false]);
-      out.push([rx,y,sw,sh,false]);
-    });
-  }
-  return out;
-}
+  // GAP_RATIO: fraction of slot height that is empty gap between sticks
+  const GAP=0.28;
 
-// 1-sou: Bird/phoenix on bamboo — green ornate traditional design
-function souBird(w,h){
-  const cx=w/2, cy=h*.46;
-  const sc=Math.min(w,h)*.34;
-  return (
-    // Outer circle border
-    `<circle cx="${cx}" cy="${cy}" r="${sc*1.08}" fill="none" stroke="#1c7530" stroke-width="${sc*.07}"/>`+
-    // Body ellipse
-    `<ellipse cx="${cx}" cy="${cy+sc*.08}" rx="${sc*.72}" ry="${sc*.6}" fill="#1c7530"/>`+
-    // Wing (lighter)
-    `<ellipse cx="${cx-sc*.08}" cy="${cy+sc*.02}" rx="${sc*.5}" ry="${sc*.4}" fill="#2db848" opacity="0.65"/>`+
-    // Head
-    `<circle cx="${cx+sc*.54}" cy="${cy-sc*.46}" r="${sc*.26}" fill="#1c7530"/>`+
-    // Crest feathers
-    `<line x1="${cx+sc*.48}" y1="${cy-sc*.72}" x2="${cx+sc*.44}" y2="${cy-sc*.46}" stroke="#1c7530" stroke-width="${sc*.08}" stroke-linecap="round"/>`+
-    `<line x1="${cx+sc*.60}" y1="${cy-sc*.76}" x2="${cx+sc*.54}" y2="${cy-sc*.46}" stroke="#1c7530" stroke-width="${sc*.08}" stroke-linecap="round"/>`+
-    `<line x1="${cx+sc*.72}" y1="${cy-sc*.70}" x2="${cx+sc*.64}" y2="${cy-sc*.44}" stroke="#1c7530" stroke-width="${sc*.065}" stroke-linecap="round"/>`+
-    // Beak
-    `<polygon points="${cx+sc*.80},${cy-sc*.46} ${cx+sc*1.06},${cy-sc*.40} ${cx+sc*.80},${cy-sc*.34}" fill="#c82020"/>`+
-    // Eye
-    `<circle cx="${cx+sc*.64}" cy="${cy-sc*.50}" r="${sc*.09}" fill="#fff"/>`+
-    `<circle cx="${cx+sc*.66}" cy="${cy-sc*.49}" r="${sc*.05}" fill="#111"/>`+
-    // Tail feathers
-    `<path d="M${cx-sc*.62},${cy+sc*.18} Q${cx-sc*1.02},${cy+sc*.42} ${cx-sc*.86},${cy+sc*.70}" fill="none" stroke="#1c7530" stroke-width="${sc*.09}" stroke-linecap="round"/>`+
-    `<path d="M${cx-sc*.55},${cy+sc*.24} Q${cx-sc*.82},${cy+sc*.50} ${cx-sc*.60},${cy+sc*.74}" fill="none" stroke="#2db848" stroke-width="${sc*.07}" stroke-linecap="round"/>`+
-    `<path d="M${cx-sc*.46},${cy+sc*.30} Q${cx-sc*.62},${cy+sc*.55} ${cx-sc*.34},${cy+sc*.74}" fill="none" stroke="#1c7530" stroke-width="${sc*.06}" stroke-linecap="round"/>`+
-    // Feet/legs
-    `<line x1="${cx+sc*.08}" y1="${cy+sc*.60}" x2="${cx+sc*.08}" y2="${cy+sc*.80}" stroke="#1c7530" stroke-width="${sc*.065}" stroke-linecap="round"/>`+
-    `<line x1="${cx+sc*.26}" y1="${cy+sc*.58}" x2="${cx+sc*.26}" y2="${cy+sc*.78}" stroke="#1c7530" stroke-width="${sc*.065}" stroke-linecap="round"/>`+
-    `<line x1="${cx+sc*.04}" y1="${cy+sc*.80}" x2="${cx-sc*.10}" y2="${cy+sc*.88}" stroke="#1c7530" stroke-width="${sc*.055}" stroke-linecap="round"/>`+
-    `<line x1="${cx+sc*.08}" y1="${cy+sc*.80}" x2="${cx+sc*.20}" y2="${cy+sc*.88}" stroke="#1c7530" stroke-width="${sc*.055}" stroke-linecap="round"/>`+
-    `<line x1="${cx+sc*.22}" y1="${cy+sc*.78}" x2="${cx+sc*.10}" y2="${cy+sc*.86}" stroke="#1c7530" stroke-width="${sc*.055}" stroke-linecap="round"/>`+
-    `<line x1="${cx+sc*.26}" y1="${cy+sc*.78}" x2="${cx+sc*.38}" y2="${cy+sc*.86}" stroke="#1c7530" stroke-width="${sc*.055}" stroke-linecap="round"/>`
-  );
+  function placeCol(x, n, sw, startY, totalH){
+    // Divide totalH into n equal slots, place stick in centre of each slot with gap
+    const slot=totalH/n;
+    const sh=slot*(1-GAP);
+    for(let i=0;i<n;i++){
+      const cy=startY+slot*(i+0.5);
+      out.push([x, cy, sw, sh, false]);
+    }
+  }
+
+  function col1(n){
+    const sw=uw*.40;
+    placeCol(midX, n, sw, pad, uh);
+  }
+
+  function col2(nL,nR,redCentre=false){
+    const sw=uw*.22;
+    const lx=midX-uw*.25, rx=midX+uw*.25;
+    placeCol(lx, nL, sw, pad, uh);
+    placeCol(rx, nR, sw, pad, uh);
+    if(redCentre){
+      // Red centre stick: fits in the middle gap of the 2-col layout
+      const slot=uh/nL;
+      const sh=slot*(1-GAP);
+      out.push([midX, h/2, sw, sh, true]);
+    }
+  }
+
+  function col3(n){
+    const sw=uw*.16;
+    const xs=[midX-uw*.28, midX, midX+uw*.28];
+    for(const x of xs) placeCol(x, n, sw, pad, uh);
+  }
+
+  if(v===2) col1(2);
+  else if(v===3) col1(3);
+  else if(v===4) col2(2,2);
+  else if(v===5) col2(2,2,true);
+  else if(v===6) col2(3,3);
+  else if(v===7) col2(3,4);
+  else if(v===8){
+    // 8-sou: 2 cols × 4 rows, tighter gap so hourglasses form W on top, M on bottom
+    const sw=uw*.22;
+    const lx=midX-uw*.25, rx=midX+uw*.25;
+    const n=4;
+    const slot=uh/n;
+    const sh=slot*.88; // very small gap — sticks nearly touch so W/M emerges from hourglass waists
+    for(let i=0;i<n;i++){
+      const cy=pad+slot*(i+0.5);
+      out.push([lx, cy, sw, sh, false]);
+      out.push([rx, cy, sw, sh, false]);
+    }
+  }
+  else if(v===9) col3(3);
+  return out;
 }
 
 // ══════════════════════════════════════════════════════════════
 // HONOURS (字牌)
 // Winds (東南西北): large near-black kanji, fills ~55% height
-// Haku (白): empty rect border only
+// Haku (白): plain white fill — no markings
 // Hatsu (發): green kanji
 // Chun (中): red kanji
 // ══════════════════════════════════════════════════════════════
 function svgHon(v,w,h){
   if(v===5){
-    const px=w*.15, py=h*.10;
-    return (
-      `<rect x="${px}" y="${py}" width="${w-px*2}" height="${h-py*2}" rx="3" `+
-      `fill="none" stroke="#aaa" stroke-width="${Math.max(1.5,w*.04)}"/>`
-    );
+    return '';
   }
-  const fs=Math.round(h*.55);
+  const fs=Math.round(h*.52);
+  const scaleY=1.45; // vertical stretch factor
   const COLORS={1:'#1a1a1a',2:'#1a1a1a',3:'#1a1a1a',4:'#1a1a1a',6:'#1a7a30',7:'#c82020'};
   const CHARS ={1:'東',2:'南',3:'西',4:'北',6:'發',7:'中'};
+  const cy=h*.56;
   return (
-    `<text x="${w*.5}" y="${h*.62}" text-anchor="middle" dominant-baseline="middle" `+
-    `font-family="'Noto Serif JP',serif" font-size="${fs}px" font-weight="900" fill="${COLORS[v]}">${CHARS[v]}</text>`
+    `<g transform="translate(${w*.5},${cy}) scale(1,${scaleY}) translate(-${w*.5},-${cy})">`+
+    `<text x="${w*.5}" y="${cy}" text-anchor="middle" dominant-baseline="middle" `+
+    `font-family="'Yuji Syuku',serif" font-size="${fs}px" font-weight="400" fill="${COLORS[v]}">${CHARS[v]}</text>`+
+    `</g>`
   );
 }
 
@@ -1129,8 +1110,28 @@ function renderMeld(container, meld, mySeat){
       ownEls.forEach(el=>container.appendChild(el));
       container.appendChild(calledEl);
     }
+  } else if(meld.type === 'kan'){
+    // Kan display: face-down for ankan (tiles 0 and 3 face down), open for daiminkan/kakan
+    const kanType=meld.kanType;
+    if(kanType==='ankan'){
+      // Closed kan: first and last tiles face down
+      const back1=document.createElement('div');back1.className='tile tmd kan-back';
+      const t1=mkElMd(meld.tiles[1]);
+      const t2=mkElMd(meld.tiles[2]);
+      const back2=document.createElement('div');back2.className='tile tmd kan-back';
+      [back1,t1,t2,back2].forEach(el=>container.appendChild(el));
+    } else {
+      // Daiminkan / kakan: all face up, called tile rotated
+      const called=meld.tiles.find(t=>t.id===meld.calledTileId);
+      const own=meld.tiles.filter(t=>t.id!==meld.calledTileId);
+      const calledEl=called?mkElMd(called):mkElMd(meld.tiles[3]);
+      calledEl.classList.add('called');
+      const ownEls=own.map(t=>mkElMd(t));
+      // Called tile on left
+      container.appendChild(calledEl);
+      ownEls.forEach(el=>container.appendChild(el));
+    }
   } else {
-    // Fallback (kan etc): plain display
     tiles.forEach(t=>container.appendChild(mkElMd(t)));
   }
 }
@@ -1140,38 +1141,53 @@ function drawActions(m){
   if(!m) return;
   bar.className='act-overlay';
   const mine=m.turn===mySeat, react=m.pending?.isForMe;
+  
 
   if(mine){
-    // ── TSUMO: only when server confirms it's a winning hand ──
-    if(m.canTsumo){
+    // TSUMO — server confirms winning hand with yaku
+    if(m.canTsumo)
       ab(bar,'TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
+
+    // ANKAN — closed kan: 4 tiles in hand (shown regardless of selection)
+    const canAnkan=m.canAnkan||[];
+    if(canAnkan.length>0){
+      // If multiple ankan possible, show one button per unique tile key
+      canAnkan.forEach(tileKey=>{
+        ab(bar,'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey}}));
+      });
     }
 
-    // ── RIICHI: server sends canRiichi = array of tile IDs that make tenpai ──
-    // Show RIICHI only when a valid riichi tile is selected (or if exactly one exists)
-    const canRiichi=m.canRiichi||[];
-    if(canRiichi.length>0){
-      // If a tile is selected and it's a valid riichi tile, show RIICHI button
-      if(selId&&canRiichi.includes(selId)){
-        ab(bar,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:selId}});selId=null;});
+    // KAKAN — add to existing pon: show when matching tile selected or only one option
+    const canKakan=m.canKakan||[];
+    if(canKakan.length>0){
+      if(selId&&canKakan.includes(selId)){
+        ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:selId}}));
+      } else if(canKakan.length===1&&!selId){
+        ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:canKakan[0]}}));
       }
     }
 
-    // ── DISCARD: only when a tile is selected and it's your turn ──
-    if(selId){
+    // RIICHI — selected tile must be in canRiichi list
+    const canRiichi=m.canRiichi||[];
+    if(canRiichi.length>0&&selId&&canRiichi.includes(selId))
+      ab(bar,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:selId}});selId=null;});
+
+    // DISCARD — tile selected
+    if(selId)
       ab(bar,'DISCARD','bdis',()=>{wss({type:'action',action:{type:'discard',tileId:selId}});selId=null;});
-    }
 
     if(bar.children.length>0) bar.classList.add('visible');
     else bar.classList.remove('visible');
 
   } else if(react){
-    // ── REACTIONS: only show buttons the server says are valid ──
     const opts=m.pending.options||[];
     if(opts.some(o=>o.type==='ron'))
       ab(bar,'RON','bron',()=>wss({type:'action',action:{type:'ron'}}));
     if(opts.some(o=>o.type==='pon'))
       ab(bar,'PON','bpon',()=>wss({type:'action',action:{type:'pon'}}));
+    // Daiminkan (called kan from discard)
+    if(opts.some(o=>o.type==='kan'))
+      ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kan'}}));
     if(opts.some(o=>o.type==='chi')){
       const c=opts.find(o=>o.type==='chi');
       ab(bar,'CHI','bchi',()=>wss({type:'action',action:{type:'chi',tileIds:c.sequences[0]}}));
