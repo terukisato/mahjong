@@ -113,27 +113,40 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
 /* H = min(13vmin,105px) = panel half-size */
 
-/* BOTTOM: top-left of zone = panel bottom-left. Rows grow down, tiles left→right. */
+/* H = min(13vmin,105px) — panel half-size. */
+
+/* BOTTOM: top-left of zone at panel bottom-left. No rotation. */
 .dzb{top:calc(50% + min(13vmin,105px));left:calc(50% - min(13vmin,105px));}
 
-/* TOP: their top-left = panel top-right (our coord). Zone bottom-right anchored there.
-   rotate(180°) at right-bottom so after rotation their visual TL = panel corner. */
+/* TOP: their visual top-left (= DOM bottom-right after 180°) at panel top-left.
+   Panel top-left = (50%-H, 50%-H). 
+   right=50%+H → element right edge at 50%-H.
+   bottom=50%+H → element bottom at 50%-H.
+   transform-origin: right bottom. 
+   Rows: DOM row-reverse so tiles go their left→right after 180° flip.
+   Columns: column-reverse so first row is at visual top (nearest panel). */
 .dzt{
-  bottom:calc(min(13vmin,105px));
-  right:calc(min(13vmin,105px));
+  bottom:calc(50% + min(13vmin,105px));
+  right:calc(50% + min(13vmin,105px));
   transform:rotate(180deg);
-  transform-origin:right bottom;}
+  transform-origin:right bottom;
+  flex-direction:column-reverse;}
+.dzt .dz-row{flex-direction:row-reverse;}
 
-/* LEFT: their top-left = panel bottom-left (our coord). Zone top-right anchored there.
-   rotate(90°) at right-top: zone unfolds leftward (away from panel = toward left player). */
+/* LEFT: their visual top-left (= DOM bottom-left after 90°CW) at panel bottom-left.
+   Panel bottom-left = (50%-H, 50%+H).
+   left=50%-H → element left edge at 50%-H.
+   bottom=50%-H → element bottom at 50%+H.
+   transform-origin: left bottom. */
 .dzl{
-  top:calc(50% + min(13vmin,105px));
-  right:calc(50% - min(13vmin,105px));
+  left:calc(50% - min(13vmin,105px));
+  bottom:calc(50% - min(13vmin,105px));
   transform:rotate(90deg);
-  transform-origin:right top;}
+  transform-origin:left bottom;}
 
-/* RIGHT: their top-left = panel bottom-right (our coord). Zone top-left anchored there.
-   rotate(-90°) at left-top: zone unfolds rightward (toward right player). */
+/* RIGHT: their visual top-left (= DOM top-left after -90°) at panel bottom-right.
+   Panel bottom-right = (50%+H, 50%+H).
+   left=50%+H, top=50%+H. transform-origin: left top. */
 .dzr{
   top:calc(50% + min(13vmin,105px));
   left:calc(50% + min(13vmin,105px));
@@ -208,9 +221,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   flex-shrink:0;position:relative;}
 .tsm::before{content:'';position:absolute;inset:2px;border:1px solid rgba(255,255,255,.12);border-radius:2px;}
 .tsm.rot{width:var(--tsm-h);height:var(--tsm-w);}
-.tdora{width:calc(var(--tmd-w) - 2px);height:calc(var(--tmd-h) - 2px);border-radius:3px;
-  background:linear-gradient(170deg,#fffdf4,#f8edd8);border:1px solid #c8a84a;border-bottom:2px solid #7a5c10;
-  box-shadow:1px 2px 4px rgba(0,0,0,.5);display:inline-flex;align-items:center;justify-content:center;}
+.tdora{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:5px;
+  background:linear-gradient(170deg,#fffdf4,#f8edd8);border:1px solid #c8a84a;border-bottom:3px solid #7a5c10;
+  box-shadow:2px 3px 8px rgba(0,0,0,.6),inset 0 2px 0 rgba(255,255,255,.95);
+  display:inline-flex;align-items:center;justify-content:center;}
 
 /* Hand layout */
 .hr{display:flex;align-items:flex-end;gap:2px;flex-wrap:nowrap;}
