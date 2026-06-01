@@ -72,56 +72,112 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
 /* Felt — responsive square using vmin */
 .felt{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:min(56vmin,460px);height:min(56vmin,460px);
+  width:min(96vmin,920px);height:min(96vmin,920px);
   background:radial-gradient(ellipse at 40% 35%,#27774a,#155230 60%,#0e3b24);
-  border-radius:14px;border:3px solid rgba(201,168,76,.5);
-  box-shadow:0 0 0 6px rgba(0,0,0,.5),0 0 80px rgba(0,0,0,.9),inset 0 0 50px rgba(0,0,0,.4);}
+  border-radius:16px;border:3px solid rgba(201,168,76,.5);
+  box-shadow:0 0 0 6px rgba(0,0,0,.5),0 0 80px rgba(0,0,0,.9),inset 0 0 60px rgba(0,0,0,.4);}
 
-/* Center info */
+/* Center info — solid opaque square */
 .ctr{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   text-align:center;z-index:5;pointer-events:none;
-  background:rgba(0,0,0,.55);border-radius:10px;padding:8px 12px;border:1px solid rgba(201,168,76,.2);
-  min-width:80px;}
-.cw{font-family:'Noto Serif JP',serif;font-size:clamp(20px,5vmin,30px);font-weight:900;color:var(--gl);filter:drop-shadow(0 0 8px rgba(201,168,76,.7));line-height:1;}
-.ci{font-size:clamp(7px,1.5vmin,9px);letter-spacing:2px;color:rgba(245,237,216,.4);margin-top:1px;}
-.cwl{font-size:clamp(9px,2vmin,11px);color:var(--jl);font-weight:700;margin-top:3px;}
-.ch{font-size:clamp(7px,1.5vmin,9px);color:rgba(245,237,216,.35);margin-top:1px;}
-.cdora{margin-top:5px;}.cdlbl{font-size:7px;letter-spacing:2px;color:rgba(201,168,76,.5);margin-bottom:2px;}.cdrow{display:flex;gap:2px;justify-content:center;}
-.tarrow{position:absolute;bottom:max(88px,11vmin);left:50%;transform:translateX(-50%);font-size:clamp(14px,3vmin,20px);z-index:20;pointer-events:none;filter:drop-shadow(0 0 6px rgba(255,220,50,.9));animation:bounce .7s ease-in-out infinite;}
+  background:#0a1e0f;
+  border-radius:6px;
+  border:2px solid rgba(201,168,76,.6);
+  width:min(26vmin,210px);height:min(26vmin,210px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:0;overflow:hidden;}
+/* Score rows use border lines as separators */
+.ctr-score{font-size:clamp(10px,1.8vmin,13px);font-weight:700;letter-spacing:1px;
+  width:100%;text-align:center;padding:5px 0;
+  border-bottom:1px solid rgba(201,168,76,.25);}
+.ctr-score:last-child{border-bottom:none;border-top:1px solid rgba(201,168,76,.25);}
+.ctr-mid{display:flex;align-items:center;width:100%;flex:1;min-height:0;}
+.ctr-side{flex:1;padding:4px;border-right:1px solid rgba(201,168,76,.25);}
+.ctr-side:last-child{border-right:none;border-left:1px solid rgba(201,168,76,.25);}
+.ctr-info{display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding:4px;}
+.cw{font-family:'Noto Serif JP',serif;font-size:clamp(26px,5.5vmin,38px);font-weight:900;color:var(--gl);line-height:1;}
+.ci{font-size:clamp(7px,1.3vmin,9px);letter-spacing:2px;color:rgba(245,237,216,.5);margin-top:2px;}
+.cwl{font-size:clamp(9px,1.8vmin,12px);color:var(--jl);font-weight:700;margin-top:3px;}
+.ch{font-size:clamp(7px,1.3vmin,9px);color:rgba(245,237,216,.4);margin-top:1px;}
+.cdrow{display:flex;gap:2px;}
+/* Empty dora slot placeholder */
+.dora-slot{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:5px;border:1px dashed rgba(201,168,76,.25);
+  background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;}
+.dora-slot.filled{border:none;background:none;padding:0;}
+.tarrow{position:absolute;bottom:max(16vmin,108px);left:50%;transform:translateX(-50%);font-size:clamp(14px,3vmin,20px);z-index:20;pointer-events:none;filter:drop-shadow(0 0 6px rgba(255,220,50,.9));animation:bounce .7s ease-in-out infinite;}
 @keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-5px)}}
 
-/* Discard zones — positioned relative to felt center using vmin */
-.dz{position:absolute;display:flex;flex-wrap:wrap;gap:1px;align-content:flex-start;}
-.dzb{bottom:max(90px,12vmin);left:50%;transform:translateX(-50%);width:min(145px,30vmin);justify-content:center;}
-.dzt{top:max(90px,12vmin);left:50%;transform:translateX(-50%) rotate(180deg);width:min(145px,30vmin);justify-content:center;}
-.dzl{left:max(90px,12vmin);top:50%;transform:translateY(-50%) rotate(90deg);width:min(110px,22vmin);}
-.dzr{right:max(90px,12vmin);top:50%;transform:translateY(-50%) rotate(-90deg);width:min(110px,22vmin);}
+/* Discard zones — top-left of zone aligns with panel bottom-left (from each player's view) */
+.dz{position:absolute;display:flex;flex-direction:column;gap:2px;pointer-events:none;}
+.dz-row{display:flex;flex-direction:row;gap:2px;}
 
-/* Player areas */
+/* H = min(13vmin,105px) = panel half-size */
+
+/* BOTTOM: top-left of zone = panel bottom-left. Rows grow down, tiles left→right. */
+.dzb{top:calc(50% + min(13vmin,105px));left:calc(50% - min(13vmin,105px));}
+
+/* TOP: their top-left = panel top-right (our coord). Zone bottom-right anchored there.
+   rotate(180°) at right-bottom so after rotation their visual TL = panel corner. */
+.dzt{
+  bottom:calc(min(13vmin,105px));
+  right:calc(min(13vmin,105px));
+  transform:rotate(180deg);
+  transform-origin:right bottom;}
+
+/* LEFT: their top-left = panel bottom-left (our coord). Zone top-right anchored there.
+   rotate(90°) at right-top: zone unfolds leftward (away from panel = toward left player). */
+.dzl{
+  top:calc(50% + min(13vmin,105px));
+  right:calc(50% - min(13vmin,105px));
+  transform:rotate(90deg);
+  transform-origin:right top;}
+
+/* RIGHT: their top-left = panel bottom-right (our coord). Zone top-left anchored there.
+   rotate(-90°) at left-top: zone unfolds rightward (toward right player). */
+.dzr{
+  top:calc(50% + min(13vmin,105px));
+  left:calc(50% + min(13vmin,105px));
+  transform:rotate(-90deg);
+  transform-origin:left top;}
+
+/* Riichi tile: rotated 90° within its zone row (from each player's perspective) */
+.dz-riichi{display:inline-flex;transform:rotate(90deg);transform-origin:center center;
+  margin:0 calc(var(--tmd-h,40px)/2 - var(--tmd-w,30px)/2);}
+
+/* Player areas — all inside the felt */
 .pa{position:absolute;display:flex;align-items:center;z-index:15;}
-.pa-b{bottom:0;left:0;right:0;flex-direction:column;padding-bottom:2px;justify-content:flex-end;align-items:center;}
-.pa-t{top:0;left:0;right:0;flex-direction:column-reverse;padding-top:2px;align-items:center;}
-.pa-l{left:0;top:0;bottom:0;flex-direction:row;padding-left:2px;align-items:center;}
-.pa-r{right:0;top:0;bottom:0;flex-direction:row-reverse;padding-right:2px;align-items:center;}
+/* Bottom (me): nameplate above hand, sits at bottom INSIDE felt */
+.pa-b{bottom:8%;left:0;right:0;flex-direction:column;align-items:center;}
+/* Top: nameplate BELOW tiles from top player's view.
+   column layout: tiles first in DOM (near screen top), nameplate second (toward felt) */
+.pa-t{top:8%;left:0;right:0;flex-direction:column;align-items:center;}
+/* Left: pivot point 10% from left edge, centred vertically, rotated 90° CW */
+.pa-l{position:absolute;top:50%;left:8%;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  transform:translate(-50%,-50%) rotate(90deg);}
+/* Right: pivot point 10% from right edge, centred vertically, rotated 90° CCW */
+.pa-r{position:absolute;top:50%;right:8%;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  transform:translate(50%,-50%) rotate(-90deg);}
 
 /* Nameplates */
-.np{background:rgba(5,15,8,.95);border:2px solid rgba(201,168,76,.25);border-radius:8px;
-  padding:4px 9px;display:flex;align-items:center;gap:6px;
+.np{background:rgba(5,15,8,.95);border:2px solid rgba(201,168,76,.25);border-radius:10px;
+  padding:7px 14px;display:flex;align-items:center;gap:9px;
   z-index:20;transition:all .25s;flex-shrink:0;white-space:nowrap;}
 .np.active{background:rgba(8,32,16,.97);border-color:#ffdd44;
   box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 16px rgba(255,221,68,.5);animation:glow 1s ease-in-out infinite;}
 @keyframes glow{0%,100%{box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 14px rgba(255,221,68,.4);}50%{box-shadow:0 0 0 3px rgba(255,221,68,.55),0 0 28px rgba(255,221,68,.7);}}
-.wb{font-family:'Noto Serif JP',serif;font-size:13px;font-weight:900;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;}
-.pname{font-size:10px;font-weight:700;color:#fff;max-width:70px;overflow:hidden;text-overflow:ellipsis;}
-.pscore{font-size:9px;color:var(--gl);}
-.btag{font-size:7px;color:rgba(201,168,76,.5);}
+.wb{font-family:'Noto Serif JP',serif;font-size:17px;font-weight:900;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;}
+.pname{font-size:14px;font-weight:700;color:#fff;max-width:110px;overflow:hidden;text-overflow:ellipsis;}
+.pscore{font-size:13px;color:var(--gl);}
+.btag{font-size:10px;color:rgba(201,168,76,.5);}
 .rs{display:inline-block;width:4px;height:22px;background:linear-gradient(180deg,#fff,#ddd);border-radius:3px;border:1px solid #bbb;margin-left:3px;}
 .tenpai{display:inline-block;padding:2px 6px;border-radius:4px;background:linear-gradient(135deg,#6a0f0f,#c02020);color:#fff;font-size:8px;letter-spacing:1px;font-family:'Cinzel Decorative',serif;animation:pulse 1s infinite;margin-left:3px;}
 
 /* ── TILES ──
    All sizes driven by CSS vars set dynamically by JS on resize.
    This makes everything scale to fit any screen. */
-.tile{position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:default;flex-shrink:0;overflow:hidden;}
+.tile{position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:default;flex-shrink:0;overflow:hidden;pointer-events:none;}
 
 .tlg{
   width:var(--tlg-w);height:var(--tlg-h);border-radius:5px;
@@ -129,24 +185,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   border:1px solid #c8a84a;border-bottom:3px solid #7a5c10;
   box-shadow:2px 3px 8px rgba(0,0,0,.6),inset 0 2px 0 rgba(255,255,255,.95);
   transition:transform .12s ease,box-shadow .12s ease;}
-.tlg.play{cursor:pointer;}
+.tlg.play{cursor:pointer;pointer-events:auto;}
 .tlg.play:hover,.tlg.play:active{transform:translateY(-10px);box-shadow:2px 12px 18px rgba(0,0,0,.7),inset 0 2px 0 rgba(255,255,255,.95);z-index:20;}
 .tlg.sel{transform:translateY(-16px);box-shadow:0 0 0 3px #00ffaa,2px 18px 24px rgba(0,0,0,.75);z-index:25;}
 
 /* Draw tile — far right, taller glow, shimmer animation */
 .tlg.drw{
   border-color:#ffe066;
-  box-shadow:2px 3px 8px rgba(0,0,0,.6),
-    0 0 0 2px rgba(255,220,50,.7),
-    0 0 20px rgba(255,200,0,.8),
-    0 0 40px rgba(201,168,76,.5),
-    inset 0 2px 0 rgba(255,255,255,.95);
-  animation:drawShimmer 1.2s ease-in-out infinite;
+  box-shadow:2px 3px 8px rgba(0,0,0,.6),0 0 0 2px rgba(255,220,50,.6),inset 0 2px 0 rgba(255,255,255,.95);
   z-index:5;}
-@keyframes drawShimmer{
-  0%,100%{box-shadow:2px 3px 8px rgba(0,0,0,.6),0 0 0 2px rgba(255,220,50,.7),0 0 16px rgba(255,200,0,.7),inset 0 2px 0 rgba(255,255,255,.95);}
-  50%{box-shadow:2px 3px 8px rgba(0,0,0,.6),0 0 0 3px rgba(255,220,50,1),0 0 30px rgba(255,200,0,1),0 0 50px rgba(201,168,76,.7),inset 0 2px 0 rgba(255,255,255,.95);}
-}
 
 .tmd{
   width:var(--tmd-w);height:var(--tmd-h);border-radius:3px;
@@ -188,52 +235,72 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .bpon{background:linear-gradient(135deg,#4a2800,#8a5000);color:#ffe0b0;border:2px solid #ca0;}
 .bpas{background:rgba(30,30,30,.9);color:rgba(245,237,216,.65);border:1px solid rgba(255,255,255,.15);}
 
-/* Chat */
-/* Toggle button */
-.chat-toggle{position:fixed;bottom:60px;right:10px;width:36px;height:36px;
-  background:rgba(26,107,69,.85);border:1px solid var(--jl);border-radius:50%;
-  color:var(--cream);font-size:16px;cursor:pointer;z-index:75;
-  display:none;align-items:center;justify-content:center;
-  box-shadow:0 2px 8px rgba(0,0,0,.5);transition:all .2s;}
-.chat-toggle:hover{background:rgba(42,158,103,.9);}
-.chat-toggle.has-unread{border-color:#ffdd44;box-shadow:0 0 10px rgba(255,221,68,.5);}
-
-/* History panel */
-.chat-panel{position:fixed;bottom:60px;right:10px;width:clamp(240px,40vw,320px);
-  background:rgba(5,14,8,.96);border:1px solid rgba(201,168,76,.3);border-radius:12px;
-  z-index:74;display:none;flex-direction:column;overflow:hidden;
-  box-shadow:0 8px 32px rgba(0,0,0,.7);}
+/* Chat — compact bottom-right corner widget */
+/* Chat bar: fixed to bottom-right, sits above action bar */
+.chat-bar{
+  position:fixed;bottom:58px;right:12px;
+  display:none;flex-direction:row;align-items:center;gap:5px;
+  background:rgba(3,12,6,.95);border:1px solid rgba(201,168,76,.25);
+  border-radius:10px;padding:5px 8px;z-index:65;
+  box-shadow:0 4px 16px rgba(0,0,0,.6);}
+.chat-input{width:160px;padding:5px 8px;background:rgba(0,0,0,.45);
+  border:1px solid rgba(201,168,76,.2);border-radius:7px;
+  color:var(--cream);font-size:12px;outline:none;font-family:'Noto Sans JP',sans-serif;}
+.chat-input:focus{border-color:var(--jl);}
+.chat-send{padding:0 10px;height:26px;background:rgba(26,107,69,.8);
+  border:1px solid var(--jl);border-radius:7px;color:var(--cream);
+  font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
+.chat-send:hover{background:rgba(42,158,103,.9);}
+/* History button */
+.chat-hist-btn{position:relative;width:26px;height:26px;padding:0;
+  background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);
+  border-radius:7px;color:var(--gl);font-size:15px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  transition:background .2s;}
+.chat-hist-btn:hover{background:rgba(201,168,76,.30);}
+.chat-hist-btn.open{background:rgba(201,168,76,.25);color:#fff;}
+.chat-hist-btn .badge{position:absolute;top:-6px;right:-6px;
+  background:#c02020;color:#fff;font-size:9px;font-weight:700;
+  min-width:16px;height:16px;border-radius:8px;display:none;
+  align-items:center;justify-content:center;padding:0 3px;}
+.chat-hist-btn .badge.show{display:flex;}
+/* History popup — opens upward from chat bar */
+.chat-panel{position:fixed;bottom:106px;right:12px;
+  width:clamp(220px,35vw,300px);max-height:260px;
+  background:rgba(5,14,8,.97);border:1px solid rgba(201,168,76,.3);
+  border-radius:12px;z-index:74;display:none;flex-direction:column;
+  overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.8);
+  animation:slideUpChat .2s ease;}
+@keyframes slideUpChat{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .chat-panel.open{display:flex;}
-.chat-panel-header{padding:8px 12px;background:rgba(26,107,69,.3);border-bottom:1px solid rgba(201,168,76,.2);
-  font-size:11px;letter-spacing:2px;color:var(--gold);font-family:'Cinzel Decorative',serif;
+.chat-panel-header{padding:7px 12px;background:rgba(26,107,69,.25);
+  border-bottom:1px solid rgba(201,168,76,.2);font-size:10px;letter-spacing:2px;
+  color:var(--gold);font-family:'Cinzel Decorative',serif;
   display:flex;justify-content:space-between;align-items:center;}
-.chat-close{background:none;border:none;color:rgba(245,237,216,.5);font-size:16px;cursor:pointer;line-height:1;padding:0 2px;}
+.chat-close{background:none;border:none;color:rgba(245,237,216,.45);
+  font-size:15px;cursor:pointer;line-height:1;padding:0;}
 .chat-close:hover{color:var(--cream);}
-.chat-history{flex:1;overflow-y:auto;max-height:200px;padding:8px;display:flex;flex-direction:column;gap:5px;}
+.chat-history{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:5px;}
 .chat-history::-webkit-scrollbar{width:4px;}
-.chat-history::-webkit-scrollbar-track{background:transparent;}
 .chat-history::-webkit-scrollbar-thumb{background:rgba(201,168,76,.3);border-radius:2px;}
 .chat-entry{display:flex;flex-direction:column;gap:1px;}
 .chat-entry-who{font-size:9px;letter-spacing:1px;font-weight:700;}
 .chat-entry-text{font-size:12px;color:var(--cream);background:rgba(255,255,255,.05);
   border-radius:6px;padding:4px 8px;line-height:1.4;word-break:break-word;}
 .chat-entry-time{font-size:8px;color:rgba(245,237,216,.3);margin-top:1px;}
-.chat-input-row{display:flex;gap:5px;padding:8px;border-top:1px solid rgba(201,168,76,.15);}
-.chat-input{flex:1;padding:5px 8px;background:rgba(0,0,0,.4);border:1px solid rgba(201,168,76,.2);
-  border-radius:7px;color:var(--cream);font-size:12px;outline:none;font-family:'Noto Sans JP',sans-serif;}
-.chat-input:focus{border-color:var(--jl);}
-.chat-send{padding:0 10px;height:28px;background:rgba(26,107,69,.7);border:1px solid var(--jl);
-  border-radius:7px;color:var(--cream);font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;}
-.chat-send:hover{background:rgba(42,158,103,.9);}
 
-/* Floating big message (unchanged) */
-.chat-float{position:fixed;left:50%;transform:translateX(-50%);z-index:180;pointer-events:none;
-  display:flex;flex-direction:column;align-items:center;gap:8px;bottom:140px;width:92%;}
-.chat-msg{font-family:'Noto Serif JP',serif;font-size:clamp(20px,5vw,44px);font-weight:900;
-  text-shadow:0 0 20px rgba(201,168,76,.9),0 2px 8px rgba(0,0,0,.9),0 0 40px rgba(201,168,76,.5);
-  text-align:center;letter-spacing:2px;animation:chatFloat 5s ease forwards;white-space:nowrap;line-height:1.2;}
-.chat-msg .chat-who{font-size:.42em;color:var(--gl);display:block;letter-spacing:3px;margin-bottom:2px;}
-@keyframes chatFloat{0%{opacity:0;transform:translateY(20px) scale(.85);}10%{opacity:1;transform:translateY(0) scale(1);}70%{opacity:1;transform:translateY(-10px) scale(1);}100%{opacity:0;transform:translateY(-40px) scale(.95);}}
+/* Floating chat messages — appear on left or right side randomly */
+.chat-float{position:fixed;z-index:300;pointer-events:none;
+  top:50%;width:auto;max-width:36vw;}
+.chat-float.side-left{left:4%;right:auto;transform:translateY(-50%);}
+.chat-float.side-right{right:4%;left:auto;transform:translateY(-50%);}
+.chat-msg{font-family:'Noto Serif JP',serif;font-size:clamp(16px,3vw,32px);font-weight:900;
+  text-shadow:0 0 16px rgba(201,168,76,.9),0 2px 8px rgba(0,0,0,.9);
+  letter-spacing:2px;animation:chatFloat 5s ease forwards;line-height:1.3;
+  background:rgba(3,10,5,.8);border:1px solid rgba(201,168,76,.3);
+  border-radius:10px;padding:10px 14px;margin-bottom:10px;word-break:break-word;}
+.chat-msg .chat-who{font-size:.45em;color:var(--gl);display:block;letter-spacing:3px;margin-bottom:3px;}
+@keyframes chatFloat{0%{opacity:0;transform:translateX(-20px) scale(.9);}10%{opacity:1;transform:translateX(0) scale(1);}75%{opacity:1;}100%{opacity:0;transform:translateY(-20px) scale(.95);}}
 
 /* Toast */
 .tc{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:200;pointer-events:none;}
@@ -288,91 +355,124 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
     <button class="bl" id="bleave">✕ Leave</button>
   </div>
   <div class="table">
-    <div class="felt"></div>
-    <div class="ctr">
-      <div class="cw" id="cw">東</div><div class="ci" id="ci">Round 1</div>
-      <div class="cwl" id="cwl">136</div><div class="ch" id="chonba"></div>
-      <div class="cdora"><div class="cdlbl">DORA</div><div class="cdrow" id="cdrow"></div></div>
-    </div>
-    <div id="tarrow" class="tarrow" style="display:none">▲</div>
-    <div class="dz dzb" id="dzb"></div>
-    <div class="dz dzt" id="dzt"></div>
-    <div class="dz dzl" id="dzl"></div>
-    <div class="dz dzr" id="dzr"></div>
+    <div class="felt">
 
-    <!-- BOTTOM — me, nameplate on top of hand -->
-    <div class="pa pa-b" id="pa-b">
-      <!-- Nameplate row — in front / above tiles -->
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;position:relative;z-index:20;">
-        <div class="np" id="npb"><div class="wb" id="wbb">東</div><div><div class="pname" id="pnb">You</div><div class="pscore" id="psb">25,000</div></div></div>
-        <span id="rsb" style="display:none" class="rs"></span>
-        <span id="tpb" style="display:none" class="tenpai">TENPAI</span>
-      </div>
-      <!-- Hand tiles row -->
-      <div style="display:flex;align-items:flex-end;gap:10px;">
-        <div class="mr" id="mlb"></div>
-        <div class="hr" id="hdb"></div>
-      </div>
-    </div>
 
-    <!-- TOP — opponent. Nameplate below (closer to felt), tiles above it.
-         The tiles themselves are displayed rotate(180deg) so they read correctly from the top player's seat. -->
-    <div class="pa pa-t" id="pa-t">
-      <!-- Tiles (rendered last in DOM = visually bottom of flex-column-reverse = closest to felt) -->
-      <div style="display:flex;align-items:flex-end;gap:6px;">
-        <div class="mr" id="mlt"></div>
-        <div class="oh rot180" id="hdt"></div>
-      </div>
-      <!-- Nameplate — sits between tiles and edge, normal orientation -->
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;position:relative;z-index:20;">
-        <div class="np" id="npt"><div class="wb" id="wbt">西</div><div><div class="pname" id="pnt">—</div><div class="pscore" id="pst">25,000</div><div class="btag" id="btt"></div></div></div>
-        <span id="rst" style="display:none" class="rs"></span>
-      </div>
-    </div>
 
-    <!-- LEFT — opponent. Nameplate to the right of tiles (toward felt). -->
-    <div class="pa pa-l" id="pa-l">
-      <!-- Tiles first in DOM = leftmost -->
-      <div class="oh v" id="hdl"></div>
-      <!-- Nameplate closer to felt -->
-      <div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-left:6px;position:relative;z-index:20;">
-        <div class="np" id="npl"><div class="wb" id="wbl">北</div><div><div class="pname" id="pnl">—</div><div class="pscore" id="psl">25,000</div><div class="btag" id="btl"></div></div></div>
-        <span id="rsl" style="display:none" class="rs" style="width:24px;height:5px;"></span>
+      <!-- CENTER INFO -->
+      <div class="ctr">
+        <!-- Top score row — rotated 180° for top player's reading direction -->
+        <div class="ctr-score" style="color:rgba(240,208,128,.9);transform:rotate(180deg);">
+          <span id="ctr-s-t">25,000</span>
+        </div>
+        <!-- Middle: left score | wind info | right score -->
+        <div class="ctr-mid">
+          <!-- Left score — rotated 90° CW for left player's reading direction -->
+          <div class="ctr-side" style="text-align:center;">
+            <span id="ctr-s-l" style="font-size:clamp(10px,1.8vmin,13px);font-weight:700;
+              color:rgba(240,208,128,.9);letter-spacing:1px;white-space:nowrap;
+              display:inline-block;transform:rotate(90deg);">25,000</span>
+          </div>
+          <!-- Wind + round info -->
+          <div class="ctr-info">
+            <div class="cw" id="cw">東</div>
+            <div class="ci" id="ci">Round 1</div>
+            <div class="cwl" id="cwl">136</div>
+            <div class="ch" id="chonba"></div>
+          </div>
+          <!-- Right score — rotated -90° for right player's reading direction -->
+          <div class="ctr-side" style="text-align:center;">
+            <span id="ctr-s-r" style="font-size:clamp(10px,1.8vmin,13px);font-weight:700;
+              color:rgba(240,208,128,.9);letter-spacing:1px;white-space:nowrap;
+              display:inline-block;transform:rotate(-90deg);">25,000</span>
+          </div>
+        </div>
+        <!-- Bottom score row — my score, yellow -->
+        <div class="ctr-score" style="color:#ffee66;">
+          <span id="ctr-s-b">25,000</span>
+        </div>
       </div>
-    </div>
+      <div id="tarrow" class="tarrow" style="display:none">▲</div>
 
-    <!-- RIGHT — opponent. Nameplate to the left of tiles (toward felt). -->
-    <div class="pa pa-r" id="pa-r">
-      <!-- Nameplate closer to felt (first in row-reverse) -->
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-right:6px;position:relative;z-index:20;">
-        <div class="np" id="npr"><div class="wb" id="wbr">南</div><div><div class="pname" id="pnr">—</div><div class="pscore" id="psr">25,000</div><div class="btag" id="btr"></div></div></div>
-        <span id="rsr" style="display:none" class="rs"></span>
+      <!-- DISCARD ZONES -->
+      <div class="dz dzb" id="dzb"></div>
+      <div class="dz dzt" id="dzt"></div>
+      <div class="dz dzl" id="dzl"></div>
+      <div class="dz dzr" id="dzr"></div>
+
+      <!-- BOTTOM (me): nameplate above hand, tiles at bottom rim -->
+      <div class="pa pa-b" id="pa-b">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:5px;position:relative;z-index:20;">
+          <div class="np" id="npb"><div class="wb" id="wbb">東</div><div><div class="pname" id="pnb">—</div></div></div>
+          <span id="rsb" style="display:none" class="rs"></span>
+          <span id="tpb" style="display:none" class="tenpai">TENPAI</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:10px;">
+          <div class="mr" id="mlb"></div>
+          <div class="hr" id="hdb"></div>
+        </div>
       </div>
-      <!-- Tiles -->
-      <div class="oh v" id="hdr"></div>
-    </div>
+
+      <!-- TOP: tiles at top rim (rot180), nameplate below from their view (also rot180) -->
+      <div class="pa pa-t" id="pa-t">
+        <div style="display:flex;align-items:flex-end;gap:6px;">
+          <div class="mr" id="mlt"></div>
+          <div class="oh rot180" id="hdt"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;position:relative;z-index:20;transform:rotate(180deg);">
+          <div class="np" id="npt"><div class="wb" id="wbt">西</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
+          <span id="rst" style="display:none" class="rs"></span>
+        </div>
+      </div>
+
+      <!-- LEFT: nameplate outer, tiles inner; whole group rotated 90° CW -->
+      <div class="pa pa-l" id="pa-l">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;z-index:20;">
+          <div class="np" id="npl"><div class="wb" id="wbl">北</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
+          <span id="rsl" style="display:none" class="rs"></span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:4px;">
+          <div class="mr" id="mll"></div>
+          <div class="oh" id="hdl"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT: nameplate outer, tiles inner; whole group rotated 90° CCW -->
+      <div class="pa pa-r" id="pa-r">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;z-index:20;">
+          <div class="np" id="npr"><div class="wb" id="wbr">南</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
+          <span id="rsr" style="display:none" class="rs"></span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:4px;">
+          <div class="mr" id="mlr"></div>
+          <div class="oh" id="hdr"></div>
+        </div>
+      </div>
+
+    </div><!-- end .felt -->
   </div>
 
   <div class="actbar" id="actbar"><span class="hint">Waiting...</span></div>
 
-  <!-- Chat toggle button -->
-  <button class="chat-toggle" id="chat-toggle" title="Chat">💬</button>
+  <!-- Always-visible chat input bar (shown during game) -->
+  <div class="chat-bar" id="chat-bar">
+    <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off">
+    <button class="chat-send" id="chat-send">Send</button>
+    <button class="chat-hist-btn" id="chat-hist-btn" title="Chat history">
+      &#8963;
+      <span class="badge" id="chat-badge">0</span>
+    </button>
+  </div>
 
-  <!-- Chat panel with history -->
+  <!-- History popup -->
   <div class="chat-panel" id="chat-panel">
     <div class="chat-panel-header">
-      <span>Chat</span>
+      <span>Chat History</span>
       <button class="chat-close" id="chat-close">✕</button>
     </div>
     <div class="chat-history" id="chat-history"></div>
-    <div class="chat-input-row">
-      <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off">
-      <button class="chat-send" id="chat-send">Send</button>
-    </div>
   </div>
 
-  <!-- Floating big chat messages -->
-  <div class="chat-float" id="chat-float"></div>
 </div>
 
 <!-- ════ ROUND END ════ -->
@@ -385,22 +485,39 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   </div>
 </div>
 <div class="tc" id="tc"></div>
+<div class="chat-float" id="chat-float"></div>
+
+<!-- DORA — fixed top-left of window -->
+<div id="dora-panel" style="position:fixed;top:44px;left:8px;z-index:80;pointer-events:none;
+  background:rgba(8,25,12,.97);
+  border:2px solid rgba(201,168,76,.5);
+  border-radius:12px;
+  padding:14px 16px 16px;
+  display:none;
+  box-shadow:0 4px 24px rgba(0,0,0,.8),inset 0 1px 0 rgba(201,168,76,.2);">
+  <div style="font-size:11px;letter-spacing:4px;color:rgba(201,168,76,.9);
+    margin-bottom:10px;font-family:'Cinzel Decorative',serif;
+    text-align:center;
+    border-bottom:1px solid rgba(201,168,76,.25);padding-bottom:8px;">DORA</div>
+  <!-- 5 fixed slots -->
+  <div style="display:flex;gap:6px;align-items:flex-end;">
+    <div id="dora-slot-0" class="dora-slot"></div>
+    <div id="dora-slot-1" class="dora-slot"></div>
+    <div id="dora-slot-2" class="dora-slot"></div>
+    <div id="dora-slot-3" class="dora-slot"></div>
+    <div id="dora-slot-4" class="dora-slot"></div>
+  </div>
+</div>
 
 <script>
 // ══ SVG Tile Renderer ═══════════════════════════════════════════════════════
 // ══ Japanese Mahjong Tile Renderer ═══════════════════════════════════════════
-// Man: large kanji + 萬 label  (red)
-// Pin: concentric circle rings arranged in patterns  (blue/red)
-// Sou: distinct bamboo sticks per value with unique color bands  (green + accent)
-//      1-sou = special bird on stick design
-// Honor: large kanji, colour-coded
-
-const MK=['','一','二','三','四','五','六','七','八','九'];
+// Pixel-faithful recreation of authentic Japanese riichi mahjong tiles.
 
 function tsvg(t,w,h){
   if(!t) return '';
   const s=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
-  const e=`</svg>`;
+  const e='</svg>';
   if(t.s==='m') return s+svgMan(t.v,w,h)+e;
   if(t.s==='p') return s+svgPin(t.v,w,h)+e;
   if(t.s==='s') return s+svgSou(t.v,w,h)+e;
@@ -408,146 +525,264 @@ function tsvg(t,w,h){
   return '';
 }
 
-// ── Man (Characters) ─────────────────────────────────────────────────────────
-// Clean kanji numeral + 萬 label, authentic red
+// ══════════════════════════════════════════════════════════════
+// MAN (マンズ) — Characters
+// Numeral: red, large, centred in upper ~65% of tile
+// 萬: small red label, bottom 18%
+// ══════════════════════════════════════════════════════════════
+const MAN_K=['','一','二','三','四','伍','六','七','八','九'];
 function svgMan(v,w,h){
-  const kanji=['','一','二','三','四','五','六','七','八','九'][v];
-  const fs=Math.round(h*.46), sf=Math.round(h*.17);
-  return `<text x="${w/2}" y="${h*.27}" text-anchor="middle" font-family="'Noto Serif JP',serif" font-size="${sf}" font-weight="700" fill="#b81c1c">萬</text>`+
-         `<text x="${w/2}" y="${h*.82}" text-anchor="middle" font-family="'Noto Serif JP',serif" font-size="${fs}" font-weight="900" fill="#c02020">${kanji}</text>`;
+  const nfs=Math.round(h*.48);
+  const lfs=Math.round(h*.16);
+  // Numeral sits in upper zone, 萬 tight to bottom
+  return (
+    `<text x="${w*.5}" y="${h*.58}" text-anchor="middle" dominant-baseline="middle" `+
+    `font-family="'Noto Serif JP',serif" font-size="${nfs}px" font-weight="900" fill="#c82020">`+
+    MAN_K[v]+`</text>`+
+    `<text x="${w*.5}" y="${h*.88}" text-anchor="middle" dominant-baseline="middle" `+
+    `font-family="'Noto Serif JP',serif" font-size="${lfs}px" font-weight="700" fill="#c82020">萬</text>`
+  );
 }
 
-// ── Pin (Circles) ─────────────────────────────────────────────────────────────
-// Each circle = outer blue ring + white gap + inner red dot
-// Sizes and layouts match Japanese tile conventions
+// ══════════════════════════════════════════════════════════════
+// PIN (ピンズ) — Circles
+// Each circle: thick red stroke ring (outer), white gap, thick dark-green stroke ring (inner), cream centre fill
+// From image: rings are stroke-based NOT filled discs
+// 1-pin: single large circle ~55% of min dimension
+// 2–9: tightly packed grid, circles slightly smaller
+// ══════════════════════════════════════════════════════════════
 function svgPin(v,w,h){
-  const positions=pinPos(v,w,h);
-  // Radius scales with count: fewer = bigger circles
+  const pos=pinPos(v,w,h);
   const base=Math.min(w,h);
-  const r=base*(v===1?.30:v<=4?.185:.155);
-  return positions.map(([cx,cy])=>pinCircle(cx,cy,r)).join('');
+  // Radius table — larger for low counts, tighter for high
+  const rMap={1:.28,2:.22,3:.195,4:.165,5:.155,6:.142,7:.135,8:.125,9:.118};
+  const r=base*(rMap[v]||.13);
+  return pos.map(([cx,cy])=>pinCircle(cx,cy,r)).join('');
 }
 
 function pinCircle(cx,cy,r){
-  const sw=Math.max(1.5,r*.32);
-  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#fdf0e0" stroke="#1050a0" stroke-width="${sw}"/>`+
-         `<circle cx="${cx}" cy="${cy}" r="${r*.38}" fill="#c82020"/>`;
+  // Outer red ring (stroke)
+  const outerSW=Math.max(1.2, r*.38);
+  // Inner dark-green ring (stroke), sits inside the red gap
+  const innerR=r*.58;
+  const innerSW=Math.max(1.0, innerR*.42);
+  return (
+    // Cream background disc
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#f4eedc"/>`+
+    // Outer red ring
+    `<circle cx="${cx}" cy="${cy}" r="${r-(outerSW/2)}" fill="none" stroke="#c82020" stroke-width="${outerSW}"/>`+
+    // Inner dark-green ring
+    `<circle cx="${cx}" cy="${cy}" r="${innerR}" fill="none" stroke="#1a5c28" stroke-width="${innerSW}"/>`
+  );
 }
 
 function pinPos(v,w,h){
-  const cx=w/2,cy=h/2,dx=w*.285,dy=h*.235;
-  const G={
-    1:[[cx,cy]],
-    2:[[cx,cy-dy*1.05],[cx,cy+dy*1.05]],
-    3:[[cx,cy-dy*1.05],[cx,cy],[cx,cy+dy*1.05]],
-    4:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
-    5:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx,cy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
-    6:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx-dx,cy],[cx+dx,cy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
-    7:[[cx-dx,cy-dy*1.3],[cx+dx,cy-dy*1.3],[cx-dx,cy-dy*.02],[cx+dx,cy-dy*.02],[cx,cy-dy*.66],[cx-dx,cy+dy*1.2],[cx+dx,cy+dy*1.2]],
-    8:[[cx-dx,cy-dy*1.3],[cx,cy-dy*1.3],[cx+dx,cy-dy*1.3],[cx-dx,cy],[cx+dx,cy],[cx-dx,cy+dy*1.3],[cx,cy+dy*1.3],[cx+dx,cy+dy*1.3]],
-    9:[[cx-dx,cy-dy*1.3],[cx,cy-dy*1.3],[cx+dx,cy-dy*1.3],[cx-dx,cy],[cx,cy],[cx+dx,cy],[cx-dx,cy+dy*1.3],[cx,cy+dy*1.3],[cx+dx,cy+dy*1.3]]
+  const cx=w/2, cy=h/2;
+  // dx/dy: column/row spacing. Tighter for more circles.
+  const spacing={
+    1:{dx:0,  dy:0,   rows:[[0,0]]},
+    2:{dx:0,  dy:.28, rows:[[0,-1],[0,1]]},
+    3:{dx:0,  dy:.26, rows:[[0,-1],[0,0],[0,1]]},
+    4:{dx:.22,dy:.26, rows:[[-1,-1],[1,-1],[-1,1],[1,1]]},
+    5:{dx:.22,dy:.26, rows:[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]]},
+    6:{dx:.22,dy:.22, rows:[[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]]},
+    7:{dx:.22,dy:.2,  rows:[[-1,-1.4],[1,-1.4],[-1,-.35],[1,-.35],[0,-.87],[-1,.75],[1,.75]]},
+    8:{dx:.22,dy:.2,  rows:[[-1,-1.5],[0,-1.5],[1,-1.5],[-1,-.5],[1,-.5],[-1,.5],[0,.5],[1,.5]]},
+    9:{dx:.2, dy:.19, rows:[[-1,-1.5],[0,-1.5],[1,-1.5],[-1,-.5],[0,-.5],[1,-.5],[-1,.5],[0,.5],[1,.5]]},
   };
-  return G[v]||[];
+  const sp=spacing[v];
+  if(!sp) return [];
+  return sp.rows.map(([gx,gy])=>[cx+gx*sp.dx*w, cy+gy*sp.dy*h]);
 }
 
-// ── Sou (Bamboo) ─────────────────────────────────────────────────────────────
-// Each bamboo stick is a proper segmented stalk:
-//   - dark green body with lighter green highlight stripe
-//   - gold/brown joint bands at top and bottom
-//   - distinct height and column layout per value
-// 1-sou = bird on single stick (traditional design)
+// ══════════════════════════════════════════════════════════════
+// SOU (ソウズ) — Bamboo
+// From image: sticks are VERY THIN and TALL relative to tile
+// Each stick has: dark-green rounded rect body, lighter green fill,
+// one thin RED band exactly at the centre joint
+// 5-sou: centre stick is RED (not green)
+// Columns: 1 col for 2–3, 2 cols for 4–9, 3 cols for 9
+// ══════════════════════════════════════════════════════════════
 function svgSou(v,w,h){
   if(v===1) return souBird(w,h);
-  const positions=souPos(v,w,h);
-  // Stick dimensions scale by count
-  const bw=w*(v<=2?.22:v<=5?.19:.16);
-  const bh=h*(v<=2?.7:v<=5?.44:v<=7?.33:.27);
-  return positions.map(([rx,ry],i)=>souStick(rx,ry,bw,bh,i)).join('');
+  const sticks=souLayout(v,w,h);
+  return sticks.map(([cx,cy,sw,sh,isRed])=>souStick(cx,cy,sw,sh,isRed)).join('');
 }
 
-// Single bamboo stick at (cx,cy) — detailed with joints and highlight
-function souStick(cx,cy,bw,bh,idx){
-  const x=cx-bw/2, y=cy-bh/2;
-  const r=bw*.3;
-  // Alternate two shades of green for adjacent sticks so they're visually distinct
-  const body=idx%2===0?'#1a7830':'#1d8f38';
-  const hi=idx%2===0?'#26a845':'#2dbd52';
-  const joint='#c8a020'; // gold band
-  const jh=bh*.09; // joint band height
-  return (
-    // Main body
-    `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="${r}" fill="${body}"/>`+
-    // Highlight stripe (left edge)
-    `<rect x="${x+bw*.1}" y="${y+bh*.06}" width="${bw*.22}" height="${bh*.88}" rx="${r*.4}" fill="${hi}" opacity="0.55"/>`+
-    // Top joint band
-    `<rect x="${x}" y="${y+bh*.1}" width="${bw}" height="${jh}" rx="1" fill="${joint}" opacity="0.85"/>`+
-    // Bottom joint band
-    `<rect x="${x}" y="${y+bh*.81}" width="${bw}" height="${jh}" rx="1" fill="${joint}" opacity="0.85"/>`+
-    // Node dot in center
-    `<circle cx="${cx}" cy="${cy}" r="${bw*.14}" fill="${joint}" opacity="0.7"/>`
-  );
-}
-
-// 1-sou: single green stick + stylised bird perched on top
-function souBird(w,h){
-  const cx=w/2,stickX=cx-w*.08,stickW=w*.16,stickY=h*.22,stickH=h*.62,r=stickW*.35;
-  const bh=stickH,bw=stickW;
-  const joint='#c8a020';const jh=bh*.09;
-  const stick=(
-    `<rect x="${stickX}" y="${stickY}" width="${stickW}" height="${stickH}" rx="${r}" fill="#1a7830"/>`+
-    `<rect x="${stickX+stickW*.1}" y="${stickY+stickH*.06}" width="${stickW*.22}" height="${stickH*.88}" rx="${r*.4}" fill="#26a845" opacity="0.55"/>`+
-    `<rect x="${stickX}" y="${stickY+bh*.1}" width="${stickW}" height="${jh}" rx="1" fill="${joint}" opacity="0.85"/>`+
-    `<rect x="${stickX}" y="${stickY+bh*.81}" width="${stickW}" height="${jh}" rx="1" fill="${joint}" opacity="0.7"/>`
-  );
-  // Bird: round body, beak, tail, eye
-  const bx=cx, by=h*.18;
-  const br=w*.19;
-  const bird=(
-    // Body
-    `<ellipse cx="${bx}" cy="${by}" rx="${br}" ry="${br*.75}" fill="#c03010"/>`+
-    // Wing highlight
-    `<ellipse cx="${bx-br*.2}" cy="${by}" rx="${br*.65}" ry="${br*.55}" fill="#d84020" opacity="0.6"/>`+
-    // Beak
-    `<polygon points="${bx+br*.85},${by-br*.1} ${bx+br*1.35},${by} ${bx+br*.85},${by+br*.1}" fill="#e8a020"/>`+
-    // Eye
-    `<circle cx="${bx+br*.35}" cy="${by-br*.2}" r="${br*.16}" fill="#fff"/>`+
-    `<circle cx="${bx+br*.38}" cy="${by-br*.18}" r="${br*.09}" fill="#111"/>`+
-    // Tail
-    `<polygon points="${bx-br*.9},${by-br*.1} ${bx-br*1.5},${by-br*.5} ${bx-br*.9},${by+br*.2}" fill="#b02808"/>`
-  );
-  return stick+bird;
-}
-
-// Column/row layout for each bamboo value
-function souPos(v,w,h){
-  const cx=w/2,cy=h/2;
-  // dx = column spacing, dy = row spacing
-  const dx=w*.32,dy=h*(v<=3?.0:v<=6?.3:.23);
-  const G={
-    2:[[cx,cy-dy*1.1],[cx,cy+dy*1.1]],
-    3:[[cx,cy-dy*1.2],[cx,cy],[cx,cy+dy*1.2]],
-    4:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
-    5:[[cx-dx,cy-dy],[cx+dx,cy-dy],[cx,cy],[cx-dx,cy+dy],[cx+dx,cy+dy]],
-    6:[[cx-dx,cy-dy*1.1],[cx+dx,cy-dy*1.1],[cx-dx,cy],[cx+dx,cy],[cx-dx,cy+dy*1.1],[cx+dx,cy+dy*1.1]],
-    7:[[cx-dx,cy-dy*1.4],[cx+dx,cy-dy*1.4],[cx-dx,cy-dy*.3],[cx+dx,cy-dy*.3],[cx,cy-dy*.85],[cx-dx,cy+dy*1.1],[cx+dx,cy+dy*1.1]],
-    8:[[cx-dx,cy-dy*1.5],[cx+dx,cy-dy*1.5],[cx-dx,cy-dy*.45],[cx+dx,cy-dy*.45],[cx-dx,cy+dy*.55],[cx+dx,cy+dy*.55],[cx-dx,cy+dy*1.55],[cx+dx,cy+dy*1.55]],
-    9:[[cx-dx,cy-dy*1.5],[cx,cy-dy*1.5],[cx+dx,cy-dy*1.5],[cx-dx,cy-dy*.3],[cx,cy-dy*.3],[cx+dx,cy-dy*.3],[cx-dx,cy+dy*.9],[cx,cy+dy*.9],[cx+dx,cy+dy*.9]]
-  };
-  return G[v]||[];
-}
-
-// ── Honours ───────────────────────────────────────────────────────────────────
-// Winds: blue kanji.  Haku: empty bordered rect.  Hatsu: green 發.  Chun: red 中.
-function svgHon(v,w,h){
-  const fs=Math.round(h*.52);
-  if(v===5){
-    // Haku — blank rectangle border only
-    const pad=w*.15;
-    return `<rect x="${pad}" y="${h*.12}" width="${w-pad*2}" height="${h*.76}" rx="3" fill="none" stroke="#888" stroke-width="${Math.max(1.5,w*.05)}"/>`;
+// Draw one bamboo stick
+// isRed: entire stick is red (used for 5-sou centre stick)
+function souStick(cx,cy,sw,sh,isRed){
+  const x=cx-sw/2, y=cy-sh/2;
+  const rx=sw*.35;
+  if(isRed){
+    // Red stick (5-sou centre)
+    return (
+      `<rect x="${x}" y="${y}" width="${sw}" height="${sh}" rx="${rx}" fill="#c82020" stroke="#8a1010" stroke-width="0.6"/>`+
+      `<rect x="${x+sw*.15}" y="${y+sh*.06}" width="${sw*.22}" height="${sh*.5}" rx="${sw*.1}" fill="#e84040" opacity="0.5"/>`
+    );
   }
-  const colors={1:'#1a50a0',2:'#1a50a0',3:'#1a50a0',4:'#1a50a0',6:'#1a7a30',7:'#c02020'};
-  const chars={1:'東',2:'南',3:'西',4:'北',6:'發',7:'中'};
-  return `<text x="${w/2}" y="${h*.74}" text-anchor="middle" font-family="'Noto Serif JP',serif" font-size="${fs}" font-weight="900" fill="${colors[v]}">${chars[v]}</text>`;
+  // Green stick — body, highlight, centre band
+  const bandH=Math.max(2, sh*.10);
+  const halfSH=(sh-bandH)/2;
+  return (
+    // Dark outline + body
+    `<rect x="${x}" y="${y}" width="${sw}" height="${sh}" rx="${rx}" fill="#1c7530" stroke="#0e4018" stroke-width="0.7"/>`+
+    // Light green fill (top half)
+    `<rect x="${x+.5}" y="${y+.5}" width="${sw-1}" height="${halfSH-.5}" rx="${rx*.8}" fill="#2db848"/>`+
+    // Light green fill (bottom half)
+    `<rect x="${x+.5}" y="${y+halfSH+bandH}" width="${sw-1}" height="${halfSH-.5}" rx="${rx*.4}" fill="#2db848"/>`+
+    // Red centre band (joint)
+    `<rect x="${x}" y="${y+halfSH}" width="${sw}" height="${bandH}" fill="#c82020"/>`+
+    // Thin gleam stripe
+    `<rect x="${x+sw*.12}" y="${y+sh*.07}" width="${sw*.14}" height="${halfSH*.5}" rx="${sw*.05}" fill="#70f090" opacity="0.4"/>`
+  );
+}
+
+// souLayout: returns array of [cx, cy, stickW, stickH, isRed]
+// Core rule: stickH < rowGap so sticks never overlap
+// Stick aspect ratio from image ≈ width:height = 1:3.5 to 1:5
+function souLayout(v,w,h){
+  const pad=w*.04; // edge padding
+  const usableW=w-pad*2;
+  const usableH=h-pad*2;
+  const top=pad, bottom=h-pad;
+  const midY=h/2;
+
+  // Helper: distribute n items evenly across usableH
+  // Returns array of y centres
+  function rows(n, spanH){
+    if(n===1) return [midY];
+    const step=spanH/(n-1);
+    return Array.from({length:n},(_,i)=>midY-spanH/2+i*step);
+  }
+
+  const out=[];
+
+  if(v===2||v===3){
+    // Single column, tall sticks
+    const sw=usableW*.38;
+    const n=v; const span=usableH*.62;
+    const step=n>1?span/(n-1):0;
+    const sh=n>1?(step*.78):(usableH*.7);
+    const ys=rows(n,span);
+    ys.forEach(y=>out.push([w/2,y,sw,sh,false]));
+  } else if(v===4||v===5||v===6){
+    // Two columns
+    const sw=usableW*.20;
+    const lx=w/2-usableW*.22, rx=w/2+usableW*.22;
+    const n=v===4?2:v===5?2:3;
+    const span=usableH*(v===6?.68:.6);
+    const step=n>1?span/(n-1):0;
+    const sh=n>1?(step*.80):(usableH*.65);
+    const ys=rows(n,span);
+    if(v===4){
+      ys.forEach(y=>{out.push([lx,y,sw,sh,false]);out.push([rx,y,sw,sh,false]);});
+    } else if(v===5){
+      // 5: 2 top pair, 1 centre RED, 2 bottom pair
+      const topYs=rows(2,span*.6);
+      const botYs=topYs.map(y=>y+span*.6);
+      // Actually: 2 cols × 2 rows + 1 centre
+      const span2=usableH*.55;
+      const s2=rows(2,span2);
+      const sh2=span2/(2-1)*.80;
+      s2.forEach(y=>{out.push([lx,y,sw,sh2,false]);out.push([rx,y,sw,sh2,false]);});
+      out.push([w/2,midY,sw,sh2,true]); // RED centre
+    } else {
+      // 6: 2 cols × 3 rows
+      const span3=usableH*.68;
+      const sh3=span3/2*.80;
+      const ys3=rows(3,span3);
+      ys3.forEach(y=>{out.push([lx,y,sw,sh3,false]);out.push([rx,y,sw,sh3,false]);});
+    }
+  } else if(v===7){
+    // 2 cols × 3 rows + 1 extra on left = 7
+    // From image: 3+4 or 2×3+1 centre top
+    const sw=usableW*.17;
+    const lx=w/2-usableW*.22, rx=w/2+usableW*.22;
+    const span=usableH*.74; const n=4;
+    const step=span/(n-1); const sh=step*.78;
+    const allY=rows(4,span);
+    // Left col: 4, right col: 3 (skip one)
+    allY.forEach((y,i)=>out.push([lx,y,sw,sh,false]));
+    [allY[0],allY[1],allY[3]].forEach(y=>out.push([rx,y,sw,sh,false]));
+  } else if(v===8){
+    // 2 cols × 4 rows
+    const sw=usableW*.17;
+    const lx=w/2-usableW*.22, rx=w/2+usableW*.22;
+    const span=usableH*.76; const step=span/3; const sh=step*.78;
+    rows(4,span).forEach(y=>{out.push([lx,y,sw,sh,false]);out.push([rx,y,sw,sh,false]);});
+  } else if(v===9){
+    // 3 cols × 3 rows
+    const sw=usableW*.15;
+    const lx=w/2-usableW*.28, cx2=w/2, rx=w/2+usableW*.28;
+    const span=usableH*.66; const step=span/2; const sh=step*.78;
+    rows(3,span).forEach(y=>{
+      out.push([lx,y,sw,sh,false]);
+      out.push([cx2,y,sw,sh,false]);
+      out.push([rx,y,sw,sh,false]);
+    });
+  }
+  return out;
+}
+
+// 1-sou: Bird/phoenix on bamboo — green ornate traditional design
+function souBird(w,h){
+  const cx=w/2, cy=h*.46;
+  const sc=Math.min(w,h)*.34;
+  return (
+    // Outer circle border
+    `<circle cx="${cx}" cy="${cy}" r="${sc*1.08}" fill="none" stroke="#1c7530" stroke-width="${sc*.07}"/>`+
+    // Body ellipse
+    `<ellipse cx="${cx}" cy="${cy+sc*.08}" rx="${sc*.72}" ry="${sc*.6}" fill="#1c7530"/>`+
+    // Wing (lighter)
+    `<ellipse cx="${cx-sc*.08}" cy="${cy+sc*.02}" rx="${sc*.5}" ry="${sc*.4}" fill="#2db848" opacity="0.65"/>`+
+    // Head
+    `<circle cx="${cx+sc*.54}" cy="${cy-sc*.46}" r="${sc*.26}" fill="#1c7530"/>`+
+    // Crest feathers
+    `<line x1="${cx+sc*.48}" y1="${cy-sc*.72}" x2="${cx+sc*.44}" y2="${cy-sc*.46}" stroke="#1c7530" stroke-width="${sc*.08}" stroke-linecap="round"/>`+
+    `<line x1="${cx+sc*.60}" y1="${cy-sc*.76}" x2="${cx+sc*.54}" y2="${cy-sc*.46}" stroke="#1c7530" stroke-width="${sc*.08}" stroke-linecap="round"/>`+
+    `<line x1="${cx+sc*.72}" y1="${cy-sc*.70}" x2="${cx+sc*.64}" y2="${cy-sc*.44}" stroke="#1c7530" stroke-width="${sc*.065}" stroke-linecap="round"/>`+
+    // Beak
+    `<polygon points="${cx+sc*.80},${cy-sc*.46} ${cx+sc*1.06},${cy-sc*.40} ${cx+sc*.80},${cy-sc*.34}" fill="#c82020"/>`+
+    // Eye
+    `<circle cx="${cx+sc*.64}" cy="${cy-sc*.50}" r="${sc*.09}" fill="#fff"/>`+
+    `<circle cx="${cx+sc*.66}" cy="${cy-sc*.49}" r="${sc*.05}" fill="#111"/>`+
+    // Tail feathers
+    `<path d="M${cx-sc*.62},${cy+sc*.18} Q${cx-sc*1.02},${cy+sc*.42} ${cx-sc*.86},${cy+sc*.70}" fill="none" stroke="#1c7530" stroke-width="${sc*.09}" stroke-linecap="round"/>`+
+    `<path d="M${cx-sc*.55},${cy+sc*.24} Q${cx-sc*.82},${cy+sc*.50} ${cx-sc*.60},${cy+sc*.74}" fill="none" stroke="#2db848" stroke-width="${sc*.07}" stroke-linecap="round"/>`+
+    `<path d="M${cx-sc*.46},${cy+sc*.30} Q${cx-sc*.62},${cy+sc*.55} ${cx-sc*.34},${cy+sc*.74}" fill="none" stroke="#1c7530" stroke-width="${sc*.06}" stroke-linecap="round"/>`+
+    // Feet/legs
+    `<line x1="${cx+sc*.08}" y1="${cy+sc*.60}" x2="${cx+sc*.08}" y2="${cy+sc*.80}" stroke="#1c7530" stroke-width="${sc*.065}" stroke-linecap="round"/>`+
+    `<line x1="${cx+sc*.26}" y1="${cy+sc*.58}" x2="${cx+sc*.26}" y2="${cy+sc*.78}" stroke="#1c7530" stroke-width="${sc*.065}" stroke-linecap="round"/>`+
+    `<line x1="${cx+sc*.04}" y1="${cy+sc*.80}" x2="${cx-sc*.10}" y2="${cy+sc*.88}" stroke="#1c7530" stroke-width="${sc*.055}" stroke-linecap="round"/>`+
+    `<line x1="${cx+sc*.08}" y1="${cy+sc*.80}" x2="${cx+sc*.20}" y2="${cy+sc*.88}" stroke="#1c7530" stroke-width="${sc*.055}" stroke-linecap="round"/>`+
+    `<line x1="${cx+sc*.22}" y1="${cy+sc*.78}" x2="${cx+sc*.10}" y2="${cy+sc*.86}" stroke="#1c7530" stroke-width="${sc*.055}" stroke-linecap="round"/>`+
+    `<line x1="${cx+sc*.26}" y1="${cy+sc*.78}" x2="${cx+sc*.38}" y2="${cy+sc*.86}" stroke="#1c7530" stroke-width="${sc*.055}" stroke-linecap="round"/>`
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// HONOURS (字牌)
+// Winds (東南西北): large near-black kanji, fills ~55% height
+// Haku (白): empty rect border only
+// Hatsu (發): green kanji
+// Chun (中): red kanji
+// ══════════════════════════════════════════════════════════════
+function svgHon(v,w,h){
+  if(v===5){
+    const px=w*.15, py=h*.10;
+    return (
+      `<rect x="${px}" y="${py}" width="${w-px*2}" height="${h-py*2}" rx="3" `+
+      `fill="none" stroke="#aaa" stroke-width="${Math.max(1.5,w*.04)}"/>`
+    );
+  }
+  const fs=Math.round(h*.55);
+  const COLORS={1:'#1a1a1a',2:'#1a1a1a',3:'#1a1a1a',4:'#1a1a1a',6:'#1a7a30',7:'#c82020'};
+  const CHARS ={1:'東',2:'南',3:'西',4:'北',6:'發',7:'中'};
+  return (
+    `<text x="${w*.5}" y="${h*.62}" text-anchor="middle" dominant-baseline="middle" `+
+    `font-family="'Noto Serif JP',serif" font-size="${fs}px" font-weight="900" fill="${COLORS[v]}">${CHARS[v]}</text>`
+  );
 }
 
 // ══ App ═══════════════════════════════════════════════════════════════════════
@@ -650,12 +885,13 @@ function startGame(m){
   const seats=m.seats;
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i],p=seats[abs];
-    $('pn'+id).textContent=i===0?($('iname').value.trim()||'Player')+' (You)':(p?.name||'—');
+    $('pn'+id).textContent=i===0?($('iname').value.trim()||'Player'):(p?.name||'—');
     $('wb'+id).textContent=W[abs];
     if(i>0&&p?.isBot){const bt=$('bt'+id);if(bt)bt.textContent='CPU';}
     $('rs'+id).style.display='none';
   }
-  $('chat-toggle').style.display='flex'; chatOpen=false; unreadCount=0; $('chat-history').innerHTML='';
+  $('chat-bar').style.display='flex'; chatOpen=false; unreadCount=0; $('chat-history').innerHTML='';
+  $('dora-panel').style.display='flex';
   show('s-game');
 }
 
@@ -670,13 +906,30 @@ function renderState(m){
   $('chonba').textContent=h||rs?`${h}本場${rs?' · '+'●'.repeat(rs):''}` :'';
 
   // Dora
-  const dr=$('cdrow');dr.innerHTML='';
-  for(const d of(m.dora||[])) dr.appendChild(mkElDora(d));
+  // Fill up to 5 fixed dora slots
+  for(let di=0;di<5;di++){
+    const slot=$('dora-slot-'+di);
+    if(!slot) continue;
+    const d=(m.dora||[])[di];
+    if(d){
+      slot.innerHTML='';slot.className='dora-slot filled';
+      slot.appendChild(mkElDora(d));
+    } else {
+      slot.innerHTML='';slot.className='dora-slot';
+    }
+  }
+  $('dora-panel').style.display='flex';
+  $('dora-panel').style.flexDirection='column';
 
-  // Scores & turn glow
+  // Scores in centre panel (compass layout: b=bottom=me, t=top, l=left, r=right)
+  // P = ['b','r','t','l'], indexed by (abs - mySeat + 4) % 4
+  const ctrIds={b:'ctr-s-b',r:'ctr-s-r',t:'ctr-s-t',l:'ctr-s-l'};
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i];
-    if(m.scores?.[abs]!==undefined) $('ps'+id).textContent=m.scores[abs].toLocaleString();
+    if(m.scores?.[abs]!==undefined){
+      const ctrEl=$(ctrIds[id]);
+      if(ctrEl) ctrEl.textContent=m.scores[abs].toLocaleString();
+    }
     $('np'+id).classList.toggle('active',m.turn===abs);
     if(m.riichi?.[abs]) $('rs'+id).style.display='';
   }
@@ -716,10 +969,8 @@ function renderState(m){
   }
 
   // Opponent hands — back tiles
-  // top (index 2): rot180 applied by .oh.rot180 class, tiles read correctly from top-player view
-  // left (index 3): vertical
-  // right (index 1): vertical
-  [[1,'r',true],[2,'t',false],[3,'l',true]].forEach(([i,id,isVert])=>{
+  // top: rot180. left/right: now column-layout rotated in CSS, tiles horizontal
+  [[1,'r',false],[2,'t',false],[3,'l',false]].forEach(([i,id,isVert])=>{
     const abs=(mySeat+i)%4;
     const hd=$('hd'+id); hd.innerHTML='';
     const cnt=m.oppHandSizes?.[abs]??13;
@@ -730,12 +981,27 @@ function renderState(m){
     }
   });
 
-  // Discards
+  // Discards — 6 tiles per row, riichi tile rotated 90° from player's perspective
   const dzMap={b:'dzb',r:'dzr',t:'dzt',l:'dzl'};
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i];
     const dz=$(dzMap[id]);dz.innerHTML='';
-    for(const t of(m.discards?.[abs]||[])) dz.appendChild(mkElMd(t));
+    const tiles=m.discards?.[abs]||[];
+    let row=null;
+    tiles.forEach((t,idx)=>{
+      if(idx%6===0){
+        row=document.createElement('div');
+        row.className='dz-row';
+        dz.appendChild(row);
+      }
+      const el=mkElMd(t);
+      if(t.riichi){
+        // Wrap in a rotated container — the 90° rotation is in player's own perspective
+        // CSS class handles the rotation; margin compensates for size change
+        el.classList.add('dz-riichi');
+      }
+      row.appendChild(el);
+    });
   }
 
   // My melds
@@ -751,7 +1017,9 @@ function renderState(m){
 }
 
 function clickTile(id){
+  console.log('[clickTile] id=',id,'selId=',selId,'mySeat=',mySeat,'inGame=',inGame,'turn=',lastState?.turn);
   if(selId===id){
+    console.log('[clickTile] -> discard');
     wss({type:'action',action:{type:'discard',tileId:id}});
     selId=null;
   } else {
@@ -765,8 +1033,9 @@ function clickTile(id){
 
 function drawActions(m){
   const bar=$('actbar');bar.innerHTML='';
-  if(!m) return;
+  if(!m){console.log('[drawActions] m is null');return;}
   const mine=m.turn===mySeat,react=m.pending?.isForMe;
+  console.log('[drawActions] turn=',m.turn,'mySeat=',mySeat,'mine=',mine,'react=',react,'selId=',selId);
   if(mine){
     if((m.myHand||[]).length===14) ab(bar,'🀄 TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
     if(!m.riichi?.[mySeat]&&!m.myMelds?.length&&(m.scores?.[mySeat]??25000)>=1000&&selId)
@@ -796,7 +1065,9 @@ function mkEl(tile,cls,w,h){
   const root=document.documentElement;
   if(!w) w=parseInt(root.style.getPropertyValue('--tmd-w'))||26;
   if(!h) h=parseInt(root.style.getPropertyValue('--tmd-h'))||36;
-  el.innerHTML=tsvg(tile,w,h);return el;
+  const svgStr=tsvg(tile,w,h);
+  el.innerHTML=svgStr?svgStr.replace('<svg ','<svg style="pointer-events:none" '):'';
+  return el;
 }
 function mkElLg(tile){
   const r=document.documentElement;
@@ -812,8 +1083,8 @@ function mkElMd(tile){
 }
 function mkElDora(tile){
   const r=document.documentElement;
-  const w=parseInt(r.style.getPropertyValue('--tmd-w'))||26;
-  const h=parseInt(r.style.getPropertyValue('--tmd-h'))||36;
+  const w=parseInt(r.style.getPropertyValue('--tlg-w'))||46;
+  const h=parseInt(r.style.getPropertyValue('--tlg-h'))||64;
   return mkEl(tile,'tdora',w,h);
 }
 
@@ -824,14 +1095,15 @@ let chatOpen=false, unreadCount=0;
 function toggleChat(){
   chatOpen=!chatOpen;
   $('chat-panel').classList.toggle('open',chatOpen);
+  $('chat-hist-btn').classList.toggle('open',chatOpen);
+  $('chat-hist-btn').style.transform=chatOpen?'rotate(180deg)':'';
   if(chatOpen){
     unreadCount=0;
-    $('chat-toggle').classList.remove('has-unread');
-    $('chat-toggle').textContent='💬';
-    // Scroll history to bottom
+    const badge=$('chat-badge');
+    badge.classList.remove('show');
+    badge.textContent='0';
     const h=$('chat-history');
     h.scrollTop=h.scrollHeight;
-    $('chat-input').focus();
   }
 }
 
@@ -847,13 +1119,16 @@ function showChatMsg(seat,name,text){
   const relSeat=(seat-mySeat+4)%4;
   const color=SEAT_COLORS[relSeat]||'#fff';
 
-  // ── Floating big message ──
-  const container=$('chat-float');
+  // ── Floating big message — random left or right ──
+  const cf=$('chat-float');
+  // Randomly pick left or right for this message
+  const goRight=Math.random()>.5;
+  cf.className='chat-float '+(goRight?'side-right':'side-left');
   const div=document.createElement('div');
   div.className='chat-msg';
   div.style.color=color;
   div.innerHTML=`<span class="chat-who">${escHtml(name)}</span>${escHtml(text)}`;
-  container.appendChild(div);
+  cf.appendChild(div);
   setTimeout(()=>div.remove(),5200);
 
   // ── History entry ──
@@ -872,8 +1147,9 @@ function showChatMsg(seat,name,text){
   // ── Unread badge ──
   if(!chatOpen){
     unreadCount++;
-    $('chat-toggle').classList.add('has-unread');
-    $('chat-toggle').textContent=`💬${unreadCount}`;
+    const badge=$('chat-badge');
+    badge.textContent=unreadCount;
+    badge.classList.add('show');
   }
 }
 
@@ -890,7 +1166,8 @@ function toast(msg){
 // ── Round End ──────────────────────────────────────────────────────────────────
 function onEnd(m){
   inGame=false;
-  $('chat-toggle').style.display='none'; $('chat-panel').classList.remove('open'); chatOpen=false;
+  $('chat-bar').style.display='none'; $('chat-panel').classList.remove('open'); chatOpen=false;
+  $('dora-panel').style.display='none';
   const T={tsumo:'🀄 TSUMO!',ron:'🀄 RON!',draw:'流局 — Draw'};
   $('ret').textContent=T[m.reason]||'Round Over';
   $('rehn').textContent=m.handLabel?`${m.handLabel} · ${m.han||0}飜${m.fu?' · '+m.fu+'符':''}` :'';
@@ -943,7 +1220,7 @@ $('bleave').onclick=goLobby;
 $('iname').onkeydown=e=>{if(e.key==='Enter')findMatch();};
 $('chat-send').onclick=sendChat;
 $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};
-$('chat-toggle').onclick=toggleChat;
+$('chat-hist-btn').onclick=toggleChat;
 $('chat-close').onclick=toggleChat;
 connect();
 </script>

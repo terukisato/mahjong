@@ -162,6 +162,7 @@ class Room {
     const idx=g.hands[seat].findIndex(t=>t.id===tileId);
     if(idx===-1) return;
     const [tile]=g.hands[seat].splice(idx,1);
+    if(g.riichiTile&&g.riichiTile[seat]===tile.id) tile.riichi=true;
     g.discards[seat].push(tile);
     g.drawTile=null;
     g.ippatsu=g.ippatsu.map((v,i)=>i===seat?false:v);
@@ -302,6 +303,8 @@ class Room {
     if(waits(hand.filter(t=>t.id!==tileId)).length===0) return;
     g.riichi[seat]=true;g.ippatsu[seat]=true;
     g.scores[seat]-=1000;g.riichiSticks++;
+    if(!g.riichiTile) g.riichiTile={};
+    g.riichiTile[seat]=tileId; // mark which tile is the riichi discard
     this._broadcastAll({type:'riichi',seat,name:this.seats[seat]?.name,scores:g.scores});
     this._discard(seat,tileId);
   }
