@@ -68,7 +68,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .bl:hover{background:rgba(160,30,30,.9);}
 
 /* Table area between top bar and action bar */
-.table{position:fixed;top:36px;left:0;right:0;bottom:52px;overflow:hidden;}
+.table{position:fixed;top:36px;left:0;right:0;bottom:0;overflow:hidden;}
 
 /* Felt — responsive square using vmin */
 .felt{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -77,28 +77,47 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   border-radius:16px;border:3px solid rgba(201,168,76,.5);
   box-shadow:0 0 0 6px rgba(0,0,0,.5),0 0 80px rgba(0,0,0,.9),inset 0 0 60px rgba(0,0,0,.4);}
 
-/* Center info — solid opaque square */
+/* Center info — dark grey panel with styled separators */
 .ctr{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  text-align:center;z-index:5;pointer-events:none;
-  background:#0a1e0f;
-  border-radius:6px;
-  border:2px solid rgba(201,168,76,.6);
+  z-index:5;pointer-events:none;
+  background:#1a1a1a;
   width:min(26vmin,210px);height:min(26vmin,210px);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:0;overflow:hidden;}
-/* Score rows use border lines as separators */
-.ctr-score{font-size:clamp(10px,1.8vmin,13px);font-weight:700;letter-spacing:1px;
+  padding:0;overflow:hidden;
+  border-radius:4px;}
+/* Score strip rows — double line separator using border + box-shadow */
+.ctr-score{font-size:clamp(12px,2.1vmin,15px);font-weight:700;letter-spacing:0;
   width:100%;text-align:center;padding:5px 0;
-  border-bottom:1px solid rgba(201,168,76,.25);}
-.ctr-score:last-child{border-bottom:none;border-top:1px solid rgba(201,168,76,.25);}
+  border-bottom:1px solid #444;
+  box-shadow:0 1px 0 #222;  /* second line below */
+  background:#1e1e1e;}
+.ctr-score:last-child{border-bottom:none;box-shadow:none;
+  border-top:1px solid #444;
+  box-shadow:inset 0 1px 0 #222;  /* second line above */
+  background:#1e1e1e;}
 .ctr-mid{display:flex;align-items:center;width:100%;flex:1;min-height:0;}
-.ctr-side{flex:1;padding:4px;border-right:1px solid rgba(201,168,76,.25);}
-.ctr-side:last-child{border-right:none;border-left:1px solid rgba(201,168,76,.25);}
-.ctr-info{display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding:4px;}
-.cw{font-family:'Noto Serif JP',serif;font-size:clamp(26px,5.5vmin,38px);font-weight:900;color:var(--gl);line-height:1;}
-.ci{font-size:clamp(7px,1.3vmin,9px);letter-spacing:2px;color:rgba(245,237,216,.5);margin-top:2px;}
-.cwl{font-size:clamp(9px,1.8vmin,12px);color:var(--jl);font-weight:700;margin-top:3px;}
-.ch{font-size:clamp(7px,1.3vmin,9px);color:rgba(245,237,216,.4);margin-top:1px;}
+/* Side score cells — dashed vertical separator */
+.ctr-side{flex:1;padding:5px 0;border-right:1px dashed #3a3a3a;}
+.ctr-side:last-child{border-right:none;border-left:1px dashed #3a3a3a;}
+/* Centre info */
+.ctr-score-val{font-size:clamp(12px,2.1vmin,15px);font-weight:700;
+  color:rgba(240,208,128,.9);letter-spacing:0;display:inline-block;}
+.ctr-info{display:flex;flex-direction:column;align-items:center;flex-shrink:0;
+  padding:4px 8px;position:relative;}
+.ctr-info::before{content:'';position:absolute;
+  width:clamp(36px,7vmin,56px);height:clamp(36px,7vmin,56px);
+  border-radius:50%;border:1px solid rgba(201,168,76,.25);
+  background:rgba(201,168,76,.04);
+  top:50%;left:50%;transform:translate(-50%,-65%);}
+.cw{font-family:'Noto Serif JP',serif;font-size:clamp(28px,6vmin,42px);font-weight:900;
+  color:#f0d080;line-height:1;position:relative;z-index:1;
+  text-shadow:0 0 14px rgba(201,168,76,.6),0 0 4px rgba(0,0,0,.8);}
+.ci{font-size:clamp(7px,1.3vmin,9px);letter-spacing:2px;color:rgba(245,237,216,.35);
+  margin-top:2px;position:relative;z-index:1;}
+.cwl{font-size:clamp(9px,1.8vmin,11px);color:#2a9e67;font-weight:700;
+  margin-top:1px;position:relative;z-index:1;}
+.ch{font-size:clamp(7px,1.3vmin,9px);color:rgba(245,237,216,.28);
+  margin-top:1px;position:relative;z-index:1;}
 .cdrow{display:flex;gap:2px;}
 /* Empty dora slot placeholder */
 .dora-slot{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:5px;border:1px dashed rgba(201,168,76,.25);
@@ -158,10 +177,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* Player areas — all inside the felt */
 .pa{position:absolute;display:flex;align-items:center;z-index:15;}
 /* Bottom (me): nameplate above hand, sits at bottom INSIDE felt */
-.pa-b{bottom:8%;left:0;right:0;flex-direction:column;align-items:center;}
+.pa-b{bottom:2%;left:0;right:0;flex-direction:column;align-items:center;}
 /* Top: nameplate BELOW tiles from top player's view.
    column layout: tiles first in DOM (near screen top), nameplate second (toward felt) */
-.pa-t{top:8%;left:0;right:0;flex-direction:column;align-items:center;}
+.pa-t{top:2%;left:0;right:0;flex-direction:column;align-items:center;}
 /* Left: pivot point 10% from left edge, centred vertically, rotated 90° CW */
 .pa-l{position:absolute;top:50%;left:8%;
   display:flex;flex-direction:column;align-items:center;gap:4px;
@@ -172,10 +191,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   transform:translate(50%,-50%) rotate(-90deg);}
 
 /* Nameplates */
-.np{background:rgba(5,15,8,.95);border:2px solid rgba(201,168,76,.25);border-radius:10px;
+.np{background:#1a1a1a;border-radius:4px;
   padding:7px 14px;display:flex;align-items:center;gap:9px;
-  z-index:20;transition:all .25s;flex-shrink:0;white-space:nowrap;}
-.np.active{background:rgba(8,32,16,.97);border-color:#ffdd44;
+  z-index:20;transition:all .25s;flex-shrink:0;white-space:nowrap;
+  box-shadow:0 0 0 1px #222,inset 0 1px 0 rgba(255,255,255,.04);}
+.np.active{background:#222;border-color:#ffdd44;
   box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 16px rgba(255,221,68,.5);animation:glow 1s ease-in-out infinite;}
 @keyframes glow{0%,100%{box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 14px rgba(255,221,68,.4);}50%{box-shadow:0 0 0 3px rgba(255,221,68,.55),0 0 28px rgba(255,221,68,.7);}}
 .wb{font-family:'Noto Serif JP',serif;font-size:17px;font-weight:900;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;}
@@ -228,24 +248,40 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .hr{display:flex;align-items:flex-end;gap:2px;flex-wrap:nowrap;}
 /* Gap between main hand and draw tile */
 .draw-sep{width:clamp(5px,1.5vmin,10px);flex-shrink:0;}
-.mg{display:flex;gap:1px;margin-right:3px;}
+.mg{display:flex;gap:1px;margin-right:5px;align-items:flex-end;}
+/* Called tile (chi/pon) rotated 90° to show it was taken from another player */
+.mg .called{transform:rotate(90deg);
+  margin-right:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);
+  margin-left:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);}
 .mr{display:flex;gap:2px;align-items:flex-end;flex-shrink:0;}
 .oh{display:flex;gap:2px;}
 .oh.rot180{transform:rotate(180deg);}
 .oh.v{flex-direction:column;}
 
 /* ── Action bar ── */
-.actbar{position:fixed;bottom:0;left:0;right:0;height:52px;background:rgba(2,8,4,.97);border-top:1px solid rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;gap:8px;z-index:60;padding:0 8px;overflow-x:auto;}
-.ba{padding:0 clamp(8px,2vw,18px);height:36px;border:none;border-radius:8px;font-family:'Cinzel Decorative',serif;font-size:clamp(9px,2vw,11px);letter-spacing:1px;cursor:pointer;transition:all .15s;font-weight:700;white-space:nowrap;flex-shrink:0;}
-.ba:hover{filter:brightness(1.2);transform:translateY(-2px);}.ba:active{transform:translateY(0);}.ba:disabled{opacity:.3;cursor:default;transform:none;filter:none;}
-.hint{padding:0 10px;height:36px;border-radius:8px;font-size:clamp(9px,2vw,11px);background:rgba(20,20,20,.8);color:rgba(245,237,216,.45);border:1px solid rgba(255,255,255,.1);font-family:'Noto Sans JP',sans-serif;display:flex;align-items:center;white-space:nowrap;}
-.bdis{background:linear-gradient(135deg,#7a1515,#b82020);color:#ffd8d8;border:2px solid #d44;}
-.btsu{background:linear-gradient(135deg,#805500,#c9a020);color:#150a00;border:2px solid #f0d060;font-weight:900;}
-.brii{background:linear-gradient(135deg,#18186e,#3030b8);color:#d0d0ff;border:2px solid #77f;}
-.bron{background:linear-gradient(135deg,#880f0f,#d42020);color:#fff;border:2px solid #f66;box-shadow:0 0 16px rgba(220,50,50,.5);font-weight:900;}
-.bchi{background:linear-gradient(135deg,#104a10,#1a7820);color:#c0ffc0;border:2px solid #4d4;}
-.bpon{background:linear-gradient(135deg,#4a2800,#8a5000);color:#ffe0b0;border:2px solid #ca0;}
-.bpas{background:rgba(30,30,30,.9);color:rgba(245,237,216,.65);border:1px solid rgba(255,255,255,.15);}
+/* Action bar hidden — actions float above hand */
+.actbar{display:none;}
+/* Floating action overlay — appears above the hand */
+.act-overlay{position:absolute;bottom:calc(2% + var(--tlg-h,64px) + 50px);
+  left:50%;transform:translateX(-50%);
+  display:flex;gap:8px;align-items:center;justify-content:center;
+  z-index:40;pointer-events:none;flex-wrap:wrap;}
+.act-overlay.visible{pointer-events:auto;}
+.ba{padding:0 clamp(10px,2vw,20px);height:38px;border:none;border-radius:8px;
+  font-family:'Cinzel Decorative',serif;font-size:clamp(10px,2vw,12px);
+  letter-spacing:1px;cursor:pointer;transition:all .15s;font-weight:700;white-space:nowrap;
+  flex-shrink:0;box-shadow:0 4px 14px rgba(0,0,0,.6);}
+.ba:hover{filter:brightness(1.2);transform:translateY(-3px);box-shadow:0 6px 18px rgba(0,0,0,.7);}
+.ba:active{transform:translateY(0);}
+.ba:disabled{opacity:.3;cursor:default;transform:none;filter:none;}
+.hint{display:none;}
+.bdis{background:#8a1818;color:#ffd8d8;border:2px solid #d44;}
+.btsu{background:#8a6500;color:#fff8d0;border:2px solid #f0d060;font-weight:900;}
+.brii{background:#1e1e8a;color:#d0d0ff;border:2px solid #77f;}
+.bron{background:#aa1010;color:#fff;border:2px solid #f66;box-shadow:0 0 16px rgba(220,50,50,.6);font-weight:900;}
+.bchi{background:#145a14;color:#c0ffc0;border:2px solid #4d4;}
+.bpon{background:#6a3800;color:#ffe0b0;border:2px solid #ca0;}
+.bpas{background:rgba(40,40,40,.95);color:rgba(245,237,216,.7);border:1px solid rgba(255,255,255,.2);}
 
 /* Chat — compact bottom-right corner widget */
 /* Chat bar: fixed to bottom-right, sits above action bar */
@@ -264,17 +300,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
 .chat-send:hover{background:rgba(42,158,103,.9);}
 /* History button */
-.chat-hist-btn{position:relative;width:26px;height:26px;padding:0;
-  background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);
-  border-radius:7px;color:var(--gl);font-size:15px;line-height:1;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-  transition:background .2s;}
-.chat-hist-btn:hover{background:rgba(201,168,76,.30);}
-.chat-hist-btn.open{background:rgba(201,168,76,.25);color:#fff;}
-.chat-hist-btn .badge{position:absolute;top:-6px;right:-6px;
-  background:#c02020;color:#fff;font-size:9px;font-weight:700;
-  min-width:16px;height:16px;border-radius:8px;display:none;
-  align-items:center;justify-content:center;padding:0 3px;}
+.chat-hist-btn{position:relative;padding:0 10px;height:26px;
+  background:none;border:none;border-left:1px solid rgba(201,168,76,.2);
+  color:rgba(201,168,76,.6);font-size:11px;letter-spacing:1px;cursor:pointer;
+  font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;
+  transition:color .2s;}
+.chat-hist-btn:hover{color:var(--gl);}
+.chat-hist-btn.open{color:var(--gl);}
+.chat-hist-btn .badge{position:absolute;top:-5px;right:2px;
+  background:#c02020;color:#fff;font-size:8px;font-weight:700;
+  min-width:14px;height:14px;border-radius:7px;display:none;
+  align-items:center;justify-content:center;padding:0 2px;}
 .chat-hist-btn .badge.show{display:flex;}
 /* History popup — opens upward from chat bar */
 .chat-panel{position:fixed;bottom:106px;right:12px;
@@ -301,18 +337,18 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   border-radius:6px;padding:4px 8px;line-height:1.4;word-break:break-word;}
 .chat-entry-time{font-size:8px;color:rgba(245,237,216,.3);margin-top:1px;}
 
-/* Floating chat messages — appear on left or right side randomly */
+/* Floating chat messages — appear at top of playing mat, centred */
 .chat-float{position:fixed;z-index:300;pointer-events:none;
-  top:50%;width:auto;max-width:36vw;}
-.chat-float.side-left{left:4%;right:auto;transform:translateY(-50%);}
-.chat-float.side-right{right:4%;left:auto;transform:translateY(-50%);}
-.chat-msg{font-family:'Noto Serif JP',serif;font-size:clamp(16px,3vw,32px);font-weight:900;
-  text-shadow:0 0 16px rgba(201,168,76,.9),0 2px 8px rgba(0,0,0,.9);
+  top:25%;left:50%;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  width:auto;max-width:70vw;}
+.chat-msg{font-family:'Noto Serif JP',serif;font-size:clamp(28px,5vw,52px);font-weight:900;
+  text-shadow:0 0 20px rgba(201,168,76,.9),0 2px 10px rgba(0,0,0,.95),0 0 40px rgba(201,168,76,.5);
   letter-spacing:2px;animation:chatFloat 5s ease forwards;line-height:1.3;
-  background:rgba(3,10,5,.8);border:1px solid rgba(201,168,76,.3);
-  border-radius:10px;padding:10px 14px;margin-bottom:10px;word-break:break-word;}
-.chat-msg .chat-who{font-size:.45em;color:var(--gl);display:block;letter-spacing:3px;margin-bottom:3px;}
-@keyframes chatFloat{0%{opacity:0;transform:translateX(-20px) scale(.9);}10%{opacity:1;transform:translateX(0) scale(1);}75%{opacity:1;}100%{opacity:0;transform:translateY(-20px) scale(.95);}}
+  word-break:break-word;text-align:center;}
+.chat-msg .chat-who{font-size:.7em;color:var(--gl);display:inline;letter-spacing:1px;}
+.chat-msg .chat-who::after{content:": ";color:rgba(240,208,128,.6);}
+@keyframes chatFloat{0%{opacity:0;transform:translateY(-10px) scale(.9);}10%{opacity:1;transform:translateY(0) scale(1);}75%{opacity:1;}100%{opacity:0;transform:translateY(-16px) scale(.95);}}
 
 /* Toast */
 .tc{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:200;pointer-events:none;}
@@ -374,16 +410,14 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
       <!-- CENTER INFO -->
       <div class="ctr">
         <!-- Top score row — rotated 180° for top player's reading direction -->
-        <div class="ctr-score" style="color:rgba(240,208,128,.9);transform:rotate(180deg);">
-          <span id="ctr-s-t">25,000</span>
+        <div class="ctr-score" style="transform:rotate(180deg);">
+          <span id="ctr-s-t" class="ctr-score-val">25000</span>
         </div>
         <!-- Middle: left score | wind info | right score -->
         <div class="ctr-mid">
           <!-- Left score — rotated 90° CW for left player's reading direction -->
           <div class="ctr-side" style="text-align:center;">
-            <span id="ctr-s-l" style="font-size:clamp(10px,1.8vmin,13px);font-weight:700;
-              color:rgba(240,208,128,.9);letter-spacing:1px;white-space:nowrap;
-              display:inline-block;transform:rotate(90deg);">25,000</span>
+            <span id="ctr-s-l" class="ctr-score-val" style="transform:rotate(90deg);">25000</span>
           </div>
           <!-- Wind + round info -->
           <div class="ctr-info">
@@ -394,14 +428,12 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
           </div>
           <!-- Right score — rotated -90° for right player's reading direction -->
           <div class="ctr-side" style="text-align:center;">
-            <span id="ctr-s-r" style="font-size:clamp(10px,1.8vmin,13px);font-weight:700;
-              color:rgba(240,208,128,.9);letter-spacing:1px;white-space:nowrap;
-              display:inline-block;transform:rotate(-90deg);">25,000</span>
+            <span id="ctr-s-r" class="ctr-score-val" style="transform:rotate(-90deg);">25000</span>
           </div>
         </div>
         <!-- Bottom score row — my score, yellow -->
-        <div class="ctr-score" style="color:#ffee66;">
-          <span id="ctr-s-b">25,000</span>
+        <div class="ctr-score">
+          <span id="ctr-s-b" class="ctr-score-val">25000</span>
         </div>
       </div>
       <div id="tarrow" class="tarrow" style="display:none">▲</div>
@@ -412,14 +444,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
       <div class="dz dzl" id="dzl"></div>
       <div class="dz dzr" id="dzr"></div>
 
+      <!-- Floating action overlay -->
+      <div class="act-overlay" id="actbar"></div>
+
       <!-- BOTTOM (me): nameplate above hand, tiles at bottom rim -->
       <div class="pa pa-b" id="pa-b">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:5px;position:relative;z-index:20;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;position:relative;z-index:20;">
           <div class="np" id="npb"><div class="wb" id="wbb">東</div><div><div class="pname" id="pnb">—</div></div></div>
           <span id="rsb" style="display:none" class="rs"></span>
           <span id="tpb" style="display:none" class="tenpai">TENPAI</span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:10px;">
+        <div style="display:flex;align-items:flex-end;gap:6px;">
           <div class="mr" id="mlb"></div>
           <div class="hr" id="hdb"></div>
         </div>
@@ -431,7 +466,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
           <div class="mr" id="mlt"></div>
           <div class="oh rot180" id="hdt"></div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;position:relative;z-index:20;transform:rotate(180deg);">
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px;position:relative;z-index:20;transform:rotate(180deg);">
           <div class="np" id="npt"><div class="wb" id="wbt">西</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
           <span id="rst" style="display:none" class="rs"></span>
         </div>
@@ -439,11 +474,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
       <!-- LEFT: nameplate outer, tiles inner; whole group rotated 90° CW -->
       <div class="pa pa-l" id="pa-l">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;z-index:20;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;z-index:20;">
           <div class="np" id="npl"><div class="wb" id="wbl">北</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
           <span id="rsl" style="display:none" class="rs"></span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:4px;">
+        <div style="display:flex;align-items:flex-end;gap:6px;">
           <div class="mr" id="mll"></div>
           <div class="oh" id="hdl"></div>
         </div>
@@ -451,11 +486,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
       <!-- RIGHT: nameplate outer, tiles inner; whole group rotated 90° CCW -->
       <div class="pa pa-r" id="pa-r">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;z-index:20;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;z-index:20;">
           <div class="np" id="npr"><div class="wb" id="wbr">南</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
           <span id="rsr" style="display:none" class="rs"></span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:4px;">
+        <div style="display:flex;align-items:flex-end;gap:6px;">
           <div class="mr" id="mlr"></div>
           <div class="oh" id="hdr"></div>
         </div>
@@ -464,14 +499,14 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
     </div><!-- end .felt -->
   </div>
 
-  <div class="actbar" id="actbar"><span class="hint">Waiting...</span></div>
+  <!-- Action overlay floats above player hand -->
 
   <!-- Always-visible chat input bar (shown during game) -->
   <div class="chat-bar" id="chat-bar">
     <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off">
     <button class="chat-send" id="chat-send">Send</button>
     <button class="chat-hist-btn" id="chat-hist-btn" title="Chat history">
-      &#8963;
+      History
       <span class="badge" id="chat-badge">0</span>
     </button>
   </div>
@@ -879,6 +914,15 @@ function resetLobby(){
   $('bready').classList.remove('pressed');
   $('bready').disabled=false;
   document.querySelectorAll('.slot').forEach(sl=>{sl.innerHTML='<span class="si">🀄</span>';sl.className='slot';});
+  // Hide dora panel and reset chat badge
+  $('dora-panel').style.display='none';
+  $('chat-bar').style.display='none';
+  $('chat-panel').classList.remove('open');
+  chatOpen=false;
+  unreadCount=0;
+  const badge=$('chat-badge');
+  badge.textContent='0';
+  badge.classList.remove('show');
   show('s-lobby');
 }
 
@@ -940,7 +984,7 @@ function renderState(m){
     const abs=(mySeat+i)%4,id=P[i];
     if(m.scores?.[abs]!==undefined){
       const ctrEl=$(ctrIds[id]);
-      if(ctrEl) ctrEl.textContent=m.scores[abs].toLocaleString();
+      if(ctrEl) ctrEl.textContent=m.scores[abs];
     }
     $('np'+id).classList.toggle('active',m.turn===abs);
     if(m.riichi?.[abs]) $('rs'+id).style.display='';
@@ -949,9 +993,8 @@ function renderState(m){
   // Status bar
   const mine=m.turn===mySeat,react=m.pending?.isForMe;
   const si=$('tst');
-  if(react){si.className='tb-st my';si.textContent='⚡ React now!';}
-  else if(mine){si.className='tb-st my';si.textContent='⭐ Your turn — click a tile';}
-  else{si.className='tb-st';si.textContent=`${$('pn'+pid(m.turn))?.textContent||'—'}'s turn`;}
+  si.className=m.turn===mySeat||react?'tb-st my':'tb-st';
+  si.textContent=($('pn'+pid(m.turn))?.textContent||'—')+"'s turn";
   $('tarrow').style.display=mine?'block':'none';
 
   // My hand — draw tile always goes to the far right with a separator
@@ -1016,11 +1059,11 @@ function renderState(m){
     });
   }
 
-  // My melds
+  // My melds — Japanese style: called tile rotated 90°, position depends on fromSeat
   const ml=$('mlb');ml.innerHTML='';
   for(const meld of(m.myMelds||[])){
     const g=document.createElement('div');g.className='mg';
-    for(const t of meld.tiles) g.appendChild(mkElMd(t));
+    renderMeld(g, meld, mySeat);
     ml.appendChild(g);
   }
 
@@ -1043,28 +1086,101 @@ function clickTile(id){
   }
 }
 
+// Japanese meld display:
+// Chi: called tile (from left/lower seat) goes LEFT, rotated 90°
+// Pon: called tile position depends on fromSeat direction
+//   from right (+1): rotated tile on LEFT
+//   from across (+2): rotated tile in MIDDLE
+//   from left (+3): rotated tile on RIGHT
+function renderMeld(container, meld, mySeat){
+  const tiles = meld.tiles;
+  const calledId = meld.calledTileId;
+  const fromSeat = meld.fromSeat;
+  // direction: 1=right, 2=across, 3=left (relative to mySeat)
+  const dir = fromSeat !== undefined ? (fromSeat - mySeat + 4) % 4 : 1;
+
+  if(meld.type === 'chi'){
+    // Chi: called tile always from left (dir=3), rotated tile goes to left of group
+    const called = tiles.find(t=>t.id===calledId);
+    const own = tiles.filter(t=>t.id!==calledId);
+    // Left position: called tile first (leftmost), rotated
+    const calledEl = mkElMd(called||tiles[0]);
+    calledEl.classList.add('called');
+    container.appendChild(calledEl);
+    (called ? own : tiles.slice(1)).forEach(t=>container.appendChild(mkElMd(t)));
+  } else if(meld.type === 'pon'){
+    // Pon: two own tiles + one called tile, rotated position varies
+    const called = tiles.find(t=>t.id===calledId);
+    const own = tiles.filter(t=>t.id!==calledId);
+    const calledEl = mkElMd(called||tiles[2]);
+    calledEl.classList.add('called');
+    const ownEls = (called ? own : tiles.slice(0,2)).map(t=>mkElMd(t));
+    if(dir===1){
+      // From right: rotated on LEFT
+      container.appendChild(calledEl);
+      ownEls.forEach(el=>container.appendChild(el));
+    } else if(dir===2){
+      // From across: rotated in MIDDLE
+      container.appendChild(ownEls[0]);
+      container.appendChild(calledEl);
+      container.appendChild(ownEls[1]);
+    } else {
+      // From left (dir===3): rotated on RIGHT
+      ownEls.forEach(el=>container.appendChild(el));
+      container.appendChild(calledEl);
+    }
+  } else {
+    // Fallback (kan etc): plain display
+    tiles.forEach(t=>container.appendChild(mkElMd(t)));
+  }
+}
+
 function drawActions(m){
   const bar=$('actbar');bar.innerHTML='';
-  if(!m){console.log('[drawActions] m is null');return;}
-  const mine=m.turn===mySeat,react=m.pending?.isForMe;
-  console.log('[drawActions] turn=',m.turn,'mySeat=',mySeat,'mine=',mine,'react=',react,'selId=',selId);
+  if(!m) return;
+  bar.className='act-overlay';
+  const mine=m.turn===mySeat, react=m.pending?.isForMe;
+
   if(mine){
-    if((m.myHand||[]).length===14) ab(bar,'🀄 TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
-    if(!m.riichi?.[mySeat]&&!m.myMelds?.length&&(m.scores?.[mySeat]??25000)>=1000&&selId)
-      ab(bar,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:selId}});selId=null;});
-    if(selId) ab(bar,'DISCARD','bdis',()=>{wss({type:'action',action:{type:'discard',tileId:selId}});selId=null;});
-    else hint(bar,'Click a tile · click again to discard');
+    // ── TSUMO: only when server confirms it's a winning hand ──
+    if(m.canTsumo){
+      ab(bar,'TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
+    }
+
+    // ── RIICHI: server sends canRiichi = array of tile IDs that make tenpai ──
+    // Show RIICHI only when a valid riichi tile is selected (or if exactly one exists)
+    const canRiichi=m.canRiichi||[];
+    if(canRiichi.length>0){
+      // If a tile is selected and it's a valid riichi tile, show RIICHI button
+      if(selId&&canRiichi.includes(selId)){
+        ab(bar,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:selId}});selId=null;});
+      }
+    }
+
+    // ── DISCARD: only when a tile is selected and it's your turn ──
+    if(selId){
+      ab(bar,'DISCARD','bdis',()=>{wss({type:'action',action:{type:'discard',tileId:selId}});selId=null;});
+    }
+
+    if(bar.children.length>0) bar.classList.add('visible');
+    else bar.classList.remove('visible');
+
   } else if(react){
+    // ── REACTIONS: only show buttons the server says are valid ──
     const opts=m.pending.options||[];
-    if(opts.some(o=>o.type==='ron')) ab(bar,'🀄 RON!','bron',()=>wss({type:'action',action:{type:'ron'}}));
-    if(opts.some(o=>o.type==='pon')) ab(bar,'PON','bpon',()=>wss({type:'action',action:{type:'pon'}}));
+    if(opts.some(o=>o.type==='ron'))
+      ab(bar,'RON','bron',()=>wss({type:'action',action:{type:'ron'}}));
+    if(opts.some(o=>o.type==='pon'))
+      ab(bar,'PON','bpon',()=>wss({type:'action',action:{type:'pon'}}));
     if(opts.some(o=>o.type==='chi')){
       const c=opts.find(o=>o.type==='chi');
       ab(bar,'CHI','bchi',()=>wss({type:'action',action:{type:'chi',tileIds:c.sequences[0]}}));
     }
-    ab(bar,'PASS','bpas',()=>wss({type:'action',action:{type:'pass'}}));
+    ab(bar,'SKIP','bpas',()=>wss({type:'action',action:{type:'pass'}}));
+    bar.classList.add('visible');
+
   } else {
-    hint(bar,($('pn'+pid(m.turn))?.textContent||'—')+' is thinking…');
+    bar.classList.remove('visible');
   }
 }
 
@@ -1108,7 +1224,6 @@ function toggleChat(){
   chatOpen=!chatOpen;
   $('chat-panel').classList.toggle('open',chatOpen);
   $('chat-hist-btn').classList.toggle('open',chatOpen);
-  $('chat-hist-btn').style.transform=chatOpen?'rotate(180deg)':'';
   if(chatOpen){
     unreadCount=0;
     const badge=$('chat-badge');
@@ -1131,15 +1246,14 @@ function showChatMsg(seat,name,text){
   const relSeat=(seat-mySeat+4)%4;
   const color=SEAT_COLORS[relSeat]||'#fff';
 
-  // ── Floating big message — random left or right ──
+  // ── Floating big message — top of mat, centred ──
   const cf=$('chat-float');
-  // Randomly pick left or right for this message
-  const goRight=Math.random()>.5;
-  cf.className='chat-float '+(goRight?'side-right':'side-left');
+  cf.className='chat-float';
   const div=document.createElement('div');
   div.className='chat-msg';
   div.style.color=color;
   div.innerHTML=`<span class="chat-who">${escHtml(name)}</span>${escHtml(text)}`;
+  div.style.whiteSpace='nowrap';
   cf.appendChild(div);
   setTimeout(()=>div.remove(),5200);
 
@@ -1195,7 +1309,7 @@ function onEnd(m){
   (m.scores||[]).forEach((sc,seat)=>{
     const name=seat===mySeat?'⭐ '+($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
     const row=document.createElement('tr');if(seat===m.winner)row.className='w';
-    row.innerHTML=`<td>${W[seat]} ${name}</td><td>${sc.toLocaleString()}</td>`;
+    row.innerHTML=`<td>${W[seat]} ${name}</td><td>${sc}</td>`;
     tbl.appendChild(row);
   });
   show('s-end');
@@ -1210,9 +1324,9 @@ function updateTileSizes(){
   // Medium tiles (discards): ~60% of large
   const mdW=Math.round(lgW*0.63);
   const mdH=Math.round(lgH*0.63);
-  // Small tiles (opponent backs): ~42% of large
-  const smW=Math.round(lgW*0.42);
-  const smH=Math.round(lgH*0.42);
+  // Small tiles (opponent backs): ~65% of large
+  const smW=Math.round(lgW*0.65);
+  const smH=Math.round(lgH*0.65);
   const root=document.documentElement;
   root.style.setProperty('--tlg-w',lgW+'px');
   root.style.setProperty('--tlg-h',lgH+'px');

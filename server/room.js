@@ -230,29 +230,29 @@ class Room {
       if(r.type==='chi') chiSeat=seat;
     }
     if(ronSeat!==null) this._ron(ronSeat,fromSeat,tile);
-    else if(ponSeat!==null) this._pon(ponSeat,tile);
-    else if(chiSeat!==null) this._chi(chiSeat,tile,responses[chiSeat].tileIds);
+    else if(ponSeat!==null) this._pon(ponSeat,tile,fromSeat);
+    else if(chiSeat!==null) this._chi(chiSeat,tile,responses[chiSeat].tileIds,fromSeat);
     else this._nextTurn();
   }
 
-  _pon(seat,tile){
+  _pon(seat,tile,fromSeat){
     const g=this.game;
     const hand=g.hands[seat];
     const matches=hand.filter(t=>key(t)===key(tile));
     const used=matches.slice(0,2);
     g.hands[seat]=hand.filter(t=>!used.map(u=>u.id).includes(t.id));
-    g.melds[seat].push({type:'pon',tiles:[...used,tile]});
+    g.melds[seat].push({type:'pon',tiles:[...used,tile],calledTileId:tile.id,fromSeat});
     g.turn=seat;
     this._sendState();
     if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat])),BOT_DELAY);
   }
 
-  _chi(seat,tile,tileIds){
+  _chi(seat,tile,tileIds,fromSeat){
     const g=this.game;
     const hand=g.hands[seat];
     const used=hand.filter(t=>tileIds.includes(t.id));
     g.hands[seat]=hand.filter(t=>!tileIds.includes(t.id));
-    g.melds[seat].push({type:'chi',tiles:sort([...used,tile])});
+    g.melds[seat].push({type:'chi',tiles:sort([...used,tile]),calledTileId:tile.id,fromSeat});
     g.turn=seat;
     this._sendState();
     if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat])),BOT_DELAY);
@@ -331,6 +331,12 @@ class Room {
       if(!p||p.isBot) continue;
       const hand=g.hands[seat];
       const w=hand.length===13?waits(hand):[];
+      // canRiichi: tile IDs the player can discard to declare riichi
+      // Only when: 14 tiles, no melds, not already riichi, >=1000 pts
+      let canRiichi=[];
+      if(hand.length===14&&!g.melds[seat].length&&!g.riichi[seat]&&g.scores[seat]>=1000){
+        canRiichi=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id)).length>0).map(t=>t.id);
+      }
       let pendingForMe=null;
       if(g.pending&&g.pending.seats.includes(seat)){
         const myR=g.pending.options.find(r=>r.seat===seat);
@@ -341,7 +347,7 @@ class Room {
       this._send(p,{type:'game_state',seat,myHand:hand,myMelds:g.melds[seat],
         discards:g.discards,melds:g.melds,scores:g.scores,turn:g.turn,
         round:g.round,roundWind:g.roundWind,honba:g.honba,riichiSticks:g.riichiSticks,
-        dora:g.dora,wallCount:g.wall.length,waits:w,riichi:g.riichi,pending:pendingForMe,
+        dora:g.dora,wallCount:g.wall.length,waits:w,riichi:g.riichi,pending:pendingForMe,canTsumo:g.turn===seat&&isWin(hand),canRiichi,
         oppHandSizes:g.hands.map((h,i)=>i===seat?null:h.length),
         drawTile:g.turn===seat?g.drawTile:null});
     }

@@ -24,7 +24,6 @@ function sort(hand){
   });
 }
 
-// Full hand decomposition — returns array of group-arrays or []
 function decompose(hand) {
   const counts = {};
   for(const t of hand){ const k=key(t); counts[k]=(counts[k]||0)+1; }
@@ -41,16 +40,12 @@ function _dec(counts, groups, results, total) {
   if(!keys.length){ results.push([...groups]); return; }
   const k=keys[0]; const suit=k.slice(-1); const val=parseInt(k);
   const rem=Object.values(counts).reduce((a,b)=>a+b,0);
-
-  // pair (only when remaining tiles mod 3 == 2)
   if(rem%3===2 && counts[k]>=2){
     counts[k]-=2; _dec(counts,[...groups,{t:'pair',k:[k,k]}],results,total); counts[k]+=2;
   }
-  // triplet
   if(counts[k]>=3){
     counts[k]-=3; _dec(counts,[...groups,{t:'tri',k:[k,k,k]}],results,total); counts[k]+=3;
   }
-  // sequence
   if(suit!=='z'){
     const k2=`${val+1}${suit}`,k3=`${val+2}${suit}`;
     if(counts[k2]>0&&counts[k3]>0){
@@ -72,6 +67,41 @@ function isKokushi(hand){
   const terms=['1m','9m','1p','9p','1s','9s','1z','2z','3z','4z','5z','6z','7z'];
   const keys=hand.map(key);
   return terms.every(t=>keys.includes(t)) && terms.some(t=>keys.filter(k=>k===t).length>=2);
+}
+
+// Kokushi with 13-sided wait (all 13 terminals/honours in hand, pair from draw)
+function isKokushi13(hand){
+  if(hand.length!==14) return false;
+  const terms=['1m','9m','1p','9p','1s','9s','1z','2z','3z','4z','5z','6z','7z'];
+  const c={}; for(const t of hand){c[key(t)]=(c[key(t)]||0)+1;}
+  const keys=Object.keys(c);
+  return keys.length===13 && keys.every(k=>terms.includes(k));
+}
+
+// Chuuren Poutou: 1112345678999 + any same suit tile (menzen only)
+function isChuuren(hand){
+  if(hand.length!==14) return false;
+  const c={}; for(const t of hand){c[key(t)]=(c[key(t)]||0)+1;}
+  const suits=new Set(hand.map(t=>t.s));
+  if(suits.size!==1||suits.has('z')) return false;
+  const s=[...suits][0];
+  const base={[`1${s}`]:3,[`2${s}`]:1,[`3${s}`]:1,[`4${s}`]:1,[`5${s}`]:1,[`6${s}`]:1,[`7${s}`]:1,[`8${s}`]:1,[`9${s}`]:3};
+  for(const [k,n] of Object.entries(base)){
+    if((c[k]||0)<n) return false;
+  }
+  return true;
+}
+// 9-sided wait version
+function isChuuren9(hand){
+  if(!isChuuren(hand)) return false;
+  const c={}; for(const t of hand){c[key(t)]=(c[key(t)]||0)+1;}
+  const suits=new Set(hand.map(t=>t.s));
+  const s=[...suits][0];
+  const base={[`1${s}`]:3,[`2${s}`]:1,[`3${s}`]:1,[`4${s}`]:1,[`5${s}`]:1,[`6${s}`]:1,[`7${s}`]:1,[`8${s}`]:1,[`9${s}`]:3};
+  for(const [k,n] of Object.entries(base)){
+    if((c[k]||0)!==n) return false; // exactly base = 9-sided wait
+  }
+  return true;
 }
 
 function isWin(hand){
@@ -106,32 +136,59 @@ function canChi(hand,disc){
   return seqs;
 }
 
-// ── Yaku detection ──────────────────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────────────────
 const TERMINALS = new Set(['1m','9m','1p','9p','1s','9s']);
 const HONORS    = new Set(['1z','2z','3z','4z','5z','6z','7z']);
 const DRAGONS   = new Set(['5z','6z','7z']);
+const WINDS     = new Set(['1z','2z','3z','4z']);
+const GREEN_TILES = new Set(['2s','3s','4s','6s','8s','6z']); // Ryuuiisou
 
 function isTermOrHon(k){ return TERMINALS.has(k)||HONORS.has(k); }
 function isSimple(k){ return !isTermOrHon(k); }
 function getSuit(k){ return k.slice(-1); }
 function getVal(k){ return parseInt(k); }
 
-function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIppatsu){
+// ── Main yaku detector ───────────────────────────────────────────────────────
+function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIppatsu, isDoubleRiichi, isRinshan, isChankan, isHaitei, isHoutei, isTenhou, isChiihou){
   const open=melds.length>0;
   const menzen=!open;
   const allKeys=hand14.map(key);
 
-  // Yakuman checks first
-  if(menzen && isKokushi(hand14)) return {han:13,yakuList:[{name:'Kokushi Musou',jp:'国士無双',han:13}],yakuman:true};
-  if(allKeys.every(k=>HONORS.has(k)))  return {han:13,yakuList:[{name:'Tsuuiisou',jp:'字一色',han:13}],yakuman:true};
-  if(allKeys.every(k=>TERMINALS.has(k))) return {han:13,yakuList:[{name:'Chinroutou',jp:'清老頭',han:13}],yakuman:true};
+  // ── Tenhou / Chiihou (Yakuman, before anything else) ─────────────────────
+  if(isTenhou) return ym('Tenhou','天和',13);
+  if(isChiihou) return ym('Chiihou','地和',13);
 
-  // Chiitoitsu
+  // ── Kokushi Musou ────────────────────────────────────────────────────────
+  if(menzen && isKokushi(hand14)){
+    if(isKokushi13(hand14)) return ym('Kokushi Juusanmen','国士無双十三面待ち',26); // double
+    return ym('Kokushi Musou','国士無双',13);
+  }
+
+  // ── Ryuuiisou (All Green) ────────────────────────────────────────────────
+  if(allKeys.every(k=>GREEN_TILES.has(k))) return ym('Ryuuiisou','緑一色',13);
+
+  // ── Tsuuiisou (All Honors) ───────────────────────────────────────────────
+  if(allKeys.every(k=>HONORS.has(k))) return ym('Tsuuiisou','字一色',13);
+
+  // ── Chinroutou (All Terminals) ───────────────────────────────────────────
+  if(allKeys.every(k=>TERMINALS.has(k))) return ym('Chinroutou','清老頭',13);
+
+  // ── Chuuren Poutou ───────────────────────────────────────────────────────
+  if(menzen && isChuuren(hand14)){
+    if(isChuuren9(hand14)) return ym('Junsei Chuuren','純正九蓮宝燈',26); // double
+    return ym('Chuuren Poutou','九蓮宝燈',13);
+  }
+
+  // ── Chiitoitsu ───────────────────────────────────────────────────────────
   if(menzen && isChiitoitsu(hand14)){
-    const yl=[{name:'Chiitoitsu',jp:'七対子',han:2}];
-    let h=2;
-    if(isRiichi){yl.push({name:'Riichi',jp:'リーチ',han:1});h++;}
-    if(isIppatsu){yl.push({name:'Ippatsu',jp:'一発',han:1});h++;}
+    const yl=[]; let h=2;
+    yl.push({name:'Chiitoitsu',jp:'七対子',han:2});
+    if(isDoubleRiichi){yl.push({name:'Double Riichi',jp:'ダブルリーチ',han:2});h+=2;}
+    else if(isRiichi){yl.push({name:'Riichi',jp:'リーチ',han:1});h++;}
+    if(isIppatsu&&isRiichi){yl.push({name:'Ippatsu',jp:'一発',han:1});h++;}
+    if(isHaitei){yl.push({name:'Haitei',jp:'海底摸月',han:1});h++;}
+    if(isHoutei){yl.push({name:'Houtei',jp:'河底撈魚',han:1});h++;}
+    const dc=countDora(hand14,[]);// dora added by caller
     return {han:h,yakuList:yl};
   }
 
@@ -140,84 +197,190 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
 
   let best={han:0,yakuList:[]};
   for(const groups of decomps){
-    const r=evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,menzen);
-    if(r.han>best.han) best=r;
+    const r=evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen);
+    if(r.yakuman||r.han>best.han) best=r;
+    if(r.yakuman) break;
   }
   return best;
 }
 
-function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,menzen){
+function ym(name,jp,han){ return {han,yakuList:[{name,jp,han}],yakuman:true}; }
+
+function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen){
   const yl=[]; let han=0;
   const allKeys=hand14.map(key);
-  const open=melds.length>0;
   const allGroups=[...groups,...melds.map(m=>({t:m.type==='pon'?'tri':'seq',k:m.tiles.map(key),open:true}))];
   const pairs=groups.filter(g=>g.t==='pair');
-  const seqs=groups.filter(g=>g.t==='seq');
+  const seqs=allGroups.filter(g=>g.t==='seq');
+  const closedSeqs=groups.filter(g=>g.t==='seq');
   const tris=allGroups.filter(g=>g.t==='tri');
   const closedTris=groups.filter(g=>g.t==='tri');
   const pairKey=pairs[0]?.k[0];
 
-  if(isRiichi&&menzen){yl.push({name:'Riichi',jp:'リーチ',han:1});han++;}
-  if(isIppatsu&&menzen){yl.push({name:'Ippatsu',jp:'一発',han:1});han++;}
-  if(isTsumo&&menzen){yl.push({name:'Menzen Tsumo',jp:'門前清自摸和',han:1});han++;}
+  // ── Yakuman checks within decomp ──────────────────────────────────────────
+
+  // Suu Kantsu — 4 kans (handled in game logic, checked via melds)
+  const kanMelds=melds.filter(m=>m.type==='kan');
+  if(kanMelds.length===4) return ym('Suu Kantsu','四槓子',13);
+
+  // Suu Ankou — 4 closed triplets (tsumo: single wait counts)
+  if(menzen&&closedTris.length===4){
+    // Tanki (single tile pair wait) = Suu Ankou Tanki = double yakuman
+    if(pairs.length===1&&allGroups.filter(g=>g.t==='pair').length===1)
+      return ym('Suu Ankou Tanki','四暗刻単騎',26);
+    return ym('Suu Ankou','四暗刻',13);
+  }
+
+  // Daisangen — 3 dragon triplets
+  if(tris.filter(g=>DRAGONS.has(g.k[0])).length===3)
+    return ym('Daisangen','大三元',13);
+
+  // Shousuushii — 3 wind triplets + 1 wind pair
+  const windTris=tris.filter(g=>WINDS.has(g.k[0]));
+  const windPair=pairKey&&WINDS.has(pairKey);
+  if(windTris.length===3&&windPair) return ym('Shousuushii','小四喜',13);
+
+  // Daisuushii — 4 wind triplets (double yakuman in some rules, 13 in standard)
+  if(windTris.length===4) return ym('Daisuushii','大四喜',26);
+
+  // ── Regular yaku ─────────────────────────────────────────────────────────
+
+  // Riichi / Double Riichi / Ippatsu
+  if(menzen){
+    if(isDoubleRiichi){yl.push({name:'Double Riichi',jp:'ダブルリーチ',han:2});han+=2;}
+    else if(isRiichi){yl.push({name:'Riichi',jp:'リーチ',han:1});han++;}
+    if(isIppatsu&&(isRiichi||isDoubleRiichi)){yl.push({name:'Ippatsu',jp:'一発',han:1});han++;}
+  }
+
+  // Menzen Tsumo
+  if(isTsumo&&menzen&&!isRinshan){yl.push({name:'Menzen Tsumo',jp:'門前清自摸和',han:1});han++;}
+
+  // Rinshan Kaihou
+  if(isRinshan){yl.push({name:'Rinshan Kaihou',jp:'嶺上開花',han:1});han++;}
+
+  // Chankan
+  if(isChankan){yl.push({name:'Chankan',jp:'槍槓',han:1});han++;}
+
+  // Haitei Raoyue (last tile tsumo)
+  if(isHaitei&&isTsumo){yl.push({name:'Haitei',jp:'海底摸月',han:1});han++;}
+
+  // Houtei Raoyui (last tile ron)
+  if(isHoutei&&!isTsumo){yl.push({name:'Houtei',jp:'河底撈魚',han:1});han++;}
 
   // Tanyao
   if(allKeys.every(isSimple)&&melds.every(m=>m.tiles.every(t=>isSimple(key(t))))){
     yl.push({name:'Tanyao',jp:'断么九',han:1});han++;
   }
 
-  // Pinfu
-  if(menzen&&seqs.length===4&&pairKey&&!DRAGONS.has(pairKey)&&!HONORS.has(pairKey)){
+  // Pinfu (menzen only, 4 sequences, pair not yakuhai, two-sided wait)
+  if(menzen&&seqs.length===4&&pairKey&&!DRAGONS.has(pairKey)&&pairKey!==`${seatWind}z`&&pairKey!==`${roundWind}z`){
     yl.push({name:'Pinfu',jp:'平和',han:1});han++;
   }
 
-  // Iipeiko
-  if(menzen&&seqs.length>=2){
-    const ss=seqs.map(g=>g.k.join());
-    if(new Set(ss).size<ss.length){yl.push({name:'Iipeiko',jp:'一盃口',han:1});han++;}
+  // Iipeiko (menzen only, two identical sequences)
+  if(menzen&&closedSeqs.length>=2){
+    const ss=closedSeqs.map(g=>g.k.join(','));
+    const dupes=ss.filter((s,i)=>ss.indexOf(s)!==i);
+    if(dupes.length>=1){yl.push({name:'Iipeiko',jp:'一盃口',han:1});han++;}
   }
 
-  // Yakuhai
+  // Ryanpeiko (menzen only, two pairs of identical sequences)
+  if(menzen&&closedSeqs.length===4){
+    const ss=closedSeqs.map(g=>g.k.join(','));
+    const counts={};ss.forEach(s=>counts[s]=(counts[s]||0)+1);
+    if(Object.values(counts).filter(n=>n===2).length===2){
+      // Remove iipeiko if awarded, replace with ryanpeiko
+      const ii=yl.findIndex(y=>y.name==='Iipeiko');
+      if(ii>=0){yl.splice(ii,1);han--;}
+      yl.push({name:'Ryanpeiko',jp:'二盃口',han:3});han+=3;
+    }
+  }
+
+  // Yakuhai (dragon/wind triplets)
   for(const g of tris){
     const k=g.k[0];
-    if(DRAGONS.has(k)){const nm={5:'Haku',6:'Hatsu',7:'Chun'}[getVal(k)];yl.push({name:nm,jp:{5:'白',6:'發',7:'中'}[getVal(k)],han:1});han++;}
+    if(k==='5z'){yl.push({name:'Haku',jp:'白',han:1});han++;}
+    else if(k==='6z'){yl.push({name:'Hatsu',jp:'發',han:1});han++;}
+    else if(k==='7z'){yl.push({name:'Chun',jp:'中',han:1});han++;}
     if(k===`${seatWind}z`){yl.push({name:'Seat Wind',jp:'自風',han:1});han++;}
     if(k===`${roundWind}z`&&seatWind!==roundWind){yl.push({name:'Round Wind',jp:'場風',han:1});han++;}
   }
 
-  // Sanshoku Doujun
+  // Shousangen (2 dragon triplets + 1 dragon pair)
+  const dragonTris=tris.filter(g=>DRAGONS.has(g.k[0]));
+  if(dragonTris.length===2&&pairKey&&DRAGONS.has(pairKey)){
+    yl.push({name:'Shousangen',jp:'小三元',han:2});han+=2;
+  }
+
+  // Sanshoku Doujun (same sequence in all 3 suits)
   if(seqs.length>=3){
     const byVal={};
-    for(const g of seqs){const v=g.k[0];if(!byVal[v])byVal[v]=new Set();byVal[v].add(getSuit(g.k[0]));}
+    for(const g of seqs){
+      const v=g.k[0];
+      if(!byVal[v])byVal[v]=new Set();
+      byVal[v].add(getSuit(g.k[0]));
+    }
     for(const suits of Object.values(byVal)){
-      if(suits.has('m')&&suits.has('p')&&suits.has('s')){const h=menzen?2:1;yl.push({name:'Sanshoku Doujun',jp:'三色同順',han:h});han+=h;break;}
+      if(suits.has('m')&&suits.has('p')&&suits.has('s')){
+        const h=menzen?2:1;yl.push({name:'Sanshoku Doujun',jp:'三色同順',han:h});han+=h;break;
+      }
     }
   }
 
-  // Ittsu
+  // Sanshoku Doukou (same triplet in all 3 suits)
+  if(tris.length>=3){
+    const triVals={};
+    for(const g of tris){
+      if(getSuit(g.k[0])==='z') continue;
+      const v=getVal(g.k[0]);
+      if(!triVals[v])triVals[v]=new Set();
+      triVals[v].add(getSuit(g.k[0]));
+    }
+    for(const suits of Object.values(triVals)){
+      if(suits.has('m')&&suits.has('p')&&suits.has('s')){
+        yl.push({name:'Sanshoku Doukou',jp:'三色同刻',han:2});han+=2;break;
+      }
+    }
+  }
+
+  // Ittsu (straight: 123, 456, 789 same suit)
   for(const suit of['m','p','s']){
     const vs=seqs.filter(g=>getSuit(g.k[0])===suit).map(g=>getVal(g.k[0]));
-    if(vs.includes(1)&&vs.includes(4)&&vs.includes(7)){const h=menzen?2:1;yl.push({name:'Ittsu',jp:'一気通貫',han:h});han+=h;break;}
+    if(vs.includes(1)&&vs.includes(4)&&vs.includes(7)){
+      const h=menzen?2:1;yl.push({name:'Ittsu',jp:'一気通貫',han:h});han+=h;break;
+    }
+  }
+
+  // Chanta (every group contains terminal or honour, at least 1 sequence)
+  if(seqs.length>=1&&allGroups.every(g=>g.k.some(k=>isTermOrHon(k)))&&pairKey&&isTermOrHon(pairKey)){
+    const h=menzen?2:1;yl.push({name:'Chanta',jp:'混全帯么九',han:h});han+=h;
   }
 
   // Toitoi
   if(tris.length===4){yl.push({name:'Toitoi',jp:'対々和',han:2});han+=2;}
 
-  // San Ankou
-  if(closedTris.length>=3){yl.push({name:'San Ankou',jp:'三暗刻',han:2});han+=2;}
+  // San Ankou (3 closed triplets)
+  if(closedTris.length===3){yl.push({name:'San Ankou',jp:'三暗刻',han:2});han+=2;}
 
-  // Suu Ankou (Yakuman)
-  if(menzen&&closedTris.length===4) return {han:13,yakuList:[{name:'Suu Ankou',jp:'四暗刻',han:13}],yakuman:true};
+  // Honitsu (one suit + honours)
+  const nonHonorSuits=new Set(allKeys.filter(k=>!HONORS.has(k)).map(getSuit));
+  if(nonHonorSuits.size===1&&allKeys.some(k=>HONORS.has(k))){
+    const h=menzen?3:2;yl.push({name:'Honitsu',jp:'混一色',han:h});han+=h;
+  }
 
-  // Honitsu
-  const suits=new Set(allKeys.filter(k=>!HONORS.has(k)).map(getSuit));
-  if(suits.size===1&&allKeys.some(k=>HONORS.has(k))){const h=menzen?3:2;yl.push({name:'Honitsu',jp:'混一色',han:h});han+=h;}
+  // Junchan (every group contains terminal, at least 1 sequence, no honours)
+  if(!allKeys.some(k=>HONORS.has(k))&&seqs.length>=1&&
+     allGroups.every(g=>g.k.some(k=>TERMINALS.has(k)))&&pairKey&&TERMINALS.has(pairKey)){
+    // Remove chanta if awarded
+    const ci=yl.findIndex(y=>y.name==='Chanta');
+    if(ci>=0){yl.splice(ci,1);han-=(menzen?2:1);}
+    const h=menzen?3:2;yl.push({name:'Junchan',jp:'純全帯么九',han:h});han+=h;
+  }
 
-  // Chinitsu
-  if(suits.size===1&&!allKeys.some(k=>HONORS.has(k))){const h=menzen?6:5;yl.push({name:'Chinitsu',jp:'清一色',han:h});han+=h;}
-
-  // Daisangen (Yakuman)
-  if(tris.filter(g=>DRAGONS.has(g.k[0])).length===3) return {han:13,yakuList:[{name:'Daisangen',jp:'大三元',han:13}],yakuman:true};
+  // Chinitsu (one suit, no honours)
+  if(nonHonorSuits.size===1&&!allKeys.some(k=>HONORS.has(k))){
+    const h=menzen?6:5;yl.push({name:'Chinitsu',jp:'清一色',han:h});han+=h;
+  }
 
   if(han===0) return {han:0,yakuList:[]};
   return {han,yakuList:yl};
@@ -237,14 +400,15 @@ function calcFu(groups,isTsumo,menzen){
   let fu=isTsumo?20:menzen?30:30;
   for(const g of groups){
     if(g.t==='tri'){const k=g.k[0];fu+=isTermOrHon(k)?8:4;}
-    if(g.t==='pair'){const k=g.k[0];if(DRAGONS.has(k)||HONORS.has(k))fu+=2;}
+    if(g.t==='pair'){const k=g.k[0];if(DRAGONS.has(k)||HONORS.has(k)||WINDS.has(k))fu+=2;}
   }
   if(isTsumo) fu+=2;
   return Math.ceil(fu/10)*10;
 }
 
 function basePoints(han,fu){
-  if(han>=13) return 8000;
+  if(han>=26) return 32000; // double yakuman
+  if(han>=13) return 16000; // yakuman (dealer: 48000, non-dealer: 32000 / 16000)
   if(han>=11) return 6000;
   if(han>=8)  return 4000;
   if(han>=6)  return 3000;
@@ -253,6 +417,7 @@ function basePoints(han,fu){
 }
 
 function handLabel(han){
+  if(han>=26) return 'Double Yakuman ダブル役満';
   if(han>=13) return 'Yakuman 役満';
   if(han>=11) return 'Sanbaiman 三倍満';
   if(han>=8)  return 'Baiman 倍満';
