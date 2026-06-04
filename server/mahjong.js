@@ -149,7 +149,7 @@ function getSuit(k){ return k.slice(-1); }
 function getVal(k){ return parseInt(k); }
 
 // ── Main yaku detector ───────────────────────────────────────────────────────
-function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIppatsu, isDoubleRiichi, isRinshan, isChankan, isHaitei, isHoutei, isTenhou, isChiihou){
+function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIppatsu, isDoubleRiichi, isRinshan, isChankan, isHaitei, isHoutei, isTenhou, isChiihou, winTileKey){
   const open=melds.length>0;
   const menzen=!open;
   const allKeys=hand14.map(key);
@@ -197,7 +197,7 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
 
   let best={han:0,yakuList:[]};
   for(const groups of decomps){
-    const r=evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen);
+    const r=evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen,winTileKey);
     if(r.yakuman||r.han>best.han) best=r;
     if(r.yakuman) break;
   }
@@ -206,7 +206,7 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
 
 function ym(name,jp,han){ return {han,yakuList:[{name,jp,han}],yakuman:true}; }
 
-function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen){
+function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen,winTileKey){
   const yl=[]; let han=0;
   const allKeys=hand14.map(key);
   const allGroups=[...groups,...melds.map(m=>({t:m.type==='pon'?'tri':'seq',k:m.tiles.map(key),open:true}))];
@@ -396,13 +396,55 @@ function countDora(hand,doraIndicators){
   return n;
 }
 
-function calcFu(groups,isTsumo,menzen){
-  let fu=isTsumo?20:menzen?30:30;
+// waitFu: compute wait-type fu bonus given the winning tile and groups
+// Returns 0 (ryanmen/shanpon), 2 (kanchan/penchan/tanki)
+function waitFu(groups, winTileKey){
+  const pair=groups.find(g=>g.t==='pair');
+  // Tanki (pair wait)
+  if(pair&&pair.k[0]===winTileKey) return 2;
   for(const g of groups){
-    if(g.t==='tri'){const k=g.k[0];fu+=isTermOrHon(k)?8:4;}
-    if(g.t==='pair'){const k=g.k[0];if(DRAGONS.has(k)||HONORS.has(k)||WINDS.has(k))fu+=2;}
+    if(g.t!=='seq') continue;
+    const [a,b,c]=g.k; // sorted low→high within suit
+    if(a===winTileKey||c===winTileKey){
+      // Penchan: 1-2-[3] or [7]-8-9
+      const val=getVal(a); const suit=getSuit(a);
+      if(winTileKey===c&&val===7) return 2; // 789 waiting on 9
+      if(winTileKey===a&&val===1) return 2; // 123 waiting on 1
+      return 0; // ryanmen
+    }
+    if(b===winTileKey) return 2; // kanchan
   }
-  if(isTsumo) fu+=2;
+  return 0; // shanpon or unknown
+}
+
+function calcFu(groups, isTsumo, menzen, winTileKey, isPinfu){
+  // Pinfu tsumo = fixed 20 fu (no rounding needed)
+  if(isPinfu && isTsumo) return 20;
+  let fu = isTsumo ? 20 : menzen ? 30 : 30;
+  for(const g of groups){
+    if(g.t==='tri'||g.t==='kan'){
+      const k=g.k[0];
+      const isHon=isTermOrHon(k);
+      const isClosed=!g.open;
+      if(g.t==='kan'){
+        // Kan fu: open=16/32, closed=32/64
+        fu += isHon ? (isClosed?64:32) : (isClosed?32:16);
+      } else {
+        // Triplet fu: open=2/4, closed=4/8
+        fu += isHon ? (isClosed?8:4) : (isClosed?4:2);
+      }
+    }
+    if(g.t==='pair'){
+      const k=g.k[0];
+      if(DRAGONS.has(k)||WINDS.has(k)) fu+=2;
+    }
+  }
+  // Wait fu
+  if(winTileKey) fu += waitFu(groups, winTileKey);
+  // Tsumo fu (not for pinfu — already handled above; not for open hand tsumo)
+  if(isTsumo && !isPinfu) fu += 2;
+  // Minimum 30 for menzen ron
+  if(!isTsumo && menzen && fu<30) fu=30;
   return Math.ceil(fu/10)*10;
 }
 
@@ -427,4 +469,4 @@ function handLabel(han){
 }
 
 module.exports = {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
-  detectYaku,countDora,calcFu,basePoints,handLabel,decompose};
+  detectYaku,countDora,calcFu,waitFu,basePoints,handLabel,decompose};

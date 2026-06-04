@@ -172,8 +172,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   transform:rotate(-90deg);
   transform-origin:left top;}
 
-/* Riichi tile: rotated 90° within its zone row (from each player's perspective) */
-.dz-riichi{display:inline-flex;transform:rotate(90deg);transform-origin:center center;
+/* Riichi tile: rotated -90° within its zone row (from each player's perspective) */
+.dz-riichi{display:inline-flex;transform:rotate(-90deg);transform-origin:center center;
   margin:0 calc(var(--tmd-h,40px)/2 - var(--tmd-w,30px)/2);}
 
 /* Player areas — all inside the felt */
@@ -251,10 +251,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* Gap between main hand and draw tile */
 .draw-sep{width:clamp(5px,1.5vmin,10px);flex-shrink:0;}
 .mg{display:flex;gap:1px;margin-right:5px;align-items:flex-end;}
-/* Called tile (chi/pon) rotated 90° to show it was taken from another player */
-.mg .called{transform:rotate(90deg);
+/* Called tile (chi/pon) rotated -90° to show it was taken from another player */
+.mg .called{transform:rotate(-90deg);
   margin-right:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);
   margin-left:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);}
+/* Kakan: added tile stacked on top of the rotated called tile */
+.mg .called-stack{position:relative;display:inline-flex;flex-direction:column;align-items:center;}
+.mg .called-stack .called{margin:0;}
+.mg .called-stack .kakan-add{position:absolute;top:-4px;left:50%;transform:translateX(-50%) rotate(-90deg);
+  margin:0;z-index:2;}
 .mr{display:flex;gap:2px;align-items:flex-end;flex-shrink:0;}
 .oh{display:flex;gap:2px;}
 .oh.rot180{transform:rotate(180deg);}
@@ -528,7 +533,9 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
     <div class="ret" id="ret">—</div><div class="rehn" id="rehn"></div>
     <div class="yl" id="reyl"></div><div class="wt" id="rewt"></div>
     <table class="st" id="rest"></table>
-    <div class="reb"><button class="bp" style="max-width:200px;" onclick="goLobby()">Main Menu</button></div>
+    <div class="reb" id="end-btn-area">
+      <button class="bp" style="max-width:200px;" onclick="goLobby()">Main Menu</button>
+    </div>
   </div>
 </div>
 <div class="tc" id="tc"></div>
@@ -848,6 +855,9 @@ function onMsg(m){
   if(m.type==='game_state'){lastState=m;renderState(m);}
   else if(m.type==='riichi'){onRiichi(m);}
   else if(m.type==='round_end'){onEnd(m);}
+  else if(m.type==='round_start'){onRoundStart(m);}
+  else if(m.type==='game_over'){onGameOver(m);}
+  else if(m.type==='kan'){toast(W[(m.seat-mySeat+4)%4]+' カン！');}
   else if(m.type==='chat'){showChatMsg(m.seat,m.name,m.text);}
 }
 
@@ -1040,7 +1050,7 @@ function renderState(m){
     });
   }
 
-  // My melds — Japanese style: called tile rotated 90°, position depends on fromSeat
+  // My melds — Japanese style: called tile rotated -90°, position depends on fromSeat
   const ml=$('mlb');ml.innerHTML='';
   for(const meld of(m.myMelds||[])){
     const g=document.createElement('div');g.className='mg';
@@ -1048,7 +1058,30 @@ function renderState(m){
     ml.appendChild(g);
   }
 
-  $('tpb').style.display=(m.waits?.length>0&&!m.riichi?.[mySeat])?'':'none';
+  // Opponent melds — rendered from their perspective (viewerSeat = their abs seat)
+  [[1,'r'],[2,'t'],[3,'l']].forEach(([i,id])=>{
+    const abs=(mySeat+i)%4;
+    const ml2=$('ml'+id);
+    if(!ml2) return;
+    ml2.innerHTML='';
+    for(const meld of(m.melds?.[abs]||[])){
+      const g=document.createElement('div');g.className='mg';
+      renderMeld(g, meld, abs);
+      ml2.appendChild(g);
+    }
+  });
+
+  $('tpb').style.display=(m.waits?.length>0&&!m.riichi?.[mySeat]&&!m.furiten)?'':'none';
+  // Furiten indicator
+  let furitenEl=$('furiten-badge');
+  if(!furitenEl){
+    furitenEl=document.createElement('span');
+    furitenEl.id='furiten-badge';
+    furitenEl.style.cssText='display:none;padding:2px 6px;border-radius:4px;background:linear-gradient(135deg,#444,#222);color:#f88;font-size:8px;letter-spacing:1px;font-family:"Cinzel Decorative",serif;margin-left:3px;';
+    furitenEl.textContent='振聴';
+    $('tpb').parentNode.appendChild(furitenEl);
+  }
+  furitenEl.style.display=m.furiten?'':'none';
   drawActions(m);
 }
 
@@ -1067,69 +1100,117 @@ function clickTile(id){
   }
 }
 
-// Japanese meld display:
-// Chi: called tile (from left/lower seat) goes LEFT, rotated 90°
-// Pon: called tile position depends on fromSeat direction
-//   from right (+1): rotated tile on LEFT
-//   from across (+2): rotated tile in MIDDLE
-//   from left (+3): rotated tile on RIGHT
-function renderMeld(container, meld, mySeat){
+// ── Meld rendering ────────────────────────────────────────────────────────────
+// All called tiles rotate -90°. Position within group indicates source:
+//   from right  (dir=1): rotated tile on LEFT
+//   from across (dir=2): rotated tile in MIDDLE
+//   from left   (dir=3): rotated tile on RIGHT
+// Chi: always from left (dir=3), rotated tile on LEFT (nearest to hand)
+// Kakan: added tile stacked vertically on top of the original rotated called tile
+function renderMeld(container, meld, viewerSeat){
   const tiles = meld.tiles;
   const calledId = meld.calledTileId;
   const fromSeat = meld.fromSeat;
-  // direction: 1=right, 2=across, 3=left (relative to mySeat)
-  const dir = fromSeat !== undefined ? (fromSeat - mySeat + 4) % 4 : 1;
+  // direction relative to the viewer: 1=right, 2=across, 3=left
+  const dir = fromSeat !== undefined ? (fromSeat - viewerSeat + 4) % 4 : 1;
+
+  const mkC = t => { const el=mkElMd(t); el.classList.add('called'); return el; };
 
   if(meld.type === 'chi'){
-    // Chi: called tile always from left (dir=3), rotated tile goes to left of group
-    const called = tiles.find(t=>t.id===calledId);
+    // Called tile always from left, goes LEFTMOST (rightmost in DOM = rightmost visually in meld)
+    // In riichi mahjong melds are displayed right-to-left from hand edge, so leftmost = closest to hand
+    const called = tiles.find(t=>t.id===calledId) || tiles[0];
     const own = tiles.filter(t=>t.id!==calledId);
-    // Left position: called tile first (leftmost), rotated
-    const calledEl = mkElMd(called||tiles[0]);
-    calledEl.classList.add('called');
-    container.appendChild(calledEl);
-    (called ? own : tiles.slice(1)).forEach(t=>container.appendChild(mkElMd(t)));
+    // Order: rotated called tile on LEFT, then own tiles sorted
+    container.appendChild(mkC(called));
+    own.forEach(t=>container.appendChild(mkElMd(t)));
+
   } else if(meld.type === 'pon'){
-    // Pon: two own tiles + one called tile, rotated position varies
-    const called = tiles.find(t=>t.id===calledId);
+    const called = tiles.find(t=>t.id===calledId) || tiles[2];
     const own = tiles.filter(t=>t.id!==calledId);
-    const calledEl = mkElMd(called||tiles[2]);
-    calledEl.classList.add('called');
-    const ownEls = (called ? own : tiles.slice(0,2)).map(t=>mkElMd(t));
+    const ownEls = own.map(t=>mkElMd(t));
+    const calledEl = mkC(called);
     if(dir===1){
-      // From right: rotated on LEFT
+      // From right: rotated tile on LEFT
       container.appendChild(calledEl);
       ownEls.forEach(el=>container.appendChild(el));
     } else if(dir===2){
-      // From across: rotated in MIDDLE
+      // From across: rotated tile in MIDDLE
       container.appendChild(ownEls[0]);
       container.appendChild(calledEl);
       container.appendChild(ownEls[1]);
     } else {
-      // From left (dir===3): rotated on RIGHT
+      // From left (dir===3): rotated tile on RIGHT
       ownEls.forEach(el=>container.appendChild(el));
       container.appendChild(calledEl);
     }
+
   } else if(meld.type === 'kan'){
-    // Kan display: face-down for ankan (tiles 0 and 3 face down), open for daiminkan/kakan
-    const kanType=meld.kanType;
-    if(kanType==='ankan'){
-      // Closed kan: first and last tiles face down
-      const back1=document.createElement('div');back1.className='tile tmd kan-back';
-      const t1=mkElMd(meld.tiles[1]);
-      const t2=mkElMd(meld.tiles[2]);
-      const back2=document.createElement('div');back2.className='tile tmd kan-back';
-      [back1,t1,t2,back2].forEach(el=>container.appendChild(el));
+    const kanType = meld.kanType;
+
+    if(kanType === 'ankan'){
+      // Closed kan: outer two tiles face-down, inner two face-up
+      const back = () => { const d=document.createElement('div'); d.className='tile tmd kan-back'; return d; };
+      container.appendChild(back());
+      container.appendChild(mkElMd(meld.tiles[1]));
+      container.appendChild(mkElMd(meld.tiles[2]));
+      container.appendChild(back());
+
+    } else if(kanType === 'kakan'){
+      // Kakan: existing pon tiles + added tile stacked on top of called tile
+      // Find the original pon called tile and the added tile
+      // tiles[0..2] = pon tiles (calledTileId = original pon called), tiles[3] = added tile
+      // Actually: meld.tiles has 4 tiles; the kakan-added tile is stored but we need to show it stacked
+      const kakanAdded = meld.tiles[3]; // added tile (last one pushed)
+      const ponCalled = tiles.find(t=>t.id===calledId);
+      const ponOwn = tiles.filter(t=>t.id!==calledId&&t!==kakanAdded).slice(0,2);
+      const ownEls = ponOwn.map(t=>mkElMd(t));
+
+      // Build stacked called+added element
+      const stack = document.createElement('div');
+      stack.className = 'called-stack';
+      stack.style.cssText = `
+        position:relative;display:inline-flex;align-items:center;justify-content:center;
+        width:calc(var(--tmd-h,40px));
+        margin:0 calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);
+      `;
+      const calledEl = ponCalled ? mkElMd(ponCalled) : mkElMd(tiles[0]);
+      calledEl.style.transform='rotate(-90deg)';
+      // Added tile stacked on top
+      const addedEl = kakanAdded ? mkElMd(kakanAdded) : mkElMd(tiles[3]);
+      addedEl.style.cssText='position:absolute;top:-4px;transform:rotate(-90deg);';
+      stack.appendChild(calledEl);
+      stack.appendChild(addedEl);
+
+      if(dir===1){
+        container.appendChild(stack);
+        ownEls.forEach(el=>container.appendChild(el));
+      } else if(dir===2){
+        container.appendChild(ownEls[0]);
+        container.appendChild(stack);
+        container.appendChild(ownEls[1]);
+      } else {
+        ownEls.forEach(el=>container.appendChild(el));
+        container.appendChild(stack);
+      }
+
     } else {
-      // Daiminkan / kakan: all face up, called tile rotated
-      const called=meld.tiles.find(t=>t.id===meld.calledTileId);
-      const own=meld.tiles.filter(t=>t.id!==meld.calledTileId);
-      const calledEl=called?mkElMd(called):mkElMd(meld.tiles[3]);
-      calledEl.classList.add('called');
-      const ownEls=own.map(t=>mkElMd(t));
-      // Called tile on left
-      container.appendChild(calledEl);
-      ownEls.forEach(el=>container.appendChild(el));
+      // Daiminkan: 4 tiles, called tile rotated, position by direction (same as pon)
+      const called = tiles.find(t=>t.id===calledId) || tiles[3];
+      const own = tiles.filter(t=>t.id!==calledId);
+      const ownEls = own.map(t=>mkElMd(t));
+      const calledEl = mkC(called);
+      if(dir===1){
+        container.appendChild(calledEl);
+        ownEls.forEach(el=>container.appendChild(el));
+      } else if(dir===2){
+        container.appendChild(ownEls[0]);
+        container.appendChild(calledEl);
+        ownEls.slice(1).forEach(el=>container.appendChild(el));
+      } else {
+        ownEls.forEach(el=>container.appendChild(el));
+        container.appendChild(calledEl);
+      }
     }
   } else {
     tiles.forEach(t=>container.appendChild(mkElMd(t)));
@@ -1298,11 +1379,51 @@ function showChatMsg(seat,name,text){
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 // ── Riichi / Toast ────────────────────────────────────────────────────────────
-function onRiichi(m){$('rs'+pid(m.seat)).style.display='';toast('リーチ — '+(m.name||'Player'));}
+function onRiichi(m){
+  $('rs'+pid(m.seat)).style.display='';
+  const label=m.isDouble?'ダブルリーチ':'リーチ';
+  toast(label+' — '+(m.name||'Player'));
+}
 function toast(msg){
   const tc=$('tc'),t=document.createElement('div');
   t.className='toast';t.textContent=msg;
   tc.appendChild(t);setTimeout(()=>t.remove(),3000);
+}
+
+// ── Round Start (next round after win/draw) ────────────────────────────────────
+function onRoundStart(m){
+  // Show game screen (removes end screen)
+  inGame=true;
+  show('s-game');
+  $('chat-bar').style.display='flex';
+  $('dora-panel').style.display='flex';
+  // Reset riichi stick indicators
+  ['b','r','t','l'].forEach(p=>{ const el=$('rs'+p); if(el) el.style.display='none'; });
+  // Show brief round start toast
+  const windChar=['東','南','西','北'];
+  const wc=windChar[(m.roundWind||1)-1];
+  toast(`${wc}${m.round||1}局 · ${m.honba}本場 開始`);
+}
+
+// ── Game Over ──────────────────────────────────────────────────────────────────
+function onGameOver(m){
+  inGame=false;
+  $('chat-bar').style.display='none'; $('chat-panel').classList.remove('open'); chatOpen=false;
+  $('dora-panel').style.display='none';
+  const sorted=[...((m.scores||[]).map((s,i)=>({s,i})))].sort((a,b)=>b.s-a.s);
+  const windChar=['東','南','西','北'];
+  let rows='';
+  sorted.forEach(({s,i},rank)=>{
+    const name=i===mySeat?'⭐ '+($('iname').value.trim()||'You'):(m.playerNames?.[i]||`Seat ${i}`);
+    rows+=`<tr class="${rank===0?'w':''}"><td>${rank+1}位 ${W[i]} ${escHtml(name)}</td><td>${s}</td></tr>`;
+  });
+  const reasonLabel=m.reason==='tobi'?'飛び — Bankruptcy':'終局 — Game Over';
+  $('ret').textContent=reasonLabel;
+  $('rehn').textContent='';
+  $('reyl').innerHTML='';
+  $('rewt').innerHTML='';
+  $('rest').innerHTML=rows;
+  show('s-end');
 }
 
 // ── Round End ──────────────────────────────────────────────────────────────────
@@ -1310,25 +1431,90 @@ function onEnd(m){
   inGame=false;
   $('chat-bar').style.display='none'; $('chat-panel').classList.remove('open'); chatOpen=false;
   $('dora-panel').style.display='none';
-  const T={tsumo:'🀄 TSUMO!',ron:'🀄 RON!',draw:'流局 — Draw'};
-  $('ret').textContent=T[m.reason]||'Round Over';
-  $('rehn').textContent=m.handLabel?`${m.handLabel} · ${m.han||0}飜${m.fu?' · '+m.fu+'符':''}` :'';
+
+  const reasonLabels={
+    tsumo:'🀄 TSUMO!',ron:'🀄 RON!',
+    draw:'流局 — Draw',suukaisan:'四槓散了',
+    nagashi:'流し満貫',
+  };
+  $('ret').textContent=reasonLabels[m.reason]||'Round Over';
+
+  // Hand label & han/fu
+  if(m.reason==='tsumo'||m.reason==='ron'){
+    $('rehn').textContent=m.handLabel?`${m.handLabel} · ${m.han||0}飜${m.fu?' · '+m.fu+'符':''}` :'';
+  } else if(m.reason==='draw'){
+    // Show tenpai/noten payments
+    const payStrs=(m.payments||[]).map((p,i)=>{
+      const name=i===mySeat?'You':(m.playerNames?.[i]||`Seat ${i}`);
+      const inT=m.inTenpai?.[i];
+      const sign=p>0?'+':p<0?'':' ';
+      return `${name}: ${inT?'テンパイ':'ノーテン'} ${p!==0?sign+p:''}`;
+    });
+    $('rehn').textContent=payStrs.join('  ·  ');
+  } else {
+    $('rehn').textContent='';
+  }
+
+  // Yaku list
   const yl=$('reyl');yl.innerHTML='';
   for(const y of(m.yakuList||[])){
     const c=document.createElement('div');c.className='yc';
-    c.innerHTML=`${y.name}<span class="yh">${y.han}飜</span><span class="yj">${y.jp||''}</span>`;
+    c.innerHTML=`${escHtml(y.name)}<span class="yh">${y.han}飜</span><span class="yj">${escHtml(y.jp||'')}</span>`;
     yl.appendChild(c);
   }
+
+  // Dora / Ura Dora reveal
+  if((m.dora||[]).length||(m.uraDora||[]).length){
+    const dr=document.createElement('div');dr.style.cssText='display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;';
+    if((m.dora||[]).length){
+      const lbl=document.createElement('span');lbl.style.cssText='font-size:10px;color:var(--gold);letter-spacing:1px;margin-right:4px;';
+      lbl.textContent='ドラ';dr.appendChild(lbl);
+      for(const t of m.dora) dr.appendChild(mkElMd(t));
+    }
+    if((m.uraDora||[]).length){
+      const lbl2=document.createElement('span');lbl2.style.cssText='font-size:10px;color:#f88;letter-spacing:1px;margin-left:8px;margin-right:4px;';
+      lbl2.textContent='裏ドラ';dr.appendChild(lbl2);
+      for(const t of m.uraDora) dr.appendChild(mkElMd(t));
+    }
+    yl.appendChild(dr);
+  }
+
+  // Winning hand tiles
   const wt=$('rewt');wt.innerHTML='';
   for(const t of(m.hand||[])) if(t) wt.appendChild(mkElMd(t));
+
+  // Tenpai hands on draw
+  if(m.reason==='draw'&&m.tenpaiHands){
+    const th=document.createElement('div');th.style.cssText='margin-top:10px;';
+    m.tenpaiHands.forEach((hand,seat)=>{
+      if(!hand) return;
+      const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:4px;margin-bottom:4px;';
+      const lbl=document.createElement('span');lbl.style.cssText='font-size:10px;color:var(--gold);min-width:60px;';
+      const name=seat===mySeat?'You':(m.playerNames?.[seat]||`Seat ${seat}`);
+      lbl.textContent=name+':';row.appendChild(lbl);
+      for(const t of hand) row.appendChild(mkElMd(t));
+      th.appendChild(row);
+    });
+    wt.appendChild(th);
+  }
+
+  // Score table
   const tbl=$('rest');tbl.innerHTML='';
   (m.scores||[]).forEach((sc,seat)=>{
     const name=seat===mySeat?'⭐ '+($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
     const row=document.createElement('tr');if(seat===m.winner)row.className='w';
-    row.innerHTML=`<td>${W[seat]} ${name}</td><td>${sc}</td>`;
+    row.innerHTML=`<td>${W[seat]} ${escHtml(name)}</td><td>${sc}</td>`;
     tbl.appendChild(row);
   });
+
   show('s-end');
+  // Show appropriate button
+  const btnArea=$('end-btn-area');
+  btnArea.innerHTML='<button class="bp" style="max-width:200px;" onclick="goLobby()">Main Menu</button>';
+
+  // Schedule next round (server will send round_start, then game_state)
+  // Re-enable inGame after a delay so new game_state is accepted
+  setTimeout(()=>{ inGame=true; },5500);
 }
 
 // ── Responsive tile sizing ───────────────────────────────────────────────────────
