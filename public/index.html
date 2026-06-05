@@ -209,14 +209,16 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .pa-b{bottom:15px;left:0;right:0;flex-direction:column;align-items:center;}
 /* Top: flush to top edge, column layout (tiles first, nameplate below) */
 .pa-t{top:15px;left:0;right:0;flex-direction:column;align-items:center;}
-/* Left: pivot flush to left edge, centred vertically, rotated 90° CW */
-.pa-l{position:absolute;top:50%;left:15px;
+/* Left: pivot at left edge, centred vertically, rotated 90° CW */
+.pa-l{position:absolute;top:50%;left:0;
   display:flex;flex-direction:column;align-items:flex-start;
-  transform:translate(-50%,-50%) rotate(90deg);}
-/* Right: pivot flush to right edge, centred vertically, rotated 90° CCW */
-.pa-r{position:absolute;top:50%;right:calc(var(--tmd-h) + 15px);
+  transform:translateY(-50%) rotate(90deg);
+  transform-origin:left center;}
+/* Right: pivot at right edge, centred vertically, rotated -90° CCW */
+.pa-r{position:absolute;top:50%;right:0;
   display:flex;flex-direction:column;align-items:flex-start;
-  transform:translate(50%,-50%) rotate(-90deg);}
+  transform:translateY(-50%) rotate(-90deg);
+  transform-origin:right center;}
 
 /* Nameplates */
 .np{background:#1a1a1a;border-radius:4px;
