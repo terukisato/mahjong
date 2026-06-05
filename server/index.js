@@ -11,11 +11,11 @@ const wss=new WebSocket.Server({server});
 
 app.use(express.static(path.join(__dirname,'../public')));
 
-let waitingRoom=new Room();
+let waitingRoom=null;
 
-function getWaitingRoom(){
-  if(waitingRoom.phase==='waiting') return waitingRoom;
-  waitingRoom=new Room();
+function getWaitingRoom(mode){
+  if(waitingRoom&&waitingRoom.phase==='waiting'&&waitingRoom.gameMode===mode) return waitingRoom;
+  waitingRoom=new Room(mode);
   return waitingRoom;
 }
 
@@ -32,9 +32,10 @@ wss.on('connection',(ws)=>{
     if(msg.type==='join'){
       if(myRoom){myRoom.removeHuman(myId);myRoom=null;}
       player.name=(msg.name||'Player').slice(0,20);
-      myRoom=getWaitingRoom();
+      const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
+      myRoom=getWaitingRoom(mode);
       if(!myRoom.addHuman(player)){
-        waitingRoom=new Room();myRoom=waitingRoom;myRoom.addHuman(player);
+        waitingRoom=new Room(mode);myRoom=waitingRoom;myRoom.addHuman(player);
       }
       ws.send(JSON.stringify({type:'joined',seat:player.seat}));
     }

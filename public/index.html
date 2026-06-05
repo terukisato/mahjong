@@ -7,6 +7,9 @@
 <title>雀心 Mahjong Online</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Cinzel+Decorative:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&family=Yuji+Syuku&display=swap" rel="stylesheet">
 <style>
+/* ════════════════════════════════════════════════════════════
+   CSS VARIABLES — colours, tile sizes (JS updates tile sizes on resize)
+   ════════════════════════════════════════════════════════════ */
 :root{
   --jade:#1a6b45;--jl:#2a9e67;--jd:#0d3d28;
   --gold:#c9a84c;--gl:#f0d080;--gd:#8a6b20;--cream:#f5edd8;
@@ -15,15 +18,19 @@
   --tmd-w:26px;--tmd-h:36px;
   --tsm-w:16px;--tsm-h:22px;
 }
+/* ════ RESET & BASE ════ */
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{height:100%;overflow:hidden;}
 body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation;}
+/* ════ BACKGROUND LAYERS ════ */
 .bg{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse at 20% 85%,rgba(26,107,69,.3),transparent 55%),radial-gradient(ellipse at 80% 15%,rgba(201,168,76,.14),transparent 55%),radial-gradient(ellipse at 50% 50%,rgba(12,35,20,.85),#040a05 100%);}
 .bgg{position:fixed;inset:0;z-index:0;opacity:.03;background-image:repeating-linear-gradient(0deg,var(--gold) 0,var(--gold) 1px,transparent 0,transparent 40px),repeating-linear-gradient(90deg,var(--gold) 0,var(--gold) 1px,transparent 0,transparent 40px);}
 .screen{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;}
 .screen.hidden{display:none!important;}
 
-/* ════ LOBBY ════ */
+/* ════════════════════════════════════════════════════════════
+   LOBBY SCREEN
+   ════════════════════════════════════════════════════════════ */
 #s-lobby{flex-direction:column;gap:18px;}
 .logo{text-align:center;animation:float 5s ease-in-out infinite;}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
@@ -46,6 +53,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .wa{display:none;margin-top:14px;}
 .wm{text-align:center;color:var(--jl);font-size:12px;letter-spacing:2px;animation:pulse 1.5s infinite;}
 @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes ld-bounce{0%,80%,100%{transform:scale(0);opacity:.3}40%{transform:scale(1);opacity:1}}
+.ld-dot{width:10px;height:10px;border-radius:50%;background:var(--gold);animation:ld-bounce 1.2s ease-in-out infinite;}
 .slots{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap;}
 .slot{width:80px;min-height:64px;border-radius:10px;border:2px solid rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;background:rgba(0,0,0,.4);transition:all .4s;padding:6px 4px;}
 .slot .si{font-size:20px;line-height:1;}.slot .sn{font-size:9px;color:rgba(245,237,216,.7);font-weight:600;}.slot .sr{font-size:8px;margin-top:2px;}
@@ -53,12 +62,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .slot.bot{border-color:rgba(201,168,76,.35);background:rgba(50,35,5,.4);}
 .slot.rdy{border-color:#4eff9a;box-shadow:0 0 14px rgba(78,255,154,.3);}
 .cd{font-size:10px;color:rgba(201,168,76,.55);text-align:center;margin-top:8px;letter-spacing:1px;}
+.mode-btn{flex:1;padding:10px 6px;background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.6);font-size:13px;font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
+.mode-btn.active{background:rgba(26,107,69,.4);border-color:var(--jl);color:var(--cream);box-shadow:0 0 12px rgba(42,158,103,.3);}
+.mode-btn:hover:not(.active){border-color:rgba(201,168,76,.4);color:var(--cream);}
 .ready-btn{width:100%;padding:12px;background:linear-gradient(135deg,#0a5a2a,#1a8840);border:2px solid #4eff9a;border-radius:10px;color:#c0ffd8;font-size:14px;font-family:'Cinzel Decorative',serif;letter-spacing:3px;cursor:pointer;transition:all .25s;margin-top:12px;position:relative;overflow:hidden;}
 .ready-btn:hover{transform:translateY(-2px);box-shadow:0 0 20px rgba(78,255,154,.4);}
 .ready-btn.pressed{opacity:.6;cursor:default;transform:none;}
 .ready-btn.pressed::after{content:'✓ Ready!';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a5a2a,#1a8840);font-size:14px;letter-spacing:3px;}
 
-/* ════ GAME LAYOUT ════ */
+/* ════════════════════════════════════════════════════════════
+   GAME SCREEN — LAYOUT
+   ════════════════════════════════════════════════════════════ */
 #s-game{display:block;}
 .topbar{position:fixed;top:0;left:0;right:0;height:36px;background:rgba(3,10,5,.97);border-bottom:1px solid rgba(201,168,76,.18);display:flex;align-items:center;justify-content:space-between;padding:0 10px;z-index:50;}
 .tb-title{font-family:'Noto Serif JP',serif;font-size:12px;color:var(--gold);letter-spacing:2px;}
@@ -67,17 +81,22 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .bl{padding:0 10px;height:26px;background:rgba(120,20,20,.8);border:1px solid rgba(200,60,60,.4);border-radius:6px;color:rgba(255,180,180,.85);font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
 .bl:hover{background:rgba(160,30,30,.9);}
 
-/* Table area between top bar and action bar */
+/* ── Table container ── */
 .table{position:fixed;top:36px;left:0;right:0;bottom:0;overflow:hidden;}
 
-/* Felt — responsive square using vmin */
+/* ── Felt (green play area) + oak frame (box-shadow) ── */
 .felt{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   width:min(96vmin,920px);height:min(96vmin,920px);
   background:radial-gradient(ellipse at 40% 35%,#27774a,#155230 60%,#0e3b24);
-  border-radius:16px;border:3px solid rgba(201,168,76,.5);
-  box-shadow:0 0 0 6px rgba(0,0,0,.5),0 0 80px rgba(0,0,0,.9),inset 0 0 60px rgba(0,0,0,.4);}
+  border-radius:0;
+  border:none;
+  box-shadow:
+    inset 0 0 60px rgba(0,0,0,.4),
+    0 0 0 80px #1a0a04,
+    0 0 0 82px #0d0502,
+    8px 8px 40px 82px rgba(0,0,0,.8);}
 
-/* Center info — dark grey panel with styled separators */
+/* ── Centre info panel (round/wind/scores) ── */
 .ctr{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   z-index:5;pointer-events:none;
   background:#1a1a1a;
@@ -118,17 +137,23 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   margin-top:1px;position:relative;z-index:1;}
 .ch{font-size:clamp(7px,1.3vmin,9px);color:rgba(245,237,216,.28);
   margin-top:1px;position:relative;z-index:1;}
-.cdrow{display:flex;gap:2px;}
-/* Empty dora slot placeholder */
+/* ── Dora indicator strip ── */
 .dora-slot{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:5px;border:1px dashed rgba(201,168,76,.25);
   background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;}
 .dora-slot.filled{border:none;background:none;padding:0;}
 /* Ankan face-down tiles */
-.kan-back{width:var(--tmd-w,26px);height:var(--tmd-h,36px);background:linear-gradient(135deg,#1a3a6a,#0d1f3a);border:1px solid #2a4a8a;border-radius:3px;}
-.tarrow{position:absolute;bottom:max(16vmin,108px);left:50%;transform:translateX(-50%);font-size:clamp(14px,3vmin,20px);z-index:20;pointer-events:none;filter:drop-shadow(0 0 6px rgba(255,220,50,.9));animation:bounce .7s ease-in-out infinite;}
+.kan-back{
+  width:var(--tmd-w,26px);height:var(--tmd-h,36px);
+  background:linear-gradient(135deg,#1a3a6a,#0d1f3a);
+  border:1px solid #2a4a8a;border-radius:3px;
+  flex-shrink:0;display:inline-flex;
+  box-shadow:1px 2px 4px rgba(0,0,0,.5);
+}
 @keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-5px)}}
 
-/* Discard zones — top-left of zone aligns with panel bottom-left (from each player's view) */
+/* ════════════════════════════════════════════════════════════
+   DISCARD ZONES
+   ════════════════════════════════════════════════════════════ */
 .dz{position:absolute;display:flex;flex-direction:column;gap:2px;pointer-events:none;}
 .dz-row{display:flex;flex-direction:row;gap:2px;}
 
@@ -172,24 +197,25 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   transform:rotate(-90deg);
   transform-origin:left top;}
 
-/* Riichi tile: rotated -90° within its zone row (from each player's perspective) */
+/* Riichi tile: rotated 90° within its zone row (from each player's perspective) */
 .dz-riichi{display:inline-flex;transform:rotate(-90deg);transform-origin:center center;
   margin:0 calc(var(--tmd-h,40px)/2 - var(--tmd-w,30px)/2);}
 
-/* Player areas — all inside the felt */
+/* ════════════════════════════════════════════════════════════
+   PLAYER AREAS (hand + melds)
+   ════════════════════════════════════════════════════════════ */
 .pa{position:absolute;display:flex;align-items:center;z-index:15;}
-/* Bottom (me): nameplate above hand, sits at bottom INSIDE felt */
-.pa-b{bottom:2%;left:0;right:0;flex-direction:column;align-items:center;}
-/* Top: nameplate BELOW tiles from top player's view.
-   column layout: tiles first in DOM (near screen top), nameplate second (toward felt) */
-.pa-t{top:2%;left:0;right:0;flex-direction:column;align-items:center;}
-/* Left: pivot point 10% from left edge, centred vertically, rotated 90° CW */
-.pa-l{position:absolute;top:50%;left:8%;
-  display:flex;flex-direction:column;align-items:center;gap:4px;
+/* Bottom (me): flush to bottom edge, column layout (nameplate above tiles) */
+.pa-b{bottom:15px;left:0;right:0;flex-direction:column;align-items:center;}
+/* Top: flush to top edge, column layout (tiles first, nameplate below) */
+.pa-t{top:15px;left:0;right:0;flex-direction:column;align-items:center;}
+/* Left: pivot flush to left edge, centred vertically, rotated 90° CW */
+.pa-l{position:absolute;top:50%;left:15px;
+  display:flex;flex-direction:column;align-items:flex-start;
   transform:translate(-50%,-50%) rotate(90deg);}
-/* Right: pivot point 10% from right edge, centred vertically, rotated 90° CCW */
-.pa-r{position:absolute;top:50%;right:8%;
-  display:flex;flex-direction:column;align-items:center;gap:4px;
+/* Right: pivot flush to right edge, centred vertically, rotated 90° CCW */
+.pa-r{position:absolute;top:50%;right:calc(var(--tmd-h) + 15px);
+  display:flex;flex-direction:column;align-items:flex-start;
   transform:translate(50%,-50%) rotate(-90deg);}
 
 /* Nameplates */
@@ -202,18 +228,20 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 @keyframes glow{0%,100%{box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 14px rgba(255,221,68,.4);}50%{box-shadow:0 0 0 3px rgba(255,221,68,.55),0 0 28px rgba(255,221,68,.7);}}
 .wb{font-family:'Noto Serif JP',serif;font-size:17px;font-weight:900;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;}
 .pname{font-size:14px;font-weight:700;color:#fff;max-width:110px;overflow:hidden;text-overflow:ellipsis;}
-.pscore{font-size:13px;color:var(--gl);}
 .btag{font-size:10px;color:rgba(201,168,76,.5);}
 .rs{display:inline-block;width:4px;height:22px;background:linear-gradient(180deg,#fff,#ddd);border-radius:3px;border:1px solid #bbb;margin-left:3px;}
 .tenpai{display:inline-block;padding:2px 6px;border-radius:4px;background:linear-gradient(135deg,#6a0f0f,#c02020);color:#fff;font-size:8px;letter-spacing:1px;font-family:'Cinzel Decorative',serif;animation:pulse 1s infinite;margin-left:3px;}
 
+/* ════════════════════════════════════════════════════════════
+   TILES
+   ════════════════════════════════════════════════════════════
 /* ── TILES ──
    All sizes driven by CSS vars set dynamically by JS on resize.
    This makes everything scale to fit any screen. */
 .tile{position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:default;flex-shrink:0;overflow:hidden;pointer-events:none;}
 
 .tlg{
-  width:var(--tlg-w);height:var(--tlg-h);border-radius:5px;
+  width:var(--tlg-w,40px);height:var(--tlg-h,56px);border-radius:5px;
   background:linear-gradient(170deg,#fffdf4,#f8edd8);
   border:1px solid #c8a84a;border-bottom:3px solid #7a5c10;
   box-shadow:2px 3px 8px rgba(0,0,0,.6),inset 0 2px 0 rgba(255,255,255,.95);
@@ -229,18 +257,19 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   z-index:5;}
 
 .tmd{
-  width:var(--tmd-w);height:var(--tmd-h);border-radius:3px;
+  width:var(--tmd-w,26px);height:var(--tmd-h,36px);border-radius:3px;
   background:linear-gradient(170deg,#fffdf4,#f8edd8);
   border:1px solid #c8a84a;border-bottom:2px solid #7a5c10;
   box-shadow:1px 2px 4px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.9);
   display:inline-flex;align-items:center;justify-content:center;}
 .tsm{
-  width:var(--tsm-w);height:var(--tsm-h);border-radius:3px;
+  display:inline-flex;
+  width:var(--tsm-w,16px);height:var(--tsm-h,22px);border-radius:3px;
   background:linear-gradient(145deg,#1a5c70,#0e3a48);
   border:1px solid #3a90aa;box-shadow:1px 2px 4px rgba(0,0,0,.5);
   flex-shrink:0;position:relative;}
 .tsm::before{content:'';position:absolute;inset:2px;border:1px solid rgba(255,255,255,.12);border-radius:2px;}
-.tsm.rot{width:var(--tsm-h);height:var(--tsm-w);}
+.tsm.rot{width:var(--tsm-h,22px);height:var(--tsm-w,16px);}
 .tdora{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:5px;
   background:linear-gradient(170deg,#fffdf4,#f8edd8);border:1px solid #c8a84a;border-bottom:3px solid #7a5c10;
   box-shadow:2px 3px 8px rgba(0,0,0,.6),inset 0 2px 0 rgba(255,255,255,.95);
@@ -250,23 +279,26 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .hr{display:flex;align-items:flex-end;gap:2px;flex-wrap:nowrap;}
 /* Gap between main hand and draw tile */
 .draw-sep{width:clamp(5px,1.5vmin,10px);flex-shrink:0;}
-.mg{display:flex;gap:1px;margin-right:5px;align-items:flex-end;}
-/* Called tile (chi/pon) rotated -90° to show it was taken from another player */
+.mg{display:flex;gap:1px;margin-right:0;margin-left:4px;align-items:flex-end;}
+/* Called tile (chi/pon) rotated 90° to show it was taken from another player */
 .mg .called{transform:rotate(-90deg);
   margin-right:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);
   margin-left:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);}
-/* Kakan: added tile stacked on top of the rotated called tile */
-.mg .called-stack{position:relative;display:inline-flex;flex-direction:column;align-items:center;}
-.mg .called-stack .called{margin:0;}
-.mg .called-stack .kakan-add{position:absolute;top:-4px;left:50%;transform:translateX(-50%) rotate(-90deg);
-  margin:0;z-index:2;}
-.mr{display:flex;gap:2px;align-items:flex-end;flex-shrink:0;}
+/* Kakan stack */
+.mg .called-stack{position:relative;display:inline-flex;align-items:flex-end;justify-content:center;
+  width:var(--tmd-h,40px);
+  height:calc(var(--tmd-w,26px) + var(--tmd-w,26px) * 0.55);
+  margin-right:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);
+  margin-left:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);}
+.mg .called-stack .kakan-base{transform:rotate(-90deg);flex-shrink:0;}
+.mg .called-stack .kakan-add{position:absolute;bottom:calc(var(--tmd-w,26px) * 0.45);left:50%;transform:translateX(-50%) rotate(-90deg);z-index:2;}
+.mr{display:flex;gap:0;align-items:flex-end;flex-shrink:0;}
 .oh{display:flex;gap:2px;}
 .oh.rot180{transform:rotate(180deg);}
-.oh.v{flex-direction:column;}
 
-/* ── Action bar ── */
-/* Action bar hidden — actions float above hand */
+/* ════════════════════════════════════════════════════════════
+   ACTION BAR & BUTTONS
+   ════════════════════════════════════════════════════════════ */
 .actbar{display:none;}
 /* Floating action overlay — appears above the hand */
 .act-overlay{display:flex;gap:6px;align-items:center;
@@ -289,10 +321,12 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .bkan{background:linear-gradient(135deg,#3a0a5a,#6a1a9a);color:#e8d0ff;border:2px solid #a060d0;}
 .bpas{background:rgba(40,40,40,.95);color:rgba(245,237,216,.7);border:1px solid rgba(255,255,255,.2);}
 
-/* Chat — compact bottom-right corner widget */
+/* ════════════════════════════════════════════════════════════
+   CHAT
+   ════════════════════════════════════════════════════════════ */
 /* Chat bar: fixed to bottom-right, sits above action bar */
 .chat-bar{
-  position:fixed;bottom:58px;right:12px;
+  position:fixed;bottom:20px;right:20px;
   display:none;flex-direction:row;align-items:center;gap:5px;
   background:rgba(3,12,6,.95);border:1px solid rgba(201,168,76,.25);
   border-radius:10px;padding:5px 8px;z-index:65;
@@ -356,12 +390,14 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .chat-msg .chat-who::after{content:": ";color:rgba(240,208,128,.6);}
 @keyframes chatFloat{0%{opacity:0;transform:translateY(-10px) scale(.9);}10%{opacity:1;transform:translateY(0) scale(1);}75%{opacity:1;}100%{opacity:0;transform:translateY(-16px) scale(.95);}}
 
-/* Toast */
+/* ── Toast notifications ── */
 .tc{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:200;pointer-events:none;}
 .toast{background:rgba(0,0,0,.9);border:2px solid var(--gold);border-radius:12px;padding:12px 28px;font-family:'Cinzel Decorative',serif;font-size:clamp(14px,4vw,20px);letter-spacing:3px;color:var(--gl);text-align:center;animation:ta 2.8s ease forwards;box-shadow:0 0 50px rgba(201,168,76,.4);margin-bottom:8px;}
 @keyframes ta{0%{opacity:0;transform:scale(.8) translateY(18px)}15%{opacity:1;transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(1.05) translateY(-8px)}}
 
-/* Round end */
+/* ════════════════════════════════════════════════════════════
+   ROUND END SCREEN
+   ════════════════════════════════════════════════════════════ */
 #s-end{background:rgba(0,0,0,.93);z-index:150;flex-direction:column;}
 .rec{background:linear-gradient(155deg,rgba(18,52,30,.98),rgba(6,16,9,.99));border:2px solid var(--gold);border-radius:16px;
   padding:clamp(20px,4vw,36px) clamp(16px,5vw,52px);text-align:center;
@@ -381,12 +417,21 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 <body>
 <div class="bg"></div><div class="bgg"></div>
 
-<!-- ════ LOBBY ════ -->
+<!-- ════════════════════════════════════════════════════════════
+     LOBBY SCREEN
+     ════════════════════════════════════════════════════════════ -->
 <div class="screen" id="s-lobby">
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Mahjong Online</div></div>
   <div class="card">
     <h2>Enter the Hall</h2>
     <div class="ig"><label>Your Name</label><input type="text" id="iname" placeholder="Player" maxlength="20" value="Player"></div>
+    <div class="ig">
+      <label>Game Mode</label>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button class="mode-btn active" id="btn-tonpuu" onclick="setMode('tonpuu')">東風戦<br><span style="font-size:9px;letter-spacing:1px;opacity:.7;">TONPUU · 4 rounds</span></button>
+        <button class="mode-btn" id="btn-hanchan" onclick="setMode('hanchan')">半荘戦<br><span style="font-size:9px;letter-spacing:1px;opacity:.7;">HANCHAN · 8 rounds</span></button>
+      </div>
+    </div>
     <button class="bp" id="bfind">⚔ Find Match</button>
     <div class="wa" id="wa">
       <div class="wm" id="wmsg">Looking for players...</div>
@@ -401,106 +446,119 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   </div>
 </div>
 
-<!-- ════ GAME ════ -->
+<!-- ════════════════════════════════════════════════════════════
+     GAME SCREEN
+     ════════════════════════════════════════════════════════════ -->
 <div class="screen hidden" id="s-game">
   <div class="topbar">
-    <div class="tb-title">雀心 Mahjong</div>
+    <div class="tb-title">雀心 Mahjong <span id="tb-mode" style="font-size:10px;opacity:.6;margin-left:6px;"></span></div>
     <div class="tb-st" id="tst">—</div>
     <button class="bl" id="bleave">✕ Leave</button>
+  </div>
+  <!-- Loading overlay — shown between game_start and first game_state -->
+  <div id="game-loading" style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;">
+    <div style="font-family:'Noto Serif JP',serif;font-size:clamp(28px,6vmin,48px);font-weight:900;color:var(--gold);letter-spacing:4px;animation:pulse 1.2s ease-in-out infinite;">牌</div>
+    <div style="display:flex;gap:10px;">
+      <div class="ld-dot" style="animation-delay:0s"></div>
+      <div class="ld-dot" style="animation-delay:.2s"></div>
+      <div class="ld-dot" style="animation-delay:.4s"></div>
+    </div>
+    <div style="font-size:11px;letter-spacing:3px;color:rgba(245,237,216,.45);font-family:'Cinzel Decorative',serif;">DEALING TILES</div>
   </div>
   <div class="table">
     <div class="felt">
 
 
 
-      <!-- CENTER INFO -->
+      <!-- ── Centre info panel ── -->
       <div class="ctr">
         <!-- Top score row — rotated 180° for top player's reading direction -->
         <div class="ctr-score" style="transform:rotate(180deg);">
-          <span id="ctr-s-t" class="ctr-score-val">25000</span>
+          <span id="ctr-s-t" class="ctr-score-val">—</span>
         </div>
         <!-- Middle: left score | wind info | right score -->
         <div class="ctr-mid">
           <!-- Left score — rotated 90° CW for left player's reading direction -->
           <div class="ctr-side" style="text-align:center;">
-            <span id="ctr-s-l" class="ctr-score-val" style="transform:rotate(90deg);">25000</span>
+            <span id="ctr-s-l" class="ctr-score-val" style="transform:rotate(90deg);">—</span>
           </div>
           <!-- Wind + round info -->
           <div class="ctr-info">
-            <div class="cw" id="cw">東</div>
-            <div class="ci" id="ci">Round 1</div>
-            <div class="cwl" id="cwl">136</div>
+            <div class="cw" id="cw">—</div>
+            <div class="ci" id="ci"></div>
+            <div class="cwl" id="cwl"></div>
             <div class="ch" id="chonba"></div>
           </div>
           <!-- Right score — rotated -90° for right player's reading direction -->
           <div class="ctr-side" style="text-align:center;">
-            <span id="ctr-s-r" class="ctr-score-val" style="transform:rotate(-90deg);">25000</span>
+            <span id="ctr-s-r" class="ctr-score-val" style="transform:rotate(-90deg);">—</span>
           </div>
         </div>
         <!-- Bottom score row — my score, yellow -->
         <div class="ctr-score">
-          <span id="ctr-s-b" class="ctr-score-val">25000</span>
+          <span id="ctr-s-b" class="ctr-score-val">—</span>
         </div>
       </div>
-      <div id="tarrow" class="tarrow" style="display:none">▲</div>
 
-      <!-- DISCARD ZONES -->
+      <!-- ── Discard zones (one per player) ── -->
       <div class="dz dzb" id="dzb"></div>
       <div class="dz dzt" id="dzt"></div>
       <div class="dz dzl" id="dzl"></div>
       <div class="dz dzr" id="dzr"></div>
 
-      <!-- BOTTOM (me): nameplate above hand, tiles at bottom rim -->
+      <!-- ── BOTTOM PLAYER (you) ── -->
       <div class="pa pa-b" id="pa-b">
-        <div style="display:flex;align-items:center;justify-content:center;margin-bottom:6px;gap:6px;">
-          <div class="np" id="npb"><div class="wb" id="wbb">東</div><div><div class="pname" id="pnb">—</div></div></div>
+        <!-- Hand tiles: in normal flow, centred -->
+        <div class="hr" id="hdb"></div>
+        <!-- Nameplate: above hand tiles -->
+        <div style="margin-bottom:8px;order:-1;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div></div></div>
           <div class="act-overlay" id="actbar"></div>
           <span id="rsb" style="display:none" class="rs"></span>
           <span id="tpb" style="display:none" class="tenpai">TENPAI</span>
         </div>
-        <!-- Hand tiles left, melds right — in one row so melds don't cause recentring -->
-        <div style="display:flex;align-items:flex-end;gap:8px;">
-          <div class="hr" id="hdb"></div>
-          <div class="mr" id="mlb"></div>
-        </div>
       </div>
+      <!-- Bottom melds: their bottom-right corner = felt bottom-right -->
+      <div class="mr" id="mlb" style="position:absolute;bottom:15px;right:15px;display:flex;flex-direction:row;align-items:flex-end;z-index:15;"></div>
 
-      <!-- TOP: tiles at top rim (rot180), nameplate below from their view (also rot180) -->
+      <!-- ── TOP PLAYER (opponent, rotated 180°) ── -->
       <div class="pa pa-t" id="pa-t">
-        <div style="display:flex;align-items:flex-end;gap:6px;">
-          <div class="mr" id="mlt"></div>
-          <div class="oh rot180" id="hdt"></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:6px;position:relative;z-index:20;transform:rotate(180deg);">
-          <div class="np" id="npt"><div class="wb" id="wbt">西</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
+        <!-- Hand tiles: in normal flow, centred -->
+        <div class="oh rot180" id="hdt"></div>
+        <!-- Nameplate: below hand tiles (from their view = rotated 180°) -->
+        <div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px;transform:rotate(180deg);">
+          <div class="np" id="npt"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
           <span id="rst" style="display:none" class="rs"></span>
         </div>
       </div>
+      <!-- Top melds: their bottom-right = our top-left corner -->
+      <div class="mr" id="mlt" style="position:absolute;top:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:top left;z-index:15;"></div>
 
-      <!-- LEFT: nameplate outer, tiles inner; whole group rotated 90° CW -->
+      <!-- ── LEFT PLAYER (opponent, rotated 90° CW) ── -->
       <div class="pa pa-l" id="pa-l">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;z-index:20;">
-          <div class="np" id="npl"><div class="wb" id="wbl">北</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
+        <!-- Hand tiles: in normal flow -->
+        <div class="oh" id="hdl"></div>
+        <!-- Nameplate: below hand tiles -->
+        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+          <div class="np" id="npl"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
           <span id="rsl" style="display:none" class="rs"></span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:6px;">
-          <div class="mr" id="mll"></div>
-          <div class="oh" id="hdl"></div>
-        </div>
       </div>
+      <!-- Left melds: separate absolute, their bottom-right corner = felt bottom-left -->
+      <div class="mr" id="mll" style="position:absolute;bottom:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(90deg);transform-origin:bottom left;z-index:15;"></div>
 
-      <!-- RIGHT: nameplate outer, tiles inner; whole group rotated 90° CCW -->
+      <!-- ── RIGHT PLAYER (opponent, rotated -90° CCW) ── -->
       <div class="pa pa-r" id="pa-r">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;z-index:20;">
-          <div class="np" id="npr"><div class="wb" id="wbr">南</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
+        <!-- Hand tiles: in normal flow -->
+        <div class="oh" id="hdr"></div>
+        <!-- Nameplate: below hand tiles -->
+        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+          <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
           <span id="rsr" style="display:none" class="rs"></span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:6px;">
-          <div class="mr" id="mlr"></div>
-          <div class="oh" id="hdr"></div>
-        </div>
       </div>
-
+      <!-- Right melds: separate absolute, their bottom-right corner = felt top-right -->
+      <div class="mr" id="mlr" style="position:absolute;top:15px;right:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg);transform-origin:top right;z-index:15;"></div>
     </div><!-- end .felt -->
   </div>
 
@@ -527,21 +585,23 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
 </div>
 
-<!-- ════ ROUND END ════ -->
+<!-- ════════════════════════════════════════════════════════════
+     ROUND END / GAME OVER SCREEN
+     ════════════════════════════════════════════════════════════ -->
 <div class="screen hidden" id="s-end">
   <div class="rec">
     <div class="ret" id="ret">—</div><div class="rehn" id="rehn"></div>
     <div class="yl" id="reyl"></div><div class="wt" id="rewt"></div>
     <table class="st" id="rest"></table>
-    <div class="reb" id="end-btn-area">
-      <button class="bp" style="max-width:200px;" onclick="goLobby()">Main Menu</button>
-    </div>
+    <div class="reb"><button class="bp" style="max-width:200px;" onclick="goLobby()">Main Menu</button></div>
   </div>
 </div>
 <div class="tc" id="tc"></div>
 <div class="chat-float" id="chat-float"></div>
 
-<!-- DORA — fixed top-left of window -->
+<!-- ════════════════════════════════════════════════════════════
+     DORA INDICATOR PANEL (fixed top-left)
+     ════════════════════════════════════════════════════════════ -->
 <div id="dora-panel" style="position:fixed;top:44px;left:8px;z-index:80;pointer-events:none;
   background:rgba(8,25,12,.97);
   border:2px solid rgba(201,168,76,.5);
@@ -564,8 +624,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 </div>
 
 <script>
-// ══ SVG Tile Renderer ═══════════════════════════════════════════════════════
-// ══ Japanese Mahjong Tile Renderer ═══════════════════════════════════════════
+// SVG TILE RENDERER
+// Draws each tile (man/pin/sou/honours) as inline SVG
 // Pixel-faithful recreation of authentic Japanese riichi mahjong tiles.
 
 function tsvg(t,w,h){
@@ -579,11 +639,9 @@ function tsvg(t,w,h){
   return '';
 }
 
-// ══════════════════════════════════════════════════════════════
 // MAN (マンズ) — Characters
 // Numeral: red, large, centred in upper ~65% of tile
 // 萬: small red label, bottom 18%
-// ══════════════════════════════════════════════════════════════
 const MAN_K=['','一','二','三','四','伍','六','七','八','九'];
 function svgMan(v,w,h){
   // Same font size for numeral and 萬, both centred in their half
@@ -598,17 +656,13 @@ function svgMan(v,w,h){
   );
 }
 
-// ══════════════════════════════════════════════════════════════
 // PIN (ピンズ) — Circles
 // From image: thick dark navy outer ring, white gap, thinner inner ring, white centre with flower
 // 1-pin: large decorative circle (bigger rings, inner flower)
 // 5-pin: red circles instead of navy
-// ══════════════════════════════════════════════════════════════
-// ══════════════════════════════════════════════════════════════
 // PIN (ピンズ) — Circles with flower/petal design from image
 // Each circle: outer ring, 6-petal inner ring, small centre dot
 // Colours: 1=red outer+blue inner, 2-4=blue, 5=red, 6-9=blue with red accent
-// ══════════════════════════════════════════════════════════════
 function svgPin(v,w,h){
   const pos=pinPos(v,w,h);
   const base=Math.min(w,h);
@@ -695,11 +749,9 @@ function pinPos(v,w,h){
   return [];
 }
 
-// ══════════════════════════════════════════════════════════════
 // SOU (ソウズ) — Bamboo hourglass/bobbin sticks
 // From image: wider top+bottom, narrow waist — like a bobbin/spool
 // Green with red band at waist. 5-sou centre = red.
-// ══════════════════════════════════════════════════════════════
 function svgSou(v,w,h){
   if(v===1) return souBird(w,h);
   return souLayout(v,w,h).map(([cx,cy,sw,sh,isRed])=>souStick(cx,cy,sw,sh,isRed)).join('');
@@ -796,13 +848,11 @@ function souLayout(v,w,h){
   return out;
 }
 
-// ══════════════════════════════════════════════════════════════
 // HONOURS (字牌)
 // Winds (東南西北): large near-black kanji, fills ~55% height
 // Haku (白): plain white fill — no markings
 // Hatsu (發): green kanji
 // Chun (中): red kanji
-// ══════════════════════════════════════════════════════════════
 function svgHon(v,w,h){
   if(v===5){
     return '';
@@ -820,7 +870,7 @@ function svgHon(v,w,h){
   );
 }
 
-// ══ App ═══════════════════════════════════════════════════════════════════════
+// APP STATE
 const W=['東','南','西','北'];
 // Position IDs indexed by (absSeat - mySeat + 4) % 4
 // 0=bottom(me), 1=right, 2=top, 3=left
@@ -831,7 +881,8 @@ let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false;
 function show(id){['s-lobby','s-game','s-end'].forEach(s=>$(s).classList.toggle('hidden',s!==id));}
 function $(id){return document.getElementById(id);}
 
-// ── WebSocket ─────────────────────────────────────────────────────────────────
+
+// WEBSOCKET — connection + message dispatch
 function connect(){
   if(!location.host){
     console.warn('No server host — open via http://localhost:3000');
@@ -861,9 +912,18 @@ function onMsg(m){
   else if(m.type==='chat'){showChatMsg(m.seat,m.name,m.text);}
 }
 
-// ── Lobby ─────────────────────────────────────────────────────────────────────
+
+// LOBBY
+let gameMode='tonpuu'; // 'tonpuu' or 'hanchan'
+
+function setMode(mode){
+  gameMode=mode;
+  $('btn-tonpuu').classList.toggle('active', mode==='tonpuu');
+  $('btn-hanchan').classList.toggle('active', mode==='hanchan');
+}
+
 function findMatch(){
-  wss({type:'join',name:($('iname').value.trim()||'Player')});
+  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode});
 }
 
 function showWaiting(){
@@ -926,28 +986,51 @@ function goLobby(){
   setTimeout(connect,200);
 }
 
-// ── Game Start ─────────────────────────────────────────────────────────────────
+
+// GAME START
 function startGame(m){
   inGame=true;selId=null;lastState=null;
   const seats=m.seats;
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i],p=seats[abs];
     $('pn'+id).textContent=i===0?($('iname').value.trim()||'Player'):(p?.name||'—');
-    $('wb'+id).textContent=W[abs];
     if(i>0&&p?.isBot){const bt=$('bt'+id);if(bt)bt.textContent='CPU';}
     $('rs'+id).style.display='none';
   }
+  // Clear board (same as onRoundStart)
+  ['hdb','hdt','hdl','hdr','mlb','mlt','mll','mlr'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
+  ['dzb','dzt','dzl','dzr'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
+  // Set seat winds based on dealer
+  const windLabels=['東','南','西','北'];
+  const dealer=m.dealer??0;
+  for(let i=0;i<4;i++){
+    const abs=(mySeat+i)%4, id=P[i];
+    const wb=$('wb'+id);
+    if(wb) wb.textContent=windLabels[(abs-dealer+4)%4];
+  }
+  // Show game mode in topbar
+  const modeLabel=m.gameMode==='hanchan'?'半荘戦':'東風戦';
+  $('tb-mode').textContent=modeLabel;
   $('chat-bar').style.display='flex'; chatOpen=false; unreadCount=0; $('chat-history').innerHTML='';
   $('dora-panel').style.display='flex';
   show('s-game');
+  // Show loading overlay until first game_state arrives
+  $('game-loading').style.display='flex';
 }
 
 function pid(abs){return P[(abs-mySeat+4)%4];}
 
-// ── Render ─────────────────────────────────────────────────────────────────────
+
+// RENDER STATE — called every time a game_state message arrives
 function renderState(m){
-  $('cw').textContent=W[(m.roundWind||1)-1];
-  $('ci').textContent=`Round ${m.round||1}`;
+  // Hide loading overlay on first state
+  const loader=$('game-loading');
+  if(loader) loader.style.display='none';
+  const windChar=['東','南','西','北'];
+  const dispWind=m.displayWind||m.roundWind||1;
+  const dispRound=m.displayRound||m.round||1;
+  $('cw').textContent=windChar[dispWind-1];
+  $('ci').textContent=`Round ${dispRound}`;
   $('cwl').textContent=`${m.wallCount} tiles`;
   const h=m.honba||0,rs=m.riichiSticks||0;
   $('chonba').textContent=h||rs?`${h}本場${rs?' · '+'●'.repeat(rs):''}` :'';
@@ -971,6 +1054,7 @@ function renderState(m){
   // Scores in centre panel (compass layout: b=bottom=me, t=top, l=left, r=right)
   // P = ['b','r','t','l'], indexed by (abs - mySeat + 4) % 4
   const ctrIds={b:'ctr-s-b',r:'ctr-s-r',t:'ctr-s-t',l:'ctr-s-l'};
+  const windLabels=['東','南','西','北'];
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i];
     if(m.scores?.[abs]!==undefined){
@@ -979,6 +1063,11 @@ function renderState(m){
     }
     $('np'+id).classList.toggle('active',m.turn===abs);
     if(m.riichi?.[abs]) $('rs'+id).style.display='';
+    // Seat wind: server sends seatWinds[absIndex] = wind index (0=East..3=North)
+    if(m.seatWinds){
+      const wb=$('wb'+id);
+      if(wb) wb.textContent=windLabels[m.seatWinds[abs]];
+    }
   }
 
   // Status bar
@@ -986,16 +1075,17 @@ function renderState(m){
   const si=$('tst');
   si.className=m.turn===mySeat||react?'tb-st my':'tb-st';
   si.textContent=($('pn'+pid(m.turn))?.textContent||'—')+"'s turn";
-  $('tarrow').style.display=mine?'block':'none';
 
-  // My hand — draw tile always goes to the far right with a separator
+  // My hand — server sends mainHand (13 tiles) and drawTile separately
   const hc=$('hdb');hc.innerHTML='';
-  const drawId=m.drawTile?.id;
-  const hand=m.myHand||[];
-  const mainHand=drawId?hand.filter(t=>t.id!==drawId):hand;
-  const drawTile=drawId?hand.find(t=>t.id===drawId):null;
-  const tw=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tlg-w'))||40;
-  const th=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tlg-h'))||56;
+  const mainHand=m.myHand||[];
+  const drawTile=m.drawTile||null;
+  // Clear selId if selected tile no longer in hand (e.g. after meld)
+  const allTileIds=new Set([...mainHand.map(t=>t.id),...(drawTile?[drawTile.id]:[])]);
+  if(selId!=null&&!allTileIds.has(selId)) selId=null;
+  const root=document.documentElement;
+  const tw=parseInt(root.style.getPropertyValue('--tlg-w'))||40;
+  const th=parseInt(root.style.getPropertyValue('--tlg-h'))||56;
   mainHand.forEach(t=>{
     const el=mkEl(t,'tlg',tw,th);
     if(mine) el.classList.add('play');
@@ -1016,13 +1106,16 @@ function renderState(m){
 
   // Opponent hands — back tiles
   // top: rot180. left/right: now column-layout rotated in CSS, tiles horizontal
-  [[1,'r',false],[2,'t',false],[3,'l',false]].forEach(([i,id,isVert])=>{
+  [[1,'r'],[2,'t'],[3,'l']].forEach(([i,id])=>{
     const abs=(mySeat+i)%4;
-    const hd=$('hd'+id); hd.innerHTML='';
-    const cnt=m.oppHandSizes?.[abs]??13;
+    const hd=$('hd'+id);
+    if(!hd) return;
+    hd.innerHTML='';
+    const cnt=m.oppHandSizes?.[abs];
+    if(cnt==null||cnt<=0) return;
     for(let j=0;j<Math.min(cnt,16);j++){
       const b=document.createElement('div');
-      b.className='tile tsm'+(isVert?' rot':'');
+      b.className='tile tsm';
       hd.appendChild(b);
     }
   });
@@ -1050,15 +1143,14 @@ function renderState(m){
     });
   }
 
-  // My melds — Japanese style: called tile rotated -90°, position depends on fromSeat
+  // My melds — Japanese style: called tile rotated 90°, position depends on fromSeat
   const ml=$('mlb');ml.innerHTML='';
   for(const meld of(m.myMelds||[])){
     const g=document.createElement('div');g.className='mg';
     renderMeld(g, meld, mySeat);
     ml.appendChild(g);
   }
-
-  // Opponent melds — rendered from their perspective (viewerSeat = their abs seat)
+  // Opponent melds
   [[1,'r'],[2,'t'],[3,'l']].forEach(([i,id])=>{
     const abs=(mySeat+i)%4;
     const ml2=$('ml'+id);
@@ -1066,13 +1158,12 @@ function renderState(m){
     ml2.innerHTML='';
     for(const meld of(m.melds?.[abs]||[])){
       const g=document.createElement('div');g.className='mg';
-      renderMeld(g, meld, abs);
+      renderMeld(g,meld,abs);
       ml2.appendChild(g);
     }
   });
 
   $('tpb').style.display=(m.waits?.length>0&&!m.riichi?.[mySeat]&&!m.furiten)?'':'none';
-  // Furiten indicator
   let furitenEl=$('furiten-badge');
   if(!furitenEl){
     furitenEl=document.createElement('span');
@@ -1100,28 +1191,19 @@ function clickTile(id){
   }
 }
 
-// ── Meld rendering ────────────────────────────────────────────────────────────
-// All called tiles rotate -90°. Position within group indicates source:
-//   from right  (dir=1): rotated tile on LEFT
-//   from across (dir=2): rotated tile in MIDDLE
-//   from left   (dir=3): rotated tile on RIGHT
-// Chi: always from left (dir=3), rotated tile on LEFT (nearest to hand)
-// Kakan: added tile stacked vertically on top of the original rotated called tile
+
+// MELD RENDERING
+// Draws chi/pon/kan groups with correct orientation per player
 function renderMeld(container, meld, viewerSeat){
   const tiles = meld.tiles;
   const calledId = meld.calledTileId;
   const fromSeat = meld.fromSeat;
-  // direction relative to the viewer: 1=right, 2=across, 3=left
   const dir = fromSeat !== undefined ? (fromSeat - viewerSeat + 4) % 4 : 1;
-
   const mkC = t => { const el=mkElMd(t); el.classList.add('called'); return el; };
 
   if(meld.type === 'chi'){
-    // Called tile always from left, goes LEFTMOST (rightmost in DOM = rightmost visually in meld)
-    // In riichi mahjong melds are displayed right-to-left from hand edge, so leftmost = closest to hand
     const called = tiles.find(t=>t.id===calledId) || tiles[0];
     const own = tiles.filter(t=>t.id!==calledId);
-    // Order: rotated called tile on LEFT, then own tiles sorted
     container.appendChild(mkC(called));
     own.forEach(t=>container.appendChild(mkElMd(t)));
 
@@ -1130,93 +1212,49 @@ function renderMeld(container, meld, viewerSeat){
     const own = tiles.filter(t=>t.id!==calledId);
     const ownEls = own.map(t=>mkElMd(t));
     const calledEl = mkC(called);
-    if(dir===1){
-      // From right: rotated tile on LEFT
-      container.appendChild(calledEl);
-      ownEls.forEach(el=>container.appendChild(el));
-    } else if(dir===2){
-      // From across: rotated tile in MIDDLE
-      container.appendChild(ownEls[0]);
-      container.appendChild(calledEl);
-      container.appendChild(ownEls[1]);
-    } else {
-      // From left (dir===3): rotated tile on RIGHT
-      ownEls.forEach(el=>container.appendChild(el));
-      container.appendChild(calledEl);
-    }
+    if(dir===1){ container.appendChild(calledEl); ownEls.forEach(el=>container.appendChild(el)); }
+    else if(dir===2){ container.appendChild(ownEls[0]); container.appendChild(calledEl); container.appendChild(ownEls[1]); }
+    else { ownEls.forEach(el=>container.appendChild(el)); container.appendChild(calledEl); }
 
   } else if(meld.type === 'kan'){
     const kanType = meld.kanType;
-
     if(kanType === 'ankan'){
-      // Closed kan: outer two tiles face-down, inner two face-up
-      const back = () => { const d=document.createElement('div'); d.className='tile tmd kan-back'; return d; };
+      const back = () => { const d=document.createElement('div'); d.className='kan-back'; return d; };
       container.appendChild(back());
       container.appendChild(mkElMd(meld.tiles[1]));
       container.appendChild(mkElMd(meld.tiles[2]));
       container.appendChild(back());
 
     } else if(kanType === 'kakan'){
-      // Kakan: existing pon tiles + added tile stacked on top of called tile
-      // Find the original pon called tile and the added tile
-      // tiles[0..2] = pon tiles (calledTileId = original pon called), tiles[3] = added tile
-      // Actually: meld.tiles has 4 tiles; the kakan-added tile is stored but we need to show it stacked
-      const kakanAdded = meld.tiles[3]; // added tile (last one pushed)
-      const ponCalled = tiles.find(t=>t.id===calledId);
-      const ponOwn = tiles.filter(t=>t.id!==calledId&&t!==kakanAdded).slice(0,2);
-      const ownEls = ponOwn.map(t=>mkElMd(t));
-
-      // Build stacked called+added element
+      const kakanAdded = meld.tiles[3];
+      const ponCalled = tiles.find(t=>t.id===calledId) || meld.tiles[2];
+      const ponOwn = tiles.filter(t=>t.id!==calledId&&t!==kakanAdded);
       const stack = document.createElement('div');
       stack.className = 'called-stack';
-      stack.style.cssText = `
-        position:relative;display:inline-flex;align-items:center;justify-content:center;
-        width:calc(var(--tmd-h,40px));
-        margin:0 calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);
-      `;
-      const calledEl = ponCalled ? mkElMd(ponCalled) : mkElMd(tiles[0]);
-      calledEl.style.transform='rotate(-90deg)';
-      // Added tile stacked on top
-      const addedEl = kakanAdded ? mkElMd(kakanAdded) : mkElMd(tiles[3]);
-      addedEl.style.cssText='position:absolute;top:-4px;transform:rotate(-90deg);';
-      stack.appendChild(calledEl);
-      stack.appendChild(addedEl);
-
-      if(dir===1){
-        container.appendChild(stack);
-        ownEls.forEach(el=>container.appendChild(el));
-      } else if(dir===2){
-        container.appendChild(ownEls[0]);
-        container.appendChild(stack);
-        container.appendChild(ownEls[1]);
-      } else {
-        ownEls.forEach(el=>container.appendChild(el));
-        container.appendChild(stack);
-      }
+      const baseEl = mkElMd(ponCalled); baseEl.classList.add('kakan-base');
+      const addEl = kakanAdded ? mkElMd(kakanAdded) : mkElMd(meld.tiles[3]); addEl.classList.add('kakan-add');
+      stack.appendChild(baseEl); stack.appendChild(addEl);
+      const ownEls = ponOwn.map(t=>mkElMd(t));
+      if(dir===1){ container.appendChild(stack); ownEls.forEach(el=>container.appendChild(el)); }
+      else if(dir===2){ container.appendChild(ownEls[0]); container.appendChild(stack); if(ownEls[1]) container.appendChild(ownEls[1]); }
+      else { ownEls.forEach(el=>container.appendChild(el)); container.appendChild(stack); }
 
     } else {
-      // Daiminkan: 4 tiles, called tile rotated, position by direction (same as pon)
       const called = tiles.find(t=>t.id===calledId) || tiles[3];
       const own = tiles.filter(t=>t.id!==calledId);
       const ownEls = own.map(t=>mkElMd(t));
       const calledEl = mkC(called);
-      if(dir===1){
-        container.appendChild(calledEl);
-        ownEls.forEach(el=>container.appendChild(el));
-      } else if(dir===2){
-        container.appendChild(ownEls[0]);
-        container.appendChild(calledEl);
-        ownEls.slice(1).forEach(el=>container.appendChild(el));
-      } else {
-        ownEls.forEach(el=>container.appendChild(el));
-        container.appendChild(calledEl);
-      }
+      if(dir===1){ container.appendChild(calledEl); ownEls.forEach(el=>container.appendChild(el)); }
+      else if(dir===2){ container.appendChild(ownEls[0]); container.appendChild(calledEl); ownEls.slice(1).forEach(el=>container.appendChild(el)); }
+      else { ownEls.forEach(el=>container.appendChild(el)); container.appendChild(calledEl); }
     }
   } else {
     tiles.forEach(t=>container.appendChild(mkElMd(t)));
   }
 }
 
+
+// ACTION BAR — buttons shown on player's turn
 function drawActions(m){
   const bar=$('actbar');bar.innerHTML='';
   if(!m) return;
@@ -1294,12 +1332,6 @@ function mkEl(tile,cls,w,h){
   el.innerHTML=svgStr?svgStr.replace('<svg ','<svg style="pointer-events:none" '):'';
   return el;
 }
-function mkElLg(tile){
-  const r=document.documentElement;
-  const w=parseInt(r.style.getPropertyValue('--tlg-w'))||40;
-  const h=parseInt(r.style.getPropertyValue('--tlg-h'))||56;
-  return mkEl(tile,'tlg',w,h);
-}
 function mkElMd(tile){
   const r=document.documentElement;
   const w=parseInt(r.style.getPropertyValue('--tmd-w'))||26;
@@ -1313,7 +1345,8 @@ function mkElDora(tile){
   return mkEl(tile,'tdora',w,h);
 }
 
-// ── Chat ───────────────────────────────────────────────────────────────────────
+
+// CHAT
 const SEAT_COLORS=['#ffdd44','#ff8844','#44ddff','#88ff88'];
 let chatOpen=false, unreadCount=0;
 
@@ -1378,7 +1411,8 @@ function showChatMsg(seat,name,text){
 
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
-// ── Riichi / Toast ────────────────────────────────────────────────────────────
+
+// NOTIFICATIONS — riichi announcements, toasts
 function onRiichi(m){
   $('rs'+pid(m.seat)).style.display='';
   const label=m.isDouble?'ダブルリーチ':'リーチ';
@@ -1390,115 +1424,101 @@ function toast(msg){
   tc.appendChild(t);setTimeout(()=>t.remove(),3000);
 }
 
-// ── Round Start (next round after win/draw) ────────────────────────────────────
+
+// ROUND LIFECYCLE — start / end / game over
 function onRoundStart(m){
-  // Show game screen (removes end screen)
   inGame=true;
   show('s-game');
   $('chat-bar').style.display='flex';
   $('dora-panel').style.display='flex';
-  // Reset riichi stick indicators
+  // Show loading overlay until next game_state arrives
+  const loader=$('game-loading');
+  if(loader) loader.style.display='flex';
+
+  // ── Update seat winds based on new dealer ────────────────────────────────
+  const windLabels2=['東','南','西','北'];
+  const dealer=m.dealer??0;
+  for(let i=0;i<4;i++){
+    const abs=(mySeat+i)%4, id=P[i];
+    const wb=$('wb'+id);
+    if(wb) wb.textContent=windLabels2[(abs-dealer+4)%4];
+  }
+
+  // ── Full board reset ──────────────────────────────────────────────────────
+  // Clear all hand tiles
+  $('hdb').innerHTML='';
+  $('hdt').innerHTML='';
+  $('hdl').innerHTML='';
+  $('hdr').innerHTML='';
+  // Clear all meld tiles
+  $('mlb').innerHTML='';
+  $('mlt').innerHTML='';
+  $('mll').innerHTML='';
+  $('mlr').innerHTML='';
+  // Clear all discard zones
+  ['dzb','dzt','dzl','dzr'].forEach(id=>{ const el=$(id); if(el) el.innerHTML=''; });
+  // Clear riichi sticks
   ['b','r','t','l'].forEach(p=>{ const el=$('rs'+p); if(el) el.style.display='none'; });
-  // Show brief round start toast
+  // Clear dora panel
+  const doraPanel=$('dora-panel');
+  if(doraPanel) doraPanel.querySelectorAll('.dora-slot').forEach(s=>{s.innerHTML='';s.className='dora-slot';});
+  // Clear action bar
+  const bar=$('actbar'); if(bar) bar.innerHTML='';
+  // Clear selection
+  selId=null;
+
+  // ── Round announcement ────────────────────────────────────────────────────
   const windChar=['東','南','西','北'];
-  const wc=windChar[(m.roundWind||1)-1];
-  toast(`${wc}${m.round||1}局 · ${m.honba}本場 開始`);
+  const wind=m.displayWind||m.roundWind||1;
+  const rnd=m.displayRound||m.round||1;
+  toast(windChar[wind-1]+rnd+'局 · '+(m.honba||0)+'本場 開始');
 }
 
-// ── Game Over ──────────────────────────────────────────────────────────────────
 function onGameOver(m){
   inGame=false;
-  $('chat-bar').style.display='none'; $('chat-panel').classList.remove('open'); chatOpen=false;
+  $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
   const sorted=[...((m.scores||[]).map((s,i)=>({s,i})))].sort((a,b)=>b.s-a.s);
-  const windChar=['東','南','西','北'];
   let rows='';
   sorted.forEach(({s,i},rank)=>{
     const name=i===mySeat?'⭐ '+($('iname').value.trim()||'You'):(m.playerNames?.[i]||`Seat ${i}`);
     rows+=`<tr class="${rank===0?'w':''}"><td>${rank+1}位 ${W[i]} ${escHtml(name)}</td><td>${s}</td></tr>`;
   });
-  const reasonLabel=m.reason==='tobi'?'飛び — Bankruptcy':'終局 — Game Over';
-  $('ret').textContent=reasonLabel;
-  $('rehn').textContent='';
-  $('reyl').innerHTML='';
-  $('rewt').innerHTML='';
+  $('ret').textContent=m.reason==='tobi'?'飛び — Bankruptcy':'終局 — Game Over';
+  $('rehn').textContent='';$('reyl').innerHTML='';$('rewt').innerHTML='';
   $('rest').innerHTML=rows;
   show('s-end');
 }
 
-// ── Round End ──────────────────────────────────────────────────────────────────
 function onEnd(m){
   inGame=false;
-  $('chat-bar').style.display='none'; $('chat-panel').classList.remove('open'); chatOpen=false;
+  $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
-
-  const reasonLabels={
-    tsumo:'🀄 TSUMO!',ron:'🀄 RON!',
-    draw:'流局 — Draw',suukaisan:'四槓散了',
-    nagashi:'流し満貫',
-  };
+  const reasonLabels={tsumo:'🀄 TSUMO!',ron:'🀄 RON!',draw:'流局 — Draw',suukaisan:'四槓散了',nagashi:'流し満貫'};
   $('ret').textContent=reasonLabels[m.reason]||'Round Over';
-
-  // Hand label & han/fu
   if(m.reason==='tsumo'||m.reason==='ron'){
     $('rehn').textContent=m.handLabel?`${m.handLabel} · ${m.han||0}飜${m.fu?' · '+m.fu+'符':''}` :'';
   } else if(m.reason==='draw'){
-    // Show tenpai/noten payments
     const payStrs=(m.payments||[]).map((p,i)=>{
       const name=i===mySeat?'You':(m.playerNames?.[i]||`Seat ${i}`);
-      const inT=m.inTenpai?.[i];
-      const sign=p>0?'+':p<0?'':' ';
-      return `${name}: ${inT?'テンパイ':'ノーテン'} ${p!==0?sign+p:''}`;
+      return `${name}: ${m.inTenpai?.[i]?'テンパイ':'ノーテン'}${p!==0?' '+(p>0?'+':'')+p:''}`;
     });
     $('rehn').textContent=payStrs.join('  ·  ');
-  } else {
-    $('rehn').textContent='';
-  }
-
-  // Yaku list
+  } else { $('rehn').textContent=''; }
   const yl=$('reyl');yl.innerHTML='';
   for(const y of(m.yakuList||[])){
     const c=document.createElement('div');c.className='yc';
     c.innerHTML=`${escHtml(y.name)}<span class="yh">${y.han}飜</span><span class="yj">${escHtml(y.jp||'')}</span>`;
     yl.appendChild(c);
   }
-
-  // Dora / Ura Dora reveal
   if((m.dora||[]).length||(m.uraDora||[]).length){
     const dr=document.createElement('div');dr.style.cssText='display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;';
-    if((m.dora||[]).length){
-      const lbl=document.createElement('span');lbl.style.cssText='font-size:10px;color:var(--gold);letter-spacing:1px;margin-right:4px;';
-      lbl.textContent='ドラ';dr.appendChild(lbl);
-      for(const t of m.dora) dr.appendChild(mkElMd(t));
-    }
-    if((m.uraDora||[]).length){
-      const lbl2=document.createElement('span');lbl2.style.cssText='font-size:10px;color:#f88;letter-spacing:1px;margin-left:8px;margin-right:4px;';
-      lbl2.textContent='裏ドラ';dr.appendChild(lbl2);
-      for(const t of m.uraDora) dr.appendChild(mkElMd(t));
-    }
+    if((m.dora||[]).length){const lbl=document.createElement('span');lbl.style.cssText='font-size:10px;color:var(--gold);letter-spacing:1px;margin-right:4px;';lbl.textContent='ドラ';dr.appendChild(lbl);for(const t of m.dora) dr.appendChild(mkElMd(t));}
+    if((m.uraDora||[]).length){const lbl2=document.createElement('span');lbl2.style.cssText='font-size:10px;color:#f88;letter-spacing:1px;margin-left:8px;margin-right:4px;';lbl2.textContent='裏ドラ';dr.appendChild(lbl2);for(const t of m.uraDora) dr.appendChild(mkElMd(t));}
     yl.appendChild(dr);
   }
-
-  // Winning hand tiles
   const wt=$('rewt');wt.innerHTML='';
   for(const t of(m.hand||[])) if(t) wt.appendChild(mkElMd(t));
-
-  // Tenpai hands on draw
-  if(m.reason==='draw'&&m.tenpaiHands){
-    const th=document.createElement('div');th.style.cssText='margin-top:10px;';
-    m.tenpaiHands.forEach((hand,seat)=>{
-      if(!hand) return;
-      const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:4px;margin-bottom:4px;';
-      const lbl=document.createElement('span');lbl.style.cssText='font-size:10px;color:var(--gold);min-width:60px;';
-      const name=seat===mySeat?'You':(m.playerNames?.[seat]||`Seat ${seat}`);
-      lbl.textContent=name+':';row.appendChild(lbl);
-      for(const t of hand) row.appendChild(mkElMd(t));
-      th.appendChild(row);
-    });
-    wt.appendChild(th);
-  }
-
-  // Score table
   const tbl=$('rest');tbl.innerHTML='';
   (m.scores||[]).forEach((sc,seat)=>{
     const name=seat===mySeat?'⭐ '+($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
@@ -1506,18 +1526,14 @@ function onEnd(m){
     row.innerHTML=`<td>${W[seat]} ${escHtml(name)}</td><td>${sc}</td>`;
     tbl.appendChild(row);
   });
-
   show('s-end');
-  // Show appropriate button
-  const btnArea=$('end-btn-area');
-  btnArea.innerHTML='<button class="bp" style="max-width:200px;" onclick="goLobby()">Main Menu</button>';
-
-  // Schedule next round (server will send round_start, then game_state)
-  // Re-enable inGame after a delay so new game_state is accepted
   setTimeout(()=>{ inGame=true; },5500);
 }
 
-// ── Responsive tile sizing ───────────────────────────────────────────────────────
+
+
+// RESPONSIVE TILE SIZING
+// Recalculates --tlg/tmd/tsm CSS vars on window resize
 function updateTileSizes(){
   const vmin=Math.min(window.innerWidth,window.innerHeight);
   // Large tiles: target ~6.5% of vmin each, capped for desktop
@@ -1540,7 +1556,8 @@ function updateTileSizes(){
 window.addEventListener('resize',updateTileSizes);
 updateTileSizes();
 
-// ── Boot ───────────────────────────────────────────────────────────────────────
+
+// BOOT — initialise on page load
 $('bfind').onclick=findMatch;
 $('bready').onclick=pressReady;
 $('bcancel').onclick=()=>{wss({type:'leave'});resetLobby();};
