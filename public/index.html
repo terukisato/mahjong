@@ -206,19 +206,22 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    ════════════════════════════════════════════════════════════ */
 .pa{position:absolute;display:flex;align-items:center;z-index:15;}
 /* Bottom (me): flush to bottom edge, column layout (nameplate above tiles) */
-.pa-b{bottom:15px;left:0;right:0;flex-direction:column;align-items:center;}
+.pa-b{bottom:2%;left:13%;flex-direction:column;align-items:flex-start;}
 /* Top: flush to top edge, column layout (tiles first, nameplate below) */
-.pa-t{top:15px;left:0;right:0;flex-direction:column;align-items:center;}
-/* Left: pivot at left edge, centred vertically, rotated 90° CW */
-.pa-l{position:absolute;top:calc(min(96vmin, 920px));left:0;
+.pa-t{top:2%;left:73%;flex-direction:column;align-items:flex-start;
+transform:rotate(180deg);
+transform-origin:left center;}
+/* Left: centre at left edge, vertically centred, rotate 90° CW */
+/* Left: pivot at tile row left edge, centred on felt, rotate 90° CW */
+.pa-l{position:absolute;top:28%;left:7%;
   display:flex;flex-direction:column;align-items:flex-start;
   transform:translateY(-50%) rotate(90deg);
   transform-origin:left center;}
-/* Right: pivot at right edge, centred vertically, rotated -90° CCW */
-.pa-r{position:absolute;top:50%;right:0;
+/* Right: pivot at tile row left edge, centred on felt, rotate -90° CCW */
+.pa-r{position:absolute;top:68%;right:7%;
   display:flex;flex-direction:column;align-items:flex-start;
-  transform:translateY(-50%) rotate(-90deg);
-  transform-origin:right center;}
+  transform:translateX(100%) rotate(-90deg);
+  transform-origin:left center;}
 
 /* Nameplates */
 .np{background:#1a1a1a;border-radius:4px;
@@ -510,9 +513,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
       <!-- ── BOTTOM PLAYER (you) ── -->
       <div class="pa pa-b" id="pa-b">
-        <!-- Hand tiles: in normal flow, centred -->
         <div class="hr" id="hdb"></div>
-        <!-- Nameplate: above hand tiles -->
         <div style="margin-bottom:8px;order:-1;display:flex;align-items:center;justify-content:center;gap:6px;">
           <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div></div></div>
           <div class="act-overlay" id="actbar"></div>
@@ -525,39 +526,39 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
       <!-- ── TOP PLAYER (opponent, rotated 180°) ── -->
       <div class="pa pa-t" id="pa-t">
-        <!-- Hand tiles: in normal flow, centred -->
-        <div class="oh rot180" id="hdt"></div>
-        <!-- Nameplate: below hand tiles (from their view = rotated 180°) -->
-        <div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px;transform:rotate(180deg);">
+        <!-- Nameplate: before tiles in DOM = in front from top player's view -->
+        <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;">
           <div class="np" id="npt"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
           <span id="rst" style="display:none" class="rs"></span>
         </div>
+        <!-- Hand tiles -->
+        <div class="oh rot180" id="hdt"></div>
       </div>
       <!-- Top melds: their bottom-right = our top-left corner -->
       <div class="mr" id="mlt" style="position:absolute;top:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:top left;z-index:15;"></div>
 
       <!-- ── LEFT PLAYER (opponent, rotated 90° CW) ── -->
       <div class="pa pa-l" id="pa-l">
-        <!-- Hand tiles: in normal flow -->
-        <div class="oh" id="hdl"></div>
-        <!-- Nameplate: below hand tiles -->
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+        <!-- Nameplate: above tiles from their perspective (before in DOM) -->
+        <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;">
           <div class="np" id="npl"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
           <span id="rsl" style="display:none" class="rs"></span>
         </div>
+        <!-- Hand tiles -->
+        <div class="oh" id="hdl"></div>
       </div>
       <!-- Left melds: separate absolute, their bottom-right corner = felt bottom-left -->
       <div class="mr" id="mll" style="position:absolute;bottom:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(90deg);transform-origin:bottom left;z-index:15;"></div>
 
       <!-- ── RIGHT PLAYER (opponent, rotated -90° CCW) ── -->
       <div class="pa pa-r" id="pa-r">
-        <!-- Hand tiles: in normal flow -->
-        <div class="oh" id="hdr"></div>
-        <!-- Nameplate: below hand tiles -->
-        <div style="margin-top:8px;display:flex;align-items:center;gap:6px;">
+        <!-- Nameplate: above tiles from their perspective (before in DOM) -->
+        <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;">
           <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
           <span id="rsr" style="display:none" class="rs"></span>
         </div>
+        <!-- Hand tiles -->
+        <div class="oh" id="hdr"></div>
       </div>
       <!-- Right melds: separate absolute, their bottom-right corner = felt top-right -->
       <div class="mr" id="mlr" style="position:absolute;top:0px;right:var(--tmd-h);display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg);transform-origin:top right;z-index:15;"></div>
@@ -1181,9 +1182,9 @@ function renderState(m){
     });
   }
 
-  // My melds — Japanese style: called tile rotated 90°, position depends on fromSeat
+  // My melds — newest rightmost, growing leftward (iterate reverse, append)
   const ml=$('mlb');ml.innerHTML='';
-  for(const meld of(m.myMelds||[])){
+  for(const meld of(m.myMelds||[]).slice().reverse()){
     const g=document.createElement('div');g.className='mg';
     renderMeld(g, meld, mySeat);
     ml.appendChild(g);
@@ -1194,7 +1195,7 @@ function renderState(m){
     const ml2=$('ml'+id);
     if(!ml2) return;
     ml2.innerHTML='';
-    for(const meld of(m.melds?.[abs]||[])){
+    for(const meld of(m.melds?.[abs]||[]).slice().reverse()){
       const g=document.createElement('div');g.className='mg';
       renderMeld(g,meld,abs);
       ml2.appendChild(g);
