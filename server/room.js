@@ -1,6 +1,6 @@
 'use strict';
 const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
-       detectYaku,countDora,calcFu,waitFu,basePoints,handLabel,decompose} = require('./mahjong');
+       detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose} = require('./mahjong');
 const {botName,bestDiscard,botReact} = require('./bot');
 
 let _roomId=0;
@@ -175,7 +175,7 @@ class Room {
       if(ankanTile){this._ankan(seat,ankanTile);return;}
     }
     // Only tsumo if hand wins AND has valid yaku
-    if(isWin(hand)&&!this._isFuriten(seat)){
+    if(isWin(hand,g.melds[seat])&&!this._isFuriten(seat)){
       const sw=this._seatWindOf(seat);
       const isHaitei=g.haiteiNext&&!g.isRinshan;
       const winKey=g.drawTile?key(g.drawTile):null;
@@ -223,8 +223,7 @@ class Room {
     // Recalculate permanent furiten based on discards vs current waits
     const g=this.game;
     const hand=g.hands[seat];
-    if(hand.length!==13) return;
-    const ws=waits(hand);
+    const ws=waits(hand,g.melds[seat]);
     if(!ws.length) return;
     const myDiscards=g.discards[seat].map(key);
     g.furiten[seat]=ws.some(w=>myDiscards.includes(w));
@@ -301,7 +300,7 @@ class Room {
       const hand=g.hands[seat],opts=[];
 
       // Ron: only if not in furiten
-      if(!this._isFuriten(seat)&&isWin([...hand,tile])){
+      if(!this._isFuriten(seat)&&isWin([...hand,tile],g.melds[seat])){
         const sw=this._seatWindOf(seat);
         const isDblRiichi=g.doubleRiichi[seat];
         const {han}=detectYaku([...hand,tile],g.melds[seat],false,sw,this._roundWindValue(),
@@ -397,7 +396,7 @@ class Room {
       if(han===0) continue;
       // Ura dora for riichi players
       const uraDora=g.riichi[winSeat]?this._countUraDora(hand):0;
-      const dc=countDora(hand,g.dora)+uraDora;
+      const dc=countDora(hand,g.dora)+uraDora+countAkaDora(hand);
       const totalHan=han+dc;
       const decomps=decompose(hand);
       const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
@@ -444,9 +443,8 @@ class Room {
     const used=matches.slice(0,2);
     g.hands[seat]=hand.filter(t=>!used.map(u=>u.id).includes(t.id));
     g.melds[seat].push({type:'pon',tiles:[...used,tile],calledTileId:tile.id,fromSeat});
-    g.nagashi[seat]=false; // calling = loses nagashi
+    g.nagashi[seat]=false;
     g.turn=seat;
-    this._updateFuriten(seat);
     this._sendState();
     if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat])),BOT_DELAY);
   }
@@ -457,9 +455,8 @@ class Room {
     const used=hand.filter(t=>tileIds.includes(t.id));
     g.hands[seat]=hand.filter(t=>!tileIds.includes(t.id));
     g.melds[seat].push({type:'chi',tiles:sort([...used,tile]),calledTileId:tile.id,fromSeat});
-    g.nagashi[seat]=false; // calling = loses nagashi
+    g.nagashi[seat]=false;
     g.turn=seat;
-    this._updateFuriten(seat);
     this._sendState();
     if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat])),BOT_DELAY);
   }
@@ -536,7 +533,7 @@ class Room {
     for(let seat=0;seat<4;seat++){
       if(seat===fromSeat) continue;
       const hand=g.hands[seat];
-      if(!this._isFuriten(seat)&&isWin([...hand,tile])&&g.riichi[seat]){
+      if(!this._isFuriten(seat)&&isWin([...hand,tile],g.melds[seat])&&g.riichi[seat]){
         const sw=this._seatWindOf(seat);
         const {han}=detectYaku([...hand,tile],g.melds[seat],false,sw,this._roundWindValue(),
           true,g.ippatsu[seat],g.doubleRiichi[seat],false,true,false,false,false,false,key(tile));
@@ -603,7 +600,7 @@ class Room {
     const g=this.game;
     if(g.riichi[seat]||g.scores[seat]<1000) return;
     const hand=g.hands[seat];
-    if(waits(hand.filter(t=>t.id!==tileId)).length===0) return;
+    if(waits(hand.filter(t=>t.id!==tileId),g.melds[seat]).length===0) return;
     g.riichi[seat]=true;
     g.ippatsu[seat]=true;
     // Double riichi: declared on first discard before any calls have been made
@@ -620,7 +617,7 @@ class Room {
   _tsumo(seat){
     const g=this.game;
     const hand=g.hands[seat];
-    if(!isWin(hand)) return;
+    if(!isWin(hand,g.melds[seat])) return;
     if(this._isFuriten(seat)) return;
     const sw=this._seatWindOf(seat);
     const isHaitei=g.haiteiNext&&!g.isRinshan;
@@ -637,7 +634,7 @@ class Room {
 
     // Ura dora (only on riichi)
     const uraDora=g.riichi[seat]?this._countUraDora(hand):0;
-    const dc=countDora(hand,g.dora)+uraDora;
+    const dc=countDora(hand,g.dora)+uraDora+countAkaDora(hand);
     const totalHan=han+dc;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
     const decomps=decompose(hand);
@@ -654,6 +651,7 @@ class Room {
     g.scores[seat]+=gain+g.riichiSticks*1000;
     const yl=dc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:dc}]:yakuList;
     if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
+    const akaDora=countAkaDora(hand);if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
     this._endRound('tsumo',seat,null,hand,yl,totalHan,fu,gain);
   }
 
@@ -668,7 +666,7 @@ class Room {
     if(han===0){this._sendState();return;}
 
     const uraDora=g.riichi[winSeat]?this._countUraDora(hand):0;
-    const dc=countDora(hand,g.dora)+uraDora;
+    const dc=countDora(hand,g.dora)+uraDora+countAkaDora(hand);
     const totalHan=han+dc;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
     const decomps=decompose(hand);
@@ -678,6 +676,7 @@ class Room {
     g.scores[loseSeat]-=pay;g.scores[winSeat]+=pay;
     const yl=dc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:dc}]:yakuList;
     if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
+    const akaDora=countAkaDora(hand);if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
     this._endRound('ron',winSeat,loseSeat,hand,yl,totalHan,fu,pay);
   }
 
@@ -781,7 +780,7 @@ class Room {
     const g=this.game;
     const inTenpai=g.hands.map((hand,seat)=>{
       if(hand.length!==13) return false;
-      return waits(hand).length>0;
+      return waits(hand,g.melds[i]).length>0;
     });
     const tenpaiCount=inTenpai.filter(Boolean).length;
     const notenCount=4-tenpaiCount;
@@ -915,7 +914,7 @@ class Room {
       const p=this.seats[seat];
       if(!p||p.isBot) continue;
       const hand=g.hands[seat];
-      const w=hand.length===13?waits(hand):[];
+      const w=waits(hand,g.melds[seat]);
       let canRiichi=[];
       if(hand.length===14&&!g.melds[seat].length&&!g.riichi[seat]&&g.scores[seat]>=1000){
         canRiichi=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id)).length>0).map(t=>t.id);
@@ -951,7 +950,7 @@ class Room {
       }
       const sw=this._seatWindOf(seat);
       const canTsumo=(()=>{
-        if(g.turn!==seat||!isWin(hand)||this._isFuriten(seat)) return false;
+        if(g.turn!==seat||!isWin(hand,g.melds[seat])||this._isFuriten(seat)) return false;
         const isDblRiichi=g.doubleRiichi[seat];
         const winKey=g.drawTile?key(g.drawTile):null;
         const {han}=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),

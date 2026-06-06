@@ -210,7 +210,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* Top: flush to top edge, column layout (tiles first, nameplate below) */
 .pa-t{top:15px;left:0;right:0;flex-direction:column;align-items:center;}
 /* Left: pivot at left edge, centred vertically, rotated 90° CW */
-.pa-l{position:absolute;top:50%;left:0;
+.pa-l{position:absolute;top:calc(min(96vmin, 920px));left:0;
   display:flex;flex-direction:column;align-items:flex-start;
   transform:translateY(-50%) rotate(90deg);
   transform-origin:left center;}
@@ -426,7 +426,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Mahjong Online</div></div>
   <div class="card">
     <h2>Enter the Hall</h2>
-    <div class="ig"><label>Your Name</label><input type="text" id="iname" placeholder="Player" maxlength="20" value="Player"></div>
+    <div class="ig"><label for="iname">Your Name</label><input type="text" id="iname" placeholder="Player" maxlength="20" value="Player"></div>
     <div class="ig">
       <label>Game Mode</label>
       <div style="display:flex;gap:8px;margin-top:4px;">
@@ -521,7 +521,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
         </div>
       </div>
       <!-- Bottom melds: their bottom-right corner = felt bottom-right -->
-      <div class="mr" id="mlb" style="position:absolute;bottom:15px;right:15px;display:flex;flex-direction:row;align-items:flex-end;z-index:15;"></div>
+      <div class="mr" id="mlb" style="position:absolute;bottom:0px;right:0px;display:flex;flex-direction:row;align-items:flex-end;z-index:15;"></div>
 
       <!-- ── TOP PLAYER (opponent, rotated 180°) ── -->
       <div class="pa pa-t" id="pa-t">
@@ -560,7 +560,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
         </div>
       </div>
       <!-- Right melds: separate absolute, their bottom-right corner = felt top-right -->
-      <div class="mr" id="mlr" style="position:absolute;top:15px;right:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg);transform-origin:top right;z-index:15;"></div>
+      <div class="mr" id="mlr" style="position:absolute;top:0px;right:var(--tmd-h);display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg);transform-origin:top right;z-index:15;"></div>
     </div><!-- end .felt -->
   </div>
 
@@ -568,7 +568,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
   <!-- Always-visible chat input bar (shown during game) -->
   <div class="chat-bar" id="chat-bar">
-    <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off">
+    <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off" aria-label="Chat message">
     <button class="chat-send" id="chat-send">Send</button>
     <button class="chat-hist-btn" id="chat-hist-btn" title="Chat history">
       History
@@ -634,21 +634,21 @@ function tsvg(t,w,h){
   if(!t) return '';
   const s=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
   const e='</svg>';
-  if(t.s==='m') return s+svgMan(t.v,w,h)+e;
-  if(t.s==='p') return s+svgPin(t.v,w,h)+e;
-  if(t.s==='s') return s+svgSou(t.v,w,h)+e;
+  const red=!!t.red;
+  if(t.s==='m') return s+svgMan(t.v,w,h,red)+e;
+  if(t.s==='p') return s+svgPin(t.v,w,h,red)+e;
+  if(t.s==='s') return s+svgSou(t.v,w,h,red)+e;
   if(t.s==='z') return s+svgHon(t.v,w,h)+e;
   return '';
 }
 
 // MAN (マンズ) — Characters
-// Numeral: red, large, centred in upper ~65% of tile
-// 萬: small red label, bottom 18%
+// Numeral: black by default, red only for aka dora (red:true)
+// 萬: always red
 const MAN_K=['','一','二','三','四','伍','六','七','八','九'];
-function svgMan(v,w,h){
-  // Same font size for numeral and 萬, both centred in their half
+function svgMan(v,w,h,red=false){
   const fs=Math.round(h*.36);
-  const numColor=v===5?'#c82020':'#1a1a1a';
+  const numColor=red?'#c82020':'#1a1a1a';
   return (
     `<text x="${w*.5}" y="${h*.30}" text-anchor="middle" dominant-baseline="central" `+
     `font-family="'Yuji Syuku',serif" font-size="${fs}px" font-weight="400" fill="${numColor}">`+
@@ -665,7 +665,7 @@ function svgMan(v,w,h){
 // PIN (ピンズ) — Circles with flower/petal design from image
 // Each circle: outer ring, 6-petal inner ring, small centre dot
 // Colours: 1=red outer+blue inner, 2-4=blue, 5=red, 6-9=blue with red accent
-function svgPin(v,w,h){
+function svgPin(v,w,h,red=false){
   const pos=pinPos(v,w,h);
   const base=Math.min(w,h);
   const rMap={1:.30,2:.22,3:.20,4:.17,5:.155,6:.14,7:.128,8:.118,9:.110};
@@ -673,7 +673,10 @@ function svgPin(v,w,h){
   const isRed=(v===5);
   const hasRedOuter=false;
   const hasRedInner=(v===1);
-  return pos.map(([cx,cy,forceRed])=>pinCircle(cx,cy,r,isRed,hasRedOuter,hasRedInner,forceRed)).join('');
+  const circles=pos.map(([cx,cy,forceRed])=>pinCircle(cx,cy,r,isRed,hasRedOuter,hasRedInner,forceRed)).join('');
+  // Red corner marker for aka dora
+  const marker=red?`<circle cx="${w*.18}" cy="${h*.15}" r="${base*.07}" fill="#c82020" opacity="0.9"/>`:'' ;
+  return circles+marker;
 }
 
 function pinCircle(cx,cy,r,isRed,hasRedOuter,hasRedInner,forceRedInner){
@@ -754,9 +757,41 @@ function pinPos(v,w,h){
 // SOU (ソウズ) — Bamboo hourglass/bobbin sticks
 // From image: wider top+bottom, narrow waist — like a bobbin/spool
 // Green with red band at waist. 5-sou centre = red.
-function svgSou(v,w,h){
-  if(v===1) return souBird(w,h);
-  return souLayout(v,w,h).map(([cx,cy,sw,sh,isRed])=>souStick(cx,cy,sw,sh,isRed)).join('');
+// 1-sou: traditional bird (sparrow) on a single bamboo stick
+function souBird(w,h){
+  const cx=w/2, cy=h/2;
+  // Single bamboo stick in lower half
+  const stick=souStick(cx, cy+h*.12, w*.32, h*.38, false);
+  // Bird body — oval
+  const bx=cx, by=cy-h*.18;
+  const bw=w*.28, bh=h*.18;
+  // Wings spread
+  const bird=[
+    // Body
+    `<ellipse cx="${bx}" cy="${by}" rx="${bw*.6}" ry="${bh*.55}" fill="#1c7530" stroke="#0e4018" stroke-width="0.8"/>`,
+    // Head
+    `<circle cx="${bx+bw*.35}" cy="${by-bh*.4}" r="${bw*.32}" fill="#1c7530" stroke="#0e4018" stroke-width="0.8"/>`,
+    // Eye
+    `<circle cx="${bx+bw*.45}" cy="${by-bh*.45}" r="${bw*.09}" fill="#fff"/>`,
+    `<circle cx="${bx+bw*.47}" cy="${by-bh*.45}" r="${bw*.05}" fill="#111"/>`,
+    // Beak
+    `<polygon points="${bx+bw*.72},${by-bh*.38} ${bx+bw*.95},${by-bh*.32} ${bx+bw*.72},${by-bh*.26}" fill="#c8a020"/>`,
+    // Left wing
+    `<ellipse cx="${bx-bw*.3}" cy="${by+bh*.1}" rx="${bw*.38}" ry="${bh*.28}" fill="#2db848" stroke="#0e4018" stroke-width="0.6" transform="rotate(-20,${bx-bw*.3},${by+bh*.1})"/>`,
+    // Tail
+    `<ellipse cx="${bx-bw*.65}" cy="${by+bh*.2}" rx="${bw*.22}" ry="${bh*.12}" fill="#1c7530" stroke="#0e4018" stroke-width="0.6" transform="rotate(-35,${bx-bw*.65},${by+bh*.2})"/>`,
+    // Red breast band
+    `<ellipse cx="${bx+bw*.1}" cy="${by+bh*.15}" rx="${bw*.3}" ry="${bh*.2}" fill="#c82020" opacity="0.75"/>`,
+  ].join('');
+  return stick+bird;
+}
+
+function svgSou(v,w,h,red=false){
+  const base=Math.min(w,h);
+  const sticks=(v===1)?souBird(w,h):souLayout(v,w,h).map(([cx,cy,sw,sh,isRed])=>souStick(cx,cy,sw,sh,isRed)).join('');
+  // Red corner marker for aka dora
+  const marker=red?`<circle cx="${w*.18}" cy="${h*.15}" r="${base*.07}" fill="#c82020" opacity="0.9"/>`:'' ;
+  return sticks+marker;
 }
 
 function souStick(cx,cy,sw,sh,isRed){
@@ -1028,6 +1063,7 @@ function renderState(m){
   // Hide loading overlay on first state
   const loader=$('game-loading');
   if(loader) loader.style.display='none';
+
   const windChar=['東','南','西','北'];
   const dispWind=m.displayWind||m.roundWind||1;
   const dispRound=m.displayRound||m.round||1;

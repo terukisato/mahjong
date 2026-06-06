@@ -4,7 +4,15 @@ const SUITS = ['m','p','s'];
 
 function buildWall() {
   const tiles = []; let id = 0;
-  for (const s of SUITS) for (let v=1;v<=9;v++) for (let c=0;c<4;c++) tiles.push({s,v,id:id++});
+  for (const s of SUITS) {
+    for (let v=1;v<=9;v++) {
+      for (let c=0;c<4;c++) {
+        // One copy of 5m, 5p, 5s is a red 5 (c===0)
+        const red = (v===5 && c===0) ? true : undefined;
+        tiles.push({s,v,id:id++, ...(red?{red:true}:{})});
+      }
+    }
+  }
   for (let v=1;v<=7;v++) for (let c=0;c<4;c++) tiles.push({s:'z',v,id:id++});
   return tiles;
 }
@@ -104,18 +112,41 @@ function isChuuren9(hand){
   return true;
 }
 
-function isWin(hand){
-  if(hand.length!==14) return false;
+function isWin(hand, melds){
+  // Count tiles in melds (3 per chi/pon, 4 per kan)
+  const meldCount = melds ? melds.reduce((n,m)=>n+(m.type==='kan'?4:3),0) : 0;
+  const total = hand.length + meldCount;
+  if(total !== 14) return false;
+  if(melds && melds.length > 0){
+    // Open hand: just check if remaining hand tiles form valid sets + pair
+    return decompose(hand).length > 0;
+  }
   if(isKokushi(hand)||isChiitoitsu(hand)) return true;
   return decompose(hand).length>0;
 }
 
-function waits(hand13){
+function waits(hand, melds){
+  const meldCount = melds ? melds.reduce((n,m)=>n+(m.type==='kan'?4:3),0) : 0;
+  const handLen = hand.length;
+  // Accept hands of size 13-meldCount (between turns) OR 14-meldCount (post-meld pre-discard / draw turn)
+  const base13 = 13 - meldCount;
+  const base14 = 14 - meldCount;
+  if(handLen !== base13 && handLen !== base14) return [];
+  // If 14 tiles (draw turn or post-meld): compute waits for each possible discard
+  if(handLen === base14){
+    const waitSet = new Set();
+    for(const t of hand){
+      const reduced = hand.filter(x=>x.id!==t.id);
+      for(const w of waits(reduced, melds)) waitSet.add(w);
+    }
+    return [...waitSet];
+  }
+  // 13 tiles: test all possible draws
   const w=[];
   for(const s of['m','p','s','z']){
     const max=s==='z'?7:9;
     for(let v=1;v<=max;v++){
-      if(isWin([...hand13,{s,v,id:99999}])) w.push(`${v}${s}`);
+      if(isWin([...hand,{s,v,id:99999}],melds)) w.push(`${v}${s}`);
     }
   }
   return w;
@@ -396,6 +427,11 @@ function countDora(hand,doraIndicators){
   return n;
 }
 
+// Count red 5 tiles (aka dora) in hand — each red 5 = 1 han bonus
+function countAkaDora(hand){
+  return hand.filter(t=>t.red===true).length;
+}
+
 // waitFu: compute wait-type fu bonus given the winning tile and groups
 // Returns 0 (ryanmen/shanpon), 2 (kanchan/penchan/tanki)
 function waitFu(groups, winTileKey){
@@ -469,4 +505,4 @@ function handLabel(han){
 }
 
 module.exports = {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
-  detectYaku,countDora,calcFu,waitFu,basePoints,handLabel,decompose};
+  detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose};
