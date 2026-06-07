@@ -154,8 +154,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* ════════════════════════════════════════════════════════════
    DISCARD ZONES
    ════════════════════════════════════════════════════════════ */
-.dz{position:absolute;display:flex;flex-direction:column;gap:2px;pointer-events:none;}
-.dz-row{display:flex;flex-direction:row;gap:2px;}
+.dz{position:absolute;display:flex;flex-direction:column;;pointer-events:none;}
+.dz-row{display:flex;flex-direction:row;}
 
 /* H = min(13vmin,105px) = panel half-size */
 
@@ -208,16 +208,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* Bottom (me): flush to bottom edge, column layout (nameplate above tiles) */
 .pa-b{position:absolute;bottom:15px;left:13%;flex-direction:column;align-items:flex-start;}
 /* Top: flush to top edge, column layout (tiles first, nameplate below) */
-.pa-t{top:15px;left:73%;flex-direction:column;align-items:flex-start;
+.pa-t{position:absolute;top:15px;left:73%;flex-direction:column;align-items:flex-start;
 transform:rotate(180deg);
 transform-origin:left center;}
 /* Left: centre at left edge, vertically centred, rotate 90° CW */
 /* Left: pivot at tile row left edge, centred on felt, rotate 90° CW */
-.pa-l{position:absolute;display:flex;flex-direction:column;align-items:flex-start;
-  transform:rotate(deg);
+.pa-l{position:absolute;top:25%;left:35px;
+  display:flex;flex-direction:column;align-items:flex-start;
+  transform:rotate(90deg);
   transform-origin:left center;}
 /* Right: pivot at tile row left edge, centred on felt, rotate -90° CCW */
-.pa-r{position:absolute;top:68%;right:7%;
+.pa-r{position:absolute;top:70%;right:35px;
   display:flex;flex-direction:column;align-items:flex-start;
   transform:translateX(100%) rotate(-90deg);
   transform-origin:left center;}
@@ -297,8 +298,6 @@ transform-origin:left center;}
 .mg .called-stack .kakan-base{transform:rotate(-90deg);flex-shrink:0;}
 .mg .called-stack .kakan-add{position:absolute;bottom:calc(var(--tmd-w,26px) * 0.45);left:50%;transform:translateX(-50%) rotate(-90deg);z-index:2;}
 .mr{display:flex;gap:0;align-items:flex-end;flex-shrink:0;}
-.oh{display:flex;gap:2px;}
-.oh.rot180{transform:rotate(180deg);}
 
 /* ════════════════════════════════════════════════════════════
    ACTION BAR & BUTTONS
@@ -419,6 +418,9 @@ transform-origin:left center;}
 </style>
 </head>
 <body>
+<audio id="lobby-music" src="/Mahjong_Table_Tea_Time.mp3" loop preload="auto" style="display:none;"></audio>
+<audio id="game-music-1" src="/Mahjong_Table_Tea.mp3" preload="auto" style="display:none;"></audio>
+<audio id="game-music-2" src="/Tatami_Thunder.mp3" preload="auto" style="display:none;"></audio>
 <div class="bg"></div><div class="bgg"></div>
 
 <!-- ════════════════════════════════════════════════════════════
@@ -437,6 +439,7 @@ transform-origin:left center;}
       </div>
     </div>
     <button class="bp" id="bfind">⚔ Find Match</button>
+    <button id="bmute" onclick="toggleMusic()" style="width:100%;margin-top:6px;padding:8px;background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.6);font-size:12px;cursor:pointer;letter-spacing:1px;transition:all .2s;">🔊 Music: On</button>
     <div class="wa" id="wa">
       <div class="wm" id="wmsg">Looking for players...</div>
       <div class="slots" id="slots">
@@ -515,59 +518,52 @@ transform-origin:left center;}
         <div class="hr" id="hdb"></div>
       </div>
       <!-- ── Nameplate ── -->
-        <div style="transform-origin:50% 50%;position:absolute;bottom:calc(var(--tlg-h) + 15px);left:50%";>
+        <div style="transform:translateX(-50%);position:absolute;bottom:calc(var(--tlg-h) + 15px + 8px);left:50%";>
           <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div></div></div>
           <div class="act-overlay" id="actbar"></div>
           <span id="rsb" style="display:none" class="rs"></span>
           <span id="tpb" style="display:none" class="tenpai">TENPAI</span>
         </div>
-      </div>
       <!-- Bottom melds: their bottom-right corner = felt bottom-right -->
       <div class="mr" id="mlb" style="position:absolute;bottom:0px;right:0px;display:flex;flex-direction:row;align-items:flex-end;z-index:15;"></div>
 
       <!-- ── TOP PLAYER (opponent, rotated 180°) ── -->
       <div class="pa pa-t" id="pa-t">
-        <!-- Nameplate: before tiles in DOM = in front from top player's view -->
-        <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;">
+        <div class="hr" id="hdt"></div>
+      </div>
+        <!-- Nameplate -->
+        <div style="transform:translateX(-50%) rotate(180deg);position:absolute;top:calc(var(--tmd-h) + 15px + 8px);left:50%;z-index:20;">
           <div class="np" id="npt"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
           <span id="rst" style="display:none" class="rs"></span>
         </div>
-        <!-- Hand tiles -->
-        <div class="oh rot180" id="hdt"></div>
-      </div>
       <!-- Top melds: their bottom-right = our top-left corner -->
       <div class="mr" id="mlt" style="position:absolute;top:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:top left;z-index:15;"></div>
 
-      <!-- ── LEFT PLAYER (opponent, rotated 90° CW) ── -->
+      <!-- ── LEFT PLAYER ── -->
       <div class="pa pa-l" id="pa-l">
-        <!-- Nameplate: above tiles from their perspective (before in DOM) -->
-        <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;">
+        <div class="hr" id="hdl"></div>
+      </div>
+        <!-- Nameplate -->
+        <div style="transform:translateY(-50%) rotate(90deg);position:absolute;top:50%;left:19px;z-index:20;">
           <div class="np" id="npl"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
           <span id="rsl" style="display:none" class="rs"></span>
         </div>
-        <!-- Hand tiles -->
-        <div class="oh" id="hdl"></div>
-      </div>
-      <!-- Left melds: separate absolute, their bottom-right corner = felt bottom-left -->
-      <div class="mr" id="mll" style="position:absolute;bottom:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(90deg);transform-origin:bottom left;z-index:15;"></div>
+      <!-- Left melds: their bottom-right = our bottom-left corner -->
+      <div class="mr" id="mll" style="position:absolute;top:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:top left;z-index:15;"></div>
 
-      <!-- ── RIGHT PLAYER (opponent, rotated -90° CCW) ── -->
+      <!-- ── RIGHT PLAYER ── -->
       <div class="pa pa-r" id="pa-r">
-        <!-- Nameplate: above tiles from their perspective (before in DOM) -->
-        <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;">
+        <div class="hr" id="hdr"></div>
+      </div>
+        <!-- Nameplate -->
+        <div style="transform:translateY(-50%) rotate(-90deg);position:absolute;top:50%;right:23px;z-index:20;">
           <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
           <span id="rsr" style="display:none" class="rs"></span>
         </div>
-        <!-- Hand tiles -->
-        <div class="oh" id="hdr"></div>
-      </div>
-      <!-- Right melds: separate absolute, their bottom-right corner = felt top-right -->
-      <div class="mr" id="mlr" style="position:absolute;top:0px;right:var(--tmd-h);display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg);transform-origin:top right;z-index:15;"></div>
-    </div><!-- end .felt -->
+      <!-- Right melds: their bottom-right = our bottom-right corner -->
+      <div class="mr" id="mlr" style="position:absolute;top:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:top left;z-index:15;"></div>
+
   </div>
-
-  <!-- Action overlay floats above player hand -->
-
   <!-- Always-visible chat input bar (shown during game) -->
   <div class="chat-bar" id="chat-bar">
     <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off" aria-label="Chat message">
@@ -952,6 +948,68 @@ function onMsg(m){
 }
 
 
+// ════════════════════════════════════════════════════════════
+// LOBBY MUSIC
+// ════════════════════════════════════════════════════════════
+let musicEnabled=true;
+let currentGameTrack=1; // tracks which song plays next
+
+function playLobbyMusic(){
+  const m=$('lobby-music');
+  if(!m){ console.error('Music element not found'); return; }
+  if(!musicEnabled) return;
+  console.log('Attempting to play:', m.src);
+  m.volume=0.45;
+  m.play().then(()=>{
+    console.log('Music playing OK');
+  }).catch(e=>{
+    console.error('Music play failed:', e.message);
+  });
+}
+
+function stopLobbyMusic(){
+  const m=$('lobby-music');
+  if(!m) return;
+  m.pause();
+  m.currentTime=0;
+}
+
+function playGameMusic(){
+  if(!musicEnabled) return;
+  const t1=$('game-music-1');
+  const t2=$('game-music-2');
+  if(!t1||!t2) return;
+  // Stop both first
+  [t1,t2].forEach(t=>{ t.pause(); t.currentTime=0; });
+  // Set up alternating on end
+  t1.onended=()=>{ if(musicEnabled){ t2.volume=0.4; t2.play().catch(()=>{}); } };
+  t2.onended=()=>{ if(musicEnabled){ t1.volume=0.4; t1.play().catch(()=>{}); } };
+  // Start with track 1
+  currentGameTrack=1;
+  t1.volume=0.4;
+  t1.play().catch(()=>{});
+}
+
+function stopGameMusic(){
+  const t1=$('game-music-1');
+  const t2=$('game-music-2');
+  [t1,t2].forEach(t=>{ if(t){ t.pause(); t.currentTime=0; } });
+}
+
+function toggleMusic(){
+  musicEnabled=!musicEnabled;
+  const btn=$('bmute');
+  if(musicEnabled){
+    playLobbyMusic();
+    if(btn) btn.textContent='🔊 Music: On';
+  } else {
+    stopLobbyMusic();
+    stopGameMusic();
+    if(btn) btn.textContent='🔇 Music: Off';
+  }
+  try{ localStorage.setItem('mj-music', musicEnabled?'1':'0'); }catch(e){}
+}
+
 // LOBBY
 let gameMode='tonpuu'; // 'tonpuu' or 'hanchan'
 
@@ -962,6 +1020,7 @@ function setMode(mode){
 }
 
 function findMatch(){
+  playLobbyMusic();
   wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode});
 }
 
@@ -1023,11 +1082,15 @@ function goLobby(){
   if(ws){ws.onclose=null;ws.close();}
   resetLobby();
   setTimeout(connect,200);
+  stopGameMusic();
+  playLobbyMusic();
 }
 
 
 // GAME START
 function startGame(m){
+  stopLobbyMusic();
+  playGameMusic();
   inGame=true;selId=null;lastState=null;
   const seats=m.seats;
   for(let i=0;i<4;i++){
@@ -1516,6 +1579,8 @@ function onRoundStart(m){
 
 function onGameOver(m){
   inGame=false;
+  stopGameMusic();
+  playLobbyMusic();
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
   const sorted=[...((m.scores||[]).map((s,i)=>({s,i})))].sort((a,b)=>b.s-a.s);
@@ -1598,6 +1663,11 @@ updateTileSizes();
 
 
 // BOOT — initialise on page load
+// Restore music preference
+try{
+  const saved=localStorage.getItem('mj-music');
+  if(saved==='0'){ musicEnabled=false; const b=$('bmute'); if(b) b.textContent='🔇 Music: Off'; }
+}catch(e){}
 $('bfind').onclick=findMatch;
 $('bready').onclick=pressReady;
 $('bcancel').onclick=()=>{wss({type:'leave'});resetLobby();};
