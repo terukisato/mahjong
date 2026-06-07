@@ -206,16 +206,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    ════════════════════════════════════════════════════════════ */
 .pa{position:absolute;display:flex;align-items:center;z-index:15;}
 /* Bottom (me): flush to bottom edge, column layout (nameplate above tiles) */
-.pa-b{position:absolute;flex-direction:column;align-items:flex-start;}
+.pa-b{position:absolute;bottom:15px;left:13%;flex-direction:column;align-items:flex-start;}
 /* Top: flush to top edge, column layout (tiles first, nameplate below) */
-.pa-t{top:2%;left:73%;flex-direction:column;align-items:flex-start;
+.pa-t{top:15px;left:73%;flex-direction:column;align-items:flex-start;
 transform:rotate(180deg);
 transform-origin:left center;}
 /* Left: centre at left edge, vertically centred, rotate 90° CW */
 /* Left: pivot at tile row left edge, centred on felt, rotate 90° CW */
-.pa-l{position:absolute;top:28%;left:7%;
-  display:flex;flex-direction:column;align-items:flex-start;
-  transform:translateY(-50%) rotate(90deg);
+.pa-l{position:absolute;display:flex;flex-direction:column;align-items:flex-start;
+  transform:rotate(deg);
   transform-origin:left center;}
 /* Right: pivot at tile row left edge, centred on felt, rotate -90° CCW */
 .pa-r{position:absolute;top:68%;right:7%;
@@ -514,7 +513,9 @@ transform-origin:left center;}
       <!-- ── BOTTOM PLAYER (you) ── -->
       <div class="pa pa-b" id="pa-b">
         <div class="hr" id="hdb"></div>
-        <div style="margin-bottom:8px;order:-1;display:flex;align-items:center;justify-content:center;gap:6px;">
+      </div>
+      <!-- ── Nameplate ── -->
+        <div style="transform-origin:50% 50%;position:absolute;bottom:calc(var(--tlg-h) + 15px);left:50%";>
           <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div></div></div>
           <div class="act-overlay" id="actbar"></div>
           <span id="rsb" style="display:none" class="rs"></span>
