@@ -206,7 +206,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    ════════════════════════════════════════════════════════════ */
 .pa{position:absolute;display:flex;align-items:center;z-index:15;}
 /* Bottom (me): flush to bottom edge, column layout (nameplate above tiles) */
-.pa-b{bottom:2%;left:13%;flex-direction:column;align-items:flex-start;}
+.pa-b{position:absolute;flex-direction:column;align-items:flex-start;}
 /* Top: flush to top edge, column layout (tiles first, nameplate below) */
 .pa-t{top:2%;left:73%;flex-direction:column;align-items:flex-start;
 transform:rotate(180deg);
@@ -284,7 +284,7 @@ transform-origin:left center;}
 .hr{display:flex;align-items:flex-end;gap:2px;flex-wrap:nowrap;}
 /* Gap between main hand and draw tile */
 .draw-sep{width:clamp(5px,1.5vmin,10px);flex-shrink:0;}
-.mg{display:flex;gap:1px;margin-right:0;margin-left:4px;align-items:flex-end;}
+.mg{display:flex;gap:1px;margin-right:0;margin-left:0;align-items:flex-end;}
 /* Called tile (chi/pon) rotated 90° to show it was taken from another player */
 .mg .called{transform:rotate(-90deg);
   margin-right:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);

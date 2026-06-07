@@ -780,7 +780,7 @@ class Room {
     const g=this.game;
     const inTenpai=g.hands.map((hand,seat)=>{
       if(hand.length!==13) return false;
-      return waits(hand,g.melds[i]).length>0;
+      return waits(hand,g.melds[seat]).length>0;
     });
     const tenpaiCount=inTenpai.filter(Boolean).length;
     const notenCount=4-tenpaiCount;
