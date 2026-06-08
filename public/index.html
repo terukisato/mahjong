@@ -32,6 +32,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    LOBBY SCREEN
    ════════════════════════════════════════════════════════════ */
 #s-lobby{flex-direction:column;gap:18px;}
+#s-start{flex-direction:column;align-items:center;justify-content:center;gap:32px;}
 .logo{text-align:center;animation:float 5s ease-in-out infinite;}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 .logo-k{font-family:'Noto Serif JP',serif;font-size:clamp(40px,10vw,72px);font-weight:900;letter-spacing:clamp(4px,2vw,12px);
@@ -401,7 +402,7 @@ transform-origin:left center;}
 /* ════════════════════════════════════════════════════════════
    ROUND END SCREEN
    ════════════════════════════════════════════════════════════ */
-#s-end{background:rgba(0,0,0,.93);z-index:150;flex-direction:column;}
+#s-end{background:rgba(0,0,0,.93);z-index:250;flex-direction:column;}
 .rec{background:linear-gradient(155deg,rgba(18,52,30,.98),rgba(6,16,9,.99));border:2px solid var(--gold);border-radius:16px;
   padding:clamp(20px,4vw,36px) clamp(16px,5vw,52px);text-align:center;
   box-shadow:0 0 100px rgba(201,168,76,.35);width:min(560px,96vw);position:relative;}
@@ -419,14 +420,69 @@ transform-origin:left center;}
 </head>
 <body>
 <audio id="lobby-music" src="/Mahjong_Table_Tea_Time.mp3" loop preload="auto" style="display:none;"></audio>
-<audio id="game-music-1" src="/Mahjong_Table_Tea.mp3" preload="auto" style="display:none;"></audio>
-<audio id="game-music-2" src="/Tatami_Thunder.mp3" preload="auto" style="display:none;"></audio>
+<audio id="game-music-1" src="/Mahjong_Table_Tea.mp3" loop preload="auto" style="display:none;"></audio>
+<audio id="sfx-discard" src="/Discard.m4a" preload="auto" style="display:none;"></audio>
+
+<!-- Settings panel — outside all screens so it appears above everything -->
+<div id="settings-panel" style="
+  position:fixed;top:0;right:0;bottom:0;width:240px;
+  background:rgba(6,12,7,.97);border-left:1px solid rgba(201,168,76,.2);
+  z-index:200;transform:translateX(100%);transition:transform .25s ease;
+  display:flex;flex-direction:column;padding:20px 16px;gap:20px;overflow-y:auto;">
+  <div style="font-family:'Cinzel Decorative',serif;font-size:11px;letter-spacing:3px;color:var(--gold);border-bottom:1px solid rgba(201,168,76,.2);padding-bottom:10px;">SETTINGS</div>
+  <!-- Music section -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div style="font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);">MUSIC</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:12px;color:var(--cream);">Music</span>
+      <button id="bmute" onclick="toggleMusic()" style="
+        padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
+        background:rgba(42,158,103,.3);border:1px solid var(--jl);
+        color:var(--cream);letter-spacing:1px;transition:all .2s;">ON</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:12px;color:var(--cream);">Volume</span>
+        <span id="vol-label" style="font-size:11px;color:var(--gold);">35%</span>
+      </div>
+      <input id="vol-slider" type="range" min="0" max="100" value="35"
+        oninput="setVolume(this.value)"
+        style="width:100%;accent-color:var(--gold);cursor:pointer;">
+    </div>
+  </div>
+</div>
+<div id="settings-backdrop" onclick="toggleSettings()" style="display:none;position:fixed;inset:0;z-index:199;"></div>
 <div class="bg"></div><div class="bgg"></div>
+
+<!-- ════════════════════════════════════════════════════════════
+     START SCREEN
+     ════════════════════════════════════════════════════════════ -->
+<div class="screen" id="s-start">
+  <button onclick="toggleSettings()" title="Settings" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#888;font-size:20px;cursor:pointer;z-index:10;letter-spacing:-1px;">☰</button>
+  <div class="logo">
+    <div class="logo-k">雀 心</div>
+    <div class="logo-s">Mahjong Online</div>
+  </div>
+  <button id="bstart" style="
+    padding:16px 48px;
+    font-family:'Cinzel Decorative',serif;
+    font-size:14px;letter-spacing:4px;
+    background:linear-gradient(135deg,rgba(26,107,69,.5),rgba(13,61,40,.5));
+    border:1px solid var(--jl);border-radius:4px;
+    color:var(--cream);cursor:pointer;
+    animation:pulse 1.5s ease-in-out infinite;
+    transition:all .2s;">
+    ▶ START
+  </button>
+  <div style="font-size:10px;color:rgba(245,237,216,.3);letter-spacing:2px;">© 雀心</div>
+</div>
 
 <!-- ════════════════════════════════════════════════════════════
      LOBBY SCREEN
      ════════════════════════════════════════════════════════════ -->
-<div class="screen" id="s-lobby">
+<div class="screen hidden" id="s-lobby">
+  <!-- Settings button top-right of lobby -->
+  <button onclick="toggleSettings()" title="Settings" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#888;font-size:20px;cursor:pointer;z-index:10;letter-spacing:-1px;">☰</button>
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Mahjong Online</div></div>
   <div class="card">
     <h2>Enter the Hall</h2>
@@ -439,7 +495,6 @@ transform-origin:left center;}
       </div>
     </div>
     <button class="bp" id="bfind">⚔ Find Match</button>
-    <button id="bmute" onclick="toggleMusic()" style="width:100%;margin-top:6px;padding:8px;background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.6);font-size:12px;cursor:pointer;letter-spacing:1px;transition:all .2s;">🔊 Music: On</button>
     <div class="wa" id="wa">
       <div class="wm" id="wmsg">Looking for players...</div>
       <div class="slots" id="slots">
@@ -460,8 +515,12 @@ transform-origin:left center;}
   <div class="topbar">
     <div class="tb-title">雀心 Mahjong <span id="tb-mode" style="font-size:10px;opacity:.6;margin-left:6px;"></span></div>
     <div class="tb-st" id="tst">—</div>
-    <button class="bl" id="bleave">✕ Leave</button>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <button class="bl" id="bsettings" title="Settings" style="color:#888;font-size:18px;letter-spacing:-1px;background:none;border-color:rgba(255,255,255,.1);">☰</button>
+      <button class="bl" id="bleave">✕ Leave</button>
+    </div>
   </div>
+
   <!-- Loading overlay — shown between game_start and first game_state -->
   <div id="game-loading" style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;">
     <div style="font-family:'Noto Serif JP',serif;font-size:clamp(28px,6vmin,48px);font-weight:900;color:var(--gold);letter-spacing:4px;animation:pulse 1.2s ease-in-out infinite;">牌</div>
@@ -518,7 +577,7 @@ transform-origin:left center;}
         <div class="hr" id="hdb"></div>
       </div>
       <!-- ── Nameplate ── -->
-        <div style="transform:translateX(-50%);position:absolute;bottom:calc(var(--tlg-h) + 15px + 8px);left:50%";>
+        <div style="transform:translateX(-50%);position:absolute;bottom:calc(var(--tlg-h) + 15px + 14px);left:50%";>
           <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div></div></div>
           <div class="act-overlay" id="actbar"></div>
           <span id="rsb" style="display:none" class="rs"></span>
@@ -532,7 +591,7 @@ transform-origin:left center;}
         <div class="hr" id="hdt"></div>
       </div>
         <!-- Nameplate -->
-        <div style="transform:translateX(-50%) rotate(180deg);position:absolute;top:calc(var(--tmd-h) + 15px + 8px);left:50%;z-index:20;">
+        <div style="transform:translateX(-50%) rotate(180deg);position:absolute;top:calc(var(--tmd-h) + 15px + 14px);left:50%;z-index:20;">
           <div class="np" id="npt"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
           <span id="rst" style="display:none" class="rs"></span>
         </div>
@@ -544,24 +603,24 @@ transform-origin:left center;}
         <div class="hr" id="hdl"></div>
       </div>
         <!-- Nameplate -->
-        <div style="transform:translateY(-50%) rotate(90deg);position:absolute;top:50%;left:19px;z-index:20;">
+        <div style="transform:translateY(-50%) rotate(90deg);position:absolute;top:50%;left:25px;z-index:20;">
           <div class="np" id="npl"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
           <span id="rsl" style="display:none" class="rs"></span>
         </div>
       <!-- Left melds: their bottom-right = our bottom-left corner -->
-      <div class="mr" id="mll" style="position:absolute;top:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:top left;z-index:15;"></div>
+      <div class="mr" id="mll" style="position:absolute;bottom:0;right:min(96vmin,920px);display:flex;flex-direction:row;align-items:flex-end;transform:rotate(90deg);transform-origin:bottom right;z-index:15;"></div>
 
       <!-- ── RIGHT PLAYER ── -->
       <div class="pa pa-r" id="pa-r">
         <div class="hr" id="hdr"></div>
       </div>
         <!-- Nameplate -->
-        <div style="transform:translateY(-50%) rotate(-90deg);position:absolute;top:50%;right:23px;z-index:20;">
+        <div style="transform:translateY(-50%) rotate(-90deg);position:absolute;top:50%;right:29px;z-index:20;">
           <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
           <span id="rsr" style="display:none" class="rs"></span>
         </div>
       <!-- Right melds: their bottom-right = our bottom-right corner -->
-      <div class="mr" id="mlr" style="position:absolute;top:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:top left;z-index:15;"></div>
+      <div class="mr" id="mlr" style="position:absolute;top:0;right:var(--tmd-h,36px);display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg);transform-origin:top right;z-index:15;"></div>
 
   </div>
   <!-- Always-visible chat input bar (shown during game) -->
@@ -593,7 +652,11 @@ transform-origin:left center;}
     <div class="ret" id="ret">—</div><div class="rehn" id="rehn"></div>
     <div class="yl" id="reyl"></div><div class="wt" id="rewt"></div>
     <table class="st" id="rest"></table>
-    <div class="reb"><button class="bp" style="max-width:200px;" onclick="goLobby()">Main Menu</button></div>
+    <div class="reb" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <button id="bround-ready" class="ready-btn" style="max-width:200px;" onclick="sendRoundReady()">✓ Ready</button>
+      <button class="bp" style="max-width:200px;" onclick="goLobby()">Main Menu</button>
+    </div>
+    <div id="ready-status" style="margin-top:8px;font-size:11px;color:rgba(245,237,216,.5);letter-spacing:1px;text-align:center;"></div>
   </div>
 </div>
 <div class="tc" id="tc"></div>
@@ -913,7 +976,7 @@ const P=['b','r','t','l'];
 
 let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false;
 
-function show(id){['s-lobby','s-game','s-end'].forEach(s=>$(s).classList.toggle('hidden',s!==id));}
+function show(id){['s-start','s-lobby','s-game','s-end'].forEach(s=>$(s).classList.toggle('hidden',s!==id));}
 function $(id){return document.getElementById(id);}
 
 
@@ -938,76 +1001,94 @@ function onMsg(m){
   if(m.type==='room_update'){updateSlots(m.seats);return;}
   if(m.type==='game_start'){startGame(m);return;}
   if(!inGame) return;
-  if(m.type==='game_state'){lastState=m;renderState(m);}
+  if(m.type==='game_state'){const prev=lastState;lastState=m;renderState(m,prev);}
   else if(m.type==='riichi'){onRiichi(m);}
   else if(m.type==='round_end'){onEnd(m);}
   else if(m.type==='round_start'){onRoundStart(m);}
   else if(m.type==='game_over'){onGameOver(m);}
+  else if(m.type==='ready_status'){onReadyStatus(m);}
   else if(m.type==='kan'){toast(W[(m.seat-mySeat+4)%4]+' カン！');}
   else if(m.type==='chat'){showChatMsg(m.seat,m.name,m.text);}
 }
 
 
 // ════════════════════════════════════════════════════════════
-// LOBBY MUSIC
+// SETTINGS PANEL
+// ════════════════════════════════════════════════════════════
+function toggleSettings(){
+  const panel=$('settings-panel');
+  const backdrop=$('settings-backdrop');
+  const open=panel.style.transform==='translateX(0%)';
+  panel.style.transform=open?'translateX(100%)':'translateX(0%)';
+  backdrop.style.display=open?'none':'block';
+}
+
+// ════════════════════════════════════════════════════════════
+// MUSIC
 // ════════════════════════════════════════════════════════════
 let musicEnabled=true;
-let currentGameTrack=1; // tracks which song plays next
+let musicVolume=0.35;
+
+function allTracks(){
+  return [$('lobby-music'),$('game-music-1')].filter(Boolean);
+}
+
+function setVolume(val){
+  musicVolume=val/100;
+  const lbl=$('vol-label'); if(lbl) lbl.textContent=val+'%';
+  allTracks().forEach(t=>{ t.volume=musicVolume; });
+  try{ localStorage.setItem('mj-vol',val); }catch(e){}
+}
 
 function playLobbyMusic(){
   const m=$('lobby-music');
-  if(!m){ console.error('Music element not found'); return; }
-  if(!musicEnabled) return;
-  console.log('Attempting to play:', m.src);
-  m.volume=0.45;
-  m.play().then(()=>{
-    console.log('Music playing OK');
-  }).catch(e=>{
-    console.error('Music play failed:', e.message);
-  });
+  if(!m){ console.error('[Music] lobby-music element not found'); return; }
+  if(!musicEnabled){ console.log('[Music] disabled, skipping'); return; }
+  m.volume=musicVolume;
+  console.log('[Music] playing lobby:', m.src, 'vol:', m.volume);
+  m.play().then(()=>console.log('[Music] lobby playing OK')).catch(e=>console.error('[Music] lobby failed:', e.message));
 }
 
 function stopLobbyMusic(){
   const m=$('lobby-music');
   if(!m) return;
-  m.pause();
-  m.currentTime=0;
+  m.pause(); m.currentTime=0;
 }
 
 function playGameMusic(){
   if(!musicEnabled) return;
   const t1=$('game-music-1');
-  const t2=$('game-music-2');
-  if(!t1||!t2) return;
-  // Stop both first
-  [t1,t2].forEach(t=>{ t.pause(); t.currentTime=0; });
-  // Set up alternating on end
-  t1.onended=()=>{ if(musicEnabled){ t2.volume=0.4; t2.play().catch(()=>{}); } };
-  t2.onended=()=>{ if(musicEnabled){ t1.volume=0.4; t1.play().catch(()=>{}); } };
-  // Start with track 1
-  currentGameTrack=1;
-  t1.volume=0.4;
+  if(!t1) return;
+  t1.pause(); t1.currentTime=0;
+  t1.volume=musicVolume;
   t1.play().catch(()=>{});
 }
 
 function stopGameMusic(){
   const t1=$('game-music-1');
-  const t2=$('game-music-2');
-  [t1,t2].forEach(t=>{ if(t){ t.pause(); t.currentTime=0; } });
+  if(t1){ t1.pause(); t1.currentTime=0; }
+}
+
+function playSfx(id){
+  const el=$(id);
+  if(!el) return;
+  el.currentTime=0;
+  el.volume=musicVolume;
+  el.play().catch(()=>{});
 }
 
 function toggleMusic(){
   musicEnabled=!musicEnabled;
   const btn=$('bmute');
   if(musicEnabled){
-    playLobbyMusic();
-    if(btn) btn.textContent='🔊 Music: On';
+    if(btn){ btn.textContent='ON'; btn.style.background='rgba(42,158,103,.3)'; btn.style.borderColor='var(--jl)'; }
+    // Play whichever is appropriate — lobby or game
+    if(inGame) playGameMusic(); else playLobbyMusic();
   } else {
-    stopLobbyMusic();
-    stopGameMusic();
-    if(btn) btn.textContent='🔇 Music: Off';
+    stopLobbyMusic(); stopGameMusic();
+    if(btn){ btn.textContent='OFF'; btn.style.background='rgba(80,0,0,.3)'; btn.style.borderColor='#c82020'; }
   }
-  try{ localStorage.setItem('mj-music', musicEnabled?'1':'0'); }catch(e){}
+  try{ localStorage.setItem('mj-music',musicEnabled?'1':'0'); }catch(e){}
 }
 
 // LOBBY
@@ -1092,6 +1173,9 @@ function startGame(m){
   stopLobbyMusic();
   playGameMusic();
   inGame=true;selId=null;lastState=null;
+  // Restore Ready button visibility for new game
+  const btn=$('bround-ready'); if(btn){ btn.style.display=''; btn.disabled=false; btn.textContent='✓ Ready'; btn.style.opacity='1'; }
+  const status=$('ready-status'); if(status) status.textContent='';
   const seats=m.seats;
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i],p=seats[abs];
@@ -1124,7 +1208,7 @@ function pid(abs){return P[(abs-mySeat+4)%4];}
 
 
 // RENDER STATE — called every time a game_state message arrives
-function renderState(m){
+function renderState(m, prev){
   // Hide loading overlay on first state
   const loader=$('game-loading');
   if(loader) loader.style.display='none';
@@ -1225,6 +1309,12 @@ function renderState(m){
 
   // Discards — 6 tiles per row, riichi tile rotated 90° from player's perspective
   const dzMap={b:'dzb',r:'dzr',t:'dzt',l:'dzl'};
+  // Count total discards before re-render to detect new discard from any player
+  let prevDiscardCount=0;
+  if(prev?.discards) prev.discards.forEach(d=>{ prevDiscardCount+=(d?.length||0); });
+  let newDiscardCount=0;
+  if(m.discards) m.discards.forEach(d=>{ newDiscardCount+=(d?.length||0); });
+  if(newDiscardCount>prevDiscardCount) playSfx('sfx-discard');
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i];
     const dz=$(dzMap[id]);dz.innerHTML='';
@@ -1259,10 +1349,17 @@ function renderState(m){
     const ml2=$('ml'+id);
     if(!ml2) return;
     ml2.innerHTML='';
-    for(const meld of(m.melds?.[abs]||[]).slice().reverse()){
+    const melds=m.melds?.[abs]||[];
+    // Each player's container rotation affects DOM order vs visual order:
+    // top (180°): no reverse — grows left visually from right anchor
+    // top (180°): prepend — first meld at left anchor (our left = their right), new melds prepended to right
+    // left (90° CW): reverse + append — first meld at bottom anchor, grows upward
+    // right (-90° CCW): append — first meld at top anchor, grows downward
+    const ordered = id==='l' ? melds.slice().reverse() : melds;
+    for(const meld of ordered){
       const g=document.createElement('div');g.className='mg';
-      renderMeld(g,meld,abs);
-      ml2.appendChild(g);
+      renderMeld(g, meld, abs, id==='t');
+      if(id==='t') ml2.prepend(g); else ml2.appendChild(g);
     }
   });
 
@@ -1297,36 +1394,43 @@ function clickTile(id){
 
 // MELD RENDERING
 // Draws chi/pon/kan groups with correct orientation per player
-function renderMeld(container, meld, viewerSeat){
+function renderMeld(container, meld, viewerSeat, flipped=false){
   const tiles = meld.tiles;
   const calledId = meld.calledTileId;
   const fromSeat = meld.fromSeat;
-  const dir = fromSeat !== undefined ? (fromSeat - viewerSeat + 4) % 4 : 1;
+  let dir = fromSeat !== undefined ? (fromSeat - viewerSeat + 4) % 4 : 1;
+  // If container is rotated 180° (top player), mirror left/right direction
+  if(flipped){
+    if(dir===1) dir=3;
+    else if(dir===3) dir=1;
+  }
+  // Helper: append or prepend based on flipped (reverses visual tile order within group)
+  const add = (el) => flipped ? container.prepend(el) : container.appendChild(el);
   const mkC = t => { const el=mkElMd(t); el.classList.add('called'); return el; };
 
   if(meld.type === 'chi'){
     const called = tiles.find(t=>t.id===calledId) || tiles[0];
     const own = tiles.filter(t=>t.id!==calledId);
-    container.appendChild(mkC(called));
-    own.forEach(t=>container.appendChild(mkElMd(t)));
+    add(mkC(called));
+    own.forEach(t=>add(mkElMd(t)));
 
   } else if(meld.type === 'pon'){
     const called = tiles.find(t=>t.id===calledId) || tiles[2];
     const own = tiles.filter(t=>t.id!==calledId);
     const ownEls = own.map(t=>mkElMd(t));
     const calledEl = mkC(called);
-    if(dir===1){ container.appendChild(calledEl); ownEls.forEach(el=>container.appendChild(el)); }
-    else if(dir===2){ container.appendChild(ownEls[0]); container.appendChild(calledEl); container.appendChild(ownEls[1]); }
-    else { ownEls.forEach(el=>container.appendChild(el)); container.appendChild(calledEl); }
+    if(dir===1){ add(calledEl); ownEls.forEach(el=>add(el)); }
+    else if(dir===2){ add(ownEls[0]); add(calledEl); add(ownEls[1]); }
+    else { ownEls.forEach(el=>add(el)); add(calledEl); }
 
   } else if(meld.type === 'kan'){
     const kanType = meld.kanType;
     if(kanType === 'ankan'){
       const back = () => { const d=document.createElement('div'); d.className='kan-back'; return d; };
-      container.appendChild(back());
-      container.appendChild(mkElMd(meld.tiles[1]));
-      container.appendChild(mkElMd(meld.tiles[2]));
-      container.appendChild(back());
+      add(back());
+      add(mkElMd(meld.tiles[1]));
+      add(mkElMd(meld.tiles[2]));
+      add(back());
 
     } else if(kanType === 'kakan'){
       const kakanAdded = meld.tiles[3];
@@ -1338,21 +1442,21 @@ function renderMeld(container, meld, viewerSeat){
       const addEl = kakanAdded ? mkElMd(kakanAdded) : mkElMd(meld.tiles[3]); addEl.classList.add('kakan-add');
       stack.appendChild(baseEl); stack.appendChild(addEl);
       const ownEls = ponOwn.map(t=>mkElMd(t));
-      if(dir===1){ container.appendChild(stack); ownEls.forEach(el=>container.appendChild(el)); }
-      else if(dir===2){ container.appendChild(ownEls[0]); container.appendChild(stack); if(ownEls[1]) container.appendChild(ownEls[1]); }
-      else { ownEls.forEach(el=>container.appendChild(el)); container.appendChild(stack); }
+      if(dir===1){ add(stack); ownEls.forEach(el=>add(el)); }
+      else if(dir===2){ add(ownEls[0]); add(stack); if(ownEls[1]) add(ownEls[1]); }
+      else { ownEls.forEach(el=>add(el)); add(stack); }
 
     } else {
       const called = tiles.find(t=>t.id===calledId) || tiles[3];
       const own = tiles.filter(t=>t.id!==calledId);
       const ownEls = own.map(t=>mkElMd(t));
       const calledEl = mkC(called);
-      if(dir===1){ container.appendChild(calledEl); ownEls.forEach(el=>container.appendChild(el)); }
-      else if(dir===2){ container.appendChild(ownEls[0]); container.appendChild(calledEl); ownEls.slice(1).forEach(el=>container.appendChild(el)); }
-      else { ownEls.forEach(el=>container.appendChild(el)); container.appendChild(calledEl); }
+      if(dir===1){ add(calledEl); ownEls.forEach(el=>add(el)); }
+      else if(dir===2){ add(ownEls[0]); add(calledEl); ownEls.slice(1).forEach(el=>add(el)); }
+      else { ownEls.forEach(el=>add(el)); add(calledEl); }
     }
   } else {
-    tiles.forEach(t=>container.appendChild(mkElMd(t)));
+    tiles.forEach(t=>add(mkElMd(t)));
   }
 }
 
@@ -1528,10 +1632,30 @@ function toast(msg){
 }
 
 
+// ════════════════════════════════════════════════════════════
+// ROUND READY
+// ════════════════════════════════════════════════════════════
+function sendRoundReady(){
+  wss({type:'action',action:{type:'round_ready'}});
+  const btn=$('bround-ready');
+  if(btn){ btn.disabled=true; btn.textContent='✓ Waiting...'; btn.style.opacity='0.5'; }
+}
+
+function onReadyStatus(m){
+  const status=$('ready-status');
+  if(status) status.textContent=`${m.count}/${m.total} players ready`;
+}
+
+// ════════════════════════════════════════════════════════════
 // ROUND LIFECYCLE — start / end / game over
+// ════════════════════════════════════════════════════════════
 function onRoundStart(m){
   inGame=true;
   show('s-game');
+  // Reset Ready button for next round
+  const btn=$('bround-ready');
+  if(btn){ btn.disabled=false; btn.textContent='✓ Ready'; btn.style.opacity='1'; }
+  const status=$('ready-status'); if(status) status.textContent='';
   $('chat-bar').style.display='flex';
   $('dora-panel').style.display='flex';
   // Show loading overlay until next game_state arrives
@@ -1579,6 +1703,10 @@ function onRoundStart(m){
 
 function onGameOver(m){
   inGame=false;
+  const loader=$('game-loading'); if(loader) loader.style.display='none';
+  // Hide Ready button — game is fully over, no next round
+  const btn=$('bround-ready'); if(btn) btn.style.display='none';
+  const status=$('ready-status'); if(status) status.textContent='';
   stopGameMusic();
   playLobbyMusic();
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
@@ -1597,6 +1725,7 @@ function onGameOver(m){
 
 function onEnd(m){
   inGame=false;
+  const loader=$('game-loading'); if(loader) loader.style.display='none';
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
   const reasonLabels={tsumo:'🀄 TSUMO!',ron:'🀄 RON!',draw:'流局 — Draw',suukaisan:'四槓散了',nagashi:'流し満貫'};
@@ -1663,15 +1792,33 @@ updateTileSizes();
 
 
 // BOOT — initialise on page load
-// Restore music preference
+// Restore music & volume preferences
 try{
-  const saved=localStorage.getItem('mj-music');
-  if(saved==='0'){ musicEnabled=false; const b=$('bmute'); if(b) b.textContent='🔇 Music: Off'; }
+  const savedMusic=localStorage.getItem('mj-music');
+  const savedVol=localStorage.getItem('mj-vol');
+  if(savedVol){
+    const v=parseInt(savedVol);
+    musicVolume=v/100;
+    const sl=$('vol-slider'); if(sl) sl.value=v;
+    const lbl=$('vol-label'); if(lbl) lbl.textContent=v+'%';
+  }
+  if(savedMusic==='0'){
+    musicEnabled=false;
+    const b=$('bmute');
+    if(b){ b.textContent='OFF'; b.style.background='rgba(80,0,0,.3)'; b.style.borderColor='#c82020'; }
+  }
 }catch(e){}
+// Start music on first user interaction — via Press Start button
+function enterLobby(){
+  playLobbyMusic();
+  show('s-lobby');
+}
+$('bstart').onclick=enterLobby;
 $('bfind').onclick=findMatch;
 $('bready').onclick=pressReady;
 $('bcancel').onclick=()=>{wss({type:'leave'});resetLobby();};
 $('bleave').onclick=goLobby;
+$('bsettings').onclick=toggleSettings;
 $('iname').onkeydown=e=>{if(e.key==='Enter')findMatch();};
 $('chat-send').onclick=sendChat;
 $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};

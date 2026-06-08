@@ -18,6 +18,8 @@ class Room {
     this.gameMode=gameMode; // 'tonpuu' (4 rounds) or 'hanchan' (8 rounds)
     this.seats=[null,null,null,null];
     this.ready=new Set();
+    this.roundReady=new Set();
+    this.pendingNextRound=null;
     this.game=null;
   }
 
@@ -232,9 +234,23 @@ class Room {
   // ── Actions ────────────────────────────────────────────────────────────────
   action(playerId,act){
     const g=this.game;
-    if(!g||this.phase!=='playing') return;
     const seat=this.seats.findIndex(p=>p&&!p.isBot&&p.id===playerId);
     if(seat===-1) return;
+    // round_ready: player signals ready for next round
+    if(act.type==='round_ready'){
+      this.roundReady.add(seat);
+      const humanSeats=this.seats.map((p,i)=>p&&!p.isBot?i:-1).filter(i=>i>=0);
+      // Broadcast how many are ready
+      this._broadcastAll({type:'ready_status',count:this.roundReady.size,total:humanSeats.length});
+      if(humanSeats.every(i=>this.roundReady.has(i))&&this.pendingNextRound){
+        const fn=this.pendingNextRound;
+        this.pendingNextRound=null;
+        this.roundReady=new Set();
+        fn();
+      }
+      return;
+    }
+    if(!g||this.phase!=='playing') return;
     if(act.type==='discard'&&g.turn===seat) this._discard(seat,act.tileId);
     else if(act.type==='tsumo'&&g.turn===seat) this._tsumo(seat);
     else if(act.type==='riichi'&&g.turn===seat) this._riichi(seat,act.tileId);
@@ -759,8 +775,9 @@ class Room {
       return;
     }
 
-    // Start next round after delay
-    setTimeout(()=>{
+    // Wait for all players to click Ready before starting next round
+    this.roundReady=new Set();
+    this.pendingNextRound=()=>{
       if(this.phase!=='playing') return;
       g.dealer=newDealer;
       g.round=newRound;
@@ -773,7 +790,7 @@ class Room {
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
       setTimeout(()=>this._draw(),300);
-    },6000);
+    };
   }
 
   _resolveTenpaiPayments(){
@@ -833,7 +850,8 @@ class Room {
       return;
     }
 
-    setTimeout(()=>{
+    this.roundReady=new Set();
+    this.pendingNextRound=()=>{
       if(this.phase!=='playing') return;
       g.dealer=newDealer;g.round=newRound;g.roundWind=newRoundWind;
       g.honba=newHonba;g.turn=newDealer;
@@ -842,7 +860,7 @@ class Room {
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
       setTimeout(()=>this._draw(),300);
-    },6000);
+    };
   }
 
   _resolveNagashi(nagashiSeats){
@@ -876,7 +894,8 @@ class Room {
         playerNames:this.seats.map(p=>p?.name||'—')}),1000);
       return;
     }
-    setTimeout(()=>{
+    this.roundReady=new Set();
+    this.pendingNextRound=()=>{
       if(this.phase!=='playing') return;
       g.dealer=newDealer;g.round=newRound;g.roundWind=newRoundWind;
       g.honba=newHonba;g.turn=newDealer;
@@ -885,7 +904,7 @@ class Room {
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
       setTimeout(()=>this._draw(),300);
-    },6000);
+    };
   }
 
   _nextTurn(){
