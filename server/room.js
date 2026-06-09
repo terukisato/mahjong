@@ -233,6 +233,7 @@ class Room {
 
   // ── Actions ────────────────────────────────────────────────────────────────
   action(playerId,act){
+    try{
     const g=this.game;
     const seat=this.seats.findIndex(p=>p&&!p.isBot&&p.id===playerId);
     if(seat===-1) return;
@@ -261,6 +262,7 @@ class Room {
     else if(act.type==='kan') this._reactResponse(seat,{type:'kan'});
     else if(act.type==='chi') this._reactResponse(seat,{type:'chi',tileIds:act.tileIds});
     else if(act.type==='pass') this._reactResponse(seat,{type:'pass'});
+    }catch(e){ console.error('[action error]',e.message,e.stack); }
   }
 
   // ── Discard ────────────────────────────────────────────────────────────────

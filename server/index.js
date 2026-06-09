@@ -28,7 +28,7 @@ wss.on('connection',(ws)=>{
 
   ws.on('message',(raw)=>{
     let msg; try{msg=JSON.parse(raw);}catch{return;}
-
+    try{
     if(msg.type==='join'){
       if(myRoom){myRoom.removeHuman(myId);myRoom=null;}
       player.name=(msg.name||'Player').slice(0,20);
@@ -53,6 +53,7 @@ wss.on('connection',(ws)=>{
     if(msg.type==='leave'){
       if(myRoom){myRoom.removeHuman(myId);myRoom=null;}
     }
+    }catch(e){ console.error('[server message error]',e.message,'\n',e.stack); }
   });
 
   ws.on('close',()=>{

@@ -27,6 +27,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .bgg{position:fixed;inset:0;z-index:0;opacity:.03;background-image:repeating-linear-gradient(0deg,var(--gold) 0,var(--gold) 1px,transparent 0,transparent 40px),repeating-linear-gradient(90deg,var(--gold) 0,var(--gold) 1px,transparent 0,transparent 40px);}
 .screen{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;}
 .screen.hidden{display:none!important;}
+#s-end.hidden{display:none!important;}
 
 /* ════════════════════════════════════════════════════════════
    LOBBY SCREEN
@@ -74,7 +75,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* ════════════════════════════════════════════════════════════
    GAME SCREEN — LAYOUT
    ════════════════════════════════════════════════════════════ */
-#s-game{display:block;}
+#s-game:not(.hidden){display:block;}
 .topbar{position:fixed;top:0;left:0;right:0;height:36px;background:rgba(3,10,5,.97);border-bottom:1px solid rgba(201,168,76,.18);display:flex;align-items:center;justify-content:space-between;padding:0 10px;z-index:50;}
 .tb-title{font-family:'Noto Serif JP',serif;font-size:12px;color:var(--gold);letter-spacing:2px;}
 .tb-st{font-size:11px;color:rgba(245,237,216,.5);max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -622,7 +623,8 @@ transform-origin:left center;}
       <!-- Right melds: their bottom-right = our bottom-right corner -->
       <div class="mr" id="mlr" style="position:absolute;top:0;right:var(--tmd-h,36px);display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg);transform-origin:top right;z-index:15;"></div>
 
-  </div>
+  </div><!-- end .felt -->
+  </div><!-- end .table -->
   <!-- Always-visible chat input bar (shown during game) -->
   <div class="chat-bar" id="chat-bar">
     <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off" aria-label="Chat message">
@@ -654,7 +656,6 @@ transform-origin:left center;}
     <table class="st" id="rest"></table>
     <div class="reb" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
       <button id="bround-ready" class="ready-btn" style="max-width:200px;" onclick="sendRoundReady()">✓ Ready</button>
-      <button class="bp" style="max-width:200px;" onclick="goLobby()">Main Menu</button>
     </div>
     <div id="ready-status" style="margin-top:8px;font-size:11px;color:rgba(245,237,216,.5);letter-spacing:1px;text-align:center;"></div>
   </div>
@@ -1000,13 +1001,13 @@ function onMsg(m){
   if(m.type==='joined'){mySeat=m.seat;showWaiting();return;}
   if(m.type==='room_update'){updateSlots(m.seats);return;}
   if(m.type==='game_start'){startGame(m);return;}
+  if(m.type==='round_start'){onRoundStart(m);return;}
+  if(m.type==='round_end'){onEnd(m);return;}
+  if(m.type==='game_over'){onGameOver(m);return;}
+  if(m.type==='ready_status'){onReadyStatus(m);return;}
   if(!inGame) return;
   if(m.type==='game_state'){const prev=lastState;lastState=m;renderState(m,prev);}
   else if(m.type==='riichi'){onRiichi(m);}
-  else if(m.type==='round_end'){onEnd(m);}
-  else if(m.type==='round_start'){onRoundStart(m);}
-  else if(m.type==='game_over'){onGameOver(m);}
-  else if(m.type==='ready_status'){onReadyStatus(m);}
   else if(m.type==='kan'){toast(W[(m.seat-mySeat+4)%4]+' カン！');}
   else if(m.type==='chat'){showChatMsg(m.seat,m.name,m.text);}
 }
@@ -1042,11 +1043,9 @@ function setVolume(val){
 
 function playLobbyMusic(){
   const m=$('lobby-music');
-  if(!m){ console.error('[Music] lobby-music element not found'); return; }
-  if(!musicEnabled){ console.log('[Music] disabled, skipping'); return; }
+  if(!m||!musicEnabled) return;
   m.volume=musicVolume;
-  console.log('[Music] playing lobby:', m.src, 'vol:', m.volume);
-  m.play().then(()=>console.log('[Music] lobby playing OK')).catch(e=>console.error('[Music] lobby failed:', e.message));
+  m.play().catch(()=>{});
 }
 
 function stopLobbyMusic(){
@@ -1377,9 +1376,7 @@ function renderState(m, prev){
 }
 
 function clickTile(id){
-  console.log('[clickTile] id=',id,'selId=',selId,'mySeat=',mySeat,'inGame=',inGame,'turn=',lastState?.turn);
   if(selId===id){
-    console.log('[clickTile] -> discard');
     wss({type:'action',action:{type:'discard',tileId:id}});
     selId=null;
   } else {
@@ -1714,8 +1711,8 @@ function onGameOver(m){
   const sorted=[...((m.scores||[]).map((s,i)=>({s,i})))].sort((a,b)=>b.s-a.s);
   let rows='';
   sorted.forEach(({s,i},rank)=>{
-    const name=i===mySeat?'⭐ '+($('iname').value.trim()||'You'):(m.playerNames?.[i]||`Seat ${i}`);
-    rows+=`<tr class="${rank===0?'w':''}"><td>${rank+1}位 ${W[i]} ${escHtml(name)}</td><td>${s}</td></tr>`;
+    const name=i===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[i]||`Seat ${i}`);
+    rows+=`<tr class="${rank===0?'w':''}"><td>${rank+1}位 ${escHtml(name)}</td><td>${s}</td></tr>`;
   });
   $('ret').textContent=m.reason==='tobi'?'飛び — Bankruptcy':'終局 — Game Over';
   $('rehn').textContent='';$('reyl').innerHTML='';$('rewt').innerHTML='';
@@ -1724,11 +1721,12 @@ function onGameOver(m){
 }
 
 function onEnd(m){
+  try{
   inGame=false;
   const loader=$('game-loading'); if(loader) loader.style.display='none';
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
-  const reasonLabels={tsumo:'🀄 TSUMO!',ron:'🀄 RON!',draw:'流局 — Draw',suukaisan:'四槓散了',nagashi:'流し満貫'};
+  const reasonLabels={tsumo:'TSUMO',ron:'RON',draw:'流局 — Draw',suukaisan:'四槓散了',nagashi:'流し満貫'};
   $('ret').textContent=reasonLabels[m.reason]||'Round Over';
   if(m.reason==='tsumo'||m.reason==='ron'){
     $('rehn').textContent=m.handLabel?`${m.handLabel} · ${m.han||0}飜${m.fu?' · '+m.fu+'符':''}` :'';
@@ -1754,14 +1752,17 @@ function onEnd(m){
   const wt=$('rewt');wt.innerHTML='';
   for(const t of(m.hand||[])) if(t) wt.appendChild(mkElMd(t));
   const tbl=$('rest');tbl.innerHTML='';
-  (m.scores||[]).forEach((sc,seat)=>{
-    const name=seat===mySeat?'⭐ '+($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
+  const sorted=[...(m.scores||[]).map((sc,seat)=>({sc,seat}))].sort((a,b)=>b.sc-a.sc);
+  sorted.forEach(({sc,seat},rank)=>{
+    const name=seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
     const row=document.createElement('tr');if(seat===m.winner)row.className='w';
-    row.innerHTML=`<td>${W[seat]} ${escHtml(name)}</td><td>${sc}</td>`;
+    const ordinal=['1st','2nd','3rd','4th'][rank]||`${rank+1}th`;
+    row.innerHTML=`<td>${ordinal} ${escHtml(name)}</td><td>${sc}</td>`;
     tbl.appendChild(row);
   });
   show('s-end');
   setTimeout(()=>{ inGame=true; },5500);
+  }catch(e){ show('s-end'); }
 }
 
 
