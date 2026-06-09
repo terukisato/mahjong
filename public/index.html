@@ -24,7 +24,6 @@ html,body{height:100%;overflow:hidden;}
 body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation;}
 /* ════ BACKGROUND LAYERS ════ */
 .bg{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse at 20% 85%,rgba(26,107,69,.3),transparent 55%),radial-gradient(ellipse at 80% 15%,rgba(201,168,76,.14),transparent 55%),radial-gradient(ellipse at 50% 50%,rgba(12,35,20,.85),#040a05 100%);}
-.bgg{position:fixed;inset:0;z-index:0;opacity:.03;background-image:repeating-linear-gradient(0deg,var(--gold) 0,var(--gold) 1px,transparent 0,transparent 40px),repeating-linear-gradient(90deg,var(--gold) 0,var(--gold) 1px,transparent 0,transparent 40px);}
 .screen{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;}
 .screen.hidden{display:none!important;}
 #s-end.hidden{display:none!important;}
@@ -413,7 +412,7 @@ transform-origin:left center;}
 .yl{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-bottom:12px;}
 .yc{background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--cream);}
 .yh{color:var(--gl);font-weight:700;margin-left:4px;}.yj{color:rgba(245,237,216,.4);font-size:8px;margin-left:3px;}
-.st{width:100%;border-collapse:collapse;margin:10px 0;}.st td{padding:6px 12px;font-size:12px;border-bottom:1px solid rgba(201,168,76,.1);}
+.st{width:100%;border-collapse:collapse;margin:10px 0;}.st td{padding:6px 12px;font-size:12px;border-bottom:1px solid rgba(201,168,76,.1);text-align:left;}
 .st td:last-child{text-align:right;font-weight:700;color:var(--gl);}.st tr.w td{color:var(--gl);font-size:13px;}
 .wt{display:flex;gap:3px;justify-content:center;flex-wrap:wrap;margin:10px 0;}
 .reb{display:flex;gap:10px;justify-content:center;margin-top:16px;}
@@ -592,36 +591,36 @@ transform-origin:left center;}
         <div class="hr" id="hdt"></div>
       </div>
         <!-- Nameplate -->
-        <div style="transform:translateX(-50%) rotate(180deg);position:absolute;top:calc(var(--tmd-h) + 15px + 14px);left:50%;z-index:20;">
+        <div style="transform:translateX(-50%) rotate(180deg);position:absolute;top:calc(var(--tmd-h) + 15px + 16px);left:50%;z-index:20;">
           <div class="np" id="npt"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
           <span id="rst" style="display:none" class="rs"></span>
         </div>
       <!-- Top melds: their bottom-right = our top-left corner -->
-      <div class="mr" id="mlt" style="position:absolute;top:15px;left:15px;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:top left;z-index:15;"></div>
+      <div class="mr" id="mlt" style="position:absolute;top:0;left:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:center center;z-index:15;"></div>
 
       <!-- ── LEFT PLAYER ── -->
       <div class="pa pa-l" id="pa-l">
         <div class="hr" id="hdl"></div>
       </div>
         <!-- Nameplate -->
-        <div style="transform:translateY(-50%) rotate(90deg);position:absolute;top:50%;left:25px;z-index:20;">
+        <div style="transform:translateY(-50%) rotate(90deg);position:absolute;top:50%;left:29px;z-index:20;">
           <div class="np" id="npl"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
           <span id="rsl" style="display:none" class="rs"></span>
         </div>
       <!-- Left melds: their bottom-right = our bottom-left corner -->
-      <div class="mr" id="mll" style="position:absolute;bottom:0;right:min(96vmin,920px);display:flex;flex-direction:row;align-items:flex-end;transform:rotate(90deg);transform-origin:bottom right;z-index:15;"></div>
+      <div class="mr" id="mll" style="position:absolute;bottom:0;left:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(90deg) translateX(-100%);transform-origin:bottom left;z-index:15;"></div>
 
       <!-- ── RIGHT PLAYER ── -->
       <div class="pa pa-r" id="pa-r">
         <div class="hr" id="hdr"></div>
       </div>
         <!-- Nameplate -->
-        <div style="transform:translateY(-50%) rotate(-90deg);position:absolute;top:50%;right:29px;z-index:20;">
+        <div style="transform:translateY(-50%) rotate(-90deg);position:absolute;top:50%;right:26px;z-index:20;">
           <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
           <span id="rsr" style="display:none" class="rs"></span>
         </div>
       <!-- Right melds: their bottom-right = our bottom-right corner -->
-      <div class="mr" id="mlr" style="position:absolute;top:0;right:var(--tmd-h,36px);display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg);transform-origin:top right;z-index:15;"></div>
+      <div class="mr" id="mlr" style="position:absolute;top:0;right:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg) translateY(-100%);transform-origin:top right;z-index:15;"></div>
 
   </div><!-- end .felt -->
   </div><!-- end .table -->
@@ -1335,12 +1334,12 @@ function renderState(m, prev){
     });
   }
 
-  // My melds — newest rightmost, growing leftward (iterate reverse, append)
+  // My melds (bottom) — anchor bottom-right, first meld rightmost, grows leftward
   const ml=$('mlb');ml.innerHTML='';
-  for(const meld of(m.myMelds||[]).slice().reverse()){
+  for(const meld of(m.myMelds||[])){
     const g=document.createElement('div');g.className='mg';
     renderMeld(g, meld, mySeat);
-    ml.appendChild(g);
+    ml.prepend(g);
   }
   // Opponent melds
   [[1,'r'],[2,'t'],[3,'l']].forEach(([i,id])=>{
@@ -1349,16 +1348,12 @@ function renderState(m, prev){
     if(!ml2) return;
     ml2.innerHTML='';
     const melds=m.melds?.[abs]||[];
-    // Each player's container rotation affects DOM order vs visual order:
-    // top (180°): no reverse — grows left visually from right anchor
-    // top (180°): prepend — first meld at left anchor (our left = their right), new melds prepended to right
-    // left (90° CW): reverse + append — first meld at bottom anchor, grows upward
-    // right (-90° CCW): append — first meld at top anchor, grows downward
-    const ordered = id==='l' ? melds.slice().reverse() : melds;
-    for(const meld of ordered){
+    for(const meld of melds){
       const g=document.createElement('div');g.className='mg';
       renderMeld(g, meld, abs, id==='t');
-      if(id==='t') ml2.prepend(g); else ml2.appendChild(g);
+      if(id==='t') ml2.prepend(g); // top: anchor top-left, first meld leftmost, grows right
+      else if(id==='l') ml2.prepend(g); // left: anchor bottom-left, first meld at bottom, grows up
+      else ml2.prepend(g);          // right: anchor top-right, first meld at top, grows down
     }
   });
 
@@ -1757,7 +1752,9 @@ function onEnd(m){
     const name=seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
     const row=document.createElement('tr');if(seat===m.winner)row.className='w';
     const ordinal=['1st','2nd','3rd','4th'][rank]||`${rank+1}th`;
-    row.innerHTML=`<td>${ordinal} ${escHtml(name)}</td><td>${sc}</td>`;
+    const colours=['#f0d080','#c0c0c0','#cd7f32','var(--cream)'];
+    const colour=colours[rank]||'var(--cream)';
+    row.innerHTML=`<td><span style="color:${colour};font-weight:700;margin-right:10px;">${ordinal}</span>${escHtml(name)}</td><td>${sc}</td>`;
     tbl.appendChild(row);
   });
   show('s-end');
