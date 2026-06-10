@@ -109,7 +109,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .ctr-score{font-size:clamp(12px,2.1vmin,15px);font-weight:700;letter-spacing:0;
   width:100%;text-align:center;padding:5px 0;
   border:3px ridge rgb(72, 72, 72);background:#1a1a1a;}
-.ctr-mid{display:flex;align-items:center;justify-content:center;width:100%;flex:1;min-height:0;padding:0 min(5vmin,38px);box-sizing:border-box;}
+.ctr-mid{display:flex;align-items:center;justify-content:center;
+  width:calc(min(26vmin,210px) - 2 * min(5vmin,38px));
+  height:calc(min(26vmin,210px) - 2 * min(5vmin,38px));
+  flex-shrink:0;position:relative;padding:0;box-sizing:border-box;}
 /* Centre info */
 .ctr-score-val{font-size:clamp(12px,2.1vmin,15px);font-weight:700;
   color:rgba(240,208,128,.9);letter-spacing:0;display:inline-block;}
@@ -413,6 +416,13 @@ transform-origin:left center;}
 <audio id="lobby-music" src="/Mahjong_Table_Tea_Time.mp3" loop preload="auto" style="display:none;"></audio>
 <audio id="game-music-1" src="/Mahjong_Table_Tea.mp3" loop preload="auto" style="display:none;"></audio>
 <audio id="sfx-discard" src="/Discard.m4a" preload="auto" style="display:none;"></audio>
+<audio id="sfx-pon" src="/audio/Pon.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-chii" src="/audio/Chii.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-kan" src="/audio/Kan.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-riichi" src="/audio/Riichi.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-double-riichi" src="/audio/Double_riichi.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-ron" src="/audio/Ron.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-tsumo" src="/audio/Tsumo.mp3" preload="auto" style="display:none;"></audio>
 
 <!-- Settings panel — outside all screens so it appears above everything -->
 <div id="settings-panel" style="
@@ -423,7 +433,7 @@ transform-origin:left center;}
   <div style="font-family:'Cinzel Decorative',serif;font-size:11px;letter-spacing:3px;color:var(--gold);border-bottom:1px solid rgba(201,168,76,.2);padding-bottom:10px;">SETTINGS</div>
   <!-- Music section -->
   <div style="display:flex;flex-direction:column;gap:12px;">
-    <div style="font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);">MUSIC</div>
+    <div style="font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);">AUDIO</div>
     <div style="display:flex;align-items:center;justify-content:space-between;">
       <span style="font-size:12px;color:var(--cream);">Music</span>
       <button id="bmute" onclick="toggleMusic()" style="
@@ -434,10 +444,50 @@ transform-origin:left center;}
     <div style="display:flex;flex-direction:column;gap:6px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:12px;color:var(--cream);">Volume</span>
-        <span id="vol-label" style="font-size:11px;color:var(--gold);">35%</span>
+        <span id="vol-label" style="font-size:11px;color:var(--gold);">50%</span>
       </div>
-      <input id="vol-slider" type="range" min="0" max="100" value="35"
+      <input id="vol-slider" type="range" min="0" max="100" value="50"
         oninput="setVolume(this.value)"
+        style="width:100%;accent-color:var(--gold);cursor:pointer;">
+    </div>
+  </div>
+  <!-- FX section -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div style="font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);">FX</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:12px;color:var(--cream);">FX</span>
+      <button id="bfx" onclick="toggleFx()" style="
+        padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
+        background:rgba(42,158,103,.3);border:1px solid var(--jl);
+        color:var(--cream);letter-spacing:1px;transition:all .2s;">ON</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:12px;color:var(--cream);">Volume</span>
+        <span id="fx-vol-label" style="font-size:11px;color:var(--gold);">50%</span>
+      </div>
+      <input id="fx-vol-slider" type="range" min="0" max="100" value="50"
+        oninput="setFxVolume(this.value)"
+        style="width:100%;accent-color:var(--gold);cursor:pointer;">
+    </div>
+  </div>
+  <!-- Discard SFX section -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div style="font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);">DISCARD</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:12px;color:var(--cream);">Discard</span>
+      <button id="bdiscard-sfx" onclick="toggleDiscardSfx()" style="
+        padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
+        background:rgba(42,158,103,.3);border:1px solid var(--jl);
+        color:var(--cream);letter-spacing:1px;transition:all .2s;">ON</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:12px;color:var(--cream);">Volume</span>
+        <span id="discard-vol-label" style="font-size:11px;color:var(--gold);">50%</span>
+      </div>
+      <input id="discard-vol-slider" type="range" min="0" max="100" value="50"
+        oninput="setDiscardVolume(this.value)"
         style="width:100%;accent-color:var(--gold);cursor:pointer;">
     </div>
   </div>
@@ -534,11 +584,51 @@ transform-origin:left center;}
           <span id="ctr-s-t" class="ctr-score-val">—</span>
         </div>
         <!-- Left score — absolute, outside flex flow -->
-        <div class="ctr-score" style="position:absolute;transform:translateX(-41%) rotate(90deg);z-index:4;clip-path: inset(0 0 0 37.2px);">
+        <div class="ctr-score" style="position:absolute;transform:translateX(-41%) rotate(90deg);z-index:4;clip-path: inset(0 0 0 18.4%);">
           <span id="ctr-s-l" class="ctr-score-val">—</span>
         </div>
-                        <!-- Middle: wind info only -->
-        <div class="ctr-mid">
+        <!-- Middle: wind info + riichi sticks -->
+        <div class="ctr-mid" style="position:relative;">
+          <!-- Bottom player riichi stick -->
+          <div id="rsb" style="display:none;position:absolute;bottom:4px;left:50%;transform:translateX(-50%);z-index:16;">
+            <svg viewBox="0 0 44 10" width="32" height="7" xmlns="http://www.w3.org/2000/svg">
+              <defs><linearGradient id="rsib" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffdf4"/><stop offset="60%" stop-color="#f8edd8"/><stop offset="100%" stop-color="#e0c89a"/></linearGradient></defs>
+              <rect x="1" y="2" width="42" height="7" rx="1.5" fill="#8a6b20"/>
+              <rect x="1" y="1" width="42" height="7" rx="1.5" fill="url(#rsib)"/>
+              <rect x="1" y="1" width="42" height="2" rx="1.5" fill="rgba(255,255,255,.4)"/>
+              <circle cx="22" cy="4.5" r="2" fill="#cc2020"/><circle cx="22" cy="4" r="1.3" fill="#ee4040"/>
+            </svg>
+          </div>
+          <!-- Top player riichi stick -->
+          <div id="rst" style="display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%) rotate(180deg);z-index:16;">
+            <svg viewBox="0 0 44 10" width="32" height="7" xmlns="http://www.w3.org/2000/svg">
+              <defs><linearGradient id="rsit" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffdf4"/><stop offset="60%" stop-color="#f8edd8"/><stop offset="100%" stop-color="#e0c89a"/></linearGradient></defs>
+              <rect x="1" y="2" width="42" height="7" rx="1.5" fill="#8a6b20"/>
+              <rect x="1" y="1" width="42" height="7" rx="1.5" fill="url(#rsit)"/>
+              <rect x="1" y="1" width="42" height="2" rx="1.5" fill="rgba(255,255,255,.4)"/>
+              <circle cx="22" cy="4.5" r="2" fill="#cc2020"/><circle cx="22" cy="4" r="1.3" fill="#ee4040"/>
+            </svg>
+          </div>
+          <!-- Left player riichi stick -->
+          <div id="rsl" style="display:none;position:absolute;top:50%;left:4px;transform:translateY(-50%) rotate(90deg);z-index:16;">
+            <svg viewBox="0 0 44 10" width="32" height="7" xmlns="http://www.w3.org/2000/svg">
+              <defs><linearGradient id="rsil" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffdf4"/><stop offset="60%" stop-color="#f8edd8"/><stop offset="100%" stop-color="#e0c89a"/></linearGradient></defs>
+              <rect x="1" y="2" width="42" height="7" rx="1.5" fill="#8a6b20"/>
+              <rect x="1" y="1" width="42" height="7" rx="1.5" fill="url(#rsil)"/>
+              <rect x="1" y="1" width="42" height="2" rx="1.5" fill="rgba(255,255,255,.4)"/>
+              <circle cx="22" cy="4.5" r="2" fill="#cc2020"/><circle cx="22" cy="4" r="1.3" fill="#ee4040"/>
+            </svg>
+          </div>
+          <!-- Right player riichi stick -->
+          <div id="rsr" style="display:none;position:absolute;top:50%;right:4px;transform:translateY(-50%) rotate(-90deg);z-index:16;">
+            <svg viewBox="0 0 44 10" width="32" height="7" xmlns="http://www.w3.org/2000/svg">
+              <defs><linearGradient id="rsir" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffdf4"/><stop offset="60%" stop-color="#f8edd8"/><stop offset="100%" stop-color="#e0c89a"/></linearGradient></defs>
+              <rect x="1" y="2" width="42" height="7" rx="1.5" fill="#8a6b20"/>
+              <rect x="1" y="1" width="42" height="7" rx="1.5" fill="url(#rsir)"/>
+              <rect x="1" y="1" width="42" height="2" rx="1.5" fill="rgba(255,255,255,.4)"/>
+              <circle cx="22" cy="4.5" r="2" fill="#cc2020"/><circle cx="22" cy="4" r="1.3" fill="#ee4040"/>
+            </svg>
+          </div>
           <div class="ctr-info">
             <div class="cw" id="cw">—</div>
             <div class="ci" id="ci"></div>
@@ -550,7 +640,7 @@ transform-origin:left center;}
         <div class="ctr-score" style="position:absolute;transform:translateX(41%) rotate(-90deg);z-index:2">
           <span id="ctr-s-r" class="ctr-score-val">—</span>
         </div>
-                <!-- Bottom score row — my score -->
+        <!-- Bottom score row — my score -->
         <div class="ctr-score" style="z-index:3;">
           <span id="ctr-s-b" class="ctr-score-val">—</span>
         </div>
@@ -567,10 +657,12 @@ transform-origin:left center;}
         <div class="hr" id="hdb"></div>
       </div>
       <!-- ── Nameplate ── -->
-        <div style="transform:translateX(-50%);position:absolute;bottom:calc(var(--tlg-h) + 15px + 14px);left:50%";>
-          <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div></div></div>
-          <div class="act-overlay" id="actbar"></div>
-          <span id="rsb" style="display:none" class="rs"></span>
+        <div style="transform:translateX(-50%);position:absolute;bottom:calc(var(--tlg-h) + 15px + 14px);left:50%;">
+          <div style="position:relative;display:flex;align-items:center;">
+            <div class="act-overlay" id="actbar-left" style="position:absolute;right:100%;padding-right:6px;"></div>
+            <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div></div></div>
+            <div class="act-overlay" id="actbar-right" style="position:absolute;left:100%;padding-left:6px;"></div>
+          </div>
           <span id="tpb" style="display:none" class="tenpai">TENPAI</span>
         </div>
       <!-- Bottom melds: their bottom-right corner = felt bottom-right -->
@@ -581,9 +673,8 @@ transform-origin:left center;}
         <div class="hr" id="hdt"></div>
       </div>
         <!-- Nameplate -->
-        <div style="transform:translateX(-50%) rotate(180deg);position:absolute;top:calc(var(--tmd-h) + 15px + 16px);left:50%;z-index:20;">
+        <div style="transform:translateX(-50%) rotate(180deg);position:absolute;top:calc(var(--tmd-h) + 15px + 13px);left:50%;z-index:20;">
           <div class="np" id="npt"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
-          <span id="rst" style="display:none" class="rs"></span>
         </div>
       <!-- Top melds: their bottom-right = our top-left corner -->
       <div class="mr" id="mlt" style="position:absolute;top:0;left:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:center center;z-index:15;"></div>
@@ -595,7 +686,6 @@ transform-origin:left center;}
         <!-- Nameplate -->
         <div style="transform:translateY(-50%) rotate(90deg);position:absolute;top:50%;left:29px;z-index:20;">
           <div class="np" id="npl"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
-          <span id="rsl" style="display:none" class="rs"></span>
         </div>
       <!-- Left melds: their bottom-right = our bottom-left corner -->
       <div class="mr" id="mll" style="position:absolute;bottom:0;left:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(90deg) translateX(-100%);transform-origin:bottom left;z-index:15;"></div>
@@ -605,9 +695,8 @@ transform-origin:left center;}
         <div class="hr" id="hdr"></div>
       </div>
         <!-- Nameplate -->
-        <div style="transform:translateY(-50%) rotate(-90deg);position:absolute;top:50%;right:26px;z-index:20;">
+        <div style="transform:translateY(-50%) rotate(-90deg);position:absolute;top:50%;right:30px;z-index:20;">
           <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
-          <span id="rsr" style="display:none" class="rs"></span>
         </div>
       <!-- Right melds: their bottom-right = our bottom-right corner -->
       <div class="mr" id="mlr" style="position:absolute;top:0;right:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg) translateY(-100%);transform-origin:top right;z-index:15;"></div>
@@ -645,6 +734,7 @@ transform-origin:left center;}
     <table class="st" id="rest"></table>
     <div class="reb" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
       <button id="bround-ready" class="ready-btn" style="max-width:200px;" onclick="sendRoundReady()">✓ Ready</button>
+      <button id="bend-menu" class="bp" style="max-width:200px;display:none;" onclick="goLobby()">Main Menu</button>
     </div>
     <div id="ready-status" style="margin-top:8px;font-size:11px;color:rgba(245,237,216,.5);letter-spacing:1px;text-align:center;"></div>
   </div>
@@ -808,33 +898,49 @@ function pinPos(v,w,h){
 // SOU (ソウズ) — Bamboo hourglass/bobbin sticks
 // From image: wider top+bottom, narrow waist — like a bobbin/spool
 // Green with red band at waist. 5-sou centre = red.
-// 1-sou: traditional bird (sparrow) on a single bamboo stick
+// 1-sou: kiwi bird
 function souBird(w,h){
   const cx=w/2, cy=h/2;
-  // Single bamboo stick in lower half
-  const stick=souStick(cx, cy+h*.12, w*.32, h*.38, false);
-  // Bird body — oval
-  const bx=cx, by=cy-h*.18;
-  const bw=w*.28, bh=h*.18;
-  // Wings spread
-  const bird=[
+  // Large round body — dominates tile
+  const bx=cx*0.82, by=cy*0.92, br=Math.min(w,h)*0.342;
+  // Small head — tucked right
+  const hx=bx+br*0.82, hy=by-br*0.28, hr=br*0.38;
+  // Beak tip
+  const beakX1=hx+hr*0.72, beakY1=hy+hr*0.14;
+  const beakX2=hx+hr*1.38, beakY2=hy+hr*1.38;
+  const beakW=hr*0.18;
+  // Back leg
+  const lbx=bx-br*0.28, lby=by+br*0.82;
+  // Front leg
+  const lfx=bx+br*0.12, lfy=by+br*0.82;
+
+  const clipId=`kb${Math.floor(Math.random()*9999)}`;
+
+  return [
+    `<clipPath id="${clipId}"><rect x="0" y="0" width="${w}" height="${h}"/></clipPath>`,
     // Body
-    `<ellipse cx="${bx}" cy="${by}" rx="${bw*.6}" ry="${bh*.55}" fill="#1c7530" stroke="#0e4018" stroke-width="0.8"/>`,
+    `<circle cx="${bx}" cy="${by}" r="${br}" fill="#1c7530" clip-path="url(#${clipId})"/>`,
+    // Highlight
+    `<ellipse cx="${bx+br*0.3}" cy="${by-br*0.42}" rx="${br*0.42}" ry="${br*0.28}" fill="#2db848" opacity="0.3" transform="rotate(15,${bx+br*0.3},${by-br*0.42})"/>`,
     // Head
-    `<circle cx="${bx+bw*.35}" cy="${by-bh*.4}" r="${bw*.32}" fill="#1c7530" stroke="#0e4018" stroke-width="0.8"/>`,
+    `<circle cx="${hx}" cy="${hy}" r="${hr}" fill="#1c7530"/>`,
     // Eye
-    `<circle cx="${bx+bw*.45}" cy="${by-bh*.45}" r="${bw*.09}" fill="#fff"/>`,
-    `<circle cx="${bx+bw*.47}" cy="${by-bh*.45}" r="${bw*.05}" fill="#111"/>`,
-    // Beak
-    `<polygon points="${bx+bw*.72},${by-bh*.38} ${bx+bw*.95},${by-bh*.32} ${bx+bw*.72},${by-bh*.26}" fill="#c8a020"/>`,
-    // Left wing
-    `<ellipse cx="${bx-bw*.3}" cy="${by+bh*.1}" rx="${bw*.38}" ry="${bh*.28}" fill="#2db848" stroke="#0e4018" stroke-width="0.6" transform="rotate(-20,${bx-bw*.3},${by+bh*.1})"/>`,
-    // Tail
-    `<ellipse cx="${bx-bw*.65}" cy="${by+bh*.2}" rx="${bw*.22}" ry="${bh*.12}" fill="#1c7530" stroke="#0e4018" stroke-width="0.6" transform="rotate(-35,${bx-bw*.65},${by+bh*.2})"/>`,
-    // Red breast band
-    `<ellipse cx="${bx+bw*.1}" cy="${by+bh*.15}" rx="${bw*.3}" ry="${bh*.2}" fill="#c82020" opacity="0.75"/>`,
+    `<circle cx="${hx+hr*0.38}" cy="${hy-hr*0.28}" r="${hr*0.23}" fill="#111"/>`,
+    `<circle cx="${hx+hr*0.42}" cy="${hy-hr*0.31}" r="${hr*0.08}" fill="#fff" opacity="0.8"/>`,
+    // Beak — long thin, angling down
+    `<path d="M${beakX1},${beakY1} L${beakX2},${beakY2} L${beakX2-beakW},${beakY2+beakW*0.5} L${beakX1-beakW*0.3},${beakY1+beakW*0.5} Z" fill="#c8a020" clip-path="url(#${clipId})"/>`,
+    `<path d="M${beakX1},${beakY1} L${beakX2},${beakY2} L${beakX2-beakW*0.2},${beakY2} L${beakX1-beakW*0.1},${beakY1} Z" fill="#e8d060" opacity="0.4" clip-path="url(#${clipId})"/>`,
+    // Back leg
+    `<rect x="${lbx-w*.04}" y="${lby}" width="${w*.07}" height="${h*.12}" rx="${w*.03}" fill="#0e4018" opacity="0.55"/>`,
+    `<path d="M${lbx},${lby+h*.12} L${lbx+w*.14},${lby+h*.13} L${lbx+w*.14},${lby+h*.16} L${lbx-w*.01},${lby+h*.15} Z" fill="#0e4018" opacity="0.5"/>`,
+    `<path d="M${lbx},${lby+h*.12} L${lbx+w*.13},${lby+h*.10} L${lbx+w*.14},${lby+h*.13} L${lbx},${lby+h*.14} Z" fill="#0e4018" opacity="0.45"/>`,
+    `<path d="M${lbx},${lby+h*.12} L${lbx+w*.13},${lby+h*.15} L${lbx+w*.12},${lby+h*.18} L${lbx-w*.01},${lby+h*.15} Z" fill="#0e4018" opacity="0.4"/>`,
+    // Front leg
+    `<path d="M${lfx},${lfy} L${lfx+w*.06},${lfy+h*.10} L${lfx+w*.10},${lfy+h*.09} L${lfx+w*.04},${lfy-h*.01} Z" fill="#c82020"/>`,
+    `<path d="M${lfx+w*.06},${lfy+h*.10} L${lfx+w*.20},${lfy+h*.11} L${lfx+w*.20},${lfy+h*.14} L${lfx+w*.05},${lfy+h*.13} Z" fill="#c82020"/>`,
+    `<path d="M${lfx+w*.06},${lfy+h*.10} L${lfx+w*.19},${lfy+h*.08} L${lfx+w*.20},${lfy+h*.11} L${lfx+w*.07},${lfy+h*.12} Z" fill="#c82020"/>`,
+    `<path d="M${lfx+w*.06},${lfy+h*.10} L${lfx+w*.19},${lfy+h*.13} L${lfx+w*.18},${lfy+h*.16} L${lfx+w*.05},${lfy+h*.13} Z" fill="#c82020"/>`,
   ].join('');
-  return stick+bird;
 }
 
 function svgSou(v,w,h,red=false){
@@ -1017,7 +1123,7 @@ function toggleSettings(){
 // MUSIC
 // ════════════════════════════════════════════════════════════
 let musicEnabled=true;
-let musicVolume=0.35;
+let musicVolume=0.5;
 
 function allTracks(){
   return [$('lobby-music'),$('game-music-1')].filter(Boolean);
@@ -1057,16 +1163,103 @@ function stopGameMusic(){
   if(t1){ t1.pause(); t1.currentTime=0; }
 }
 
+let fxEnabled=true;
+let fxVolume=2.0; // default 50% display = 2.0 gain (x4 mapping)
+let discardSfxEnabled=true;
+let discardSfxVolume=1.0;
+let discardGainNode=null;
+
+// Web Audio API context for FX gain boost (allows volume >100%)
+let fxAudioCtx=null;
+let fxGainNode=null;
+
+function getFxAudioCtx(){
+  if(!fxAudioCtx){
+    fxAudioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    fxGainNode=fxAudioCtx.createGain();
+    fxGainNode.connect(fxAudioCtx.destination);
+    fxGainNode.gain.value=fxVolume;
+  }
+  return {ctx:fxAudioCtx, gain:fxGainNode};
+}
+
+function allFxTracks(){
+  return ['sfx-pon','sfx-chii','sfx-kan','sfx-riichi','sfx-double-riichi','sfx-ron','sfx-tsumo'].map(id=>$(id)).filter(Boolean);
+}
+
 function playSfx(id){
+  if(!fxEnabled) return;
   const el=$(id);
   if(!el) return;
+  try{
+    const {ctx,gain}=getFxAudioCtx();
+    if(ctx.state==='suspended') ctx.resume();
+    const src=ctx.createMediaElementSource(el);
+    src.connect(gain);
+    el._fxConnected=true;
+  }catch(e){}
   el.currentTime=0;
-  el.volume=musicVolume;
+  el.volume=1.0; // gain node handles the actual volume
+  el.play().catch(()=>{});
+}
+
+function setFxVolume(val){
+  fxVolume=(val/100)*4; // 0-100 slider maps to 0-4.0 gain
+  if(fxGainNode) fxGainNode.gain.value=fxVolume;
+  const lbl=$('fx-vol-label'); if(lbl) lbl.textContent=val+'%';
+  try{ localStorage.setItem('mj-fx-vol',val); }catch(e){}
+}
+
+function toggleFx(){
+  fxEnabled=!fxEnabled;
+  const btn=$('bfx');
+  if(fxEnabled){
+    if(btn){ btn.textContent='ON'; btn.style.background='rgba(42,158,103,.3)'; btn.style.borderColor='var(--jl)'; }
+  } else {
+    if(btn){ btn.textContent='OFF'; btn.style.background='rgba(80,0,0,.3)'; btn.style.borderColor='#c82020'; }
+  }
+  try{ localStorage.setItem('mj-fx',fxEnabled?'1':'0'); }catch(e){}
+}
+
+function toggleDiscardSfx(){
+  discardSfxEnabled=!discardSfxEnabled;
+  const btn=$('bdiscard-sfx');
+  if(discardSfxEnabled){
+    if(btn){ btn.textContent='ON'; btn.style.background='rgba(42,158,103,.3)'; btn.style.borderColor='var(--jl)'; }
+  } else {
+    if(btn){ btn.textContent='OFF'; btn.style.background='rgba(80,0,0,.3)'; btn.style.borderColor='#c82020'; }
+  }
+  try{ localStorage.setItem('mj-discard-sfx',discardSfxEnabled?'1':'0'); }catch(e){}
+}
+
+function setDiscardVolume(val){
+  discardSfxVolume=(val/100)*2;
+  if(discardGainNode) discardGainNode.gain.value=discardSfxVolume;
+  const lbl=$('discard-vol-label'); if(lbl) lbl.textContent=val+'%';
+  try{ localStorage.setItem('mj-discard-vol',val); }catch(e){}
+}
+
+function playDiscardSfx(){
+  if(!discardSfxEnabled) return;
+  const el=$('sfx-discard');
+  if(!el) return;
+  try{
+    if(!discardGainNode){
+      const ctx=getFxAudioCtx().ctx;
+      discardGainNode=ctx.createGain();
+      discardGainNode.gain.value=discardSfxVolume;
+      discardGainNode.connect(ctx.destination);
+      const src=ctx.createMediaElementSource(el);
+      src.connect(discardGainNode);
+    }
+    if(getFxAudioCtx().ctx.state==='suspended') getFxAudioCtx().ctx.resume();
+  }catch(e){}
+  el.currentTime=0;
+  el.volume=1.0;
   el.play().catch(()=>{});
 }
 
 function toggleMusic(){
-  musicEnabled=!musicEnabled;
   const btn=$('bmute');
   if(musicEnabled){
     if(btn){ btn.textContent='ON'; btn.style.background='rgba(42,158,103,.3)'; btn.style.borderColor='var(--jl)'; }
@@ -1163,6 +1356,7 @@ function startGame(m){
   inGame=true;selId=null;lastState=null;
   // Restore Ready button visibility for new game
   const btn=$('bround-ready'); if(btn){ btn.style.display=''; btn.disabled=false; btn.textContent='✓ Ready'; btn.style.opacity='1'; }
+  const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='none';
   const status=$('ready-status'); if(status) status.textContent='';
   const seats=m.seats;
   for(let i=0;i<4;i++){
@@ -1266,7 +1460,7 @@ function renderState(m, prev){
     if(mine) el.classList.add('play');
     if(t.id===selId) el.classList.add('sel');
     el.dataset.tid=t.id;
-    if(mine) el.onclick=()=>clickTile(t.id);
+    if(mine && !m.riichi?.[mySeat]) el.onclick=()=>clickTile(t.id);
     hc.appendChild(el);
   });
   if(drawTile&&mine){
@@ -1276,7 +1470,15 @@ function renderState(m, prev){
     el.classList.add('play','drw');
     el.dataset.tid=drawTile.id;
     el.onclick=()=>clickTile(drawTile.id);
+    // Auto-select draw tile when in riichi
+    if(m.riichi?.[mySeat]) el.classList.add('sel');
     hc.appendChild(el);
+    // Auto-discard after riichi — unless tsumo or ankan available
+    if(m.riichi?.[mySeat] && !m.canTsumo && !(m.canAnkan?.length) && !m.canKyuushu){
+      setTimeout(()=>{
+        if(lastState===m) wss({type:'action',action:{type:'discard',tileId:drawTile.id}});
+      }, 600);
+    }
   }
 
   // Opponent hands — back tiles
@@ -1302,7 +1504,31 @@ function renderState(m, prev){
   if(prev?.discards) prev.discards.forEach(d=>{ prevDiscardCount+=(d?.length||0); });
   let newDiscardCount=0;
   if(m.discards) m.discards.forEach(d=>{ newDiscardCount+=(d?.length||0); });
-  if(newDiscardCount>prevDiscardCount) playSfx('sfx-discard');
+  if(newDiscardCount>prevDiscardCount) playDiscardSfx();
+
+  // Detect new pon meld across all players
+  const prevPonCount=[...(prev?.melds||[]),...(prev?.myMelds?[prev.myMelds]:[])].flat().filter(mel=>mel?.type==='pon').length;
+  const allMelds=[...(m.melds?.flat()||[]),...(m.myMelds||[])];
+  const newPonCount=allMelds.filter(mel=>mel?.type==='pon').length;
+  if(newPonCount>prevPonCount) playSfx('sfx-pon');
+
+  const prevChiiCount=[...(prev?.melds||[]),...(prev?.myMelds?[prev.myMelds]:[])].flat().filter(mel=>mel?.type==='chi').length;
+  const newChiiCount=allMelds.filter(mel=>mel?.type==='chi').length;
+  if(newChiiCount>prevChiiCount) playSfx('sfx-chii');
+
+  const prevKanCount=[...(prev?.melds||[]),...(prev?.myMelds?[prev.myMelds]:[])].flat().filter(mel=>mel?.type==='kan').length;
+  const newKanCount=allMelds.filter(mel=>mel?.type==='kan').length;
+  if(newKanCount>prevKanCount) playSfx('sfx-kan');
+
+  const prevRiichiCount=(prev?.riichi||[]).filter(Boolean).length;
+  const newRiichiCount=(m.riichi||[]).filter(Boolean).length;
+  if(newRiichiCount>prevRiichiCount){
+    // Check if the new riichi is a double riichi
+    const prevDblCount=(prev?.doubleRiichi||[]).filter(Boolean).length;
+    const newDblCount=(m.doubleRiichi||[]).filter(Boolean).length;
+    if(newDblCount>prevDblCount) playSfx('sfx-double-riichi');
+    else playSfx('sfx-riichi');
+  }
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i];
     const dz=$(dzMap[id]);dz.innerHTML='';
@@ -1340,7 +1566,8 @@ function renderState(m, prev){
     const melds=m.melds?.[abs]||[];
     for(const meld of melds){
       const g=document.createElement('div');g.className='mg';
-      renderMeld(g, meld, abs, id==='t');
+      // top/left/right all need dir 1↔3 swapped due to their container rotation
+      renderMeld(g, meld, abs, id==='t'||id==='l'||id==='r');
       if(id==='t') ml2.prepend(g); // top: anchor top-left, first meld leftmost, grows right
       else if(id==='l') ml2.prepend(g); // left: anchor bottom-left, first meld at bottom, grows up
       else ml2.prepend(g);          // right: anchor top-right, first meld at top, grows down
@@ -1381,13 +1608,13 @@ function renderMeld(container, meld, viewerSeat, flipped=false){
   const calledId = meld.calledTileId;
   const fromSeat = meld.fromSeat;
   let dir = fromSeat !== undefined ? (fromSeat - viewerSeat + 4) % 4 : 1;
-  // If container is rotated 180° (top player), mirror left/right direction
+  // flip dir 1↔3 for all rotated containers (top 180°, left 90°, right -90°)
   if(flipped){
     if(dir===1) dir=3;
     else if(dir===3) dir=1;
   }
-  // Helper: append or prepend based on flipped (reverses visual tile order within group)
-  const add = (el) => flipped ? container.prepend(el) : container.appendChild(el);
+  // tile order only reverses for top player (180° rotation)
+  const add = (el) => container.appendChild(el);
   const mkC = t => { const el=mkElMd(t); el.classList.add('called'); return el; };
 
   if(meld.type === 'chi'){
@@ -1401,9 +1628,9 @@ function renderMeld(container, meld, viewerSeat, flipped=false){
     const own = tiles.filter(t=>t.id!==calledId);
     const ownEls = own.map(t=>mkElMd(t));
     const calledEl = mkC(called);
-    if(dir===1){ add(calledEl); ownEls.forEach(el=>add(el)); }
+    if(dir===1){ ownEls.forEach(el=>add(el)); add(calledEl); }
     else if(dir===2){ add(ownEls[0]); add(calledEl); add(ownEls[1]); }
-    else { ownEls.forEach(el=>add(el)); add(calledEl); }
+    else { add(calledEl); ownEls.forEach(el=>add(el)); }
 
   } else if(meld.type === 'kan'){
     const kanType = meld.kanType;
@@ -1424,18 +1651,18 @@ function renderMeld(container, meld, viewerSeat, flipped=false){
       const addEl = kakanAdded ? mkElMd(kakanAdded) : mkElMd(meld.tiles[3]); addEl.classList.add('kakan-add');
       stack.appendChild(baseEl); stack.appendChild(addEl);
       const ownEls = ponOwn.map(t=>mkElMd(t));
-      if(dir===1){ add(stack); ownEls.forEach(el=>add(el)); }
+      if(dir===1){ ownEls.forEach(el=>add(el)); add(stack); }
       else if(dir===2){ add(ownEls[0]); add(stack); if(ownEls[1]) add(ownEls[1]); }
-      else { ownEls.forEach(el=>add(el)); add(stack); }
+      else { add(stack); ownEls.forEach(el=>add(el)); }
 
     } else {
       const called = tiles.find(t=>t.id===calledId) || tiles[3];
       const own = tiles.filter(t=>t.id!==calledId);
       const ownEls = own.map(t=>mkElMd(t));
       const calledEl = mkC(called);
-      if(dir===1){ add(calledEl); ownEls.forEach(el=>add(el)); }
+      if(dir===1){ ownEls.forEach(el=>add(el)); add(calledEl); }
       else if(dir===2){ add(ownEls[0]); add(calledEl); ownEls.slice(1).forEach(el=>add(el)); }
-      else { ownEls.forEach(el=>add(el)); add(calledEl); }
+      else { add(calledEl); ownEls.forEach(el=>add(el)); }
     }
   } else {
     tiles.forEach(t=>add(mkElMd(t)));
@@ -1445,67 +1672,68 @@ function renderMeld(container, meld, viewerSeat, flipped=false){
 
 // ACTION BAR — buttons shown on player's turn
 function drawActions(m){
-  const bar=$('actbar');bar.innerHTML='';
+  const barL=$('actbar-left'), barR=$('actbar-right');
+  barL.innerHTML=''; barR.innerHTML='';
   if(!m) return;
-  bar.className='act-overlay';
+  barL.className='act-overlay'; barR.className='act-overlay';
   const mine=m.turn===mySeat, react=m.pending?.isForMe;
-  
 
   if(mine){
-    // TSUMO — server confirms winning hand with yaku
+    // LEFT: TSUMO
     if(m.canTsumo)
-      ab(bar,'TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
+      ab(barL,'TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
 
-    // ANKAN — closed kan: 4 tiles in hand (shown regardless of selection)
+    // LEFT: ANKAN
     const canAnkan=m.canAnkan||[];
-    if(canAnkan.length>0){
-      // If multiple ankan possible, show one button per unique tile key
-      canAnkan.forEach(tileKey=>{
-        ab(bar,'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey}}));
-      });
-    }
+    canAnkan.forEach(tileKey=>{
+      ab(barL,'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey}}));
+    });
 
-    // KAKAN — add to existing pon: show when matching tile selected or only one option
+    // LEFT: KAKAN
     const canKakan=m.canKakan||[];
     if(canKakan.length>0){
-      if(selId&&canKakan.includes(selId)){
-        ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:selId}}));
-      } else if(canKakan.length===1&&!selId){
-        ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:canKakan[0]}}));
-      }
+      if(selId&&canKakan.includes(selId))
+        ab(barL,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:selId}}));
+      else if(canKakan.length===1&&!selId)
+        ab(barL,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:canKakan[0]}}));
     }
 
-    // RIICHI — selected tile must be in canRiichi list
+    // LEFT: RIICHI
     const canRiichi=m.canRiichi||[];
     if(canRiichi.length>0&&selId&&canRiichi.includes(selId))
-      ab(bar,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:selId}});selId=null;});
+      ab(barL,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:selId}});selId=null;});
 
-    // DISCARD — tile selected
+    // RIGHT: DISCARD
     if(selId)
-      ab(bar,'DISCARD','bdis',()=>{wss({type:'action',action:{type:'discard',tileId:selId}});selId=null;});
+      ab(barR,'DISCARD','bdis',()=>{wss({type:'action',action:{type:'discard',tileId:selId}});selId=null;});
 
-    if(bar.children.length>0) bar.classList.add('visible');
-    else bar.classList.remove('visible');
+    // RIGHT: KYUUSHU
+    if(m.canKyuushu)
+      ab(barR,'九種九牌','bkyu',()=>wss({type:'action',action:{type:'kyuushu'}}));
+
+    if(barL.children.length>0) barL.classList.add('visible');
+    if(barR.children.length>0) barR.classList.add('visible');
 
   } else if(react){
     const opts=m.pending.options||[];
+    // LEFT: RON, PON, KAN, CHI
     if(opts.some(o=>o.type==='ron'))
-      ab(bar,'RON','bron',()=>wss({type:'action',action:{type:'ron'}}));
+      ab(barL,'RON','bron',()=>wss({type:'action',action:{type:'ron'}}));
     if(opts.some(o=>o.type==='pon'))
-      ab(bar,'PON','bpon',()=>wss({type:'action',action:{type:'pon'}}));
-    // Daiminkan (called kan from discard)
+      ab(barL,'PON','bpon',()=>wss({type:'action',action:{type:'pon'}}));
     if(opts.some(o=>o.type==='kan'))
-      ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kan'}}));
+      ab(barL,'KAN','bkan',()=>wss({type:'action',action:{type:'kan'}}));
     if(opts.some(o=>o.type==='chi')){
       const c=opts.find(o=>o.type==='chi');
-      ab(bar,'CHI','bchi',()=>wss({type:'action',action:{type:'chi',tileIds:c.sequences[0]}}));
+      ab(barL,'CHI','bchi',()=>wss({type:'action',action:{type:'chi',tileIds:c.sequences[0]}}));
     }
-    ab(bar,'SKIP','bpas',()=>wss({type:'action',action:{type:'pass'}}));
-    bar.classList.add('visible');
-
-  } else {
-    bar.classList.remove('visible');
+    // RIGHT: SKIP
+    ab(barR,'SKIP','bpas',()=>wss({type:'action',action:{type:'pass'}}));
+    if(barL.children.length>0) barL.classList.add('visible');
+    barR.classList.add('visible');
   }
+  if(!barL.classList.contains('visible')) barL.classList.remove('visible');
+  if(!barR.classList.contains('visible')) barR.classList.remove('visible');
 }
 
 function ab(c,l,cls,fn){const b=document.createElement('button');b.className='ba '+cls;b.textContent=l;b.onclick=fn;c.appendChild(b);}
@@ -1672,7 +1900,9 @@ function onRoundStart(m){
   const doraPanel=$('dora-panel');
   if(doraPanel) doraPanel.querySelectorAll('.dora-slot').forEach(s=>{s.innerHTML='';s.className='dora-slot';});
   // Clear action bar
-  const bar=$('actbar'); if(bar) bar.innerHTML='';
+  const barL=$('actbar-left'),barR=$('actbar-right');
+  if(barL){barL.innerHTML='';barL.classList.remove('visible');}
+  if(barR){barR.innerHTML='';barR.classList.remove('visible');}
   // Clear selection
   selId=null;
 
@@ -1680,14 +1910,17 @@ function onRoundStart(m){
   const windChar=['東','南','西','北'];
   const wind=m.displayWind||m.roundWind||1;
   const rnd=m.displayRound||m.round||1;
+  $('cw').textContent=windChar[wind-1];
+  $('ci').textContent=`Round ${rnd}`;
   toast(windChar[wind-1]+rnd+'局 · '+(m.honba||0)+'本場 開始');
 }
 
 function onGameOver(m){
   inGame=false;
   const loader=$('game-loading'); if(loader) loader.style.display='none';
-  // Hide Ready button — game is fully over, no next round
+  // Hide Ready, show Main Menu — game fully over
   const btn=$('bround-ready'); if(btn) btn.style.display='none';
+  const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='';
   const status=$('ready-status'); if(status) status.textContent='';
   stopGameMusic();
   playLobbyMusic();
@@ -1714,6 +1947,8 @@ function onEnd(m){
   const reasonLabels={tsumo:'TSUMO',ron:'RON',draw:'流局 — Draw',suukaisan:'四槓散了',nagashi:'流し満貫'};
   $('ret').textContent=reasonLabels[m.reason]||'Round Over';
   if(m.reason==='tsumo'||m.reason==='ron'){
+    if(m.reason==='ron') playSfx('sfx-ron');
+    if(m.reason==='tsumo') playSfx('sfx-tsumo');
     $('rehn').textContent=m.handLabel?`${m.handLabel} · ${m.han||0}飜${m.fu?' · '+m.fu+'符':''}` :'';
   } else if(m.reason==='draw'){
     const payStrs=(m.payments||[]).map((p,i)=>{
@@ -1793,6 +2028,33 @@ try{
   if(savedMusic==='0'){
     musicEnabled=false;
     const b=$('bmute');
+    if(b){ b.textContent='OFF'; b.style.background='rgba(80,0,0,.3)'; b.style.borderColor='#c82020'; }
+  }
+  const savedFx=localStorage.getItem('mj-fx');
+  const savedFxVol=localStorage.getItem('mj-fx-vol');
+  if(savedFxVol){
+    const v=parseInt(savedFxVol);
+    fxVolume=(v/100)*4;
+    if(fxGainNode) fxGainNode.gain.value=fxVolume;
+    const sl=$('fx-vol-slider'); if(sl) sl.value=v;
+    const lbl=$('fx-vol-label'); if(lbl) lbl.textContent=v+'%';
+  }
+  if(savedFx==='0'){
+    fxEnabled=false;
+    const b=$('bfx');
+    if(b){ b.textContent='OFF'; b.style.background='rgba(80,0,0,.3)'; b.style.borderColor='#c82020'; }
+  }
+  const savedDiscardSfx=localStorage.getItem('mj-discard-sfx');
+  const savedDiscardVol=localStorage.getItem('mj-discard-vol');
+  if(savedDiscardVol){
+    const v=parseInt(savedDiscardVol);
+    discardSfxVolume=(v/100)*2;
+    const sl=$('discard-vol-slider'); if(sl) sl.value=v;
+    const lbl=$('discard-vol-label'); if(lbl) lbl.textContent=v+'%';
+  }
+  if(savedDiscardSfx==='0'){
+    discardSfxEnabled=false;
+    const b=$('bdiscard-sfx');
     if(b){ b.textContent='OFF'; b.style.background='rgba(80,0,0,.3)'; b.style.borderColor='#c82020'; }
   }
 }catch(e){}

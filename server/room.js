@@ -253,6 +253,7 @@ class Room {
     }
     if(!g||this.phase!=='playing') return;
     if(act.type==='discard'&&g.turn===seat) this._discard(seat,act.tileId);
+    else if(act.type==='kyuushu'&&g.turn===seat) this._endRound('draw');
     else if(act.type==='tsumo'&&g.turn===seat) this._tsumo(seat);
     else if(act.type==='riichi'&&g.turn===seat) this._riichi(seat,act.tileId);
     else if(act.type==='ankan'&&g.turn===seat) this._ankan(seat,act.tileKey);
@@ -419,8 +420,9 @@ class Room {
       const decomps=decompose(hand);
       const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
       const fu=decomps.length?calcFu(decomps[0],false,!g.melds[winSeat].length,key(tile),hasPinfu):30;
+      const isWinnerDealer = winSeat === g.dealer;
       const bp=basePoints(totalHan,fu);
-      const pay=Math.ceil(bp*4/100)*100+g.honba*300;
+      const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300;
       results.push({winSeat,hand,yakuList,han:totalHan,fu,pay,uraDora,dc});
     }
     if(!results.length){this._sendState();return;}
@@ -737,14 +739,11 @@ class Room {
         newHonba=g.honba+1;
         newRiichiSticks=0;
       } else {
-        // Non-dealer wins → advance dealer
+        // Non-dealer wins → advance dealer and round
         newHonba=0;
         newDealer=(g.dealer+1)%4;
-        if(newDealer===0){
-          // Full rotation complete — advance round wind
-          newRound=g.round+1;
-          newRoundWind=g.roundWind+1;
-        }
+        newRoundWind=g.roundWind+1;
+        newRound=g.round+1;
       }
     } else {
       // Abortive draw → repeat with honba+1
@@ -835,7 +834,8 @@ class Room {
     let newRoundWind=g.roundWind;
     if(!dealerTenpai){
       newDealer=(g.dealer+1)%4;
-      if(newDealer===0){newRound=g.round+1;newRoundWind=g.roundWind+1;}
+      newRound=g.round+1;
+      newRoundWind=g.roundWind+1;
     }
 
     const bust=g.scores.findIndex(s=>s<0);
@@ -983,6 +983,11 @@ class Room {
       const fullHand=hand;
       const dt=g.turn===seat?g.drawTile:null;
       const mainHand=dt?fullHand.filter(t=>t.id!==dt.id):fullHand;
+      // Kyuushu Kyuuhai: 9+ unique terminals/honours on first draw
+      const TERMINALS=['1m','9m','1p','9p','1s','9s','1z','2z','3z','4z','5z','6z','7z'];
+      const canKyuushu=g.turn===seat&&g.firstRound&&hand.length===14&&
+        !g.melds[seat].length&&!g.riichi[seat]&&
+        new Set(hand.map(t=>key(t)).filter(k=>TERMINALS.includes(k))).size>=9;
       this._send(p,{type:'game_state',seat,myHand:mainHand,drawTile:dt,myMelds:g.melds[seat],
         discards:g.discards,melds:g.melds,scores:g.scores,turn:g.turn,
         round:g.round,roundWind:g.roundWind,displayWind:g.roundWind<=4?1:2,displayRound:((g.roundWind-1)%4)+1,dealer:g.dealer,honba:g.honba,
@@ -990,7 +995,7 @@ class Room {
         dora:g.dora,wallCount:g.wall.length,waits:w,riichi:g.riichi,
         doubleRiichi:g.doubleRiichi,
         furiten:g.furiten[seat]||g.tempFuriten[seat],
-        pending:pendingForMe,canTsumo,canRiichi,canAnkan,canKakan,
+        pending:pendingForMe,canTsumo,canRiichi,canAnkan,canKakan,canKyuushu,
         oppHandSizes:g.hands.map((h,i)=>i===seat?null:h.length),
         seatWinds:[0,1,2,3].map(s=>((s-g.dealer+4)%4))});
     }
