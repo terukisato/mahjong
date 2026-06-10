@@ -108,17 +108,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* Score strip rows — double line separator using border + box-shadow */
 .ctr-score{font-size:clamp(12px,2.1vmin,15px);font-weight:700;letter-spacing:0;
   width:100%;text-align:center;padding:5px 0;
-  border-bottom:1px solid #444;
-  box-shadow:0 1px 0 #222;  /* second line below */
-  background:#1e1e1e;}
-.ctr-score:last-child{border-bottom:none;box-shadow:none;
-  border-top:1px solid #444;
-  box-shadow:inset 0 1px 0 #222;  /* second line above */
-  background:#1e1e1e;}
-.ctr-mid{display:flex;align-items:center;width:100%;flex:1;min-height:0;}
-/* Side score cells — dashed vertical separator */
-.ctr-side{flex:1;padding:5px 0;border-right:1px dashed #3a3a3a;}
-.ctr-side:last-child{border-right:none;border-left:1px dashed #3a3a3a;}
+  border:3px ridge rgb(72, 72, 72);background:#1a1a1a;}
+.ctr-mid{display:flex;align-items:center;justify-content:center;width:100%;flex:1;min-height:0;padding:0 min(5vmin,38px);box-sizing:border-box;}
 /* Centre info */
 .ctr-score-val{font-size:clamp(12px,2.1vmin,15px);font-weight:700;
   color:rgba(240,208,128,.9);letter-spacing:0;display:inline-block;}
@@ -539,29 +530,28 @@ transform-origin:left center;}
       <!-- ── Centre info panel ── -->
       <div class="ctr">
         <!-- Top score row — rotated 180° for top player's reading direction -->
-        <div class="ctr-score" style="transform:rotate(180deg);">
+        <div class="ctr-score" style="transform:rotate(180deg);z-index:1;">
           <span id="ctr-s-t" class="ctr-score-val">—</span>
         </div>
-        <!-- Middle: left score | wind info | right score -->
+        <!-- Left score — absolute, outside flex flow -->
+        <div class="ctr-score" style="position:absolute;transform:translateX(-41%) rotate(90deg);z-index:4;clip-path: inset(0 0 0 37.2px);">
+          <span id="ctr-s-l" class="ctr-score-val">—</span>
+        </div>
+                        <!-- Middle: wind info only -->
         <div class="ctr-mid">
-          <!-- Left score — rotated 90° CW for left player's reading direction -->
-          <div class="ctr-side" style="text-align:center;">
-            <span id="ctr-s-l" class="ctr-score-val" style="transform:rotate(90deg);">—</span>
-          </div>
-          <!-- Wind + round info -->
           <div class="ctr-info">
             <div class="cw" id="cw">—</div>
             <div class="ci" id="ci"></div>
             <div class="cwl" id="cwl"></div>
             <div class="ch" id="chonba"></div>
           </div>
-          <!-- Right score — rotated -90° for right player's reading direction -->
-          <div class="ctr-side" style="text-align:center;">
-            <span id="ctr-s-r" class="ctr-score-val" style="transform:rotate(-90deg);">—</span>
-          </div>
         </div>
-        <!-- Bottom score row — my score, yellow -->
-        <div class="ctr-score">
+        <!-- Right score — absolute, outside flex flow -->
+        <div class="ctr-score" style="position:absolute;transform:translateX(41%) rotate(-90deg);z-index:2">
+          <span id="ctr-s-r" class="ctr-score-val">—</span>
+        </div>
+                <!-- Bottom score row — my score -->
+        <div class="ctr-score" style="z-index:3;">
           <span id="ctr-s-b" class="ctr-score-val">—</span>
         </div>
       </div>
@@ -1218,7 +1208,7 @@ function renderState(m, prev){
   $('ci').textContent=`Round ${dispRound}`;
   $('cwl').textContent=`${m.wallCount} tiles`;
   const h=m.honba||0,rs=m.riichiSticks||0;
-  $('chonba').textContent=h||rs?`${h}本場${rs?' · '+'●'.repeat(rs):''}` :'';
+  $('chonba').textContent=h?`${h}本場` :'';
 
   // Dora
   // Fill up to 5 fixed dora slots
