@@ -935,7 +935,10 @@ class Room {
       const p=this.seats[seat];
       if(!p||p.isBot) continue;
       const hand=g.hands[seat];
-      const w=waits(hand,g.melds[seat]);
+      // Calculate waits from 13-tile hand (excluding draw tile if present)
+      const dt=g.turn===seat?g.drawTile:null;
+      const handForWaits=dt?hand.filter(t=>t.id!==dt.id):hand;
+      const w=waits(handForWaits,g.melds[seat]);
       let canRiichi=[];
       if(hand.length===14&&!g.melds[seat].length&&!g.riichi[seat]&&g.scores[seat]>=1000){
         canRiichi=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id)).length>0).map(t=>t.id);
@@ -979,9 +982,7 @@ class Room {
         return han>0;
       })();
       // Send hand split: main hand (without draw tile) + draw tile separately
-      // This avoids client-side ID-matching issues
       const fullHand=hand;
-      const dt=g.turn===seat?g.drawTile:null;
       const mainHand=dt?fullHand.filter(t=>t.id!==dt.id):fullHand;
       // Kyuushu Kyuuhai: 9+ unique terminals/honours on first draw
       const TERMINALS=['1m','9m','1p','9p','1s','9s','1z','2z','3z','4z','5z','6z','7z'];

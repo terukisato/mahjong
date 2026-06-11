@@ -104,7 +104,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   width:min(26vmin,210px);height:min(26vmin,210px);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:0;overflow:hidden;
-  border-radius:4px;}
+  border-radius:1px;}
 /* Score strip rows — double line separator using border + box-shadow */
 .ctr-score{font-size:clamp(12px,2.1vmin,15px);font-weight:700;letter-spacing:0;
   width:100%;text-align:center;padding:5px 0;
@@ -413,16 +413,16 @@ transform-origin:left center;}
 </style>
 </head>
 <body>
-<audio id="lobby-music" src="/Mahjong_Table_Tea_Time.mp3" loop preload="auto" style="display:none;"></audio>
-<audio id="game-music-1" src="/Mahjong_Table_Tea.mp3" loop preload="auto" style="display:none;"></audio>
-<audio id="sfx-discard" src="/Discard.m4a" preload="auto" style="display:none;"></audio>
-<audio id="sfx-pon" src="/audio/Pon.mp3" preload="auto" style="display:none;"></audio>
-<audio id="sfx-chii" src="/audio/Chii.mp3" preload="auto" style="display:none;"></audio>
-<audio id="sfx-kan" src="/audio/Kan.mp3" preload="auto" style="display:none;"></audio>
-<audio id="sfx-riichi" src="/audio/Riichi.mp3" preload="auto" style="display:none;"></audio>
-<audio id="sfx-double-riichi" src="/audio/Double_riichi.mp3" preload="auto" style="display:none;"></audio>
-<audio id="sfx-ron" src="/audio/Ron.mp3" preload="auto" style="display:none;"></audio>
-<audio id="sfx-tsumo" src="/audio/Tsumo.mp3" preload="auto" style="display:none;"></audio>
+<audio id="lobby-music" src="/audio/Music/Mahjong_Table_Tea_Time.mp3" loop preload="auto" style="display:none;"></audio>
+<audio id="game-music-1" src="/audio/Music/Mahjong_Table_Tea.mp3" loop preload="auto" style="display:none;"></audio>
+<audio id="sfx-discard" src="/audio/FX/Discard.m4a" preload="auto" style="display:none;"></audio>
+<audio id="sfx-pon" src="/audio/Voice/Default/Pon.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-chii" src="/audio/Voice/Default/Chii.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-kan" src="/audio/Voice/Default/Kan.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-riichi" src="/audio/Voice/Default/Riichi.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-double-riichi" src="/audio/Voice/Default/Double_riichi.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-ron" src="/audio/Voice/Default/Ron.mp3" preload="auto" style="display:none;"></audio>
+<audio id="sfx-tsumo" src="/audio/Voice/Default/Tsumo.mp3" preload="auto" style="display:none;"></audio>
 
 <!-- Settings panel — outside all screens so it appears above everything -->
 <div id="settings-panel" style="
@@ -444,18 +444,17 @@ transform-origin:left center;}
     <div style="display:flex;flex-direction:column;gap:6px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:12px;color:var(--cream);">Volume</span>
-        <span id="vol-label" style="font-size:11px;color:var(--gold);">50%</span>
+        <span id="vol-label" style="font-size:11px;color:var(--gold);">35%</span>
       </div>
-      <input id="vol-slider" type="range" min="0" max="100" value="50"
+      <input id="vol-slider" type="range" min="0" max="100" value="35"
         oninput="setVolume(this.value)"
         style="width:100%;accent-color:var(--gold);cursor:pointer;">
     </div>
   </div>
   <!-- FX section -->
   <div style="display:flex;flex-direction:column;gap:12px;">
-    <div style="font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);">FX</div>
     <div style="display:flex;align-items:center;justify-content:space-between;">
-      <span style="font-size:12px;color:var(--cream);">FX</span>
+      <span style="font-size:12px;color:var(--cream);">Voice</span>
       <button id="bfx" onclick="toggleFx()" style="
         padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
         background:rgba(42,158,103,.3);border:1px solid var(--jl);
@@ -464,18 +463,17 @@ transform-origin:left center;}
     <div style="display:flex;flex-direction:column;gap:6px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:12px;color:var(--cream);">Volume</span>
-        <span id="fx-vol-label" style="font-size:11px;color:var(--gold);">50%</span>
+        <span id="fx-vol-label" style="font-size:11px;color:var(--gold);">40%</span>
       </div>
-      <input id="fx-vol-slider" type="range" min="0" max="100" value="50"
+      <input id="fx-vol-slider" type="range" min="0" max="100" value="40"
         oninput="setFxVolume(this.value)"
         style="width:100%;accent-color:var(--gold);cursor:pointer;">
     </div>
   </div>
   <!-- Discard SFX section -->
   <div style="display:flex;flex-direction:column;gap:12px;">
-    <div style="font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);">DISCARD</div>
     <div style="display:flex;align-items:center;justify-content:space-between;">
-      <span style="font-size:12px;color:var(--cream);">Discard</span>
+      <span style="font-size:12px;color:var(--cream);">FX</span>
       <button id="bdiscard-sfx" onclick="toggleDiscardSfx()" style="
         padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
         background:rgba(42,158,103,.3);border:1px solid var(--jl);
@@ -484,12 +482,17 @@ transform-origin:left center;}
     <div style="display:flex;flex-direction:column;gap:6px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:12px;color:var(--cream);">Volume</span>
-        <span id="discard-vol-label" style="font-size:11px;color:var(--gold);">50%</span>
+        <span id="discard-vol-label" style="font-size:11px;color:var(--gold);">30%</span>
       </div>
-      <input id="discard-vol-slider" type="range" min="0" max="100" value="50"
+      <input id="discard-vol-slider" type="range" min="0" max="100" value="30"
         oninput="setDiscardVolume(this.value)"
         style="width:100%;accent-color:var(--gold);cursor:pointer;">
     </div>
+  </div>
+  <!-- Voice Theme section -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+    <div style="font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);">VOICE THEME</div>
+    <div id="voice-theme-list" style="display:flex;flex-direction:column;gap:6px;"></div>
   </div>
 </div>
 <div id="settings-backdrop" onclick="toggleSettings()" style="display:none;position:fixed;inset:0;z-index:199;"></div>
@@ -527,6 +530,7 @@ transform-origin:left center;}
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Mahjong Online</div></div>
   <div class="card">
     <h2>Enter the Hall</h2>
+    <div id="lobby-inputs">
     <div class="ig"><label for="iname">Your Name</label><input type="text" id="iname" placeholder="Player" maxlength="20" value="Player"></div>
     <div class="ig">
       <label>Game Mode</label>
@@ -534,6 +538,7 @@ transform-origin:left center;}
         <button class="mode-btn active" id="btn-tonpuu" onclick="setMode('tonpuu')">東風戦<br><span style="font-size:9px;letter-spacing:1px;opacity:.7;">TONPUU · 4 rounds</span></button>
         <button class="mode-btn" id="btn-hanchan" onclick="setMode('hanchan')">半荘戦<br><span style="font-size:9px;letter-spacing:1px;opacity:.7;">HANCHAN · 8 rounds</span></button>
       </div>
+    </div>
     </div>
     <button class="bp" id="bfind">⚔ Find Match</button>
     <div class="wa" id="wa">
@@ -1123,7 +1128,7 @@ function toggleSettings(){
 // MUSIC
 // ════════════════════════════════════════════════════════════
 let musicEnabled=true;
-let musicVolume=0.5;
+let musicVolume=0.35;
 
 function allTracks(){
   return [$('lobby-music'),$('game-music-1')].filter(Boolean);
@@ -1163,10 +1168,47 @@ function stopGameMusic(){
   if(t1){ t1.pause(); t1.currentTime=0; }
 }
 
+// Voice theme system
+const voiceThemes=[
+  {id:'Default', label:'Default'},
+  {id:'Natsu', label:'Natsu'},
+];
+let currentVoiceTheme='Default';
+
+const fxFiles=['Pon','Chii','Kan','Riichi','Double_riichi','Ron','Tsumo'];
+const fxExts={Pon:'mp3',Chii:'mp3',Kan:'mp3',Riichi:'mp3',Double_riichi:'mp3',Ron:'mp3',Tsumo:'mp3'};
+
+function applyVoiceTheme(themeId){
+  currentVoiceTheme=themeId;
+  document.querySelectorAll('.theme-btn').forEach(b=>{
+    b.style.background=b.dataset.theme===themeId?'rgba(201,168,76,.25)':'rgba(42,58,42,.3)';
+    b.style.borderColor=b.dataset.theme===themeId?'var(--gold)':'rgba(201,168,76,.2)';
+  });
+  try{ localStorage.setItem('mj-voice-theme',themeId); }catch(e){}
+}
+
+function renderVoiceThemes(){
+  const list=$('voice-theme-list'); if(!list) return;
+  list.innerHTML='';
+  voiceThemes.forEach(t=>{
+    const btn=document.createElement('button');
+    btn.className='theme-btn';
+    btn.dataset.theme=t.id;
+    btn.textContent=t.label;
+    btn.style.cssText=`padding:7px 12px;border-radius:4px;font-size:11px;cursor:pointer;
+      letter-spacing:1px;transition:all .2s;text-align:left;width:100%;
+      background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);
+      color:var(--cream);font-family:'Cinzel Decorative',serif;`;
+    btn.onclick=()=>applyVoiceTheme(t.id);
+    list.appendChild(btn);
+  });
+  applyVoiceTheme(currentVoiceTheme);
+}
+
 let fxEnabled=true;
-let fxVolume=2.0; // default 50% display = 2.0 gain (x4 mapping)
+let fxVolume=1.6; // default 40% display = 1.6 gain (x4 mapping)
 let discardSfxEnabled=true;
-let discardSfxVolume=1.0;
+let discardSfxVolume=0.6;
 let discardGainNode=null;
 
 // Web Audio API context for FX gain boost (allows volume >100%)
@@ -1187,19 +1229,29 @@ function allFxTracks(){
   return ['sfx-pon','sfx-chii','sfx-kan','sfx-riichi','sfx-double-riichi','sfx-ron','sfx-tsumo'].map(id=>$(id)).filter(Boolean);
 }
 
-function playSfx(id){
+function playSfx(id, isPlayer=false){
   if(!fxEnabled) return;
   const el=$(id);
   if(!el) return;
+  // Switch src based on whether this is the main player's action
+  const fname=id.replace('sfx-','').replace(/-/g,'_');
+  const capName=fname.charAt(0).toUpperCase()+fname.slice(1);
+  const theme=isPlayer?currentVoiceTheme:'Default';
+  const ext=fxExts[capName]||'mp3';
+  el.src=`/audio/Voice/${theme}/${capName}.${ext}`;
   try{
-    const {ctx,gain}=getFxAudioCtx();
-    if(ctx.state==='suspended') ctx.resume();
-    const src=ctx.createMediaElementSource(el);
-    src.connect(gain);
-    el._fxConnected=true;
+    if(!fxGainNode){
+      const ctx=getFxAudioCtx().ctx;
+      fxGainNode=ctx.createGain();
+      fxGainNode.gain.value=fxVolume;
+      fxGainNode.connect(ctx.destination);
+      const src=ctx.createMediaElementSource(el);
+      src.connect(fxGainNode);
+    }
+    if(getFxAudioCtx().ctx.state==='suspended') getFxAudioCtx().ctx.resume();
   }catch(e){}
   el.currentTime=0;
-  el.volume=1.0; // gain node handles the actual volume
+  el.volume=1.0;
   el.play().catch(()=>{});
 }
 
@@ -1289,6 +1341,7 @@ function findMatch(){
 function showWaiting(){
   $('wa').style.display='block';
   $('bfind').style.display='none';
+  $('lobby-inputs').style.display='none';
   $('cdiv').textContent='Press Ready when you are set to start';
 }
 
@@ -1321,6 +1374,7 @@ function resetLobby(){
   mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;
   $('wa').style.display='none';
   $('bfind').style.display='block';
+  $('lobby-inputs').style.display='block';
   $('cdiv').textContent='';
   $('bready').classList.remove('pressed');
   $('bready').disabled=false;
@@ -1506,28 +1560,40 @@ function renderState(m, prev){
   if(m.discards) m.discards.forEach(d=>{ newDiscardCount+=(d?.length||0); });
   if(newDiscardCount>prevDiscardCount) playDiscardSfx();
 
-  // Detect new pon meld across all players
-  const prevPonCount=[...(prev?.melds||[]),...(prev?.myMelds?[prev.myMelds]:[])].flat().filter(mel=>mel?.type==='pon').length;
+  // Detect new pon — check if main player's melds changed
+  const prevMyPon=(prev?.myMelds||[]).filter(mel=>mel?.type==='pon').length;
+  const newMyPon=(m.myMelds||[]).filter(mel=>mel?.type==='pon').length;
+  const prevOppPon=(prev?.melds||[]).flat().filter(mel=>mel?.type==='pon').length;
+  const newOppPon=(m.melds||[]).flat().filter(mel=>mel?.type==='pon').length;
   const allMelds=[...(m.melds?.flat()||[]),...(m.myMelds||[])];
-  const newPonCount=allMelds.filter(mel=>mel?.type==='pon').length;
-  if(newPonCount>prevPonCount) playSfx('sfx-pon');
+  if(newMyPon>prevMyPon) playSfx('sfx-pon',true);
+  else if(newOppPon>prevOppPon) playSfx('sfx-pon',false);
 
-  const prevChiiCount=[...(prev?.melds||[]),...(prev?.myMelds?[prev.myMelds]:[])].flat().filter(mel=>mel?.type==='chi').length;
-  const newChiiCount=allMelds.filter(mel=>mel?.type==='chi').length;
-  if(newChiiCount>prevChiiCount) playSfx('sfx-chii');
+  // Chi
+  const prevMyChi=(prev?.myMelds||[]).filter(mel=>mel?.type==='chi').length;
+  const newMyChi=(m.myMelds||[]).filter(mel=>mel?.type==='chi').length;
+  const prevOppChi=(prev?.melds||[]).flat().filter(mel=>mel?.type==='chi').length;
+  const newOppChi=(m.melds||[]).flat().filter(mel=>mel?.type==='chi').length;
+  if(newMyChi>prevMyChi) playSfx('sfx-chii',true);
+  else if(newOppChi>prevOppChi) playSfx('sfx-chii',false);
 
-  const prevKanCount=[...(prev?.melds||[]),...(prev?.myMelds?[prev.myMelds]:[])].flat().filter(mel=>mel?.type==='kan').length;
-  const newKanCount=allMelds.filter(mel=>mel?.type==='kan').length;
-  if(newKanCount>prevKanCount) playSfx('sfx-kan');
+  // Kan
+  const prevMyKan=(prev?.myMelds||[]).filter(mel=>mel?.type==='kan').length;
+  const newMyKan=(m.myMelds||[]).filter(mel=>mel?.type==='kan').length;
+  const prevOppKan=(prev?.melds||[]).flat().filter(mel=>mel?.type==='kan').length;
+  const newOppKan=(m.melds||[]).flat().filter(mel=>mel?.type==='kan').length;
+  if(newMyKan>prevMyKan) playSfx('sfx-kan',true);
+  else if(newOppKan>prevOppKan) playSfx('sfx-kan',false);
 
+  // Riichi
   const prevRiichiCount=(prev?.riichi||[]).filter(Boolean).length;
   const newRiichiCount=(m.riichi||[]).filter(Boolean).length;
   if(newRiichiCount>prevRiichiCount){
-    // Check if the new riichi is a double riichi
+    const isMe=!prev?.riichi?.[mySeat]&&m.riichi?.[mySeat];
     const prevDblCount=(prev?.doubleRiichi||[]).filter(Boolean).length;
     const newDblCount=(m.doubleRiichi||[]).filter(Boolean).length;
-    if(newDblCount>prevDblCount) playSfx('sfx-double-riichi');
-    else playSfx('sfx-riichi');
+    if(newDblCount>prevDblCount) playSfx('sfx-double-riichi',isMe);
+    else playSfx('sfx-riichi',isMe);
   }
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i];
@@ -1947,8 +2013,8 @@ function onEnd(m){
   const reasonLabels={tsumo:'TSUMO',ron:'RON',draw:'流局 — Draw',suukaisan:'四槓散了',nagashi:'流し満貫'};
   $('ret').textContent=reasonLabels[m.reason]||'Round Over';
   if(m.reason==='tsumo'||m.reason==='ron'){
-    if(m.reason==='ron') playSfx('sfx-ron');
-    if(m.reason==='tsumo') playSfx('sfx-tsumo');
+    if(m.reason==='ron') playSfx('sfx-ron', m.winner===mySeat);
+    if(m.reason==='tsumo') playSfx('sfx-tsumo', m.winner===mySeat);
     $('rehn').textContent=m.handLabel?`${m.handLabel} · ${m.han||0}飜${m.fu?' · '+m.fu+'符':''}` :'';
   } else if(m.reason==='draw'){
     const payStrs=(m.payments||[]).map((p,i)=>{
@@ -2057,7 +2123,10 @@ try{
     const b=$('bdiscard-sfx');
     if(b){ b.textContent='OFF'; b.style.background='rgba(80,0,0,.3)'; b.style.borderColor='#c82020'; }
   }
+  const savedTheme=localStorage.getItem('mj-voice-theme');
+  if(savedTheme) currentVoiceTheme=savedTheme;
 }catch(e){}
+renderVoiceThemes();
 // Start music on first user interaction — via Press Start button
 function enterLobby(){
   playLobbyMusic();
