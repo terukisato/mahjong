@@ -15,7 +15,7 @@
   --gold:#c9a84c;--gl:#f0d080;--gd:#8a6b20;--cream:#f5edd8;
   /* Responsive tile sizes via CSS vars — JS updates these on resize */
   --tlg-w:40px;--tlg-h:56px;
-  --tmd-w:26px;--tmd-h:36px;
+  --tmd-w:28px;--tmd-h:36px;
   --tsm-w:16px;--tsm-h:22px;
 }
 /* ════ RESET & BASE ════ */
@@ -76,59 +76,64 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    ════════════════════════════════════════════════════════════ */
 #s-game:not(.hidden){display:block;}
 .topbar{position:fixed;top:0;left:0;right:0;height:36px;background:rgba(3,10,5,.97);border-bottom:1px solid rgba(201,168,76,.18);display:flex;align-items:center;justify-content:space-between;padding:0 10px;z-index:50;}
-.tb-title{font-family:'Noto Serif JP',serif;font-size:12px;color:var(--gold);letter-spacing:2px;}
-.tb-st{font-size:11px;color:rgba(245,237,216,.5);max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.tb-st.my{color:#ffdd44;font-weight:700;animation:pulse 1s infinite;}
-.bl{padding:0 10px;height:26px;background:rgba(120,20,20,.8);border:1px solid rgba(200,60,60,.4);border-radius:6px;color:rgba(255,180,180,.85);font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
+.tb-title{font-family:'Noto Serif JP',serif;font-size:14px;color:var(--gold);letter-spacing:2px;}
+.tb-st{font-size:14px;color:rgba(245,237,216,.5);max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tb-st.my{color:#ffdd44;font-weight:700;animation:pulse 1.5s infinite;}
+.bl{padding:0 10px;height:26px;background:rgba(120,20,20,.8);border:1px solid rgba(200,60,60,.4);border-radius:6px;color:rgba(255,180,180,.85);font-size:13px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
 .bl:hover{background:rgba(160,30,30,.9);}
 
 /* ── Table container ── */
-.table{position:fixed;top:36px;left:0;right:0;bottom:0;overflow:hidden;}
+.table{position:fixed;top: 36px;;left:0;right:0;bottom:0;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;}
 
-/* ── Felt (green play area) + oak frame (box-shadow) ── */
+/* ── Sizing variable — single source of truth ── */
+:root{
+  --table-size: 110vmin;
+  --felt-size: calc(var(--table-size) * 0.86);
+}
+
+/* ── Wood table — sits behind the felt ── */
+.wood-table{
+  width:var(--table-size);
+  height:var(--table-size);
+  background:radial-gradient(ellipse at 40% 30%,#462727,#241006 50%,#1a0a04);
+  box-shadow:0 8px 48px rgba(0,0,0,.8),0 2px 0 rgba(255,255,255,.04) inset;
+  border:2px solid #0d0502;
+  flex-shrink:0;}
+
+/* ── Felt (green play area) ── */
 .felt{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:min(96vmin,920px);height:min(96vmin,920px);
+  width:var(--felt-size);
+  height:var(--felt-size);
   background:radial-gradient(ellipse at 40% 35%,#27774a,#155230 60%,#0e3b24);
-  border-radius:0;
   border:none;
-  box-shadow:
-    inset 0 0 60px rgba(0,0,0,.4),
-    0 0 0 80px #1a0a04,
-    0 0 0 82px #0d0502,
-    8px 8px 40px 82px rgba(0,0,0,.8);}
+  box-shadow:inset 0 0 60px rgba(0,0,0,.4);}
 
 /* ── Centre info panel (round/wind/scores) ── */
 .ctr{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  z-index:5;pointer-events:none;
+  z-index:1;pointer-events:none;
   background:#1a1a1a;
-  width:min(26vmin,210px);height:min(26vmin,210px);
+  width:min(26vmin,26%);height:min(26vmin,26%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:0;overflow:hidden;
   border-radius:1px;}
 /* Score strip rows — double line separator using border + box-shadow */
-.ctr-score{font-size:clamp(12px,2.1vmin,15px);font-weight:700;letter-spacing:0;
-  width:100%;text-align:center;padding:5px 0;
-  border:3px ridge rgb(72, 72, 72);background:#1a1a1a;}
+.ctr-score{width:100%;height:20%;text-align:center;
+  border: ridge 0.4vmin rgb(72, 72, 72);background:#1a1a1a;}
 .ctr-mid{display:flex;align-items:center;justify-content:center;
-  width:calc(min(26vmin,210px) - 2 * min(5vmin,38px));
-  height:calc(min(26vmin,210px) - 2 * min(5vmin,38px));
-  flex-shrink:0;position:relative;padding:0;box-sizing:border-box;}
+  width:calc(min(26vmin,26%) - 2 * min(5vmin,38px));
+  height:calc(min(26vmin,26%) - 2 * min(5vmin,38px));
+  flex-shrink:0;position:relative;box-sizing:border-box;}
 /* Centre info */
-.ctr-score-val{font-size:clamp(12px,2.1vmin,15px);font-weight:700;
-  color:rgba(240,208,128,.9);letter-spacing:0;display:inline-block;}
-.ctr-info{display:flex;flex-direction:column;align-items:center;flex-shrink:0;
-  padding:4px 8px;position:relative;}
-.ctr-info::before{content:'';position:absolute;
-  width:clamp(36px,7vmin,56px);height:clamp(36px,7vmin,56px);
-  border-radius:50%;border:1px solid rgba(201,168,76,.25);
-  background:rgba(201,168,76,.04);
-  top:50%;left:50%;transform:translate(-50%,-65%);}
-.cw{font-family:'Noto Serif JP',serif;font-size:clamp(28px,6vmin,42px);font-weight:900;
+.ctr-score-val{display:flex;font-size:2.1vmin;font-weight:700;align-items:center;
+  color:rgba(240,208,128,.9);letter-spacing:0;justify-content:center;padding-top:2%}
+.ctr-info{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
+.cw{font-family:'Noto Serif JP',serif;font-size:clamp(28px,5vmin,5vmin);font-weight:900;
   color:#f0d080;line-height:1;position:relative;z-index:1;
   text-shadow:0 0 14px rgba(201,168,76,.6),0 0 4px rgba(0,0,0,.8);}
-.ci{font-size:clamp(7px,1.3vmin,9px);letter-spacing:2px;color:rgba(245,237,216,.35);
+.ci{font-size:clamp(7px,1.5vmin,15px);letter-spacing:2px;color:rgba(245,237,216,.35);
   margin-top:2px;position:relative;z-index:1;}
-.cwl{font-size:clamp(9px,1.8vmin,11px);color:#2a9e67;font-weight:700;
+.cwl{font-size:clamp(9px,1.8vmin,15px);color:#2a9e67;font-weight:700;
   margin-top:1px;position:relative;z-index:1;}
 .ch{font-size:clamp(7px,1.3vmin,9px);color:rgba(245,237,216,.28);
   margin-top:1px;position:relative;z-index:1;}
@@ -157,7 +162,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* H = min(13vmin,105px) — panel half-size. */
 
 /* BOTTOM: top-left of zone at panel bottom-left. No rotation. */
-.dzb{top:calc(50% + min(13vmin,105px));left:calc(50% - min(13vmin,105px));}
+.dzb{top:calc(50% + calc(min(26vmin,26%) / 2));left:calc(50% - calc(min(26vmin,26%) / 2));}
 
 /* TOP: their visual top-left (= DOM bottom-right after 180°) at panel top-left.
    Panel top-left = (50%-H, 50%-H). 
@@ -167,8 +172,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    Rows: DOM row-reverse so tiles go their left→right after 180° flip.
    Columns: column-reverse so first row is at visual top (nearest panel). */
 .dzt{
-  top:calc(50% - min(13vmin,105px));
-  left:calc(50% + min(13vmin,105px));
+  top:calc(50% - calc(min(26vmin,26%) / 2));
+  left:calc(50% + calc(min(26vmin,26%) / 2));
   transform:rotate(180deg);
   transform-origin:left top;}
 
@@ -178,8 +183,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    bottom=50%-H → element bottom at 50%+H.
    transform-origin: left bottom. */
 .dzl{
-  left:calc(50% - min(13vmin,105px));
-  top:calc(50% - min(13vmin,105px));
+  left:calc(50% - calc(min(26vmin,26%) / 2));
+  top:calc(50% - calc(min(26vmin,26%) / 2));
   transform:rotate(90deg);
   transform-origin:left top;}
 
@@ -187,54 +192,47 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    Panel bottom-right = (50%+H, 50%+H).
    left=50%+H, top=50%+H. transform-origin: left top. */
 .dzr{
-  top:calc(50% + min(13vmin,105px));
-  left:calc(50% + min(13vmin,105px));
+  top:calc(50% + calc(min(26vmin,26%) / 2));
+  left:calc(50% + calc(min(26vmin,26%) / 2));
   transform:rotate(-90deg);
   transform-origin:left top;}
 
 /* Riichi tile: rotated 90° within its zone row (from each player's perspective) */
 .dz-riichi{display:inline-flex;transform:rotate(-90deg);transform-origin:center center;
-  margin:0 calc(var(--tmd-h,40px)/2 - var(--tmd-w,30px)/2);}
+  margin:calc((var(--tmd-w,40px) - var(--tmd-h,30px))/2) calc(var(--tmd-h,40px)/2 - var(--tmd-w,30px)/2);}
 
 /* ════════════════════════════════════════════════════════════
    PLAYER AREAS (hand + melds)
    ════════════════════════════════════════════════════════════ */
-.pa{position:absolute;display:flex;align-items:center;z-index:15;}
 /* Bottom (me): flush to bottom edge, column layout (nameplate above tiles) */
-.pa-b{position:absolute;bottom:15px;left:13%;flex-direction:column;align-items:flex-start;}
+.pa-b{position:absolute;bottom:1vmin;left:10vmin;}
 /* Top: flush to top edge, column layout (tiles first, nameplate below) */
-.pa-t{position:absolute;top:15px;left:73%;flex-direction:column;align-items:flex-start;
-transform:rotate(180deg);
-transform-origin:left center;}
+.pa-t{position:absolute;top:1vmin;right:10vmin;transform-origin:center center;transform:rotate(180deg);}
 /* Left: centre at left edge, vertically centred, rotate 90° CW */
 /* Left: pivot at tile row left edge, centred on felt, rotate 90° CW */
-.pa-l{position:absolute;top:25%;left:35px;
-  display:flex;flex-direction:column;align-items:flex-start;
-  transform:rotate(90deg);
-  transform-origin:left center;}
+.pa-l{position:absolute;top:calc(10vmin - var(--tsm-h,22px));left:1vmin;transform-origin:left bottom;transform:rotate(90deg);}
 /* Right: pivot at tile row left edge, centred on felt, rotate -90° CCW */
-.pa-r{position:absolute;top:70%;right:35px;
-  display:flex;flex-direction:column;align-items:flex-start;
-  transform:translateX(100%) rotate(-90deg);
-  transform-origin:left center;}
+.pa-r{position:absolute;bottom:calc(10vmin - var(--tsm-h,22px));right:1vmin;transform-origin:right top;transform:rotate(90deg);}
 
 /* Nameplates */
-.np{background:#1a1a1a;border-radius:4px;
-  padding:7px 14px;display:flex;align-items:center;gap:9px;
+.np{background:#1a1a1a;border-radius:1px;
+  padding:0.8vmin 2vmin 0.8vmin 0.8vmin;display:flex;align-items:center;gap:9px;
   z-index:20;transition:all .25s;flex-shrink:0;white-space:nowrap;
   box-shadow:0 0 0 1px #222,inset 0 1px 0 rgba(255,255,255,.04);}
 .np.active{background:#222;border-color:#ffdd44;
-  box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 16px rgba(255,221,68,.5);animation:glow 1s ease-in-out infinite;}
-@keyframes glow{0%,100%{box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 14px rgba(255,221,68,.4);}50%{box-shadow:0 0 0 3px rgba(255,221,68,.55),0 0 28px rgba(255,221,68,.7);}}
-.wb{font-family:'Noto Serif JP',serif;font-size:17px;font-weight:900;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;}
-.pname{font-size:14px;font-weight:700;color:#fff;max-width:110px;overflow:hidden;text-overflow:ellipsis;}
+  box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 16px rgba(255,221,68,.5);animation:glow 1.6s ease-in-out infinite;}
+@keyframes glow{0%,100%{box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 14px rgba(255,221,68,.4);}50%{box-shadow:0 0 0 2px rgba(255,221,68,.55),0 0 28px rgba(255,221,68,.7);}}
+.wb{font-family:'Noto Serif JP',serif;font-size:3vmin;font-weight:900;width:4vmin;height:4vmin;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;}
+.pname{font-size:1.8vmin;font-weight:700;color:#fff;max-width:none;overflow:hidden;text-overflow:ellipsis;}
 .btag{font-size:10px;color:rgba(201,168,76,.5);}
-.rs{display:inline-block;width:4px;height:22px;background:linear-gradient(180deg,#fff,#ddd);border-radius:3px;border:1px solid #bbb;margin-left:3px;}
-.tenpai{display:inline-block;padding:2px 6px;border-radius:4px;background:linear-gradient(135deg,#6a0f0f,#c02020);color:#fff;font-size:8px;letter-spacing:1px;font-family:'Cinzel Decorative',serif;animation:pulse 1s infinite;margin-left:3px;}
+.tenpai{padding:0.4vmin 0.4vmin;border-radius:0.5vmin;background:linear-gradient(135deg,#6a0f0f,#c02020);color:#fff;font-size:1.2vmin;letter-spacing:1px;font-family:'Cinzel Decorative',serif;
+  position:absolute;bottom:calc(var(--tlg-h) + 8vmin);left:15vmin;z-index:30;}
+.furiten-badge{padding:0.4vmin 0.4vmin;border-radius:0.5vmin;background:linear-gradient(135deg,#444,#222);color:#f88;font-size:1.2vmin;letter-spacing:1px;font-family:'Cinzel Decorative',serif;
+  position:absolute;bottom:calc(var(--tlg-h) + 8vmin);left:calc(21vmin);z-index:31;}
 
 /* ════════════════════════════════════════════════════════════
    TILES
-   ════════════════════════════════════════════════════════════
+   ══════════════════════════════════════════════════════
 /* ── TILES ──
    All sizes driven by CSS vars set dynamically by JS on resize.
    This makes everything scale to fit any screen. */
@@ -248,12 +246,12 @@ transform-origin:left center;}
   transition:transform .12s ease,box-shadow .12s ease;}
 .tlg.play{cursor:pointer;pointer-events:auto;}
 .tlg.play:hover,.tlg.play:active{transform:translateY(-10px);box-shadow:2px 12px 18px rgba(0,0,0,.7),inset 0 2px 0 rgba(255,255,255,.95);z-index:20;}
-.tlg.sel{transform:translateY(-16px);box-shadow:0 0 0 3px #00ffaa,2px 18px 24px rgba(0,0,0,.75);z-index:25;}
+.tlg.sel{transform:translateY(-10px);box-shadow:0 0 0 0.2vmin #00ffaa,2px 12px 18px rgba(0,0,0,.75);z-index:25;}
 
 /* Draw tile — far right, taller glow, shimmer animation */
 .tlg.drw{
   border-color:#ffe066;
-  box-shadow:2px 3px 8px rgba(0,0,0,.6),0 0 0 2px rgba(255,220,50,.6),inset 0 2px 0 rgba(255,255,255,.95);
+  box-shadow:2px 3px 8px rgba(0,0,0,.6),0 0 0 0.3vmin rgba(255,220,50,.6),inset 0 2px 0 rgba(255,255,255,.95);
   z-index:5;}
 
 .tmd{
@@ -281,28 +279,28 @@ transform-origin:left center;}
 .draw-sep{width:clamp(5px,1.5vmin,10px);flex-shrink:0;}
 .mg{display:flex;margin-right:0;margin-left:0;align-items:flex-end;}
 /* Called tile (chi/pon) rotated 90° to show it was taken from another player */
-.mg .called{transform:rotate(-90deg);
-  margin-right:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);
-  margin-left:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);}
+.mg .called{transform:rotate(-90deg) translateX(calc((var(--tmd-w,40px) - var(--tmd-h,26px))/2 + 1px));
+  margin-right:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2);
+  margin-left:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2);}
 /* Kakan stack */
 .mg .called-stack{position:relative;display:inline-flex;align-items:flex-end;justify-content:center;
   width:var(--tmd-h,40px);
-  height:calc(var(--tmd-w,26px) + var(--tmd-w,26px) * 0.55);
-  margin-right:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);
-  margin-left:calc(var(--tmd-h,40px)/2 - var(--tmd-w,26px)/2 + 1px);}
-.mg .called-stack .kakan-base{transform:rotate(-90deg);flex-shrink:0;}
-.mg .called-stack .kakan-add{position:absolute;bottom:calc(var(--tmd-w,26px) * 0.45);left:50%;transform:translateX(-50%) rotate(-90deg);z-index:2;}
+  height:var(--tmd-h,35px);
+  overflow:visible;
+  margin:0;}
+.mg .called-stack .kakan-base{position:absolute;bottom:calc((var(--tmd-w,26px) - var(--tmd-h,35px)) /2);left:50%;transform:translateX(-50%) rotate(-90deg);flex-shrink:0;}
+.mg .called-stack .kakan-add{position:absolute;bottom:var(--tmd-w,26px);left:50%;transform:translateX(-50%) rotate(-90deg);z-index:2;}
 .mr{display:flex;gap:0;align-items:flex-end;flex-shrink:0;}
 
 /* ════════════════════════════════════════════════════════════
    ACTION BAR & BUTTONS
    ════════════════════════════════════════════════════════════ */
-.actbar{display:none;}
+.actbar{display:flex;align-items:center;}
 /* Floating action overlay — appears above the hand */
-.act-overlay{display:flex;gap:6px;align-items:center;
+.act-overlay{display:flex;gap:1vmin;align-items:center;
   z-index:40;pointer-events:none;flex-wrap:nowrap;flex-shrink:0;}
 .act-overlay.visible{pointer-events:auto;}
-.ba{padding:0 clamp(10px,2vw,20px);height:38px;border:none;border-radius:8px;
+.ba{padding:0 clamp(10px,1vmin,20px);height:6vmin;border:none;border-radius:8px;
   font-family:'Cinzel Decorative',serif;font-size:clamp(10px,2vw,12px);
   letter-spacing:1px;cursor:pointer;transition:all .15s;font-weight:700;white-space:nowrap;
   flex-shrink:0;box-shadow:0 4px 14px rgba(0,0,0,.6);}
@@ -409,7 +407,104 @@ transform-origin:left center;}
 .st{width:100%;border-collapse:collapse;margin:10px 0;}.st td{padding:6px 12px;font-size:12px;border-bottom:1px solid rgba(201,168,76,.1);text-align:left;}
 .st td:last-child{text-align:right;font-weight:700;color:var(--gl);}.st tr.w td{color:var(--gl);font-size:13px;}
 .wt{display:flex;gap:3px;justify-content:center;flex-wrap:wrap;margin:10px 0;}
-.reb{display:flex;gap:10px;justify-content:center;margin-top:16px;}
+/* ── Settings panel ── */
+#settings-panel{position:fixed;top:0;right:0;bottom:0;width:240px;
+  background:rgba(6,12,7,.97);border-left:1px solid rgba(201,168,76,.2);
+  z-index:200;transform:translateX(100%);transition:transform .25s ease;
+  display:flex;flex-direction:column;padding:20px 16px;gap:20px;overflow-y:auto;}
+#settings-backdrop{display:none;position:fixed;inset:0;z-index:199;}
+.sp-title{font-family:'Cinzel Decorative',serif;font-size:11px;letter-spacing:3px;
+  color:var(--gold);border-bottom:1px solid rgba(201,168,76,.2);padding-bottom:10px;}
+.sp-section{display:flex;flex-direction:column;gap:12px;}
+.sp-header{font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);}
+.sp-row{display:flex;align-items:center;justify-content:space-between;}
+.sp-label{font-size:12px;color:var(--cream);}
+.sp-toggle{padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
+  background:rgba(42,158,103,.3);border:1px solid var(--jl);
+  color:var(--cream);letter-spacing:1px;transition:all .2s;}
+.sp-vol{display:flex;flex-direction:column;gap:6px;}
+.sp-vol-row{display:flex;justify-content:space-between;align-items:center;}
+.sp-vol-label{font-size:11px;color:var(--gold);}
+.sp-slider{width:100%;accent-color:var(--gold);cursor:pointer;}
+.sp-theme-list{display:flex;flex-direction:column;gap:6px;}
+
+/* ── Start screen button ── */
+#bstart{padding:16px 48px;font-family:'Cinzel Decorative',serif;
+  font-size:14px;letter-spacing:4px;
+  background:linear-gradient(135deg,rgba(26,107,69,.5),rgba(13,61,40,.5));
+  border:1px solid var(--jl);border-radius:4px;color:var(--cream);cursor:pointer;
+  animation:pulse 1.5s ease-in-out infinite;transition:all .2s;}
+.start-copy{font-size:10px;color:rgba(245,237,216,.3);letter-spacing:2px;}
+.settings-icon-btn{position:absolute;top:12px;right:14px;background:none;border:none;
+  color:#888;font-size:20px;cursor:pointer;z-index:10;letter-spacing:-1px;}
+
+/* ── Topbar inline elements ── */
+.tb-settings{color:#888;font-size:18px;letter-spacing:-1px;background:none;border-color:rgba(255,255,255,.1);}
+.tb-mode-label{font-size:10px;opacity:.6;margin-left:6px;}
+.tb-right{display:flex;align-items:center;gap:6px;}
+
+/* ── Game loading overlay ── */
+#game-loading{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;}
+.gl-kanji{font-family:'Noto Serif JP',serif;font-size:clamp(28px,6vmin,48px);
+  font-weight:900;color:var(--gold);letter-spacing:4px;animation:pulse 1.2s ease-in-out infinite;}
+.gl-dots{display:flex;gap:10px;}
+.gl-label{font-size:11px;letter-spacing:3px;color:rgba(245,237,216,.45);font-family:'Cinzel Decorative',serif;}
+
+/* ── Centre score positions ── */
+.ctr-score-top{position:absolute;top:0;transform:rotate(180deg);z-index:1;}
+.ctr-score-left{position:absolute;left:-40%;transform:rotate(90deg);z-index:4;clip-path:inset(0 0 0 20%);}
+.ctr-score-right{position:absolute;right:-40%;transform:rotate(-90deg);z-index:2;}
+.ctr-score-bottom{position:absolute;bottom:0;z-index:3;}
+.ctr-mid-rel{position:absolute;}
+
+/* ── Riichi stick positions ── */
+.rs-bottom{display:none;position:absolute;bottom:0.3vmin;right:1.45vmin;;z-index:16;}
+.rs-top{display:none;position:absolute;bottom: 0.3vmin;;right:1.45vmin;;;z-index:16;}
+.rs-left{display:none;position:absolute;bottom:0.3vmin;right:1.45vmin;z-index:16;}
+.rs-right{display:none;position:absolute;bottom:0.3vmin;right:1.45vmin;z-index:16;}
+
+/* ── Riichi stick size ── */
+.rs-bottom svg{width:6vmin;height:auto;}
+.rs-top svg{width:6vmin;height:auto;}
+.rs-left svg{width:6vmin;height:auto;}
+.rs-right svg{width:6vmin;height:auto;}
+
+/* ── Meld containers ── */
+.ml-b{position:absolute;bottom:0;right:0;display:flex;flex-direction:row;align-items:flex-end;z-index:15;}
+.ml-t{position:absolute;top:0;left:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:center center;z-index:15;}
+.ml-l{position:absolute;bottom:0;left:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(90deg) translateX(-100%);transform-origin:bottom left;z-index:15;}
+.ml-r{position:absolute;top:0;right:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg) translateY(-100%);transform-origin:top right;z-index:15;}
+
+/* ── Nameplates positions ── */
+.np-wrap-b{position:absolute;bottom:calc(var(--tlg-h) + 3vmin);left:15%;display:flex;gap:1vmin;}
+.np-inner{display:flex;align-items:center;position:relative;}
+.actbar{position:absolute;left:100%;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px;margin-left:10px;white-space:nowrap;}
+.np-wrap-t{position:absolute;top:calc(var(--tsm-h) + 3vmin);right:15%;transform:rotate(180deg);z-index:20;}
+.np-wrap-l{position:absolute;top:15%;left:calc(var(--tsm-h) + 3vmin);transform:translateX(-50%) rotate(90deg);transform-origin:center bottom;z-index:20;}
+.np-wrap-r{position:absolute;bottom:15%;right:calc(var(--tsm-h) + 3vmin);transform:translateX(50%) rotate(90deg);transform-origin:center top;z-index:20;}
+.np-flip{transform:rotate(180deg); transform-origin:center center;}
+.np-inner{position:relative;display:flex;align-items:center;}
+
+/* ── Dora panel ── */
+#dora-panel{position:fixed;top:44px;left:8px;z-index:80;pointer-events:none;
+  background:rgba(8,25,12,.97);border:2px solid rgba(201,168,76,.5);border-radius:12px;
+  padding:14px 16px 16px;display:none;
+  box-shadow:0 4px 24px rgba(0,0,0,.8),inset 0 1px 0 rgba(201,168,76,.2);}
+.dora-title{font-size:11px;letter-spacing:4px;color:rgba(201,168,76,.9);
+  margin-bottom:10px;font-family:'Cinzel Decorative',serif;text-align:center;
+  border-bottom:1px solid rgba(201,168,76,.25);padding-bottom:8px;}
+.dora-slots{display:flex;gap:6px;align-items:flex-end;}
+
+/* ── Round end screen ── */
+.reb-btn{max-width:200px;}
+.ready-status{margin-top:8px;font-size:11px;color:rgba(245,237,216,.5);letter-spacing:1px;text-align:center;}
+
+/* ── Mode button sub-label ── */
+.mode-sub{font-size:9px;letter-spacing:1px;opacity:.7;}
+
+/* ── Lobby mode row ── */
+.mode-row{display:flex;gap:8px;margin-top:4px;}
 </style>
 </head>
 <body>
@@ -424,101 +519,72 @@ transform-origin:left center;}
 <audio id="sfx-ron" src="/audio/Voice/Default/Ron.mp3" preload="auto" style="display:none;"></audio>
 <audio id="sfx-tsumo" src="/audio/Voice/Default/Tsumo.mp3" preload="auto" style="display:none;"></audio>
 
-<!-- Settings panel — outside all screens so it appears above everything -->
-<div id="settings-panel" style="
-  position:fixed;top:0;right:0;bottom:0;width:240px;
-  background:rgba(6,12,7,.97);border-left:1px solid rgba(201,168,76,.2);
-  z-index:200;transform:translateX(100%);transition:transform .25s ease;
-  display:flex;flex-direction:column;padding:20px 16px;gap:20px;overflow-y:auto;">
-  <div style="font-family:'Cinzel Decorative',serif;font-size:11px;letter-spacing:3px;color:var(--gold);border-bottom:1px solid rgba(201,168,76,.2);padding-bottom:10px;">SETTINGS</div>
-  <!-- Music section -->
-  <div style="display:flex;flex-direction:column;gap:12px;">
-    <div style="font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);">AUDIO</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <span style="font-size:12px;color:var(--cream);">Music</span>
-      <button id="bmute" onclick="toggleMusic()" style="
-        padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
-        background:rgba(42,158,103,.3);border:1px solid var(--jl);
-        color:var(--cream);letter-spacing:1px;transition:all .2s;">ON</button>
+<!-- Settings panel -->
+<div id="settings-panel">
+  <div class="sp-title">SETTINGS</div>
+  <!-- Audio section -->
+  <div class="sp-section">
+    <div class="sp-header">AUDIO</div>
+    <div class="sp-row">
+      <span class="sp-label">Music</span>
+      <button id="bmute" class="sp-toggle" onclick="toggleMusic()">ON</button>
     </div>
-    <div style="display:flex;flex-direction:column;gap:6px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:12px;color:var(--cream);">Volume</span>
-        <span id="vol-label" style="font-size:11px;color:var(--gold);">35%</span>
+    <div class="sp-vol">
+      <div class="sp-vol-row">
+        <span class="sp-label">Volume</span>
+        <span id="vol-label" class="sp-vol-label">35%</span>
       </div>
-      <input id="vol-slider" type="range" min="0" max="100" value="35"
-        oninput="setVolume(this.value)"
-        style="width:100%;accent-color:var(--gold);cursor:pointer;">
+      <input id="vol-slider" class="sp-slider" type="range" min="0" max="100" value="35" oninput="setVolume(this.value)">
+    </div>
+  </div>
+  <!-- Voice section -->
+  <div class="sp-section">
+    <div class="sp-row">
+      <span class="sp-label">Voice</span>
+      <button id="bfx" class="sp-toggle" onclick="toggleFx()">ON</button>
+    </div>
+    <div class="sp-vol">
+      <div class="sp-vol-row">
+        <span class="sp-label">Volume</span>
+        <span id="fx-vol-label" class="sp-vol-label">40%</span>
+      </div>
+      <input id="fx-vol-slider" class="sp-slider" type="range" min="0" max="100" value="40" oninput="setFxVolume(this.value)">
     </div>
   </div>
   <!-- FX section -->
-  <div style="display:flex;flex-direction:column;gap:12px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <span style="font-size:12px;color:var(--cream);">Voice</span>
-      <button id="bfx" onclick="toggleFx()" style="
-        padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
-        background:rgba(42,158,103,.3);border:1px solid var(--jl);
-        color:var(--cream);letter-spacing:1px;transition:all .2s;">ON</button>
+  <div class="sp-section">
+    <div class="sp-row">
+      <span class="sp-label">FX</span>
+      <button id="bdiscard-sfx" class="sp-toggle" onclick="toggleDiscardSfx()">ON</button>
     </div>
-    <div style="display:flex;flex-direction:column;gap:6px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:12px;color:var(--cream);">Volume</span>
-        <span id="fx-vol-label" style="font-size:11px;color:var(--gold);">40%</span>
+    <div class="sp-vol">
+      <div class="sp-vol-row">
+        <span class="sp-label">Volume</span>
+        <span id="discard-vol-label" class="sp-vol-label">30%</span>
       </div>
-      <input id="fx-vol-slider" type="range" min="0" max="100" value="40"
-        oninput="setFxVolume(this.value)"
-        style="width:100%;accent-color:var(--gold);cursor:pointer;">
-    </div>
-  </div>
-  <!-- Discard SFX section -->
-  <div style="display:flex;flex-direction:column;gap:12px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <span style="font-size:12px;color:var(--cream);">FX</span>
-      <button id="bdiscard-sfx" onclick="toggleDiscardSfx()" style="
-        padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
-        background:rgba(42,158,103,.3);border:1px solid var(--jl);
-        color:var(--cream);letter-spacing:1px;transition:all .2s;">ON</button>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:6px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-size:12px;color:var(--cream);">Volume</span>
-        <span id="discard-vol-label" style="font-size:11px;color:var(--gold);">30%</span>
-      </div>
-      <input id="discard-vol-slider" type="range" min="0" max="100" value="30"
-        oninput="setDiscardVolume(this.value)"
-        style="width:100%;accent-color:var(--gold);cursor:pointer;">
+      <input id="discard-vol-slider" class="sp-slider" type="range" min="0" max="100" value="30" oninput="setDiscardVolume(this.value)">
     </div>
   </div>
   <!-- Voice Theme section -->
-  <div style="display:flex;flex-direction:column;gap:12px;">
-    <div style="font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);">VOICE THEME</div>
-    <div id="voice-theme-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+  <div class="sp-section">
+    <div class="sp-header">VOICE THEME</div>
+    <div id="voice-theme-list" class="sp-theme-list"></div>
   </div>
 </div>
-<div id="settings-backdrop" onclick="toggleSettings()" style="display:none;position:fixed;inset:0;z-index:199;"></div>
+<div id="settings-backdrop" onclick="toggleSettings()"></div>
 <div class="bg"></div><div class="bgg"></div>
 
 <!-- ════════════════════════════════════════════════════════════
      START SCREEN
      ════════════════════════════════════════════════════════════ -->
 <div class="screen" id="s-start">
-  <button onclick="toggleSettings()" title="Settings" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#888;font-size:20px;cursor:pointer;z-index:10;letter-spacing:-1px;">☰</button>
+  <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
   <div class="logo">
     <div class="logo-k">雀 心</div>
     <div class="logo-s">Mahjong Online</div>
   </div>
-  <button id="bstart" style="
-    padding:16px 48px;
-    font-family:'Cinzel Decorative',serif;
-    font-size:14px;letter-spacing:4px;
-    background:linear-gradient(135deg,rgba(26,107,69,.5),rgba(13,61,40,.5));
-    border:1px solid var(--jl);border-radius:4px;
-    color:var(--cream);cursor:pointer;
-    animation:pulse 1.5s ease-in-out infinite;
-    transition:all .2s;">
-    ▶ START
-  </button>
-  <div style="font-size:10px;color:rgba(245,237,216,.3);letter-spacing:2px;">© 雀心</div>
+  <button id="bstart">▶ START</button>
+  <div class="start-copy">© 雀心</div>
 </div>
 
 <!-- ════════════════════════════════════════════════════════════
@@ -526,17 +592,17 @@ transform-origin:left center;}
      ════════════════════════════════════════════════════════════ -->
 <div class="screen hidden" id="s-lobby">
   <!-- Settings button top-right of lobby -->
-  <button onclick="toggleSettings()" title="Settings" style="position:absolute;top:12px;right:14px;background:none;border:none;color:#888;font-size:20px;cursor:pointer;z-index:10;letter-spacing:-1px;">☰</button>
+  <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Mahjong Online</div></div>
   <div class="card">
     <h2>Enter the Hall</h2>
     <div id="lobby-inputs">
-    <div class="ig"><label for="iname">Your Name</label><input type="text" id="iname" placeholder="Player" maxlength="20" value="Player"></div>
+    <div class="ig"><label for="iname">Your Name</label><input type="text" id="iname" placeholder="Player" maxlength="10" value="Player"></div>
     <div class="ig">
       <label>Game Mode</label>
-      <div style="display:flex;gap:8px;margin-top:4px;">
-        <button class="mode-btn active" id="btn-tonpuu" onclick="setMode('tonpuu')">東風戦<br><span style="font-size:9px;letter-spacing:1px;opacity:.7;">TONPUU · 4 rounds</span></button>
-        <button class="mode-btn" id="btn-hanchan" onclick="setMode('hanchan')">半荘戦<br><span style="font-size:9px;letter-spacing:1px;opacity:.7;">HANCHAN · 8 rounds</span></button>
+      <div class="mode-row">
+        <button class="mode-btn active" id="btn-tonpuu" onclick="setMode('tonpuu')">東風戦<br><span class="mode-sub">TONPUU · 4 rounds</span></button>
+        <button class="mode-btn" id="btn-hanchan" onclick="setMode('hanchan')">半荘戦<br><span class="mode-sub">HANCHAN · 8 rounds</span></button>
       </div>
     </div>
     </div>
@@ -559,54 +625,34 @@ transform-origin:left center;}
      ════════════════════════════════════════════════════════════ -->
 <div class="screen hidden" id="s-game">
   <div class="topbar">
-    <div class="tb-title">雀心 Mahjong <span id="tb-mode" style="font-size:10px;opacity:.6;margin-left:6px;"></span></div>
+    <div class="tb-title">雀心 Mahjong <span id="tb-mode" class="tb-mode-label"></span></div>
     <div class="tb-st" id="tst">—</div>
-    <div style="display:flex;align-items:center;gap:6px;">
-      <button class="bl" id="bsettings" title="Settings" style="color:#888;font-size:18px;letter-spacing:-1px;background:none;border-color:rgba(255,255,255,.1);">☰</button>
+    <div class="tb-right">
+      <button class="bl tb-settings" id="bsettings" title="Settings">☰</button>
       <button class="bl" id="bleave">✕ Leave</button>
     </div>
   </div>
 
   <!-- Loading overlay — shown between game_start and first game_state -->
-  <div id="game-loading" style="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;">
-    <div style="font-family:'Noto Serif JP',serif;font-size:clamp(28px,6vmin,48px);font-weight:900;color:var(--gold);letter-spacing:4px;animation:pulse 1.2s ease-in-out infinite;">牌</div>
-    <div style="display:flex;gap:10px;">
+  <div id="game-loading">
+    <div class="gl-kanji">配牌中</div>
+    <div class="gl-dots">
       <div class="ld-dot" style="animation-delay:0s"></div>
       <div class="ld-dot" style="animation-delay:.2s"></div>
       <div class="ld-dot" style="animation-delay:.4s"></div>
     </div>
-    <div style="font-size:11px;letter-spacing:3px;color:rgba(245,237,216,.45);font-family:'Cinzel Decorative',serif;">DEALING TILES</div>
+    <div class="gl-label">DEALING TILES</div>
   </div>
+
   <div class="table">
+    <div class="wood-table"></div>
     <div class="felt">
-
-
-
       <!-- ── Centre info panel ── -->
       <div class="ctr">
-        <!-- Top score row — rotated 180° for top player's reading direction -->
-        <div class="ctr-score" style="transform:rotate(180deg);z-index:1;">
+        <div class="ctr-score ctr-score-top">
           <span id="ctr-s-t" class="ctr-score-val">—</span>
-        </div>
-        <!-- Left score — absolute, outside flex flow -->
-        <div class="ctr-score" style="position:absolute;transform:translateX(-41%) rotate(90deg);z-index:4;clip-path: inset(0 0 0 18.4%);">
-          <span id="ctr-s-l" class="ctr-score-val">—</span>
-        </div>
-        <!-- Middle: wind info + riichi sticks -->
-        <div class="ctr-mid" style="position:relative;">
-          <!-- Bottom player riichi stick -->
-          <div id="rsb" style="display:none;position:absolute;bottom:4px;left:50%;transform:translateX(-50%);z-index:16;">
-            <svg viewBox="0 0 44 10" width="32" height="7" xmlns="http://www.w3.org/2000/svg">
-              <defs><linearGradient id="rsib" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffdf4"/><stop offset="60%" stop-color="#f8edd8"/><stop offset="100%" stop-color="#e0c89a"/></linearGradient></defs>
-              <rect x="1" y="2" width="42" height="7" rx="1.5" fill="#8a6b20"/>
-              <rect x="1" y="1" width="42" height="7" rx="1.5" fill="url(#rsib)"/>
-              <rect x="1" y="1" width="42" height="2" rx="1.5" fill="rgba(255,255,255,.4)"/>
-              <circle cx="22" cy="4.5" r="2" fill="#cc2020"/><circle cx="22" cy="4" r="1.3" fill="#ee4040"/>
-            </svg>
-          </div>
-          <!-- Top player riichi stick -->
-          <div id="rst" style="display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%) rotate(180deg);z-index:16;">
-            <svg viewBox="0 0 44 10" width="32" height="7" xmlns="http://www.w3.org/2000/svg">
+          <div id="rst" class="rs-top">
+            <svg viewBox="0 0 44 10" width="4vmin" height="1vmin" xmlns="http://www.w3.org/2000/svg">
               <defs><linearGradient id="rsit" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffdf4"/><stop offset="60%" stop-color="#f8edd8"/><stop offset="100%" stop-color="#e0c89a"/></linearGradient></defs>
               <rect x="1" y="2" width="42" height="7" rx="1.5" fill="#8a6b20"/>
               <rect x="1" y="1" width="42" height="7" rx="1.5" fill="url(#rsit)"/>
@@ -614,9 +660,11 @@ transform-origin:left center;}
               <circle cx="22" cy="4.5" r="2" fill="#cc2020"/><circle cx="22" cy="4" r="1.3" fill="#ee4040"/>
             </svg>
           </div>
-          <!-- Left player riichi stick -->
-          <div id="rsl" style="display:none;position:absolute;top:50%;left:4px;transform:translateY(-50%) rotate(90deg);z-index:16;">
-            <svg viewBox="0 0 44 10" width="32" height="7" xmlns="http://www.w3.org/2000/svg">
+        </div>
+        <div class="ctr-score ctr-score-left">
+          <span id="ctr-s-l" class="ctr-score-val">—</span>
+          <div id="rsl" class="rs-left">
+            <svg viewBox="0 0 44 10" width="4vmin" height="1vmin" xmlns="http://www.w3.org/2000/svg">
               <defs><linearGradient id="rsil" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffdf4"/><stop offset="60%" stop-color="#f8edd8"/><stop offset="100%" stop-color="#e0c89a"/></linearGradient></defs>
               <rect x="1" y="2" width="42" height="7" rx="1.5" fill="#8a6b20"/>
               <rect x="1" y="1" width="42" height="7" rx="1.5" fill="url(#rsil)"/>
@@ -624,16 +672,8 @@ transform-origin:left center;}
               <circle cx="22" cy="4.5" r="2" fill="#cc2020"/><circle cx="22" cy="4" r="1.3" fill="#ee4040"/>
             </svg>
           </div>
-          <!-- Right player riichi stick -->
-          <div id="rsr" style="display:none;position:absolute;top:50%;right:4px;transform:translateY(-50%) rotate(-90deg);z-index:16;">
-            <svg viewBox="0 0 44 10" width="32" height="7" xmlns="http://www.w3.org/2000/svg">
-              <defs><linearGradient id="rsir" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffdf4"/><stop offset="60%" stop-color="#f8edd8"/><stop offset="100%" stop-color="#e0c89a"/></linearGradient></defs>
-              <rect x="1" y="2" width="42" height="7" rx="1.5" fill="#8a6b20"/>
-              <rect x="1" y="1" width="42" height="7" rx="1.5" fill="url(#rsir)"/>
-              <rect x="1" y="1" width="42" height="2" rx="1.5" fill="rgba(255,255,255,.4)"/>
-              <circle cx="22" cy="4.5" r="2" fill="#cc2020"/><circle cx="22" cy="4" r="1.3" fill="#ee4040"/>
-            </svg>
-          </div>
+        </div>
+        <div class="ctr-mid ctr-mid-rel">
           <div class="ctr-info">
             <div class="cw" id="cw">—</div>
             <div class="ci" id="ci"></div>
@@ -641,13 +681,29 @@ transform-origin:left center;}
             <div class="ch" id="chonba"></div>
           </div>
         </div>
-        <!-- Right score — absolute, outside flex flow -->
-        <div class="ctr-score" style="position:absolute;transform:translateX(41%) rotate(-90deg);z-index:2">
+        <div class="ctr-score ctr-score-right">
           <span id="ctr-s-r" class="ctr-score-val">—</span>
+          <div id="rsr" class="rs-right">
+            <svg viewBox="0 0 44 10" width="4vmin" height="1vmin" xmlns="http://www.w3.org/2000/svg">
+              <defs><linearGradient id="rsir" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffdf4"/><stop offset="60%" stop-color="#f8edd8"/><stop offset="100%" stop-color="#e0c89a"/></linearGradient></defs>
+              <rect x="1" y="2" width="42" height="7" rx="1.5" fill="#8a6b20"/>
+              <rect x="1" y="1" width="42" height="7" rx="1.5" fill="url(#rsir)"/>
+              <rect x="1" y="1" width="42" height="2" rx="1.5" fill="rgba(255,255,255,.4)"/>
+              <circle cx="22" cy="4.5" r="2" fill="#cc2020"/><circle cx="22" cy="4" r="1.3" fill="#ee4040"/>
+            </svg>
+          </div>
         </div>
-        <!-- Bottom score row — my score -->
-        <div class="ctr-score" style="z-index:3;">
+        <div class="ctr-score ctr-score-bottom">
           <span id="ctr-s-b" class="ctr-score-val">—</span>
+          <div id="rsb" class="rs-bottom">
+            <svg viewBox="0 0 44 10" width="4vmin" height="1vmin" xmlns="http://www.w3.org/2000/svg">
+              <defs><linearGradient id="rsib" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fffdf4"/><stop offset="60%" stop-color="#f8edd8"/><stop offset="100%" stop-color="#e0c89a"/></linearGradient></defs>
+              <rect x="1" y="2" width="42" height="7" rx="1.5" fill="#8a6b20"/>
+              <rect x="1" y="1" width="42" height="7" rx="1.5" fill="url(#rsib)"/>
+              <rect x="1" y="1" width="42" height="2" rx="1.5" fill="rgba(255,255,255,.4)"/>
+              <circle cx="22" cy="4.5" r="2" fill="#cc2020"/><circle cx="22" cy="4" r="1.3" fill="#ee4040"/>
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -658,53 +714,48 @@ transform-origin:left center;}
       <div class="dz dzr" id="dzr"></div>
 
       <!-- ── BOTTOM PLAYER (you) ── -->
-      <div class="pa pa-b" id="pa-b">
+      <div class="pa-b" id="pa-b">
         <div class="hr" id="hdb"></div>
       </div>
       <!-- ── Nameplate ── -->
-        <div style="transform:translateX(-50%);position:absolute;bottom:calc(var(--tlg-h) + 15px + 14px);left:50%;">
-          <div style="position:relative;display:flex;align-items:center;">
-            <div class="act-overlay" id="actbar-left" style="position:absolute;right:100%;padding-right:6px;"></div>
+        <div class="np-wrap-b">
+          <div class="np-inner">
             <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div></div></div>
-            <div class="act-overlay" id="actbar-right" style="position:absolute;left:100%;padding-left:6px;"></div>
           </div>
-          <span id="tpb" style="display:none" class="tenpai">TENPAI</span>
+          <div class="act-overlay actbar" id="actbar"></div>
         </div>
-      <!-- Bottom melds: their bottom-right corner = felt bottom-right -->
-      <div class="mr" id="mlb" style="position:absolute;bottom:0px;right:0px;display:flex;flex-direction:row;align-items:flex-end;z-index:15;"></div>
+        <span id="tpb" style="display:none" class="tenpai">TENPAI</span>
+      <div class="mr ml-b" id="mlb"></div>
 
       <!-- ── TOP PLAYER (opponent, rotated 180°) ── -->
-      <div class="pa pa-t" id="pa-t">
+      <div class="pa-t" id="pa-t">
         <div class="hr" id="hdt"></div>
       </div>
-        <!-- Nameplate -->
-        <div style="transform:translateX(-50%) rotate(180deg);position:absolute;top:calc(var(--tmd-h) + 15px + 13px);left:50%;z-index:20;">
+        <div class="np-wrap-t">
           <div class="np" id="npt"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
         </div>
-      <!-- Top melds: their bottom-right = our top-left corner -->
-      <div class="mr" id="mlt" style="position:absolute;top:0;left:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(180deg);transform-origin:center center;z-index:15;"></div>
+      <div class="mr ml-t" id="mlt"></div>
 
       <!-- ── LEFT PLAYER ── -->
-      <div class="pa pa-l" id="pa-l">
+      <div class="pa-l" id="pa-l">
         <div class="hr" id="hdl"></div>
       </div>
-        <!-- Nameplate -->
-        <div style="transform:translateY(-50%) rotate(90deg);position:absolute;top:50%;left:29px;z-index:20;">
+        <div class="np-wrap-l">
           <div class="np" id="npl"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
         </div>
-      <!-- Left melds: their bottom-right = our bottom-left corner -->
-      <div class="mr" id="mll" style="position:absolute;bottom:0;left:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(90deg) translateX(-100%);transform-origin:bottom left;z-index:15;"></div>
+      <div class="mr ml-l" id="mll"></div>
 
       <!-- ── RIGHT PLAYER ── -->
-      <div class="pa pa-r" id="pa-r">
+      <div class="pa-r" id="pa-r">
         <div class="hr" id="hdr"></div>
       </div>
-        <!-- Nameplate -->
-        <div style="transform:translateY(-50%) rotate(-90deg);position:absolute;top:50%;right:30px;z-index:20;">
-          <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
+        <div class="np-wrap-r">
+          <div class="np-flip">
+            <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
+          </div>
         </div>
-      <!-- Right melds: their bottom-right = our bottom-right corner -->
-      <div class="mr" id="mlr" style="position:absolute;top:0;right:0;display:flex;flex-direction:row;align-items:flex-end;transform:rotate(-90deg) translateY(-100%);transform-origin:top right;z-index:15;"></div>
+      <div class="mr ml-r" id="mlr"></div>
+      
 
   </div><!-- end .felt -->
   </div><!-- end .table -->
@@ -737,11 +788,11 @@ transform-origin:left center;}
     <div class="ret" id="ret">—</div><div class="rehn" id="rehn"></div>
     <div class="yl" id="reyl"></div><div class="wt" id="rewt"></div>
     <table class="st" id="rest"></table>
-    <div class="reb" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-      <button id="bround-ready" class="ready-btn" style="max-width:200px;" onclick="sendRoundReady()">✓ Ready</button>
-      <button id="bend-menu" class="bp" style="max-width:200px;display:none;" onclick="goLobby()">Main Menu</button>
+    <div class="reb">
+      <button id="bround-ready" class="ready-btn reb-btn" onclick="sendRoundReady()">✓ Ready</button>
+      <button id="bend-menu" class="bp reb-btn" style="display:none;" onclick="goLobby()">Main Menu</button>
     </div>
-    <div id="ready-status" style="margin-top:8px;font-size:11px;color:rgba(245,237,216,.5);letter-spacing:1px;text-align:center;"></div>
+    <div id="ready-status" class="ready-status"></div>
   </div>
 </div>
 <div class="tc" id="tc"></div>
@@ -750,19 +801,9 @@ transform-origin:left center;}
 <!-- ════════════════════════════════════════════════════════════
      DORA INDICATOR PANEL (fixed top-left)
      ════════════════════════════════════════════════════════════ -->
-<div id="dora-panel" style="position:fixed;top:44px;left:8px;z-index:80;pointer-events:none;
-  background:rgba(8,25,12,.97);
-  border:2px solid rgba(201,168,76,.5);
-  border-radius:12px;
-  padding:14px 16px 16px;
-  display:none;
-  box-shadow:0 4px 24px rgba(0,0,0,.8),inset 0 1px 0 rgba(201,168,76,.2);">
-  <div style="font-size:11px;letter-spacing:4px;color:rgba(201,168,76,.9);
-    margin-bottom:10px;font-family:'Cinzel Decorative',serif;
-    text-align:center;
-    border-bottom:1px solid rgba(201,168,76,.25);padding-bottom:8px;">DORA</div>
-  <!-- 5 fixed slots -->
-  <div style="display:flex;gap:6px;align-items:flex-end;">
+<div id="dora-panel">
+  <div class="dora-title">DORA</div>
+  <div class="dora-slots">
     <div id="dora-slot-0" class="dora-slot"></div>
     <div id="dora-slot-1" class="dora-slot"></div>
     <div id="dora-slot-2" class="dora-slot"></div>
@@ -1312,10 +1353,10 @@ function playDiscardSfx(){
 }
 
 function toggleMusic(){
+  musicEnabled=!musicEnabled;
   const btn=$('bmute');
   if(musicEnabled){
     if(btn){ btn.textContent='ON'; btn.style.background='rgba(42,158,103,.3)'; btn.style.borderColor='var(--jl)'; }
-    // Play whichever is appropriate — lobby or game
     if(inGame) playGameMusic(); else playLobbyMusic();
   } else {
     stopLobbyMusic(); stopGameMusic();
@@ -1485,7 +1526,7 @@ function renderState(m, prev){
       if(ctrEl) ctrEl.textContent=m.scores[abs];
     }
     $('np'+id).classList.toggle('active',m.turn===abs);
-    if(m.riichi?.[abs]) $('rs'+id).style.display='';
+    if(m.riichi?.[abs]) $('rs'+id).style.display='block';
     // Seat wind: server sends seatWinds[absIndex] = wind index (0=East..3=North)
     if(m.seatWinds){
       const wb=$('wb'+id);
@@ -1633,7 +1674,7 @@ function renderState(m, prev){
     for(const meld of melds){
       const g=document.createElement('div');g.className='mg';
       // top/left/right all need dir 1↔3 swapped due to their container rotation
-      renderMeld(g, meld, abs, id==='t'||id==='l'||id==='r');
+      renderMeld(g, meld, abs);
       if(id==='t') ml2.prepend(g); // top: anchor top-left, first meld leftmost, grows right
       else if(id==='l') ml2.prepend(g); // left: anchor bottom-left, first meld at bottom, grows up
       else ml2.prepend(g);          // right: anchor top-right, first meld at top, grows down
@@ -1645,11 +1686,11 @@ function renderState(m, prev){
   if(!furitenEl){
     furitenEl=document.createElement('span');
     furitenEl.id='furiten-badge';
-    furitenEl.style.cssText='display:none;padding:2px 6px;border-radius:4px;background:linear-gradient(135deg,#444,#222);color:#f88;font-size:8px;letter-spacing:1px;font-family:"Cinzel Decorative",serif;margin-left:3px;';
-    furitenEl.textContent='振聴';
-    $('tpb').parentNode.appendChild(furitenEl);
+    furitenEl.className='furiten-badge';
+    furitenEl.textContent='Furiten';
+    document.querySelector('.felt').appendChild(furitenEl);
   }
-  furitenEl.style.display=m.furiten?'':'none';
+  furitenEl.style.display=m.furiten?'block':'none';
   drawActions(m);
 }
 
@@ -1709,13 +1750,12 @@ function renderMeld(container, meld, viewerSeat, flipped=false){
 
     } else if(kanType === 'kakan'){
       const kakanAdded = meld.tiles[3];
-      const ponCalled = tiles.find(t=>t.id===calledId) || meld.tiles[2];
-      const ponOwn = tiles.filter(t=>t.id!==calledId&&t!==kakanAdded);
+      const ponCalled = meld.tiles[2];
+      const ponOwn = meld.tiles.slice(0, 2); // always first 2 tiles
       const stack = document.createElement('div');
       stack.className = 'called-stack';
       const baseEl = mkElMd(ponCalled); baseEl.classList.add('kakan-base');
-      const addEl = kakanAdded ? mkElMd(kakanAdded) : mkElMd(meld.tiles[3]); addEl.classList.add('kakan-add');
-      stack.appendChild(baseEl); stack.appendChild(addEl);
+      const addEl = mkElMd(kakanAdded); addEl.classList.add('kakan-add');stack.appendChild(baseEl); stack.appendChild(addEl);// ponOwn should have 2 tiles (original pon had 3, minus the called = 2)
       const ownEls = ponOwn.map(t=>mkElMd(t));
       if(dir===1){ ownEls.forEach(el=>add(el)); add(stack); }
       else if(dir===2){ add(ownEls[0]); add(stack); if(ownEls[1]) add(ownEls[1]); }
@@ -1738,68 +1778,64 @@ function renderMeld(container, meld, viewerSeat, flipped=false){
 
 // ACTION BAR — buttons shown on player's turn
 function drawActions(m){
-  const barL=$('actbar-left'), barR=$('actbar-right');
-  barL.innerHTML=''; barR.innerHTML='';
+  const bar=$('actbar'); bar.innerHTML='';
   if(!m) return;
-  barL.className='act-overlay'; barR.className='act-overlay';
+  bar.className='act-overlay';
   const mine=m.turn===mySeat, react=m.pending?.isForMe;
 
   if(mine){
     // LEFT: TSUMO
     if(m.canTsumo)
-      ab(barL,'TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
+      ab(bar,'TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
 
     // LEFT: ANKAN
     const canAnkan=m.canAnkan||[];
     canAnkan.forEach(tileKey=>{
-      ab(barL,'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey}}));
+      ab(bar,'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey}}));
     });
 
     // LEFT: KAKAN
     const canKakan=m.canKakan||[];
     if(canKakan.length>0){
       if(selId&&canKakan.includes(selId))
-        ab(barL,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:selId}}));
+        ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:selId}}));
       else if(canKakan.length===1&&!selId)
-        ab(barL,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:canKakan[0]}}));
+        ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:canKakan[0]}}));
     }
 
     // LEFT: RIICHI
     const canRiichi=m.canRiichi||[];
     if(canRiichi.length>0&&selId&&canRiichi.includes(selId))
-      ab(barL,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:selId}});selId=null;});
+      ab(bar,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:selId}});selId=null;});
 
     // RIGHT: DISCARD
     if(selId)
-      ab(barR,'DISCARD','bdis',()=>{wss({type:'action',action:{type:'discard',tileId:selId}});selId=null;});
+      ab(bar,'DISCARD','bdis',()=>{wss({type:'action',action:{type:'discard',tileId:selId}});selId=null;});
 
     // RIGHT: KYUUSHU
     if(m.canKyuushu)
-      ab(barR,'九種九牌','bkyu',()=>wss({type:'action',action:{type:'kyuushu'}}));
+      ab(bar,'Kyuushu Kyuuhai','bkyu',()=>wss({type:'action',action:{type:'kyuushu'}}));
 
-    if(barL.children.length>0) barL.classList.add('visible');
-    if(barR.children.length>0) barR.classList.add('visible');
+    if(bar.children.length>0) bar.classList.add('visible');
 
   } else if(react){
     const opts=m.pending.options||[];
     // LEFT: RON, PON, KAN, CHI
     if(opts.some(o=>o.type==='ron'))
-      ab(barL,'RON','bron',()=>wss({type:'action',action:{type:'ron'}}));
+      ab(bar,'RON','bron',()=>wss({type:'action',action:{type:'ron'}}));
     if(opts.some(o=>o.type==='pon'))
-      ab(barL,'PON','bpon',()=>wss({type:'action',action:{type:'pon'}}));
+      ab(bar,'PON','bpon',()=>wss({type:'action',action:{type:'pon'}}));
     if(opts.some(o=>o.type==='kan'))
-      ab(barL,'KAN','bkan',()=>wss({type:'action',action:{type:'kan'}}));
+      ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kan'}}));
     if(opts.some(o=>o.type==='chi')){
       const c=opts.find(o=>o.type==='chi');
-      ab(barL,'CHI','bchi',()=>wss({type:'action',action:{type:'chi',tileIds:c.sequences[0]}}));
+      ab(bar,'CHI','bchi',()=>wss({type:'action',action:{type:'chi',tileIds:c.sequences[0]}}));
     }
     // RIGHT: SKIP
-    ab(barR,'SKIP','bpas',()=>wss({type:'action',action:{type:'pass'}}));
-    if(barL.children.length>0) barL.classList.add('visible');
-    barR.classList.add('visible');
+    ab(bar,'SKIP','bpas',()=>wss({type:'action',action:{type:'pass'}}));
+    if(bar.children.length>0) bar.classList.add('visible');
   }
-  if(!barL.classList.contains('visible')) barL.classList.remove('visible');
-  if(!barR.classList.contains('visible')) barR.classList.remove('visible');
+  if(!bar.classList.contains('visible')) bar.classList.remove('visible');
 }
 
 function ab(c,l,cls,fn){const b=document.createElement('button');b.className='ba '+cls;b.textContent=l;b.onclick=fn;c.appendChild(b);}
@@ -1897,7 +1933,7 @@ function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(
 
 // NOTIFICATIONS — riichi announcements, toasts
 function onRiichi(m){
-  $('rs'+pid(m.seat)).style.display='';
+  $('rs'+pid(m.seat)).style.display='block';
   const label=m.isDouble?'ダブルリーチ':'リーチ';
   toast(label+' — '+(m.name||'Player'));
 }
@@ -1966,9 +2002,7 @@ function onRoundStart(m){
   const doraPanel=$('dora-panel');
   if(doraPanel) doraPanel.querySelectorAll('.dora-slot').forEach(s=>{s.innerHTML='';s.className='dora-slot';});
   // Clear action bar
-  const barL=$('actbar-left'),barR=$('actbar-right');
-  if(barL){barL.innerHTML='';barL.classList.remove('visible');}
-  if(barR){barR.innerHTML='';barR.classList.remove('visible');}
+  const bar=$('actbar'); if(bar){bar.innerHTML='';bar.classList.remove('visible');}
   // Clear selection
   selId=null;
 
@@ -2058,17 +2092,24 @@ function onEnd(m){
 // RESPONSIVE TILE SIZING
 // Recalculates --tlg/tmd/tsm CSS vars on window resize
 function updateTileSizes(){
-  const vmin=Math.min(window.innerWidth,window.innerHeight);
-  // Large tiles: target ~6.5% of vmin each, capped for desktop
-  const lgW=Math.round(Math.min(vmin*0.066,46));
+  // Read felt size from CSS variable — available immediately, no layout needed
+  const root=document.documentElement;
+  const feltSizeStr=getComputedStyle(root).getPropertyValue('--felt-size').trim();
+  // Parse the computed value (may be in px after calc resolution)
+  const felt=document.querySelector('.felt');
+  const feltSize=felt?felt.getBoundingClientRect().width:
+    parseFloat(feltSizeStr)||Math.min(window.innerWidth,window.innerHeight)*0.86;
+  const base=feltSize>0?feltSize:Math.min(window.innerWidth,window.innerHeight)*0.86;
+  // Max 14 tiles must fit in ~74% of felt width (remaining for melds/padding)
+  const maxByFit=Math.floor((base*0.74)/14);
+  // Cap at 6% of base for aesthetics
+  const lgW=Math.round(Math.min(base*0.060,maxByFit));
   const lgH=Math.round(lgW*1.38);
-  // Medium tiles (discards): ~60% of large
-  const mdW=Math.round(lgW*0.63);
-  const mdH=Math.round(lgH*0.63);
-  // Small tiles (opponent backs): ~65% of large
+  const dzWidth=base*0.26;          // discard zone is ~26% of felt width
+  const mdW=Math.floor(dzWidth/6);  // 6 tiles per row
+  const mdH=Math.round(mdW*1.38);   // maintain tile aspect ratio
   const smW=Math.round(lgW*0.65);
   const smH=Math.round(lgH*0.65);
-  const root=document.documentElement;
   root.style.setProperty('--tlg-w',lgW+'px');
   root.style.setProperty('--tlg-h',lgH+'px');
   root.style.setProperty('--tmd-w',mdW+'px');
@@ -2078,6 +2119,7 @@ function updateTileSizes(){
 }
 window.addEventListener('resize',updateTileSizes);
 updateTileSizes();
+setTimeout(updateTileSizes,100);
 
 
 // BOOT — initialise on page load

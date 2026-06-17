@@ -960,9 +960,12 @@ class Room {
         }
       }
       let canKakan=[];
-      if(g.turn===seat&&!g.riichi[seat]&&hand.length===14){
+      if(g.turn===seat&&!g.riichi[seat]&&g.drawTile){
         const ponKeys=g.melds[seat].filter(m=>m.type==='pon').map(m=>key(m.tiles[0]));
-        canKakan=hand.filter(t=>ponKeys.includes(key(t))).map(t=>t.id);
+        canKakan=hand.filter(t=>ponKeys.includes(key(t))&&t.id===g.drawTile.id).map(t=>t.id);
+        // Also allow kakan with any tile in hand matching a pon (not just draw tile)
+        if(canKakan.length===0)
+          canKakan=hand.filter(t=>ponKeys.includes(key(t))).map(t=>t.id);
       }
       let pendingForMe=null;
       if(g.pending&&g.pending.seats.includes(seat)){
