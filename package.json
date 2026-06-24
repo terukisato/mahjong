@@ -1,7 +1,21 @@
 {
-  "name": "mahjong-online",
-  "version": "2.0.0",
+  "name": "janshin",
+  "version": "0.9.0",
+  "description": "Janshin (雀心) — riichi mahjong web game",
   "main": "server/index.js",
-  "scripts": { "start": "node server/index.js" },
-  "dependencies": { "express": "^4.18.2", "ws": "^8.14.2" }
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js"
+  },
+  "keywords": [
+    "mahjong",
+    "riichi",
+    "game"
+  ],
+  "author": "Teruki Sato",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.2.1",
+    "ws": "^8.21.0"
+  }
 }

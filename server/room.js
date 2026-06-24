@@ -263,6 +263,19 @@ class Room {
     else if(act.type==='kan') this._reactResponse(seat,{type:'kan'});
     else if(act.type==='chi') this._reactResponse(seat,{type:'chi',tileIds:act.tileIds});
     else if(act.type==='pass') this._reactResponse(seat,{type:'pass'});
+    // DEBUG ONLY — forces a player's hand to specific tiles for testing win conditions.
+    // Remove this block before production deployment.
+    else if(act.type==='debug_set_hand'&&Array.isArray(act.tiles)){
+      let nextId=10000;
+      g.hands[seat]=act.tiles.map(t=>({id:nextId++,s:t.s,v:t.v}));
+      if(act.drawTile){
+        g.drawTile={id:nextId++,s:act.drawTile.s,v:act.drawTile.v};
+        g.hands[seat].push(g.drawTile);
+        g.turn=seat;
+      }
+      this._sendState();
+      console.log('[DEBUG] Set hand for seat',seat,':',g.hands[seat].map(t=>t.s+t.v).join(' '));
+    }
     }catch(e){ console.error('[action error]',e.message,e.stack); }
   }
 
@@ -306,7 +319,7 @@ class Room {
         }
       }
     } else {
-      if(this._checkSuukaisan()) return;
+      if(this._checkSuukaikan()) return;
       this._nextTurn();
     }
   }
@@ -396,7 +409,7 @@ class Room {
     if(ponSeat!==null) this._pon(ponSeat,tile,fromSeat);
     else if(chiSeat!==null) this._chi(chiSeat,tile,responses[chiSeat].tileIds,fromSeat);
     else {
-      if(this._checkSuukaisan()) return;
+      if(this._checkSuukaikan()) return;
       this._nextTurn();
     }
   }
@@ -465,6 +478,7 @@ class Room {
     g.melds[seat].push({type:'pon',tiles:[...used,tile],calledTileId:tile.id,fromSeat});
     g.nagashi[seat]=false;
     g.turn=seat;
+    g.ippatsu=g.ippatsu.map(()=>false);
     this._sendState();
     if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat])),BOT_DELAY);
   }
@@ -477,6 +491,7 @@ class Room {
     g.melds[seat].push({type:'chi',tiles:sort([...used,tile]),calledTileId:tile.id,fromSeat});
     g.nagashi[seat]=false;
     g.turn=seat;
+    g.ippatsu=g.ippatsu.map(()=>false);
     this._sendState();
     if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat])),BOT_DELAY);
   }
@@ -593,12 +608,12 @@ class Room {
     this._draw(true);
   }
 
-  // Suukaisan: 4 kans by different players = abortive draw
-  _checkSuukaisan(){
+  // Suukaikan: 4 kans by different players = abortive draw
+  _checkSuukaikan(){
     const g=this.game;
     if(g.kanCount<4) return false;
     if(new Set(g.kanSeats).size===1) return false;
-    this._endRound('suukaisan');
+    this._endRound('suukaikan');
     return true;
   }
 
@@ -692,7 +707,8 @@ class Room {
     const decomps=decompose(hand);
     const fu=decomps.length?calcFu(decomps[0],false,!g.melds[winSeat].length,key(tile),hasPinfu):30;
     const bp=basePoints(totalHan,fu);
-    const pay=Math.ceil(bp*4/100)*100+g.honba*300+g.riichiSticks*1000;
+    const isWinnerDealer=winSeat===g.dealer;
+    const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300+g.riichiSticks*1000;
     g.scores[loseSeat]-=pay;g.scores[winSeat]+=pay;
     const yl=dc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:dc}]:yakuList;
     if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
@@ -731,7 +747,6 @@ class Room {
     let newRiichiSticks=0;
     let newDealer=g.dealer;
     let newRound=g.round;
-    let newRoundWind=g.roundWind;
 
     if(reason==='tsumo'||reason==='ron'){
       if(dealerWon){
@@ -739,10 +754,9 @@ class Room {
         newHonba=g.honba+1;
         newRiichiSticks=0;
       } else {
-        // Non-dealer wins → advance dealer and round
+        // Non-dealer wins → advance dealer and kyoku
         newHonba=0;
         newDealer=(g.dealer+1)%4;
-        newRoundWind=g.roundWind+1;
         newRound=g.round+1;
       }
     } else {
@@ -750,6 +764,9 @@ class Room {
       newHonba=g.honba+1;
       newRiichiSticks=g.riichiSticks;
     }
+
+    // Derive wind from round number: rounds 1-4=East, 5-8=South
+    const newRoundWind=Math.ceil(newRound/4);
 
     this._broadcastAll({type:'round_end',reason,winner,loser,hand,yakuList,han,fu,payment,
       scores:g.scores,handLabel:han?handLabel(han):'',
@@ -767,27 +784,30 @@ class Room {
       return;
     }
 
-    // Hanchan: East round (winds 1-4) + South round (winds 5-8) = 8 rounds total
-    // newRoundWind > 8 means South 4 complete → game over
-    if(newRoundWind>(this.gameMode==="hanchan"?8:4)){
+    const maxRound=this.gameMode==="hanchan"?8:4;
+    if(newRound>maxRound){
       this.phase='done';
       this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
       return;
     }
 
+    // Apply round state immediately so subsequent _endRound calls see correct g.round
+    g.dealer=newDealer;
+    g.round=newRound;
+    g.roundWind=newRoundWind;
+    g.honba=newHonba;
+    g.riichiSticks=reason==='suukaikan'?g.riichiSticks:newRiichiSticks;
+
     // Wait for all players to click Ready before starting next round
     this.roundReady=new Set();
     this.pendingNextRound=()=>{
       if(this.phase!=='playing') return;
-      g.dealer=newDealer;
-      g.round=newRound;
-      g.roundWind=newRoundWind;
-      g.honba=newHonba;
-      g.riichiSticks=reason==='suukaisan'?g.riichiSticks:newRiichiSticks;
       g.turn=newDealer;
       this._initRound();
-      this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:newRoundWind<=4?1:2,displayRound:((newRoundWind-1)%4)+1,
+      const dispWind=Math.ceil(newRound/4);
+      const dispRound=((newRound-1)%4)+1;
+      this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:dispWind,displayRound:dispRound,
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
       setTimeout(()=>this._draw(),300);
@@ -797,7 +817,6 @@ class Room {
   _resolveTenpaiPayments(){
     const g=this.game;
     const inTenpai=g.hands.map((hand,seat)=>{
-      if(hand.length!==13) return false;
       return waits(hand,g.melds[seat]).length>0;
     });
     const tenpaiCount=inTenpai.filter(Boolean).length;
@@ -831,12 +850,11 @@ class Room {
     const newHonba=g.honba+1;
     let newDealer=g.dealer;
     let newRound=g.round;
-    let newRoundWind=g.roundWind;
     if(!dealerTenpai){
       newDealer=(g.dealer+1)%4;
       newRound=g.round+1;
-      newRoundWind=g.roundWind+1;
     }
+    const newRoundWind=Math.ceil(newRound/4);
 
     const bust=g.scores.findIndex(s=>s<0);
     if(bust>=0){
@@ -845,20 +863,25 @@ class Room {
         playerNames:this.seats.map(p=>p?.name||'—')}),1000);
       return;
     }
-    if(newRoundWind>(this.gameMode==="hanchan"?8:4)){
+    const maxRound=this.gameMode==="hanchan"?8:4;
+    if(newRound>maxRound){
       this.phase='done';
       setTimeout(()=>this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')}),1000);
       return;
     }
 
+    g.dealer=newDealer;g.round=newRound;g.roundWind=newRoundWind;
+    g.honba=newHonba;
+
     this.roundReady=new Set();
     this.pendingNextRound=()=>{
       if(this.phase!=='playing') return;
-      g.dealer=newDealer;g.round=newRound;g.roundWind=newRoundWind;
-      g.honba=newHonba;g.turn=newDealer;
+      g.turn=newDealer;
       this._initRound();
-      this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:newRoundWind<=4?1:2,displayRound:((newRoundWind-1)%4)+1,
+      const dispWind=Math.ceil(newRound/4);
+      const dispRound=((newRound-1)%4)+1;
+      this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:dispWind,displayRound:dispRound,
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
       setTimeout(()=>this._draw(),300);
@@ -885,24 +908,30 @@ class Room {
     // Nagashi: dealer repeat if dealer is nagashi winner
     const dealerNagashi=nagashiSeats[g.dealer];
     const newHonba=g.honba+1;
-    let newDealer=g.dealer,newRound=g.round,newRoundWind=g.roundWind;
+    let newDealer=g.dealer,newRound=g.round;
     if(!dealerNagashi){
       newDealer=(g.dealer+1)%4;
-      if(newDealer===0){newRound++;newRoundWind++;}
+      newRound=g.round+1;
     }
-    if(newRoundWind>(this.gameMode==="hanchan"?8:4)){
+    const newRoundWind=Math.ceil(newRound/4);
+    const maxRound=this.gameMode==="hanchan"?8:4;
+    if(newRound>maxRound){
       this.phase='done';
       setTimeout(()=>this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')}),1000);
       return;
     }
+    g.dealer=newDealer;g.round=newRound;g.roundWind=newRoundWind;
+    g.honba=newHonba;
+
     this.roundReady=new Set();
     this.pendingNextRound=()=>{
       if(this.phase!=='playing') return;
-      g.dealer=newDealer;g.round=newRound;g.roundWind=newRoundWind;
-      g.honba=newHonba;g.turn=newDealer;
+      g.turn=newDealer;
       this._initRound();
-      this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:newRoundWind<=4?1:2,displayRound:((newRoundWind-1)%4)+1,
+      const dispWind=Math.ceil(newRound/4);
+      const dispRound=((newRound-1)%4)+1;
+      this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:dispWind,displayRound:dispRound,
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
       setTimeout(()=>this._draw(),300);
@@ -937,11 +966,11 @@ class Room {
       const hand=g.hands[seat];
       // Calculate waits from 13-tile hand (excluding draw tile if present)
       const dt=g.turn===seat?g.drawTile:null;
-      const handForWaits=dt?hand.filter(t=>t.id!==dt.id):hand;
-      const w=waits(handForWaits,g.melds[seat]);
+      const w=waits(hand,g.melds[seat]);
       let canRiichi=[];
-      if(hand.length===14&&!g.melds[seat].length&&!g.riichi[seat]&&g.scores[seat]>=1000){
-        canRiichi=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id)).length>0).map(t=>t.id);
+      const hasOpenMeld=g.melds[seat].some(m=>m.type!=='kan'||m.kanType!=='ankan');
+      if(hand.length===14&&!hasOpenMeld&&!g.riichi[seat]&&g.scores[seat]>=1000){
+        canRiichi=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id),g.melds[seat]).length>0).map(t=>t.id);
       }
       let canAnkan=[];
       if(g.turn===seat&&hand.length===14){
@@ -994,7 +1023,7 @@ class Room {
         new Set(hand.map(t=>key(t)).filter(k=>TERMINALS.includes(k))).size>=9;
       this._send(p,{type:'game_state',seat,myHand:mainHand,drawTile:dt,myMelds:g.melds[seat],
         discards:g.discards,melds:g.melds,scores:g.scores,turn:g.turn,
-        round:g.round,roundWind:g.roundWind,displayWind:g.roundWind<=4?1:2,displayRound:((g.roundWind-1)%4)+1,dealer:g.dealer,honba:g.honba,
+        round:g.round,roundWind:g.roundWind,displayWind:Math.ceil(g.round/4),displayRound:((g.round-1)%4)+1,dealer:g.dealer,honba:g.honba,
         riichiSticks:g.riichiSticks,
         dora:g.dora,wallCount:g.wall.length,waits:w,riichi:g.riichi,
         doubleRiichi:g.doubleRiichi,

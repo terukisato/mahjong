@@ -113,12 +113,20 @@ function isChuuren9(hand){
 }
 
 function isWin(hand, melds){
-  // Count tiles in melds (3 per chi/pon, 4 per kan)
-  const meldCount = melds ? melds.reduce((n,m)=>n+(m.type==='kan'?4:3),0) : 0;
-  const total = hand.length + meldCount;
-  if(total !== 14) return false;
+  // Physical tile accounting: melds hold 3 tiles (chi/pon) or 4 tiles (kan).
+  // A kan's 4th tile is a "bonus" the player banked via their rinshan
+  // replacement draw, so total physical tiles (hand + melds) for a complete
+  // hand is 14 plus one extra per kan called.
+  const physicalMeldTiles = melds ? melds.reduce((n,m)=>n+(m.type==='kan'?4:3),0) : 0;
+  const numKans = melds ? melds.filter(m=>m.type==='kan').length : 0;
+  const total = hand.length + physicalMeldTiles;
+  if(total !== 14 + numKans) return false;
   if(melds && melds.length > 0){
-    // Open hand: just check if remaining hand tiles form valid sets + pair
+    // Open hand: just check if remaining hand tiles form valid sets + pair.
+    // Each meld — kan included — represents exactly ONE set (3 tiles) in
+    // the logical 4-sets-plus-pair structure, regardless of its physical
+    // tile count, so decompose() naturally needs no special-casing here:
+    // hand.length is already correctly sized by the total check above.
     return decompose(hand).length > 0;
   }
   if(isKokushi(hand)||isChiitoitsu(hand)) return true;
@@ -127,10 +135,12 @@ function isWin(hand, melds){
 
 function waits(hand, melds){
   const meldCount = melds ? melds.reduce((n,m)=>n+(m.type==='kan'?4:3),0) : 0;
+  const numKans = melds ? melds.filter(m=>m.type==='kan').length : 0;
   const handLen = hand.length;
-  // Accept hands of size 13-meldCount (between turns) OR 14-meldCount (post-meld pre-discard / draw turn)
-  const base13 = 13 - meldCount;
-  const base14 = 14 - meldCount;
+  // Each kan grants a bonus rinshan draw, shifting the expected hand size
+  // up by one per kan relative to the normal 13/14 baseline.
+  const base13 = 13 - meldCount + numKans;
+  const base14 = 14 - meldCount + numKans;
   if(handLen !== base13 && handLen !== base14) return [];
   // If 14 tiles (draw turn or post-meld): compute waits for each possible discard
   if(handLen === base14){
