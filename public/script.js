@@ -301,7 +301,7 @@ const W=['東','南','西','北'];
 // 0=bottom(me), 1=right, 2=top, 3=left
 const P=['b','r','t','l'];
 
-let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false;
+let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false, discarding=false;
 
 function show(id){['s-start','s-lobby','s-game','s-end'].forEach(s=>$(s).classList.toggle('hidden',s!==id));}
 function $(id){return document.getElementById(id);}
@@ -332,7 +332,7 @@ function onMsg(m){
   if(m.type==='game_over'){onGameOver(m);return;}
   if(m.type==='ready_status'){onReadyStatus(m);return;}
   if(!inGame) return;
-  if(m.type==='game_state'){const prev=lastState;lastState=m;renderState(m,prev);}
+  if(m.type==='game_state'){const prev=lastState;lastState=m;discarding=false;renderState(m,prev);}
   else if(m.type==='riichi'){onRiichi(m);}
   else if(m.type==='kan'){toast(W[(m.seat-mySeat+4)%4]+' カン！');}
   else if(m.type==='chat'){showChatMsg(m.seat,m.name,m.text);}
@@ -467,14 +467,21 @@ function allFxTracks(){
 // (a MediaElementSource can only be created once per <audio> element)
 const _fxConnectedEls = new WeakSet();
 
-function playSfx(id, isPlayer=false){
+function getSeatVoiceTheme(seat){
+  // Returns the voice theme for a given absolute seat index.
+  // Main player uses their own selected theme; others use their stored theme from game state.
+  if(seat===mySeat) return currentVoiceTheme;
+  return lastState?.seatVoiceThemes?.[seat]||'Default';
+}
+
+function playSfx(id, seat=null){
   if(!fxEnabled) return;
   const el=$(id);
   if(!el) return;
-  // Switch src based on whether this is the main player's action
   const fname=id.replace('sfx-','').replace(/-/g,'_');
   const capName=fname.charAt(0).toUpperCase()+fname.slice(1);
-  const theme=isPlayer?currentVoiceTheme:'Default';
+  // Determine theme: if seat provided use that seat's theme, else Default
+  const theme=seat!==null?getSeatVoiceTheme(seat):'Default';
   const ext=fxExts[capName]||'mp3';
   el.src=`/audio/Voice/${theme}/${capName}.${ext}`;
   try{
@@ -571,7 +578,7 @@ function setMode(mode){
 
 function findMatch(){
   playLobbyMusic();
-  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode});
+  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,voiceTheme:currentVoiceTheme});
 }
 
 function showWaiting(){
@@ -607,7 +614,7 @@ function pressReady(){
 }
 
 function resetLobby(){
-  mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;
+  mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;discarding=false;
   $('wa').style.display='none';
   $('bfind').style.display='block';
   $('lobby-inputs').style.display='block';
@@ -652,7 +659,7 @@ function startGame(m){
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i],p=seats[abs];
     $('pn'+id).textContent=i===0?($('iname').value.trim()||'Player'):(p?.name||'—');
-    if(i>0&&p?.isBot){const bt=$('bt'+id);if(bt)bt.textContent='CPU';}
+    if(i>0){const bt=$('bt'+id);if(bt)bt.textContent=p?.isBot?'CPU':'';}
     $('rs'+id).style.display='none';
   }
   // Clear board (same as onRoundStart)
@@ -803,34 +810,43 @@ function renderState(m, prev){
   const prevOppPon=(prev?.melds||[]).flat().filter(mel=>mel?.type==='pon').length;
   const newOppPon=(m.melds||[]).flat().filter(mel=>mel?.type==='pon').length;
   const allMelds=[...(m.melds?.flat()||[]),...(m.myMelds||[])];
-  if(newMyPon>prevMyPon) playSfx('sfx-pon',true);
-  else if(newOppPon>prevOppPon) playSfx('sfx-pon',false);
+  if(newMyPon>prevMyPon) playSfx('sfx-pon',mySeat);
+  else if(newOppPon>prevOppPon){
+    const seat=m.melds?.findIndex((ms,i)=>i!==mySeat&&(ms?.filter(ml=>ml?.type==='pon').length||0)>(prev?.melds?.[i]?.filter(ml=>ml?.type==='pon').length||0));
+    playSfx('sfx-pon',seat>=0?seat:null);
+  }
 
   // Chi
   const prevMyChi=(prev?.myMelds||[]).filter(mel=>mel?.type==='chi').length;
   const newMyChi=(m.myMelds||[]).filter(mel=>mel?.type==='chi').length;
   const prevOppChi=(prev?.melds||[]).flat().filter(mel=>mel?.type==='chi').length;
   const newOppChi=(m.melds||[]).flat().filter(mel=>mel?.type==='chi').length;
-  if(newMyChi>prevMyChi) playSfx('sfx-chii',true);
-  else if(newOppChi>prevOppChi) playSfx('sfx-chii',false);
+  if(newMyChi>prevMyChi) playSfx('sfx-chii',mySeat);
+  else if(newOppChi>prevOppChi){
+    const seat=m.melds?.findIndex((ms,i)=>i!==mySeat&&(ms?.filter(ml=>ml?.type==='chi').length||0)>(prev?.melds?.[i]?.filter(ml=>ml?.type==='chi').length||0));
+    playSfx('sfx-chii',seat>=0?seat:null);
+  }
 
   // Kan
   const prevMyKan=(prev?.myMelds||[]).filter(mel=>mel?.type==='kan').length;
   const newMyKan=(m.myMelds||[]).filter(mel=>mel?.type==='kan').length;
   const prevOppKan=(prev?.melds||[]).flat().filter(mel=>mel?.type==='kan').length;
   const newOppKan=(m.melds||[]).flat().filter(mel=>mel?.type==='kan').length;
-  if(newMyKan>prevMyKan) playSfx('sfx-kan',true);
-  else if(newOppKan>prevOppKan) playSfx('sfx-kan',false);
+  if(newMyKan>prevMyKan) playSfx('sfx-kan',mySeat);
+  else if(newOppKan>prevOppKan){
+    const seat=m.melds?.findIndex((ms,i)=>i!==mySeat&&(ms?.filter(ml=>ml?.type==='kan').length||0)>(prev?.melds?.[i]?.filter(ml=>ml?.type==='kan').length||0));
+    playSfx('sfx-kan',seat>=0?seat:null);
+  }
 
   // Riichi
   const prevRiichiCount=(prev?.riichi||[]).filter(Boolean).length;
   const newRiichiCount=(m.riichi||[]).filter(Boolean).length;
   if(newRiichiCount>prevRiichiCount){
-    const isMe=!prev?.riichi?.[mySeat]&&m.riichi?.[mySeat];
+    const riichiSeat=(m.riichi||[]).findIndex((v,i)=>v&&!prev?.riichi?.[i]);
     const prevDblCount=(prev?.doubleRiichi||[]).filter(Boolean).length;
     const newDblCount=(m.doubleRiichi||[]).filter(Boolean).length;
-    if(newDblCount>prevDblCount) playSfx('sfx-double-riichi',isMe);
-    else playSfx('sfx-riichi',isMe);
+    if(newDblCount>prevDblCount) playSfx('sfx-double-riichi',riichiSeat>=0?riichiSeat:null);
+    else playSfx('sfx-riichi',riichiSeat>=0?riichiSeat:null);
   }
   for(let i=0;i<4;i++){
     const abs=(mySeat+i)%4,id=P[i];
@@ -891,8 +907,10 @@ function renderState(m, prev){
 }
 
 function clickTile(id){
+  if(discarding) return;
   if(selId===id){
     wss({type:'action',action:{type:'discard',tileId:id}});
+    discarding=true;
     selId=null;
   } else {
     selId=id;
@@ -1007,7 +1025,7 @@ function drawActions(m){
 
     // RIGHT: DISCARD
     if(selId)
-      ab(bar,'DISCARD','bdis',()=>{wss({type:'action',action:{type:'discard',tileId:selId}});selId=null;});
+      ab(bar,'DISCARD','bdis',()=>{if(discarding)return;wss({type:'action',action:{type:'discard',tileId:selId}});discarding=true;selId=null;});
 
     // RIGHT: KYUUSHU
     if(m.canKyuushu)
@@ -1288,18 +1306,38 @@ function onGameOver(m){
   show('s-end');
 }
 
+function limitLabel(han,fu){
+  if(han>=26) return {label:'ダブル役満',en:'Double Yakuman',cls:'lbl-double-yakuman'};
+  if(han>=13) return {label:'役満',en:'Yakuman',cls:'lbl-yakuman'};
+  if(han>=11) return {label:'三倍満',en:'Sanbaiman',cls:'lbl-sanbaiman'};
+  if(han>=8)  return {label:'倍満',en:'Baiman',cls:'lbl-baiman'};
+  if(han>=6)  return {label:'跳満',en:'Haneman',cls:'lbl-haneman'};
+  if(han>=5)  return {label:'満貫',en:'Mangan',cls:'lbl-mangan'};
+  if(han===4&&fu>=30) return {label:'満貫',en:'Mangan',cls:'lbl-mangan'};
+  if(han===3&&fu>=70) return {label:'満貫',en:'Mangan',cls:'lbl-mangan'};
+  return null;
+}
+
+
 function onEnd(m){
   try{
   inGame=false;
   const loader=$('game-loading'); if(loader) loader.style.display='none';
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
-  const reasonLabels={tsumo:'TSUMO',ron:'ロン - RON',draw:'流局 - Exhaustive Draw',suukaikan:'四開槓 - Suukaikan',nagashi:'流し満貫 - Mangan at Draw'};
+  const reasonLabels={tsumo:'ツモ - TSUMO',ron:'ロン - RON',draw:'流局 - Exhaustive Draw',suukaikan:'四開槓 - Suukaikan',nagashi:'流し満貫 - Mangan at Draw'};
   $('ret').textContent=reasonLabels[m.reason]||'Round Over';
   if(m.reason==='tsumo'||m.reason==='ron'){
-    if(m.reason==='ron') playSfx('sfx-ron', m.winner===mySeat);
-    if(m.reason==='tsumo') playSfx('sfx-tsumo', m.winner===mySeat);
-    $('rehn').textContent=m.handLabel?`${m.handLabel} · ${m.han||0}Han${m.fu?' · '+m.fu+'Fu':''}` :'';
+    if(m.reason==='ron') playSfx('sfx-ron', m.winner);
+    if(m.reason==='tsumo') playSfx('sfx-tsumo', m.winner);
+    const winnerName=m.winner===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[m.winner]||`Seat ${m.winner}`);
+    // FIX 1: strip han count from handLabel line — it's shown in the yaku pills below.
+    // Only show fu here; total han is redundant.
+    const limit=limitLabel(m.han||0,m.fu||0);
+    const limitHtml=limit?`<span class="re-limit ${limit.cls}">${limit.en} · ${limit.label}</span>`:'';
+    const handInfo=(m.fu&&!limit)?`<span class="re-hand"> · ${m.han} Han · ${m.fu} Fu</span>`
+      :(m.fu&&limit)?`<span class="re-hand"> · ${m.han} Han · ${m.fu} Fu</span>`:'';
+    $('rehn').innerHTML=`<span class="re-winner">${escHtml(winnerName)}</span>${limitHtml}${handInfo}`;
   } else if(m.reason==='draw'){
     const payStrs=(m.payments||[]).map((p,i)=>{
       const name=i===mySeat?'You':(m.playerNames?.[i]||`Seat ${i}`);
@@ -1307,20 +1345,59 @@ function onEnd(m){
     });
     $('rehn').textContent=payStrs.join('  ·  ');
   } else { $('rehn').textContent=''; }
+  // FIX 2: yaku pills only — dora tiles move to sit directly above the winning hand tiles
   const yl=$('reyl');yl.innerHTML='';
   for(const y of(m.yakuList||[])){
     const c=document.createElement('div');c.className='yc';
     c.innerHTML=`${escHtml(y.name)}<span class="yh">${y.han}Han</span><span class="yj">${escHtml(y.jp||'')}</span>`;
     yl.appendChild(c);
   }
-  if((m.dora||[]).length||(m.uraDora||[]).length){
-    const dr=document.createElement('div');dr.style.cssText='display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;';
-    if((m.dora||[]).length){const lbl=document.createElement('span');lbl.style.cssText='font-size:10px;color:var(--gold);letter-spacing:1px;margin-right:4px;';lbl.textContent='Dora';dr.appendChild(lbl);for(const t of m.dora) dr.appendChild(mkElMd(t));}
-    if((m.uraDora||[]).length){const lbl2=document.createElement('span');lbl2.style.cssText='font-size:10px;color:#f88;letter-spacing:1px;margin-left:8px;margin-right:4px;';lbl2.textContent='Ura Dora';dr.appendChild(lbl2);for(const t of m.uraDora) dr.appendChild(mkElMd(t));}
-    yl.appendChild(dr);
-  }
+  // Hand tiles + dora grouped together in rewt
   const wt=$('rewt');wt.innerHTML='';
-  for(const t of(m.hand||[])) if(t) wt.appendChild(mkElMd(t));
+  // Collect aka dora tiles from hand + melds
+  const allHandTiles=[...(m.hand||[]),...(m.melds||[]).flatMap(ml=>ml.tiles||[])];
+  if((m.dora||[]).length||(m.uraDora||[]).length){
+    const dr=document.createElement('div');dr.className='re-dora-row';
+    if((m.dora||[]).length){
+      const lbl=document.createElement('span');lbl.className='re-dora-lbl';lbl.textContent='Dora';
+      dr.appendChild(lbl);
+      for(const t of m.dora) dr.appendChild(mkElMd(t));
+    }
+    if((m.uraDora||[]).length){
+      const lbl2=document.createElement('span');lbl2.className='re-dora-lbl re-ura-lbl';lbl2.textContent='Ura Dora';
+      dr.appendChild(lbl2);
+      for(const t of m.uraDora) dr.appendChild(mkElMd(t));
+    }
+    wt.appendChild(dr);
+  }
+  const tileRow=document.createElement('div');tileRow.className='re-tile-row';
+  for(const t of(m.hand||[])) if(t) tileRow.appendChild(mkElMd(t));
+  // Render melds right of closed hand, separated by a gap
+  for(const meld of(m.melds||[])){
+    const sep=document.createElement('div');sep.className='re-meld-sep';
+    tileRow.appendChild(sep);
+    // For the win panel we show melds flat (winner's perspective, no rotation)
+    // Reuse renderMeld logic but simplified: called tile gets .called class for visual marker
+    const calledId=meld.calledTileId;
+    const kanType=meld.kanType;
+    if(meld.type==='ankan'){
+      // Ankan: show face-down / face-up / face-up / face-down
+      const back=()=>{const d=document.createElement('div');d.className='kan-back re-kan-back';return d;};
+      tileRow.appendChild(back());
+      tileRow.appendChild(mkElMd(meld.tiles[1]));
+      tileRow.appendChild(mkElMd(meld.tiles[2]));
+      tileRow.appendChild(back());
+    } else {
+      // Chi, pon, daiminkan, kakan — show all tiles face-up, mark called tile
+      for(const t of meld.tiles){
+        const el=mkElMd(t);
+        if(t.id===calledId) el.classList.add('called');
+        tileRow.appendChild(el);
+      }
+    }
+  }
+  wt.appendChild(tileRow);
+  // Score table with delta column
   const tbl=$('rest');tbl.innerHTML='';
   const sorted=[...(m.scores||[]).map((sc,seat)=>({sc,seat}))].sort((a,b)=>b.sc-a.sc);
   sorted.forEach(({sc,seat},rank)=>{
@@ -1329,9 +1406,35 @@ function onEnd(m){
     const ordinal=['1st','2nd','3rd','4th'][rank]||`${rank+1}th`;
     const colours=['#f0d080','#c0c0c0','#cd7f32','var(--cream)'];
     const colour=colours[rank]||'var(--cream)';
-    row.innerHTML=`<td><span style="color:${colour};font-weight:700;margin-right:10px;">${ordinal}</span>${escHtml(name)}</td><td>${sc}</td>`;
+    const delta=m.prevScores?sc-m.prevScores[seat]:null;
+    const startScore=m.prevScores?m.prevScores[seat]:sc;
+    const scoreSpanId=`re-sc-${seat}`;
+    const deltaHtml=delta!=null&&delta!==0
+      ?`<span class="re-delta ${delta>0?'re-delta-pos':'re-delta-neg'}">${delta>0?'+':''}${delta.toLocaleString()}</span>`
+      :`<span class="re-delta re-delta-nil">—</span>`;
+    row.innerHTML=`<td><span style="color:${colour};font-weight:700;margin-right:10px;">${ordinal}</span>${escHtml(name)}</td><td><span id="${scoreSpanId}">${startScore.toLocaleString()}</span></td><td class="re-td-delta">${deltaHtml}</td>`;
     tbl.appendChild(row);
   });
+  // Animate score count-up after a short delay
+  setTimeout(()=>{
+    (m.scores||[]).forEach((sc,seat)=>{
+      const startScore=m.prevScores?m.prevScores[seat]:sc;
+      if(startScore===sc) return;
+      const span=document.getElementById(`re-sc-${seat}`);
+      if(!span) return;
+      const duration=900;
+      const start=performance.now();
+      const ease=t=>t<.5?2*t*t:(-1+(4-2*t)*t);
+      function frame(now){
+        const t=Math.min((now-start)/duration,1);
+        const val=Math.round(startScore+(sc-startScore)*ease(t));
+        span.textContent=val.toLocaleString();
+        if(t<1) requestAnimationFrame(frame);
+        else span.textContent=sc.toLocaleString();
+      }
+      requestAnimationFrame(frame);
+    });
+  }, 400);
   show('s-end');
   setTimeout(()=>{ inGame=true; },5500);
   }catch(e){ show('s-end'); }

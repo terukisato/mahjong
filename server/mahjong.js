@@ -201,8 +201,27 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
 
   // ── Kokushi Musou ────────────────────────────────────────────────────────
   if(menzen && isKokushi(hand14)){
-    if(isKokushi13(hand14)) return ym('Kokushi Juusanmen','国士無双十三面待ち',26); // double
+    if(isKokushi13(hand14)){
+      // Juusanmen: win tile is NOT the pair = waiting on any of the 13 tiles
+      // Regular Kokushi: win tile IS the pair tile
+      const c={};
+      for(const t of hand14){ const k=`${t.v}${t.s}`; c[k]=(c[k]||0)+1; }
+      const pairKey=Object.keys(c).find(k=>c[k]===2);
+      if(winTileKey && pairKey && winTileKey===pairKey)
+        return ym('Kokushi Musou','国士無双',13);
+      return ym('Kokushi Juusanmen','国士無双十三面待ち',26);
+    }
     return ym('Kokushi Musou','国士無双',13);
+  }
+
+  // ── Daisuushii / Shousuushii (must check before Tsuuiisou since all winds = all honours) ──
+  if(menzen||true){ // open hands can also have Daisuushii/Shousuushii
+    const allK=hand14.map(key);
+    const windCounts={};
+    for(const k of allK) if(WINDS.has(k)){windCounts[k]=(windCounts[k]||0)+1;}
+    const windKeys=Object.keys(windCounts);
+    if(windKeys.length===4&&windKeys.every(k=>windCounts[k]>=3))
+      return ym('Daisuushii','大四喜',26);
   }
 
   // ── Ryuuiisou (All Green) ────────────────────────────────────────────────
@@ -220,7 +239,11 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
     return ym('Chuuren Poutou','九蓮宝燈',13);
   }
 
+  const decomps=decompose(hand14);
+
   // ── Chiitoitsu ───────────────────────────────────────────────────────────
+  // Only award if no regular decomp exists, or if chiitoi scores higher
+  let chiitoi=null;
   if(menzen && isChiitoitsu(hand14)){
     const yl=[]; let h=2;
     yl.push({name:'Chiitoitsu',jp:'七対子',han:2});
@@ -229,14 +252,14 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
     if(isIppatsu&&isRiichi){yl.push({name:'Ippatsu',jp:'一発',han:1});h++;}
     if(isHaitei){yl.push({name:'Haitei',jp:'海底摸月',han:1});h++;}
     if(isHoutei){yl.push({name:'Houtei',jp:'河底撈魚',han:1});h++;}
-    const dc=countDora(hand14,[]);// dora added by caller
-    return {han:h,yakuList:yl};
+    chiitoi={han:h,yakuList:yl};
+    if(!decomps.length) return chiitoi;
   }
 
-  const decomps=decompose(hand14);
   if(!decomps.length) return {han:0,yakuList:[]};
 
   let best={han:0,yakuList:[]};
+  if(chiitoi) best=chiitoi;
   for(const groups of decomps){
     const r=evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen,winTileKey);
     if(r.yakuman||r.han>best.han) best=r;
@@ -249,7 +272,7 @@ function ym(name,jp,han){ return {han,yakuList:[{name,jp,han}],yakuman:true}; }
 
 function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen,winTileKey){
   const yl=[]; let han=0;
-  const allKeys=hand14.map(key);
+  const allKeys=[...hand14.map(key),...melds.flatMap(m=>m.tiles.map(key))];
   const allGroups=[...groups,...melds.map(m=>({t:m.type==='pon'?'tri':'seq',k:m.tiles.map(key),open:true}))];
   const pairs=groups.filter(g=>g.t==='pair');
   const seqs=allGroups.filter(g=>g.t==='seq');
@@ -264,11 +287,12 @@ function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIp
   const kanMelds=melds.filter(m=>m.type==='kan');
   if(kanMelds.length===4) return ym('Suu Kantsu','四槓子',13);
 
-  // Suu Ankou — 4 closed triplets (tsumo: single wait counts)
+  // Suu Ankou — 4 closed triplets
   if(menzen&&closedTris.length===4){
-    // Tanki (single tile pair wait) = Suu Ankou Tanki = double yakuman
-    if(pairs.length===1&&allGroups.filter(g=>g.t==='pair').length===1)
-      return ym('Suu Ankou Tanki','四暗刻単騎',26);
+    // Tanki = won on the pair tile (single wait on the pair)
+    const pairK=pairs[0]?.k[0];
+    const isTanki=winTileKey&&pairK&&winTileKey===pairK;
+    if(isTanki) return ym('Suu Ankou Tanki','四暗刻単騎',26);
     return ym('Suu Ankou','四暗刻',13);
   }
 
@@ -357,7 +381,7 @@ function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIp
   if(seqs.length>=3){
     const byVal={};
     for(const g of seqs){
-      const v=g.k[0];
+      const v=getVal(g.k[0]);
       if(!byVal[v])byVal[v]=new Set();
       byVal[v].add(getSuit(g.k[0]));
     }

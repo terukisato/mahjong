@@ -137,6 +137,11 @@ class Room {
     const g=this.game;
     if(!g||this.phase!=='playing') return;
     if(g.wall.length===0&&!fromRinshan){this._endRound('draw');return;}
+    // Cancel ippatsu for the drawing player if they've already made their riichi discard
+    if(g.ippatsu[g.turn]&&g.riichi[g.turn]){
+      const riichiDiscardIdx=g.discards[g.turn].findIndex(t=>t.riichi);
+      if(riichiDiscardIdx>=0) g.ippatsu[g.turn]=false;
+    }
     let t;
     if(fromRinshan){
       t=g.deadWall.shift();
@@ -289,7 +294,7 @@ class Room {
     g.discards[seat].push(tile);
     g.drawTile=null;
     g.isRinshan=false;
-    g.ippatsu=g.ippatsu.map((v,i)=>i===seat?false:v);
+    g.ippatsu=g.ippatsu.map((v,i)=>i===seat?v:false);
     g.turnCount++;
 
     // After discard, check nagashi (any non-terminal/honour or called tile = loses nagashi)
@@ -455,6 +460,7 @@ class Room {
       totalLoss+=r.pay;
       winGains[r.winSeat]=(winGains[r.winSeat]||0)+r.pay;
     }
+    const prevScores=[...g.scores];
     g.scores[loseSeat]-=totalLoss;
     for(const r of results){
       g.scores[r.winSeat]+=winGains[r.winSeat];
@@ -463,9 +469,13 @@ class Room {
 
     // Build combined yaku display (show first winner's hand info in round_end, extras in extras)
     const primary=results[0];
-    const yl=primary.dc>0?[...primary.yakuList,{name:'Dora',jp:'ドラ',han:primary.dc}]:primary.yakuList;
+    const primaryAkaDora=countAkaDora(primary.hand);
+    const primaryRegularDc=primary.dc-primaryAkaDora;
+    const yl=primaryRegularDc>0?[...primary.yakuList,{name:'Dora',jp:'ドラ',han:primaryRegularDc}]:[...primary.yakuList];
+    if(primary.uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:primary.uraDora});
+    if(primaryAkaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:primaryAkaDora});
     this._endRound('ron',primary.winSeat,loseSeat,primary.hand,yl,primary.han,primary.fu,totalLoss,
-      results.length>1?results.slice(1):null);
+      results.length>1?results.slice(1):null,prevScores,g.melds[primary.winSeat]);
   }
 
   // ── Pon / Chi ──────────────────────────────────────────────────────────────
@@ -677,6 +687,7 @@ class Room {
     const fu=decomps.length?calcFu(decomps[0],true,!g.melds[seat].length,winKey,hasPinfu):30;
     const bp=basePoints(totalHan,fu);
     const isDealer=seat===g.dealer;
+    const prevScores=[...g.scores];
     let gain=0;
     for(let i=0;i<4;i++){
       if(i===seat) continue;
@@ -684,10 +695,12 @@ class Room {
       g.scores[i]-=pay;gain+=pay;
     }
     g.scores[seat]+=gain+g.riichiSticks*1000;
-    const yl=dc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:dc}]:yakuList;
+    const akaDora=countAkaDora(hand);
+    const regularDc=dc-akaDora;
+    const yl=regularDc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:regularDc}]:yakuList;
     if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
-    const akaDora=countAkaDora(hand);if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
-    this._endRound('tsumo',seat,null,hand,yl,totalHan,fu,gain);
+    if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
+    this._endRound('tsumo',seat,null,hand,yl,totalHan,fu,gain,undefined,prevScores,g.melds[seat]);
   }
 
   _ron(winSeat,loseSeat,tile,isChankan=false){
@@ -709,15 +722,18 @@ class Room {
     const bp=basePoints(totalHan,fu);
     const isWinnerDealer=winSeat===g.dealer;
     const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300+g.riichiSticks*1000;
+    const prevScores=[...g.scores];
     g.scores[loseSeat]-=pay;g.scores[winSeat]+=pay;
-    const yl=dc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:dc}]:yakuList;
+    const akaDora=countAkaDora(hand);
+    const regularDc=dc-akaDora;
+    const yl=regularDc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:regularDc}]:yakuList;
     if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
-    const akaDora=countAkaDora(hand);if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
-    this._endRound('ron',winSeat,loseSeat,hand,yl,totalHan,fu,pay);
+    if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
+    this._endRound('ron',winSeat,loseSeat,hand,yl,totalHan,fu,pay,undefined,prevScores,g.melds[winSeat]);
   }
 
   // ── Round end ───────────────────────────────────────────────────────────────
-  _endRound(reason,winner,loser,hand,yakuList,han,fu,payment,extraWinners){
+  _endRound(reason,winner,loser,hand,yakuList,han,fu,payment,extraWinners,prevScores,melds){
     const g=this.game;
     // Tobi check (bankruptcy)
     const bust=g.scores.findIndex(s=>s<0);
@@ -750,7 +766,28 @@ class Room {
 
     if(reason==='tsumo'||reason==='ron'){
       if(dealerWon){
-        // Dealer wins → repeat (honba+1)
+        // Dealer wins → normally repeat (honba+1)
+        // Agariyame: if it's the final kyoku and dealer is in 1st place, end instead
+        const maxRound=this.gameMode==="hanchan"?8:4;
+        const isLastKyoku=g.round>=maxRound;
+        const dealerScore=g.scores[g.dealer];
+        const dealerIsFirst=g.scores.every(s=>s<=dealerScore);
+        if(isLastKyoku&&dealerIsFirst){
+          // End game — dealer wins and is already first, no need to continue
+          this._broadcastAll({type:'round_end',reason,winner,loser,hand,yakuList,han,fu,payment,
+            scores:g.scores,handLabel:han?handLabel(han):'',
+            playerNames:this.seats.map(p=>p?.name||'—'),
+            extraWinners:extraWinners||null,
+            uraDora:g.deadWall.slice(9,9+g.dora.length),
+            dora:g.dora,
+            prevScores:prevScores||null,
+            melds:melds||[],
+          });
+          this.phase='done';
+          setTimeout(()=>this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
+            playerNames:this.seats.map(p=>p?.name||'—')}),1000);
+          return;
+        }
         newHonba=g.honba+1;
         newRiichiSticks=0;
       } else {
@@ -774,21 +811,23 @@ class Room {
       extraWinners:extraWinners||null,
       uraDora: g.deadWall.slice(9,9+g.dora.length),
       dora: g.dora,
+      prevScores:prevScores||null,
+      melds:melds||[],
     });
 
     // Game over conditions
     if(bust>=0){
       this.phase='done';
-      this._broadcastAll({type:'game_over',reason:'tobi',bust,scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')});
+      setTimeout(()=>this._broadcastAll({type:'game_over',reason:'tobi',bust,scores:g.scores,
+        playerNames:this.seats.map(p=>p?.name||'—')}),5000);
       return;
     }
 
     const maxRound=this.gameMode==="hanchan"?8:4;
     if(newRound>maxRound){
       this.phase='done';
-      this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')});
+      setTimeout(()=>this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
+        playerNames:this.seats.map(p=>p?.name||'—')}),5000);
       return;
     }
 
@@ -1024,6 +1063,7 @@ class Room {
       this._send(p,{type:'game_state',seat,myHand:mainHand,drawTile:dt,myMelds:g.melds[seat],
         discards:g.discards,melds:g.melds,scores:g.scores,turn:g.turn,
         round:g.round,roundWind:g.roundWind,displayWind:Math.ceil(g.round/4),displayRound:((g.round-1)%4)+1,dealer:g.dealer,honba:g.honba,
+        seatVoiceThemes:this.seats.map(p=>p?.voiceTheme||'Default'),
         riichiSticks:g.riichiSticks,
         dora:g.dora,wallCount:g.wall.length,waits:w,riichi:g.riichi,
         doubleRiichi:g.doubleRiichi,
@@ -1034,7 +1074,7 @@ class Room {
     }
   }
 
-  _seatInfo(){ return this.seats.map(p=>p?{name:p.name,isBot:!!p.isBot}:null); }
+  _seatInfo(){ return this.seats.map(p=>p?{name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default'}:null); }
 
   _broadcastRoomUpdate(){
     const readyIds=Array.from(this.ready);

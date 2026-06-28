@@ -32,6 +32,7 @@ wss.on('connection',(ws)=>{
     if(msg.type==='join'){
       if(myRoom){myRoom.removeHuman(myId);myRoom=null;}
       player.name=(msg.name||'Player').slice(0,20);
+      player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
       const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
       myRoom=getWaitingRoom(mode);
       if(!myRoom.addHuman(player)){
