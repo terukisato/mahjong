@@ -137,6 +137,11 @@ class Room {
     const g=this.game;
     if(!g||this.phase!=='playing') return;
     if(g.wall.length===0&&!fromRinshan){this._endRound('draw');return;}
+    // Cancel ippatsu for the drawing player if they've already made their riichi discard
+    if(g.ippatsu[g.turn]&&g.riichi[g.turn]){
+      const riichiDiscardIdx=g.discards[g.turn].findIndex(t=>t.riichi);
+      if(riichiDiscardIdx>=0) g.ippatsu[g.turn]=false;
+    }
     let t;
     if(fromRinshan){
       t=g.deadWall.shift();
@@ -289,7 +294,7 @@ class Room {
     g.discards[seat].push(tile);
     g.drawTile=null;
     g.isRinshan=false;
-    g.ippatsu=g.ippatsu.map((v,i)=>i===seat?false:v);
+    g.ippatsu=g.ippatsu.map((v,i)=>i===seat?v:false);
     g.turnCount++;
 
     // After discard, check nagashi (any non-terminal/honour or called tile = loses nagashi)
@@ -455,6 +460,7 @@ class Room {
       totalLoss+=r.pay;
       winGains[r.winSeat]=(winGains[r.winSeat]||0)+r.pay;
     }
+    const prevScores=[...g.scores];
     g.scores[loseSeat]-=totalLoss;
     for(const r of results){
       g.scores[r.winSeat]+=winGains[r.winSeat];
@@ -469,7 +475,7 @@ class Room {
     if(primary.uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:primary.uraDora});
     if(primaryAkaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:primaryAkaDora});
     this._endRound('ron',primary.winSeat,loseSeat,primary.hand,yl,primary.han,primary.fu,totalLoss,
-      results.length>1?results.slice(1):null);
+      results.length>1?results.slice(1):null,prevScores,g.melds[primary.winSeat]);
   }
 
   // ── Pon / Chi ──────────────────────────────────────────────────────────────
