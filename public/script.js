@@ -1435,6 +1435,10 @@ function onEnd(m){
       requestAnimationFrame(frame);
     });
   }, 400);
+  if(m.gameOver){
+    const btn=$('bround-ready'); if(btn) btn.style.display='none';
+    const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='';
+  }
   show('s-end');
   setTimeout(()=>{ inGame=true; },5500);
   }catch(e){ show('s-end'); }

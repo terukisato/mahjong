@@ -244,6 +244,7 @@ class Room {
     if(seat===-1) return;
     // round_ready: player signals ready for next round
     if(act.type==='round_ready'){
+      if(this.phase==='done') return;
       this.roundReady.add(seat);
       const humanSeats=this.seats.map((p,i)=>p&&!p.isBot?i:-1).filter(i=>i>=0);
       // Broadcast how many are ready
@@ -782,6 +783,7 @@ class Room {
             dora:g.dora,
             prevScores:prevScores||null,
             melds:melds||[],
+            gameOver:true,
           });
           this.phase='done';
           setTimeout(()=>this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
@@ -813,6 +815,7 @@ class Room {
       dora: g.dora,
       prevScores:prevScores||null,
       melds:melds||[],
+      gameOver:this.phase==='done',
     });
 
     // Game over conditions
@@ -877,11 +880,16 @@ class Room {
     }
 
     const tenpaiHands=g.hands.map((h,i)=>inTenpai[i]?h:null);
+    const drawBust=g.scores.findIndex(s=>s<0);
+    const drawMaxRound=this.gameMode==="hanchan"?8:4;
+    let drawNewRound=g.round; if(!inTenpai[g.dealer]) drawNewRound=g.round+1;
+    const drawGameOver=drawBust>=0||drawNewRound>drawMaxRound;
     this._broadcastAll({type:'round_end',reason:'draw',scores:g.scores,
       inTenpai,payments,tenpaiHands,
       playerNames:this.seats.map(p=>p?.name||'—'),
       dora:g.dora,
       uraDora:g.deadWall.slice(9,9+g.dora.length),
+      gameOver:drawGameOver,
     });
 
     // Dealer tenpai = repeat; dealer noten = advance
@@ -941,8 +949,11 @@ class Room {
       }
       g.scores[winner]+=gain;
     }
+    const nagashiMaxRound=this.gameMode==="hanchan"?8:4;
+    const nagashiNewRound=nagashiSeats[g.dealer]?g.round:g.round+1;
+    const nagashiGameOver=nagashiNewRound>nagashiMaxRound;
     this._broadcastAll({type:'round_end',reason:'nagashi',nagashiSeats,scores:g.scores,
-      playerNames:this.seats.map(p=>p?.name||'—'),dora:g.dora});
+      playerNames:this.seats.map(p=>p?.name||'—'),dora:g.dora,gameOver:nagashiGameOver});
 
     // Nagashi: dealer repeat if dealer is nagashi winner
     const dealerNagashi=nagashiSeats[g.dealer];
