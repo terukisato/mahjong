@@ -1339,11 +1339,7 @@ function onEnd(m){
       :(m.fu&&limit)?`<span class="re-hand"> · ${m.han} Han · ${m.fu} Fu</span>`:'';
     $('rehn').innerHTML=`<span class="re-winner">${escHtml(winnerName)}</span>${limitHtml}${handInfo}`;
   } else if(m.reason==='draw'){
-    const payStrs=(m.payments||[]).map((p,i)=>{
-      const name=i===mySeat?'You':(m.playerNames?.[i]||`Seat ${i}`);
-      return `${name}: ${m.inTenpai?.[i]?'Tenpai':'No Points Hand'}${p!==0?' '+(p>0?'+':'')+p:''}`;
-    });
-    $('rehn').textContent=payStrs.join('  ·  ');
+    $('rehn').textContent='';
   } else { $('rehn').textContent=''; }
   // FIX 2: yaku pills only — dora tiles move to sit directly above the winning hand tiles
   const yl=$('reyl');yl.innerHTML='';

@@ -414,7 +414,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .re-badge-pos{color:#7ec87e;}.re-badge-neg{color:#e07070;}
 .re-delta-pos{color:#7ec87e;}.re-delta-neg{color:#e07070;}
 .re-delta-nil{color:rgba(245,237,216,.25);font-weight:400;}
-
+@keyframes re-badge-float{0%{opacity:0;transform:translateY(0)}15%{opacity:1;transform:translateY(-4px)}70%{opacity:1;transform:translateY(-12px)}100%{opacity:0;transform:translateY(-20px)}}
 .re-limit{display:inline-block;margin-left:8px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;vertical-align:middle;}
 .lbl-mangan  {background:rgba(80,160,80,.18);border:1px solid rgba(100,200,100,.4);color:#90e090;}
 .lbl-haneman {background:rgba(80,140,200,.18);border:1px solid rgba(100,180,255,.4);color:#90c8ff;}

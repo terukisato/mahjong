@@ -471,7 +471,7 @@ class Room {
     // Build combined yaku display (show first winner's hand info in round_end, extras in extras)
     const primary=results[0];
     const primaryAkaDora=countAkaDora(primary.hand);
-    const primaryRegularDc=primary.dc-primaryAkaDora;
+    const primaryRegularDc=primary.dc-primaryAkaDora-primary.uraDora;
     const yl=primaryRegularDc>0?[...primary.yakuList,{name:'Dora',jp:'ドラ',han:primaryRegularDc}]:[...primary.yakuList];
     if(primary.uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:primary.uraDora});
     if(primaryAkaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:primaryAkaDora});
@@ -697,7 +697,7 @@ class Room {
     }
     g.scores[seat]+=gain+g.riichiSticks*1000;
     const akaDora=countAkaDora(hand);
-    const regularDc=dc-akaDora;
+    const regularDc=dc-akaDora-uraDora;
     const yl=regularDc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:regularDc}]:yakuList;
     if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
     if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
@@ -726,7 +726,7 @@ class Room {
     const prevScores=[...g.scores];
     g.scores[loseSeat]-=pay;g.scores[winSeat]+=pay;
     const akaDora=countAkaDora(hand);
-    const regularDc=dc-akaDora;
+    const regularDc=dc-akaDora-uraDora;
     const yl=regularDc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:regularDc}]:yakuList;
     if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
     if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
@@ -806,6 +806,8 @@ class Room {
 
     // Derive wind from round number: rounds 1-4=East, 5-8=South
     const newRoundWind=Math.ceil(newRound/4);
+    const maxRound=this.gameMode==="hanchan"?8:4;
+    const isGameOver=bust>=0||newRound>maxRound;
 
     this._broadcastAll({type:'round_end',reason,winner,loser,hand,yakuList,han,fu,payment,
       scores:g.scores,handLabel:han?handLabel(han):'',
@@ -815,7 +817,7 @@ class Room {
       dora: g.dora,
       prevScores:prevScores||null,
       melds:melds||[],
-      gameOver:this.phase==='done',
+      gameOver:isGameOver,
     });
 
     // Game over conditions
@@ -826,7 +828,6 @@ class Room {
       return;
     }
 
-    const maxRound=this.gameMode==="hanchan"?8:4;
     if(newRound>maxRound){
       this.phase='done';
       setTimeout(()=>this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
@@ -865,6 +866,7 @@ class Room {
     const notenCount=4-tenpaiCount;
 
     let payments=[0,0,0,0];
+    const prevScores=[...g.scores];
     if(tenpaiCount>0&&notenCount>0){
       // Standard: 3000 total split. Noten pays, tenpai receives.
       const totalPot=3000;
@@ -889,6 +891,7 @@ class Room {
       playerNames:this.seats.map(p=>p?.name||'—'),
       dora:g.dora,
       uraDora:g.deadWall.slice(9,9+g.dora.length),
+      prevScores,
       gameOver:drawGameOver,
     });
 
