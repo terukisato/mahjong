@@ -301,7 +301,7 @@ const W=['東','南','西','北'];
 // 0=bottom(me), 1=right, 2=top, 3=left
 const P=['b','r','t','l'];
 
-let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false, discarding=false;
+let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false, discarding=false, pendingGameOver=null;
 
 function show(id){['s-start','s-lobby','s-game','s-end'].forEach(s=>$(s).classList.toggle('hidden',s!==id));}
 function $(id){return document.getElementById(id);}
@@ -329,7 +329,11 @@ function onMsg(m){
   if(m.type==='game_start'){startGame(m);return;}
   if(m.type==='round_start'){onRoundStart(m);return;}
   if(m.type==='round_end'){onEnd(m);return;}
-  if(m.type==='game_over'){onGameOver(m);return;}
+  if(m.type==='game_over'){
+    pendingGameOver=m;
+    const btn=$('bview-results'); if(btn) btn.style.display='';
+    return;
+  }
   if(m.type==='ready_status'){onReadyStatus(m);return;}
   if(!inGame) return;
   if(m.type==='game_state'){const prev=lastState;lastState=m;discarding=false;renderState(m,prev);}
@@ -635,8 +639,24 @@ function resetLobby(){
 }
 
 function goLobby(){
-  if(inGame&&!confirm('Leave game and return to menu?')) return;
+  if(inGame){ showLeaveConfirm(); return; }
+  _leaveGame();
+}
+function showLeaveConfirm(){
+  $('leave-modal').classList.add('visible');
+  $('leave-backdrop').classList.add('visible');
+}
+function cancelLeaveConfirm(){
+  $('leave-modal').classList.remove('visible');
+  $('leave-backdrop').classList.remove('visible');
+}
+function confirmLeaveGame(){
+  cancelLeaveConfirm();
+  _leaveGame();
+}
+function _leaveGame(){
   inGame=false;
+  pendingGameOver=null;
   wss({type:'leave'});
   if(ws){ws.onclose=null;ws.close();}
   resetLobby();
@@ -654,6 +674,8 @@ function startGame(m){
   // Restore Ready button visibility for new game
   const btn=$('bround-ready'); if(btn){ btn.style.display=''; btn.disabled=false; btn.textContent='✓ Ready'; btn.style.opacity='1'; }
   const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='none';
+  const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display='none';
+  pendingGameOver=null;
   const status=$('ready-status'); if(status) status.textContent='';
   const seats=m.seats;
   for(let i=0;i<4;i++){
@@ -1288,6 +1310,7 @@ function onGameOver(m){
   const loader=$('game-loading'); if(loader) loader.style.display='none';
   // Hide Ready, show Main Menu — game fully over
   const btn=$('bround-ready'); if(btn) btn.style.display='none';
+  const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display='none';
   const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='';
   const status=$('ready-status'); if(status) status.textContent='';
   stopGameMusic();
@@ -1433,11 +1456,17 @@ function onEnd(m){
   }, 400);
   if(m.gameOver){
     const btn=$('bround-ready'); if(btn) btn.style.display='none';
-    const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='';
+    const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display=pendingGameOver?'':'none';
   }
   show('s-end');
   setTimeout(()=>{ inGame=true; },5500);
   }catch(e){ show('s-end'); }
+}
+
+function showGameOverResults(){
+  if(!pendingGameOver) return;
+  const m=pendingGameOver; pendingGameOver=null;
+  onGameOver(m);
 }
 
 

@@ -133,15 +133,10 @@ class Room {
   }
 
   // ── Turn flow ──────────────────────────────────────────────────────────────
-  _draw(fromRinshan=false){
+    _draw(fromRinshan=false){
     const g=this.game;
     if(!g||this.phase!=='playing') return;
     if(g.wall.length===0&&!fromRinshan){this._endRound('draw');return;}
-    // Cancel ippatsu for the drawing player if they've already made their riichi discard
-    if(g.ippatsu[g.turn]&&g.riichi[g.turn]){
-      const riichiDiscardIdx=g.discards[g.turn].findIndex(t=>t.riichi);
-      if(riichiDiscardIdx>=0) g.ippatsu[g.turn]=false;
-    }
     let t;
     if(fromRinshan){
       t=g.deadWall.shift();
@@ -286,16 +281,20 @@ class Room {
   }
 
   // ── Discard ────────────────────────────────────────────────────────────────
-  _discard(seat,tileId){
+    _discard(seat,tileId){
     const g=this.game;
     const idx=g.hands[seat].findIndex(t=>t.id===tileId);
     if(idx===-1) return;
     const [tile]=g.hands[seat].splice(idx,1);
-    if(g.riichiTile&&g.riichiTile[seat]===tile.id) tile.riichi=true;
+    const isRiichiDiscard=g.riichiTile&&g.riichiTile[seat]===tile.id;
+    if(isRiichiDiscard) tile.riichi=true;
     g.discards[seat].push(tile);
     g.drawTile=null;
     g.isRinshan=false;
-    g.ippatsu=g.ippatsu.map((v,i)=>i===seat?v:false);
+    // Ippatsu rule: only broken by a call, never by a plain discard from another player.
+    // The discarding player's own ippatsu is cancelled here only if this discard is NOT
+    // their riichi declaration discard (i.e. they already had their ippatsu draw and missed it).
+    if(g.ippatsu[seat]&&!isRiichiDiscard) g.ippatsu[seat]=false;
     g.turnCount++;
 
     // After discard, check nagashi (any non-terminal/honour or called tile = loses nagashi)
@@ -786,8 +785,8 @@ class Room {
             gameOver:true,
           });
           this.phase='done';
-          setTimeout(()=>this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
-            playerNames:this.seats.map(p=>p?.name||'—')}),5000);
+          this._broadcastAll({type:'game_over',reason:'tobi',bust,scores:g.scores,
+  playerNames:this.seats.map(p=>p?.name||'—')});
           return;
         }
         newHonba=g.honba+1;
@@ -823,15 +822,15 @@ class Room {
     // Game over conditions
     if(bust>=0){
       this.phase='done';
-      setTimeout(()=>this._broadcastAll({type:'game_over',reason:'tobi',bust,scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')}),5000);
+      this._broadcastAll({type:'game_over',reason:'tobi',bust,scores:g.scores,
+        playerNames:this.seats.map(p=>p?.name||'—')});
       return;
     }
 
     if(newRound>maxRound){
       this.phase='done';
-      setTimeout(()=>this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')}),5000);
+      this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
+        playerNames:this.seats.map(p=>p?.name||'—')});
       return;
     }
 
@@ -909,15 +908,15 @@ class Room {
     const bust=g.scores.findIndex(s=>s<0);
     if(bust>=0){
       this.phase='done';
-      setTimeout(()=>this._broadcastAll({type:'game_over',reason:'tobi',bust,scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')}),5000);
+      this._broadcastAll({type:'game_over',reason:'tobi',bust,scores:g.scores,
+        playerNames:this.seats.map(p=>p?.name||'—')});
       return;
     }
     const maxRound=this.gameMode==="hanchan"?8:4;
     if(newRound>maxRound){
       this.phase='done';
-      setTimeout(()=>this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')}),5000);
+      this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
+        playerNames:this.seats.map(p=>p?.name||'—')});
       return;
     }
 
@@ -970,8 +969,8 @@ class Room {
     const maxRound=this.gameMode==="hanchan"?8:4;
     if(newRound>maxRound){
       this.phase='done';
-      setTimeout(()=>this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')}),5000);
+      this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
+        playerNames:this.seats.map(p=>p?.name||'—')});
       return;
     }
     g.dealer=newDealer;g.round=newRound;g.roundWind=newRoundWind;

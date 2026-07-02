@@ -110,6 +110,17 @@
   </div>
 </div>
 
+<!-- Leave-game confirm modal -->
+<div id="leave-backdrop" class="about-backdrop" onclick="cancelLeaveConfirm()"></div>
+<div id="leave-modal" class="about-modal leave-modal">
+  <div class="about-title">Leave Game?</div>
+  <div class="about-body"><p>Your progress in this match will be lost.</p></div>
+  <div class="leave-actions">
+    <button class="leave-btn-stay" onclick="cancelLeaveConfirm()">Stay</button>
+    <button class="leave-btn-confirm" onclick="confirmLeaveGame()">Leave</button>
+  </div>
+</div>
+
 <!-- ════════════════════════════════════════════════════════════
      LOBBY SCREEN
      ════════════════════════════════════════════════════════════ -->
@@ -151,7 +162,7 @@
     <div class="tb-title">雀心 Mahjong <span id="tb-mode" class="tb-mode-label"></span></div>
     <div class="tb-st" id="tst">—</div>
     <div class="tb-right">
-      <button class="bl tb-settings" id="bsettings" title="Settings">☰</button>
+      <button class="settings-icon-btn" id="bsettings" title="Settings">☰</button>
       <button class="bl" id="bleave">✕ Leave</button>
     </div>
   </div>
@@ -315,6 +326,7 @@
     <table class="st" id="rest"></table>
     <div class="reb">
       <button id="bround-ready" class="ready-btn reb-btn" onclick="sendRoundReady()">✓ Ready</button>
+      <button id="bview-results" class="bp reb-btn" style="display:none;" onclick="showGameOverResults()">View Results</button>
       <button id="bend-menu" class="bp reb-btn" style="display:none;" onclick="goLobby()">Main Menu</button>
     </div>
     <div id="ready-status" class="ready-status"></div>

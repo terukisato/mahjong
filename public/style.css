@@ -474,11 +474,19 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .about-section{margin-top:14px;padding-top:14px;border-top:1px solid rgba(201,168,76,.15);}
 .about-section-title{font-size:10px;letter-spacing:2px;color:rgba(201,168,76,.7);
   font-family:'Cinzel Decorative',serif;margin-bottom:6px;}
+.leave-modal .about-body{text-align:center;}
+.leave-actions{display:flex;gap:10px;margin-top:18px;}
+.leave-actions button{flex:1;padding:11px;border-radius:10px;font-size:12px;
+  font-family:'Cinzel Decorative',serif;letter-spacing:2px;cursor:pointer;transition:all .25s;}
+.leave-btn-stay{background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);color:var(--cream);}
+.leave-btn-stay:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(26,107,69,.5);}
+.leave-btn-confirm{background:rgba(120,20,20,.85);border:1px solid rgba(200,60,60,.5);color:rgba(255,200,200,.9);}
+.leave-btn-confirm:hover{background:rgba(160,30,30,.95);transform:translateY(-2px);}
 .settings-icon-btn{position:absolute;top:12px;right:14px;background:none;border:none;
   color:#888;font-size:20px;cursor:pointer;z-index:10;letter-spacing:-1px;}
 
 /* ── Topbar inline elements ── */
-.tb-settings{color:#888;font-size:18px;letter-spacing:-1px;background:none;border-color:rgba(255,255,255,.1);}
+.tb-right .settings-icon-btn{position:static;z-index:auto;}
 .tb-mode-label{font-size:10px;opacity:.6;margin-left:6px;}
 .tb-version{font-size:9px;opacity:.4;margin-left:6px;letter-spacing:1px;font-family:var(--font-sans);}
 .about-version{font-size:10px;opacity:.5;margin-left:6px;letter-spacing:1px;font-family:var(--font-sans);}
