@@ -1,2 +1,18 @@
 node_modules/
 npm-debug.log
+yarn-error.log
+
+# Environment / secrets
+.env
+.env.*.local
+
+# Claude Code local tooling config (dev-server launch config, local perms)
+.claude/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Scratch files used while iterating on tile art
+public/tile-preview.html

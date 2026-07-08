@@ -19,14 +19,18 @@ function tsvg(t,w,h){
 // 萬: always red
 const MAN_K=['','一','二','三','四','伍','六','七','八','九'];
 function svgMan(v,w,h,red=false){
-  const fs=Math.round(h*.36);
+  const fs=Math.round(h*.45);
   const numColor=red?'#c82020':'#1a1a1a';
+  const base=Math.min(w,h);
+  // Red dotted marker in the top-left corner (5-man)
+  const marker=red?`<circle cx="${w*.18}" cy="${h*.15}" r="${base*.06}" fill="#c82020" opacity="0.9"/>`:'';
   return (
-    `<text x="${w*.5}" y="${h*.30}" text-anchor="middle" dominant-baseline="central" `+
-    `font-family="'Yuji Syuku',serif" font-size="${fs}px" font-weight="400" fill="${numColor}">`+
+    `<text x="${w*.5}" y="${h*.25}" text-anchor="middle" dominant-baseline="central" `+
+    `font-family="'Yuji Syuku',serif" font-size="${fs}px" font-weight="570" fill="${numColor}">`+
     MAN_K[v]+`</text>`+
     `<text x="${w*.5}" y="${h*.70}" text-anchor="middle" dominant-baseline="central" `+
-    `font-family="'Yuji Syuku',serif" font-size="${fs}px" font-weight="400" fill="#c82020">萬</text>`
+    `font-family="'Yuji Syuku',serif" font-size="${fs}px" font-weight="570
+    " fill="#c82020">萬</text>`+marker
   );
 }
 
@@ -40,14 +44,18 @@ function svgMan(v,w,h,red=false){
 function svgPin(v,w,h,red=false){
   const pos=pinPos(v,w,h);
   const base=Math.min(w,h);
-  const rMap={1:.30,2:.22,3:.20,4:.17,5:.155,6:.14,7:.128,8:.118,9:.110};
+  const rMap={1:.44,2:.30,3:.22,4:.22,5:.22,6:.20,7:.18,8:.17,9:.17};
   const r=base*(rMap[v]||.11);
-  const isRed=(v===5);
-  const hasRedOuter=false;
+  const hasRedOuter=red;
   const hasRedInner=(v===1);
-  const circles=pos.map(([cx,cy,forceRed])=>pinCircle(cx,cy,r,isRed,hasRedOuter,hasRedInner,forceRed)).join('');
-  // Red corner marker for aka dora
-  const marker=red?`<circle cx="${w*.18}" cy="${h*.15}" r="${base*.07}" fill="#c82020" opacity="0.9"/>`:'' ;
+  const circles=pos.map(([cx,cy,forceRed])=>pinCircle(cx,cy,r,red,hasRedOuter,hasRedInner,forceRed)).join('');
+  // Red dotted marker to the right of the middle circle (5-pin)
+  let marker='';
+  if(red){
+    const mid=pos.find(([,,forceRed])=>forceRed) || [w/2,h/2];
+    const[mcx,mcy]=mid;
+    marker=`<circle cx="${mcx+r+base*.1}" cy="${mcy}" r="${base*.06}" fill="#c82020" opacity="0.9"/>`;
+  }
   return circles+marker;
 }
 
@@ -86,21 +94,30 @@ function pinPos(v,w,h){
 
   function col1(n){
     if(n===1) return [[cx,cy]];
-    const step=ph/(n+0.4);
-    return Array.from({length:n},(_,i)=>([cx, oy+step*(i+0.7)]));
+    const step=ph/(n-0.1);
+    return Array.from({length:n},(_,i)=>([cx, oy+step*(i+0.45)]));
   }
-  function col2(nL,nR){
-    const lx=ox+pw*.27, rx=ox+pw*.73;
-    const stepL=ph/(nL+0.4), stepR=ph/(nR+0.4);
-    const L=Array.from({length:nL},(_,i)=>([lx,oy+stepL*(i+0.7)]));
-    const R=Array.from({length:nR},(_,i)=>([rx,oy+stepR*(i+0.7)]));
+  function col2(nL,nR,colGap,rowGap){
+    const gx=colGap!=null?colGap:.23;
+    const lx=ox+pw*(.5-gx), rx=ox+pw*(.5+gx);
+    function colYs(n,gap){
+      if(n===2){
+        const g=(gap!=null?gap:.4)*ph;
+        return [cy-g/2, cy+g/2];
+      }
+      const step=ph/(n+(gap!=null?gap:0.4));
+      return Array.from({length:n},(_,i)=>oy+step*(i+0.55));
+    }
+    const L=colYs(nL,rowGap).map(y=>[lx,y]);
+    const R=colYs(nR,rowGap).map(y=>[rx,y]);
     return [...L,...R];
   }
   function col3(n){
-    const lx=ox+pw*.17, mx=cx, rx=ox+pw*.83;
-    const step=ph/(n+0.4);
+    const lx=ox+pw*.13, mx=cx, rx=ox+pw*.86;
+    const step=ph/(n - 0.15);
+    const midRow=Math.floor(n/2);
     const pts=[];
-    for(let i=0;i<n;i++) for(const x of[lx,mx,rx]) pts.push([x,oy+step*(i+0.7)]);
+    for(let i=0;i<n;i++) for(const x of[lx,mx,rx]) pts.push([x,oy+step*(i+0.45),i===midRow]);
     return pts;
   }
 
@@ -108,20 +125,47 @@ function pinPos(v,w,h){
   if(v===2) return col1(2);
   if(v===3){
     // Diagonal: top-left, centre (red), bottom-right
-    const r3=Math.min(w,h)*.20;
-    const off=Math.min(pw,ph)*.26;
-    return [[cx-off,cy-off,false],[cx,cy,true],[cx+off,cy+off,false]];
+    const offX=Math.min(pw,ph)*.28;
+    const offY=Math.min(pw,ph)*.48;
+    return [[cx-offX,cy-offY,false],[cx,cy,true],[cx+offX,cy+offY,false]];
   }
-  if(v===4) return col2(2,2);
-  if(v===5){ const g=col2(2,2); g.push([cx,cy]); return g; }
-  if(v===6) return col2(3,3);
+  if(v===4) return col2(2,2,.28,0.66);
+  if(v===5){ const g=col2(2,2,.28,0.66); g.push([cx,cy,true]); return g; }
+  if(v===6){
+    const gx=.23;
+    const lx=ox+pw*(.5-gx), rx=ox+pw*(.5+gx);
+    const gapTop=0.40;   // gap between the top blue pair and the red 2x2 grid — ADJUST THIS
+    const gapGrid=0.30;  // gap between the two rows inside the red 2x2 grid
+    const totalSpan=(gapTop+gapGrid)*ph;
+    const yTop=cy-totalSpan/2;
+    const yMid=yTop+gapTop*ph;
+    const yBot=yMid+gapGrid*ph;
+    return [
+      [lx,yTop,false],[rx,yTop,false],
+      [lx,yMid,true],[rx,yMid,true],
+      [lx,yBot,true],[rx,yBot,true],
+    ];
+  }
   if(v===7){
-    const lx=ox+pw*.27, rx=ox+pw*.73;
-    const L=Array.from({length:3},(_,i)=>([lx,oy+ph/(3+.4)*(i+.7)]));
-    const R=Array.from({length:4},(_,i)=>([rx,oy+ph/(4+.4)*(i+.7)]));
-    return [...L,...R];
+    const gx=.20;
+    const lx=ox+pw*(.5-gx), rx=ox+pw*(.5+gx);
+    const diagSpan=0.20; // vertical span of the diagonal-3 cluster above the grid
+    const gapTop=0.26;   // gap between the diagonal-3 and the red 2x2 grid below — ADJUST THIS
+    const gapGrid=0.28;  // gap between the two rows inside the red 2x2 grid
+    const totalSpan=(diagSpan+gapTop+gapGrid)*ph;
+    const yDiagTop=cy-totalSpan/2;
+    const yDiagBot=yDiagTop+diagSpan*ph;
+    const yDiagMid=(yDiagTop+yDiagBot)/2;
+    const yMid=yDiagBot+gapTop*ph;
+    const yBot=yMid+gapGrid*ph;
+    const diagOffX=pw*.34; // horizontal spread of the diagonal-3 — wide enough to avoid overlap
+    return [
+      [cx-diagOffX,yDiagTop,false],[cx,yDiagMid,false],[cx+diagOffX,yDiagBot,false],
+      [lx,yMid,true],[rx,yMid,true],
+      [lx,yBot,true],[rx,yBot,true],
+    ];
   }
-  if(v===8) return col2(4,4);
+  if(v===8) return col2(4,4,.20,0.14);
   if(v===9) return col3(3);
   return [];
 }
@@ -176,35 +220,108 @@ function souBird(w,h){
 
 function svgSou(v,w,h,red=false){
   const base=Math.min(w,h);
-  const sticks=(v===1)?souBird(w,h):souLayout(v,w,h).map(([cx,cy,sw,sh,isRed])=>souStick(cx,cy,sw,sh,isRed)).join('');
-  // Red corner marker for aka dora
-  const marker=red?`<circle cx="${w*.18}" cy="${h*.15}" r="${base*.07}" fill="#c82020" opacity="0.9"/>`:'' ;
+  let marker='';
+  let sticks;
+  if(v===1) sticks=souBird(w,h);
+  else if(v===8) sticks=souWM(w,h);
+  else{
+    const layout=souLayout(v,w,h);
+    sticks=layout.map(([cx,cy,sw,sh,isRed,centerSquareSh])=>souStick(cx,cy,sw,sh,isRed,false,false,false,centerSquareSh)).join('');
+    if(red){
+      // Red dotted marker just above the red centre bamboo (5-sou)
+      const centreStick=layout.find(([,,,,isRed])=>isRed);
+      if(centreStick){
+        const[cx,cy,,sh]=centreStick;
+        marker=`<circle cx="${cx}" cy="${cy-sh/2-base*.10}" r="${base*.06}" fill="#c82020" opacity="0.9"/>`;
+      }
+    }
+  }
   return sticks+marker;
 }
 
-function souStick(cx,cy,sw,sh,isRed){
-  const x=cx-sw/2, y=cy-sh/2;
-  const capH=sh*.22;   // top/bottom cap height
-  const waistW=sw*.62; // narrow waist width
-  const waistY=y+capH;
-  const waistH=sh-capH*2;
-  const bandH=Math.max(1.5,sh*.10);
-  const bandY=cy-bandH/2;
-  const fill=isRed?'#c82020':'#1c7530';
-  const stroke=isRed?'#8a1010':'#0e4018';
-  const hlCol=isRed?'#e86060':'#2db848';
+// 8-sou: a "W" (top) and a mirrored "M" (bottom), each built from 2 upright
+// bamboo canes (outer legs) + 2 canes leaning in from the sides that meet at
+// a point in the middle, with a short white "joint" rod smoothing the seam
+// where the two leaning canes meet. Hand-tuned on a fixed 220x300 reference
+// canvas per motif (600 tall for W+M together), then scaled onto the tile.
+function souMMotif(caneW){
+  const stickLen=145.6;
+  const leftX=30, rightX=190, topY=150-stickLen/2;
+  const leanLeftX=25, leanRightX=195, leanY=154, leanPivotY=topY+4;
+  const leanAngle=38;
+  const leanLeftBody=`<g transform="rotate(${-leanAngle},${leanLeftX},${leanPivotY})">${souStick(leanLeftX, leanY, caneW, stickLen, false, true, false, true)}</g>`;
+  const leanLeftTip=`<g transform="rotate(${-leanAngle},${leanLeftX},${leanPivotY})">${souStickBottomCap(leanLeftX, leanY, caneW, stickLen, false)}</g>`;
+  const leanRightBody=`<g transform="rotate(${leanAngle},${leanRightX},${leanPivotY})">${souStick(leanRightX, leanY, caneW, stickLen, false, true, false, true)}</g>`;
+  const leanRightTip=`<g transform="rotate(${leanAngle},${leanRightX},${leanPivotY})">${souStickBottomCap(leanRightX, leanY, caneW, stickLen, false)}</g>`;
+  const jointRod=`<rect x="105" y="185" width="10" height="13" rx="5.5" fill="#ffffff"/>`;
+  return leanLeftTip+leanRightTip+leanLeftBody+leanRightBody+jointRod+
+    souStick(leftX, 150, caneW, stickLen, false)+souStick(rightX, 150, caneW, stickLen, false);
+}
+function souWM(w,h){
+  // Tweak these to reshape the W/M design (all within the fixed 220x600
+  // reference frame, before it gets fit onto the actual tile size):
+  const glyphScaleX=0.8;  // width of each W/M glyph
+  const glyphScaleY=1.63;  // height of each W/M glyph
+  const gap=-250;         // vertical gap between the W and the M
+  const topY=18;           // extra vertical offset for the W (top) piece
+  const bottomY=45;        // extra vertical offset for the M (bottom) piece
 
-  // Hourglass shape via path: wide top cap, narrow waist, wide bottom cap
-  const tw=sw/2, ww=waistW/2;
-  const path=`M${cx-tw},${y} Q${cx-tw},${waistY} ${cx-ww},${waistY} L${cx-ww},${waistY+waistH} Q${cx-tw},${waistY+waistH} ${cx-tw},${y+sh} L${cx+tw},${y+sh} Q${cx+tw},${waistY+waistH} ${cx+ww},${waistY+waistH} L${cx+ww},${waistY} Q${cx+tw},${waistY} ${cx+tw},${y} Z`;
+  // Match 2-sou's rendered stick width. 2-sou's stick is uw*.40*0.7*0.9 wide
+  // (uw = 0.86*w, since souLayout's pad = w*.07) and its visible rod is 60%
+  // of that; solving backwards through this glyph's scale(glyphScaleX,...)
+  // and the final scale(w/220,...) below gives the reference-frame cane
+  // width that renders at the same final pixel width.
+  const caneW=(0.86*.40*0.7*0.9*220)/glyphScaleX;
 
-  return (
-    `<path d="${path}" fill="${fill}" stroke="${stroke}" stroke-width="0.8"/>`+
-    // Highlight on top cap
-    `<rect x="${cx-sw*.28}" y="${y+sh*.04}" width="${sw*.22}" height="${capH*.55}" rx="${sw*.08}" fill="${hlCol}" opacity="0.5"/>`+
-    // Red centre band
-    (!isRed?`<rect x="${cx-ww}" y="${bandY}" width="${waistW}" height="${bandH}" fill="#c82020"/>`:'')
-  );
+  const refCx=110, refCy=150;
+  const m=souMMotif(caneW);
+  const resized=`<g transform="translate(${refCx},${refCy}) scale(${glyphScaleX},${glyphScaleY}) translate(${-refCx},${-refCy})">${m}</g>`;
+  const wTop=`<g transform="translate(0,${topY}) rotate(180,${refCx},${refCy})">${resized}</g>`;
+  const mBottom=`<g transform="translate(0,${300*glyphScaleY+gap+bottomY})">${resized}</g>`;
+  return `<g transform="scale(${w/220},${h/600})">${wTop}${mBottom}</g>`;
+}
+
+// Bamboo stick built from 6 flat shapes, hand-tuned at a 220x840 reference
+// canvas (rendered bbox: x 20-220, y 90.948-738.012) and reproduced here by
+// wrapping that exact template in a transform that maps its bbox onto the
+// (cx,cy,sw,sh) slot given by souLayout.
+const SOU_STICK_CAP_PATH='M54.72,45 L165.28,45 Q179.28,45 190.90,52.81 A100,70 0 1 1 29.10,52.81 Q40.72,45 54.72,45 Z';
+function souStick(cx,cy,sw,sh,isRed,hideTopCap=false,bottomCapOnTop=false,hideBottomCap=false,centerSquareSh=null){
+  const fill=isRed?'#c8262a':'#1c7530';
+  const scaleX=sw/200, scaleY=sh/647.064;
+  const outer=`translate(${cx-sw/2},${cy-sh/2}) scale(${scaleX},${scaleY}) translate(-20,-90.948)`;
+  // Centre square and both end caps normally get squished by the same
+  // scaleY as the rest of the stick, but when centerSquareSh is given (e.g.
+  // matching a different value's stick length) they're each rescaled about
+  // their own centre so they render at the same absolute size as that
+  // reference stick's — only the straight rod actually gets shorter.
+  const sizeCompensation=centerSquareSh?centerSquareSh/sh:1;
+  const topCapShape=`<path d="${SOU_STICK_CAP_PATH}" fill="${fill}" transform="translate(10,10)"/>`;
+  const topCap=hideTopCap?'':(sizeCompensation===1?topCapShape:
+    `<g transform="translate(0,114.48) scale(1,${sizeCompensation}) translate(0,-114.48)">${topCapShape}</g>`);
+  const bottomCapShape=`<path d="${SOU_STICK_CAP_PATH}" fill="${fill}" transform="translate(10,610) rotate(180,110,104.48)"/>`;
+  const bottomCap=hideBottomCap?'':(sizeCompensation===1?bottomCapShape:
+    `<g transform="translate(0,714.48) scale(1,${sizeCompensation}) translate(0,-714.48)">${bottomCapShape}</g>`);
+  const rod=`<rect x="60" y="140" width="120" height="548.96" fill="${fill}"/>`+
+    `<rect x="97.4" y="86" width="45.2" height="656.96" rx="22.6" fill="#ffffff"/>`;
+  const squareShape=`<rect x="20" y="353.48" width="200" height="122" rx="50" fill="${fill}"/>`+
+    `<rect x="58.8" y="385.648" width="122.4" height="57.664" rx="30.6" fill="#ffffff"/>`;
+  const square=sizeCompensation===1?squareShape:
+    `<g transform="translate(0,414.48) scale(1,${sizeCompensation}) translate(0,-414.48)">${squareShape}</g>`;
+  const body=rod+square;
+  const inner=bottomCapOnTop?(topCap+body+bottomCap):(topCap+bottomCap+body);
+  return `<g transform="${outer}"><g transform="translate(0,41.448) scale(1,0.9)">${inner}</g></g>`;
+}
+
+// Just the bottom cap alone, positioned/scaled exactly as it would be inside
+// souStick — for pulling a cane's tip out to render as a separate top layer.
+function souStickBottomCap(cx,cy,sw,sh,isRed){
+  const fill=isRed?'#c8262a':'#1c7530';
+  const scaleX=sw/200, scaleY=sh/647.064;
+  const outer=`translate(${cx-sw/2},${cy-sh/2}) scale(${scaleX},${scaleY}) translate(-20,-90.948)`;
+  return `<g transform="${outer}"><g transform="translate(0,41.448) scale(1,0.9)">`+
+    `<path d="${SOU_STICK_CAP_PATH}" fill="${fill}" transform="translate(10,610) rotate(180,110,104.48)"/>`+
+    `</g></g>`;
 }
 
 function souLayout(v,w,h){
@@ -216,60 +333,96 @@ function souLayout(v,w,h){
   // GAP_RATIO: fraction of slot height that is empty gap between sticks
   const GAP=0.28;
 
-  function placeCol(x, n, sw, startY, totalH){
+  function placeCol(x, n, sw, startY, totalH, hMult=1, allRed=false, shOverride=null, centerSquareSh=null){
     // Divide totalH into n equal slots, place stick in centre of each slot with gap
     const slot=totalH/n;
-    const sh=slot*(1-GAP);
+    const sh=shOverride ?? (slot*(1-GAP)*hMult);
     for(let i=0;i<n;i++){
       const cy=startY+slot*(i+0.5);
-      out.push([x, cy, sw, sh, false]);
+      out.push([x, cy, sw, sh, allRed, centerSquareSh]);
     }
   }
 
-  function col1(n){
-    const sw=uw*.40;
-    placeCol(midX, n, sw, pad, uh);
+  function col1(n, hMult=1, wMult=1){
+    const sw=uw*.40*wMult;
+    placeCol(midX, n, sw, pad, uh, hMult);
   }
 
-  function col2(nL,nR,redCentre=false){
-    const sw=uw*.22;
-    const lx=midX-uw*.25, rx=midX+uw*.25;
-    placeCol(lx, nL, sw, pad, uh);
-    placeCol(rx, nR, sw, pad, uh);
+  function col2(nL,nR,redCentre=false,swOverride=null,shOverride=null,xOffset=uw*.25){
+    const sw=swOverride ?? uw*.33;
+    const lx=midX-xOffset, rx=midX+xOffset;
+    placeCol(lx, nL, sw, pad, uh, 1, false, shOverride);
+    placeCol(rx, nR, sw, pad, uh, 1, false, shOverride);
     if(redCentre){
       // Red centre stick: fits in the middle gap of the 2-col layout
       const slot=uh/nL;
-      const sh=slot*(1-GAP);
+      const sh=shOverride ?? (slot*(1-GAP));
       out.push([midX, h/2, sw, sh, true]);
     }
   }
 
-  function col3(n){
-    const sw=uw*.16;
-    const xs=[midX-uw*.28, midX, midX+uw*.28];
-    for(const x of xs) placeCol(x, n, sw, pad, uh);
+  function col3(n, redCol=-1, swOverride=null, centerSquareSh=null){
+    const sw=swOverride ?? uw*.23*0.9;
+    const xs=[midX-uw*.35, midX, midX+uw*.35];
+    xs.forEach((x,i)=>placeCol(x, n, sw, pad, uh, 1, i===redCol, null, centerSquareSh));
   }
 
-  if(v===2) col1(2);
-  else if(v===3) col1(3);
-  else if(v===4) col2(2,2);
-  else if(v===5) col2(2,2,true);
-  else if(v===6) col2(3,3);
-  else if(v===7) col2(3,4);
-  else if(v===8){
-    // 8-sou: 2 cols × 4 rows, tighter gap so hourglasses form W on top, M on bottom
-    const sw=uw*.22;
-    const lx=midX-uw*.25, rx=midX+uw*.25;
-    const n=4;
-    const slot=uh/n;
-    const sh=slot*.88; // very small gap — sticks nearly touch so W/M emerges from hourglass waists
-    for(let i=0;i<n;i++){
-      const cy=pad+slot*(i+0.5);
-      out.push([lx, cy, sw, sh, false]);
-      out.push([rx, cy, sw, sh, false]);
+  function triangle3(swOverride=null, shOverride=null){
+    // One stick on top, two side-by-side below it — triangular arrangement
+    const sw=swOverride ?? uw*.30;
+    const rowH=uh/2;
+    const sh=shOverride ?? (rowH*(1-GAP));
+    const topCy=pad+rowH*0.5;
+    const botCy=pad+rowH*1.5;
+    const offsetX=uw*.35;
+    out.push([midX, topCy, sw, sh, false]);
+    out.push([midX-offsetX, botCy, sw, sh, false]);
+    out.push([midX+offsetX, botCy, sw, sh, false]);
+  }
+
+  function grid3x2(shOverride=null,swOverride=null){
+    // 3 columns x 2 rows — width kept narrower than the 2-sou stick since
+    // three of them must fit side-by-side without overflowing the tile
+    const sw=swOverride ?? uw*.30;
+    const xs=[midX-uw*.35, midX, midX+uw*.35];
+    const rowH=uh/2;
+    const sh=shOverride ?? (rowH*(1-GAP));
+    for(const x of xs){
+      out.push([x, pad+rowH*0.5, sw, sh, false]);
+      out.push([x, pad+rowH*1.5, sw, sh, false]);
     }
   }
-  else if(v===9) col3(3);
+
+  function oneOnTopOf3x2(swOverride=null,centerSquareSh=null){
+    // One stick on top, then two rows of three side-by-side below it (7 total)
+    const sw=swOverride ?? uw*.23;
+    const rowH=uh/3;
+    const sh=rowH*(1-GAP);
+    const xs=[midX-uw*.35, midX, midX+uw*.35];
+    out.push([midX, pad+rowH*0.5, sw, sh, true, centerSquareSh]); // top stick is red
+    for(const x of xs) out.push([x, pad+rowH*1.5, sw, sh, false, centerSquareSh]);
+    for(const x of xs) out.push([x, pad+rowH*2.5, sw, sh, false, centerSquareSh]);
+  }
+
+  // 2-sou's per-stick size (col1's sw*wMult, sh*hMult with n=2) — 3-6 sou match this exactly
+  const stick2W=uw*.40*0.7*0.9;
+  const stick2H=(uh/2)*(1-GAP)*1.2;
+  // Horizontal distance from centre to each pair of bamboos — tweak these for 4s/5s
+  const pairXOffset4=uw*.25;
+  const pairXOffset5=uw*.35;
+  // 6-sou's stick width — 7-sou and 9-sou reuse this (scaled down further)
+  // so their sticks (and their centre squares) match each other, just
+  // narrower and shorter than 6-sou's.
+  const stick6W=uw*.30*0.9;
+  const stick79W=stick6W*0.9;
+
+  if(v===2) col1(2, 1.2, 0.7*0.9);
+  else if(v===3) triangle3(stick2W, stick2H);
+  else if(v===4) col2(2,2,false,stick2W,stick2H,pairXOffset4);
+  else if(v===5) col2(2,2,true,stick2W,stick2H,pairXOffset5);
+  else if(v===6) grid3x2(stick2H,stick6W);
+  else if(v===7) oneOnTopOf3x2(stick79W, stick2H);
+  else if(v===9) col3(3, 1, stick79W, stick2H);
   return out;
 }
 
@@ -282,8 +435,8 @@ function svgHon(v,w,h){
   if(v===5){
     return '';
   }
-  const fs=Math.round(h*.52);
-  const scaleY=1.45; // vertical stretch factor
+  const fs=Math.round(h*.65);
+  const scaleY=1.2; // vertical stretch factor
   const COLORS={1:'#1a1a1a',2:'#1a1a1a',3:'#1a1a1a',4:'#1a1a1a',6:'#1a7a30',7:'#c82020'};
   const CHARS ={1:'東',2:'南',3:'西',4:'北',6:'發',7:'中'};
   const cy=h*.56;
