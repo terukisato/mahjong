@@ -4,13 +4,30 @@ const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
 const {botName,bestDiscard,botReact} = require('./bot');
 
 let _roomId=0;
-const BOT_DELAY=1200;
+const BOT_DELAY=1200; // pause before a bot acts, so its move is readable on screen
 
 // ── Dead wall layout (14 tiles) ─────────────────────────────────────────────
 // [0-3]  = rinshan tiles (drawn on kan)
 // [4-8]  = dora indicators  (dora[0] = deadWall[4], revealed on kan = deadWall[5..8])
 // [9-13] = ura dora indicators (revealed only on riichi win)
 
+// One Room = one 4-seat table for a full game (tonpuu/hanchan). `this.seats`
+// holds up to 4 player-or-bot entries (index = seat number, stable for the
+// whole game); `this.game` holds all per-game/per-round mutable state and is
+// null until start() is called. mahjong.js has no knowledge of turn order or
+// the wall — this class owns the state machine and calls into mahjong.js
+// (imported above) purely for "is this a win / what yaku / how many fu"
+// questions given a snapshot of tiles.
+//
+// Call priority when a discard can be reacted to (ron/pon/kan/chi): ron
+// always wins if anyone can ron; among calls, pon/kan (either) beat chi;
+// chi is further restricted to the player sitting immediately after the
+// discarder. See _checkReactions/_resolveReactions.
+//
+// `g.pending` (set while waiting on ron/pon/chi/kan responses to a discard,
+// or on chankan responses to an added kan) has the shape:
+//   {tile, fromSeat, seats:[...reacting seats], options:[{seat,options}],
+//    responses:{seat: {type, ...}}, timer, isChankan?}
 class Room {
   constructor(gameMode='tonpuu'){
     this.id=++_roomId;
@@ -24,8 +41,9 @@ class Room {
   }
 
   addHuman(player){
-    const seat=this.seats.indexOf(null);
-    if(seat===-1) return false;
+    const openSeats=this.seats.reduce((acc,s,i)=>{if(s===null)acc.push(i);return acc;},[]);
+    if(openSeats.length===0) return false;
+    const seat=openSeats[Math.floor(Math.random()*openSeats.length)];
     player.seat=seat;
     this.seats[seat]=player;
     this._broadcastRoomUpdate();
@@ -84,6 +102,12 @@ class Room {
   }
 
   // ── Game lifecycle ─────────────────────────────────────────────────────────
+  // Resets everything that's scoped to a single round (hand) — deals a fresh
+  // wall, clears riichi/furiten/melds/etc. Does NOT touch scores, dealer,
+  // round number, or honba/riichiSticks carried over from the previous round
+  // — those live on `this.game` directly and are set by start() (new game)
+  // or by the pendingNextRound closures in _endRound/_resolveTenpaiPayments/
+  // _resolveNagashi (next round after a win/draw).
   _initRound(){
     const g=this.game;
     const wall=shuffle(buildWall());
@@ -122,8 +146,8 @@ class Room {
       scores:[25000,25000,25000,25000],
       turn:startDealer,
       dealer:startDealer,
-      round:1,        // hand number within current wind (1-4+)
-      roundWind:1,    // 1-8 for hanchan: 1-4=East, 5-8=South
+      round:1,        // overall hand counter: 1-4=East round, 5-8=South round (hanchan)
+      roundWind:1,    // derived from round: 1=East, 2=South (see _roundWindValue)
       honba:0,
       riichiSticks:0,
     };
@@ -167,6 +191,11 @@ class Room {
     this._botTurn(seat);
   }
 
+  // Bot's own-turn decision priority: ankan > tsumo > riichi > (forced
+  // discard of the drawn tile if already in riichi) > best discard. Note a
+  // riichi'd bot never attempts ankan here even though it can be legal
+  // (see _ankan's wait-preserving check) — this is a deliberate simplicity
+  // tradeoff in the bot AI, not a rules bug.
   _botTurn(seat){
     const g=this.game;
     if(!g||g.turn!==seat||this.phase!=='playing') return;
@@ -329,6 +358,13 @@ class Room {
     }
   }
 
+  // Collects every seat's available reaction options to a just-discarded
+  // tile (ron/pon/kan/chi). This only computes what's *offered* to each
+  // seat — it does not resolve priority between them; that happens once all
+  // responses are in, in _resolveReactions. seat===(fromSeat+1)%4 is the
+  // discarder's shimocha (the seat that plays right after them in turn
+  // order) — the discarder is THAT player's kamicha, and chi may only be
+  // called from your kamicha, so this is the only seat ever offered chi.
   _checkReactions(fromSeat,tile){
     const g=this.game;
     const reactions=[];
@@ -371,7 +407,7 @@ class Room {
     }
 
     if(resp.type==='ron'){this._resolveReactions();return;}
-    if(resp.type==='kan'){const tile=g.pending.tile;g.pending=null;this._daiminkan(seat,tile);return;}
+    if(resp.type==='kan'){const tile=g.pending.tile,fromSeat=g.pending.fromSeat;g.pending=null;this._daiminkan(seat,tile,fromSeat);return;}
 
     const tile=g.pending.tile;
     for(const r of g.pending.options){
@@ -388,6 +424,13 @@ class Room {
     if(g.pending.seats.every(s=>g.pending.responses[s])) this._resolveReactions();
   }
 
+  // Once every reacting seat has responded (or we've at least heard back
+  // from all humans — bots may still be "thinking" on their BOT_DELAY
+  // timer, but their eventual response can't outrank a human's), apply
+  // priority: any ron wins outright (multiple simultaneous ron supported);
+  // otherwise pon/kan (checked together, first one found wins — in
+  // practice at most one seat can pon/kan the same discard) beats chi;
+  // if nobody called anything, play just continues to the next seat.
   _resolveReactions(){
     const g=this.game;
     if(!g.pending) return;
@@ -486,9 +529,12 @@ class Room {
     const used=matches.slice(0,2);
     g.hands[seat]=hand.filter(t=>!used.map(u=>u.id).includes(t.id));
     g.melds[seat].push({type:'pon',tiles:[...used,tile],calledTileId:tile.id,fromSeat});
+    g.discards[fromSeat]=g.discards[fromSeat].filter(t=>t.id!==tile.id); // called tile leaves their pond
     g.nagashi[seat]=false;
+    g.nagashi[fromSeat]=false; // their discard was called — nagashi requires no discard ever be taken
     g.turn=seat;
     g.ippatsu=g.ippatsu.map(()=>false);
+    this._broadcastAll({type:'pon',seat,name:this.seats[seat]?.name});
     this._sendState();
     if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat])),BOT_DELAY);
   }
@@ -499,28 +545,44 @@ class Room {
     const used=hand.filter(t=>tileIds.includes(t.id));
     g.hands[seat]=hand.filter(t=>!tileIds.includes(t.id));
     g.melds[seat].push({type:'chi',tiles:sort([...used,tile]),calledTileId:tile.id,fromSeat});
+    g.discards[fromSeat]=g.discards[fromSeat].filter(t=>t.id!==tile.id); // called tile leaves their pond
     g.nagashi[seat]=false;
+    g.nagashi[fromSeat]=false; // their discard was called — nagashi requires no discard ever be taken
     g.turn=seat;
     g.ippatsu=g.ippatsu.map(()=>false);
+    this._broadcastAll({type:'chi',seat,name:this.seats[seat]?.name});
     this._sendState();
     if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat])),BOT_DELAY);
   }
 
   // ── Kan types ──────────────────────────────────────────────────────────────
-  _daiminkan(seat,tile){
+  // Three ways to form a kan, all converge on the same "draw a rinshan
+  // replacement tile" tail (_draw(true)) and reveal a new kan-dora indicator:
+  //   daiminkan  called on another player's discard (like a pon, but 4 tiles)
+  //   ankan      self-declared from 4 concealed copies already in hand;
+  //              during riichi only legal if it doesn't change your waits
+  //              (checked below) — a closed kan, so `open:false`
+  //              (matters for fu — see calcFu in mahjong.js)
+  //   kakan      "added kan": upgrading an existing pon by drawing/holding
+  //              the 4th copy. Exposed to chankan (robbing the kan) since,
+  //              unlike ankan, the tile becoming a kan was never concealed
+  //              this whole time — an opponent could be waiting on it.
+  _daiminkan(seat,tile,fromSeat){
     const g=this.game;
     if(g.kanCount>=4) return;
     const hand=g.hands[seat];
     const matches=hand.filter(t=>key(t)===key(tile));
     if(matches.length<3) return;
     g.hands[seat]=hand.filter(t=>!matches.map(u=>u.id).includes(t.id));
-    g.melds[seat].push({type:'kan',kanType:'daiminkan',tiles:[...matches,tile],calledTileId:tile.id,open:true});
+    g.melds[seat].push({type:'kan',kanType:'daiminkan',tiles:[...matches,tile],calledTileId:tile.id,fromSeat,open:true});
+    if(fromSeat!=null) g.discards[fromSeat]=g.discards[fromSeat].filter(t=>t.id!==tile.id); // called tile leaves their pond
     g.kanCount++;g.kanSeats.push(seat);
     g.nagashi[seat]=false;
+    if(fromSeat!=null) g.nagashi[fromSeat]=false; // their discard was called — nagashi requires no discard ever be taken
     this._openNewDora(g);
     g.turn=seat;
     g.ippatsu=g.ippatsu.map(()=>false);
-    this._broadcastAll({type:'kan',seat,kanType:'daiminkan'});
+    this._broadcastAll({type:'kan',seat,name:this.seats[seat]?.name,kanType:'daiminkan'});
     this._draw(true);
   }
 
@@ -543,7 +605,7 @@ class Room {
     g.kanCount++;g.kanSeats.push(seat);
     this._openNewDora(g);
     g.ippatsu=g.ippatsu.map(()=>false);
-    this._broadcastAll({type:'kan',seat,kanType:'ankan'});
+    this._broadcastAll({type:'kan',seat,name:this.seats[seat]?.name,kanType:'ankan'});
     this._draw(true);
   }
 
@@ -572,16 +634,19 @@ class Room {
     this._completeChankan(seat,addTile,ponIdx);
   }
 
+  // Any tenpai (non-furiten) player waiting on the tile being added to a kan
+  // may rob it, not just players in riichi — riichi is just one of several
+  // ways to have a valid yaku, same as for a normal ron.
   _checkChankan(fromSeat,tile){
     const g=this.game;
     const reactions=[];
     for(let seat=0;seat<4;seat++){
       if(seat===fromSeat) continue;
       const hand=g.hands[seat];
-      if(!this._isFuriten(seat)&&isWin([...hand,tile],g.melds[seat])&&g.riichi[seat]){
+      if(!this._isFuriten(seat)&&isWin([...hand,tile],g.melds[seat])){
         const sw=this._seatWindOf(seat);
         const {han}=detectYaku([...hand,tile],g.melds[seat],false,sw,this._roundWindValue(),
-          true,g.ippatsu[seat],g.doubleRiichi[seat],false,true,false,false,false,false,key(tile));
+          g.riichi[seat],g.ippatsu[seat],g.doubleRiichi[seat],false,true,false,false,false,false,key(tile));
         if(han>0) reactions.push({seat,options:[{type:'ron'}]});
       }
     }
@@ -614,7 +679,7 @@ class Room {
     g.kanCount++;g.kanSeats.push(seat);
     this._openNewDora(g);
     g.ippatsu=g.ippatsu.map(()=>false);
-    this._broadcastAll({type:'kan',seat,kanType:'kakan'});
+    this._broadcastAll({type:'kan',seat,name:this.seats[seat]?.name,kanType:'kakan'});
     this._draw(true);
   }
 
@@ -703,6 +768,10 @@ class Room {
     this._endRound('tsumo',seat,null,hand,yl,totalHan,fu,gain,undefined,prevScores,g.melds[seat]);
   }
 
+  // NOTE: appears unused — _resolveReactions/_checkChankanReacted both route
+  // through _multiRon (which handles the single-winner case fine too), so
+  // this single-winner path is currently dead code. Left in place rather
+  // than removed since that wasn't asked for; flag before relying on it.
   _ron(winSeat,loseSeat,tile,isChankan=false){
     const g=this.game;
     const hand=[...g.hands[winSeat],tile];
@@ -733,6 +802,18 @@ class Room {
   }
 
   // ── Round end ───────────────────────────────────────────────────────────────
+  // Common tail for tsumo/ron: figures out what happens to dealer/round/honba
+  // and whether the game itself is over, then broadcasts round_end and either
+  // queues the next round (via pendingNextRound, released once every human
+  // clicks Ready — see the 'round_ready' action) or ends the game.
+  // `reason` is one of: 'tsumo' | 'ron' | 'draw' (exhaustive, wall ran out —
+  // handled specially below for nagashi mangan / tenpai payments) |
+  // 'suukaikan' (abortive draw: 4 kans by more than one player).
+  // Dealer-repeat rule: dealer keeps their seat (honba+1, same round number)
+  // whenever they win; otherwise the dealer seat rotates and round advances.
+  // Agariyame: if this is the last kyoku of the game and the dealer both won
+  // and is already in the lead, the game ends immediately instead of
+  // offering an honba repeat.
   _endRound(reason,winner,loser,hand,yakuList,han,fu,payment,extraWinners,prevScores,melds){
     const g=this.game;
     // Tobi check (bankruptcy)
@@ -856,6 +937,11 @@ class Room {
     };
   }
 
+  // Exhaustive draw (wall ran out), no nagashi mangan: noten (not-tenpai)
+  // players pay a flat 3000 total, split evenly among tenpai players. Called
+  // from _endRound only when reason==='draw' and nobody qualified for
+  // nagashi. Dealer-repeat rule for draws: dealer stays if THEY were tenpai,
+  // regardless of anyone else's tenpai state.
   _resolveTenpaiPayments(){
     const g=this.game;
     const inTenpai=g.hands.map((hand,seat)=>{
@@ -937,6 +1023,11 @@ class Room {
     };
   }
 
+  // Nagashi Mangan: a player who reached the exhaustive draw having discarded
+  // only terminals/honors, with none of those discards called by anyone
+  // (tracked incrementally via g.nagashi in _discard/_pon/_chi/_daiminkan),
+  // is paid as if they'd won a mangan by tsumo. Multiple seats can qualify
+  // simultaneously. Dealer-repeat rule: dealer stays if THEY qualified.
   _resolveNagashi(nagashiSeats){
     const g=this.game;
     // Nagashi Mangan: 8000 base. Dealer pays/receives double.
@@ -1003,12 +1094,28 @@ class Room {
     return ((seat-g.dealer+4)%4)+1;
   }
 
-  // Round wind for yaku: rounds 1-4 = East(1), rounds 5-8 = South(2)
+  // Round wind for yaku (1=East, 2=South). g.roundWind is already stored as
+  // this converted 1/2 value everywhere it's set (see the Math.ceil(round/4)
+  // calls in _endRound/_resolveTenpaiPayments/_resolveNagashi) — it is NOT
+  // the raw 1-8 hand-within-wind counter (that's g.round), so just return it
+  // directly. (Previously this re-derived it with a `<=4?1:2` check meant
+  // for a raw 1-8 value, which was always true once roundWind was already
+  // 1 or 2 — so Round Wind yaku was silently always East, even in a
+  // hanchan's South round.)
   _roundWindValue(){
-    return this.game.roundWind<=4?1:2;
+    return this.game.roundWind;
   }
 
   // ── State broadcast ────────────────────────────────────────────────────────
+  // Called after almost every state-changing action. Builds and sends a
+  // SEPARATE game_state payload per human seat (bots are skipped — they act
+  // synchronously off `this.game` directly, no message needed) so each
+  // player only ever sees their own concealed hand; opponents' hands are
+  // sent as bare counts (oppHandSizes) for rendering face-down tiles. Also
+  // where all the "can I ___ right now" client hints are computed
+  // (canRiichi/canAnkan/canKakan/canTsumo/canKyuushu) — these are advisory
+  // for the UI only, the server re-validates independently when the actual
+  // action arrives (see action() and the individual handlers).
   _sendState(){
     const g=this.game;
     if(!g) return;

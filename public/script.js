@@ -44,7 +44,7 @@ function svgMan(v,w,h,red=false){
 function svgPin(v,w,h,red=false){
   const pos=pinPos(v,w,h);
   const base=Math.min(w,h);
-  const rMap={1:.44,2:.30,3:.22,4:.22,5:.22,6:.20,7:.18,8:.17,9:.17};
+  const rMap={1:.44,2:.29,3:.22,4:.22,5:.22,6:.20,7:.18,8:.17,9:.17};
   const r=base*(rMap[v]||.11);
   const hasRedOuter=red;
   const hasRedInner=(v===1);
@@ -449,18 +449,30 @@ function svgHon(v,w,h){
 }
 
 // APP STATE
-const W=['東','南','西','北'];
-// Position IDs indexed by (absSeat - mySeat + 4) % 4
-// 0=bottom(me), 1=right, 2=top, 3=left
+// Table layout: every seat-indexed value from the server (scores, discards,
+// melds, riichi flags, ...) is in ABSOLUTE seat order (0-3, stable for the
+// whole game). To place a player at a screen position, rotate by your own
+// seat: abs=(mySeat+i)%4, id=P[i] — i.e. P[0]='b' is always mySeat itself
+// (bottom), P[1]='r' is mySeat+1 (your shimocha / next player, drawn on your
+// right per real mahjong table convention), P[2]='t' is across (toimen),
+// P[3]='l' is mySeat+3 (your kamicha / previous player, on your left). This
+// exact `abs=(mySeat+i)%4, id=P[i]` pattern repeats throughout this file
+// (renderState, onRoundStart, etc.) — keep it consistent if you touch it, a
+// mismatch here silently shows the wrong player's info in the wrong seat.
 const P=['b','r','t','l'];
 
+// Core client state — mostly set by onMsg's handlers below. `lastState` is
+// the previous game_state message, kept around so renderState can diff
+// against it (e.g. "did a new pon just happen" for sound effects).
 let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false, discarding=false, pendingGameOver=null;
 
 function show(id){['s-start','s-lobby','s-game','s-end'].forEach(s=>$(s).classList.toggle('hidden',s!==id));}
 function $(id){return document.getElementById(id);}
 
 
-// WEBSOCKET — connection + message dispatch
+// WEBSOCKET — connection + message dispatch. Auto-reconnects on close/error
+// with a flat 2s retry (no backoff) — fine for a small self-hosted game, not
+// meant to survive a real network partition gracefully.
 function connect(){
   if(!location.host){
     console.warn('No server host — open via http://localhost:3000');
@@ -475,6 +487,11 @@ function connect(){
 }
 function wss(d){if(ws&&ws.readyState===1)ws.send(JSON.stringify(d));}
 
+// Server -> client message router. Lobby/lifecycle messages (joined,
+// room_update, game_start, round_start/end, game_over, ready_status) are
+// handled regardless of state; the `if(!inGame) return;` gate below that
+// means the remaining message types (game_state, riichi, kan, chat) are
+// only meaningful — and only processed — once actually seated at a table.
 function onMsg(m){
   if(m.type==='hello') return;
   if(m.type==='joined'){mySeat=m.seat;showWaiting();return;}
@@ -491,7 +508,9 @@ function onMsg(m){
   if(!inGame) return;
   if(m.type==='game_state'){const prev=lastState;lastState=m;discarding=false;renderState(m,prev);}
   else if(m.type==='riichi'){onRiichi(m);}
-  else if(m.type==='kan'){toast(W[(m.seat-mySeat+4)%4]+' カン！');}
+  else if(m.type==='kan'){toast((m.name||'Player')+' — カン！');}
+  else if(m.type==='pon'){toast((m.name||'Player')+' — ポン！');}
+  else if(m.type==='chi'){toast((m.name||'Player')+' — チー！');}
   else if(m.type==='chat'){showChatMsg(m.seat,m.name,m.text);}
 }
 
@@ -858,10 +877,23 @@ function startGame(m){
   $('game-loading').style.display='flex';
 }
 
+// Absolute seat -> screen position id ('b'/'r'/'t'/'l'). The inverse of the
+// `abs=(mySeat+i)%4` pattern used everywhere else — use this one when you
+// have an absolute seat number and need to know where on screen it lives.
 function pid(abs){return P[(abs-mySeat+4)%4];}
 
 
-// RENDER STATE — called every time a game_state message arrives
+// RENDER STATE — called every time a game_state message arrives (`m` = new
+// state, `prev` = the previous game_state, or undefined on the first call).
+// This is a full re-render, not a diff/patch — every seat's UI panel, hand,
+// discards, and melds are rebuilt from scratch each call. `prev` exists only
+// so specific bits of code below can detect "what just changed" (new pon/
+// chi/kan, new discard, new riichi) purely to decide which sound effect to
+// play; it's not used to skip any rendering work. Roughly in order: topbar
+// (wind/round/wall count/honba) -> dora -> per-seat scores/wind/turn
+// indicator -> my hand -> opponent hands (face-down count only) -> discard
+// piles -> meld sfx-diffing -> discard piles for real -> action buttons
+// (drawActions, called at the very end once all the above state is settled).
 function renderState(m, prev){
   // Hide loading overlay on first state
   const loader=$('game-loading');
@@ -1081,6 +1113,11 @@ function renderState(m, prev){
   drawActions(m);
 }
 
+// Tap-to-select, tap-again-to-discard: first click on a tile just selects
+// it (highlights + shows available action buttons for that selection);
+// clicking the SAME tile again is what actually sends the discard. `discarding`
+// is a one-shot latch to swallow extra clicks between sending the action and
+// the next game_state confirming it, so a slow network can't double-discard.
 function clickTile(id){
   if(discarding) return;
   if(selId===id){
@@ -1098,7 +1135,15 @@ function clickTile(id){
 
 
 // MELD RENDERING
-// Draws chi/pon/kan groups with correct orientation per player
+// Draws chi/pon/kan groups with correct orientation per player. Real riichi
+// tables sideways-rotate the called tile within the group to show which
+// neighbor it was called from: `dir` (called-from seat, relative to whoever
+// owns this meld) is 1=kamicha(left) -> called tile goes on the left end,
+// 2=toimen(across) -> called tile goes in the middle, 3=shimocha(right) ->
+// called tile goes on the right end. `viewerSeat` is the OWNER of the meld
+// (not the person looking at the screen) — ankan has no `fromSeat` (self-
+// declared) so it defaults to dir=1, though ankan's rendering below doesn't
+// actually use dir since all 4 tiles are drawn face-down/symmetric anyway.
 function renderMeld(container, meld, viewerSeat, flipped=false){
   const tiles = meld.tiles;
   const calledId = meld.calledTileId;
@@ -1165,7 +1210,13 @@ function renderMeld(container, meld, viewerSeat, flipped=false){
 }
 
 
-// ACTION BAR — buttons shown on player's turn
+// ACTION BAR — buttons shown on player's turn. Two mutually-exclusive
+// branches driven straight off server-computed flags (this file never
+// re-derives legality itself, it just renders whatever the server already
+// said is available — see _sendState in room.js for canTsumo/canRiichi/
+// canAnkan/canKakan/canKyuushu, and _checkReactions for pending.options):
+//   mine   it's your own turn — tsumo/ankan/kakan/riichi/discard/kyuushu
+//   react  someone else just discarded and you can ron/pon/kan/chi/pass
 function drawActions(m){
   const bar=$('actbar'); bar.innerHTML='';
   const stalePicker=$('chi-picker'); if(stalePicker) stalePicker.remove();
@@ -1377,7 +1428,7 @@ function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(
 function onRiichi(m){
   $('rs'+pid(m.seat)).style.display='block';
   const label=m.isDouble?'ダブルリーチ':'リーチ';
-  toast(label+' — '+(m.name||'Player'));
+  toast((m.name||'Player')+' — '+label);
 }
 function toast(msg){
   const tc=$('tc'),t=document.createElement('div');
@@ -1495,6 +1546,11 @@ function limitLabel(han,fu){
 }
 
 
+// Round-end panel (win/draw/abortive-draw/nagashi) — purely presentational,
+// just formats whatever room.js already computed and sent in the round_end
+// message (yakuList, han/fu, dora, scores, ...). No scoring logic lives
+// here; if a number on this panel looks wrong, the bug is almost certainly
+// in server/mahjong.js or server/room.js, not this rendering.
 function onEnd(m){
   try{
   inGame=false;

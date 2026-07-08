@@ -1,10 +1,23 @@
 'use strict';
+// Deliberately simple bot AI — a greedy local-search heuristic, not a real
+// shanten/efficiency calculator. It never plans more than one tile ahead and
+// has no concept of yaku, safety (defense against other players' waits), or
+// hand value beyond raw shape. Good enough to fill empty seats; not meant to
+// play well. If you want a stronger bot, the natural next step is a real
+// shanten (tiles-away-from-tenpai) calculation instead of `handScore`'s
+// proxy metric below.
 const {key,isWin,waits,canPon,canChi} = require('./mahjong');
 
 const BOT_NAMES=['Sakura AI','Yuki Bot','Hana CPU','Ryu AI','Kaze Bot','Tsuki AI','Hoshi CPU','Umi Bot'];
 let _bi=0;
 function botName(){ return BOT_NAMES[_bi++%BOT_NAMES.length]; }
 
+// Rough "how good is this 13-tile shape" score, used to compare candidate
+// hands (never to compare against an absolute threshold). Tenpai always
+// wins outright (huge flat bonus, further reward for having more waits =
+// wider tenpai); otherwise score triplets/pairs and partial runs (an
+// adjacent tile is worth more than a 2-away tile) as a cheap substitute for
+// real shanten counting.
 function handScore(hand13){
   const w=waits(hand13);
   if(w.length) return 1000+w.length*10;
@@ -23,6 +36,9 @@ function handScore(hand13){
   return s;
 }
 
+// Try discarding each tile in turn, keep whichever leaves the best-scoring
+// 13-tile remainder. O(n) calls to handScore (each O(n) itself) per discard
+// decision — fine at hand-sized n, not something to scale up.
 function bestDiscard(hand14){
   let bestId=null,bestScore=-Infinity;
   for(let i=0;i<hand14.length;i++){
@@ -33,6 +49,15 @@ function bestDiscard(hand14){
   return bestId;
 }
 
+// Reaction to another player's discard. Always ron if offered (never sandbag
+// for a bigger hand). Otherwise only pon/chi if NOT already tenpai — a bot
+// that's already tenpai never breaks it to call, since calling here is only
+// evaluated as a shape improvement, not as "does this get me to tenpai
+// faster" (which it can't, already being there) — and only if the resulting
+// hand doesn't lose too much shape value (the -20/-15 fudge factors let it
+// accept a modest score dip in exchange for advancing the hand). Never
+// considers kan reactions — the options array may include one but it's
+// simply not checked, so bots always pass on kan-on-discard.
 function botReact(hand,disc,options){
   if(options.some(o=>o.type==='ron')) return {type:'ron'};
   const inTenpai=waits(hand).length>0;
