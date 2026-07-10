@@ -225,11 +225,14 @@ function svgSou(v,w,h,red=false){
   if(v===1) sticks=souBird(w,h);
   else if(v===8) sticks=souWM(w,h);
   else{
-    const layout=souLayout(v,w,h);
+    const layout=souLayout(v,w,h,red);
     sticks=layout.map(([cx,cy,sw,sh,isRed,centerSquareSh])=>souStick(cx,cy,sw,sh,isRed,false,false,false,centerSquareSh)).join('');
     if(red){
-      // Red dotted marker just above the red centre bamboo (5-sou)
-      const centreStick=layout.find(([,,,,isRed])=>isRed);
+      // Red dotted marker just above the centre bamboo (5-sou). col2 always
+      // pushes the centre stick last, so grab it by position rather than by
+      // "is it red" — now that aka dora reddens every stick, that search
+      // would just match the first (outer) one instead.
+      const centreStick=layout[layout.length-1];
       if(centreStick){
         const[cx,cy,,sh]=centreStick;
         marker=`<circle cx="${cx}" cy="${cy-sh/2-base*.10}" r="${base*.06}" fill="#c82020" opacity="0.9"/>`;
@@ -324,7 +327,7 @@ function souStickBottomCap(cx,cy,sw,sh,isRed){
     `</g></g>`;
 }
 
-function souLayout(v,w,h){
+function souLayout(v,w,h,red=false){
   const pad=w*.07;
   const uw=w-pad*2, uh=h-pad*2;
   const midX=w/2;
@@ -348,13 +351,17 @@ function souLayout(v,w,h){
     placeCol(midX, n, sw, pad, uh, hMult);
   }
 
-  function col2(nL,nR,redCentre=false,swOverride=null,shOverride=null,xOffset=uw*.25){
+  function col2(nL,nR,redCentre=false,swOverride=null,shOverride=null,xOffset=uw*.25,allRed=false){
     const sw=swOverride ?? uw*.33;
     const lx=midX-xOffset, rx=midX+xOffset;
-    placeCol(lx, nL, sw, pad, uh, 1, false, shOverride);
-    placeCol(rx, nR, sw, pad, uh, 1, false, shOverride);
+    placeCol(lx, nL, sw, pad, uh, 1, allRed, shOverride);
+    placeCol(rx, nR, sw, pad, uh, 1, allRed, shOverride);
     if(redCentre){
-      // Red centre stick: fits in the middle gap of the 2-col layout
+      // Centre stick: always red — this is the traditional single red pip
+      // that a normal (non-bonus) 5-sou tile has. When allRed is also set
+      // (the aka dora / bonus red-5 tile), every OTHER stick is red too
+      // (via placeCol above), matching how the red flag turns every pip/
+      // numeral red on the man/pin tiles.
       const slot=uh/nL;
       const sh=shOverride ?? (slot*(1-GAP));
       out.push([midX, h/2, sw, sh, true]);
@@ -419,7 +426,7 @@ function souLayout(v,w,h){
   if(v===2) col1(2, 1.2, 0.7*0.9);
   else if(v===3) triangle3(stick2W, stick2H);
   else if(v===4) col2(2,2,false,stick2W,stick2H,pairXOffset4);
-  else if(v===5) col2(2,2,true,stick2W,stick2H,pairXOffset5);
+  else if(v===5) col2(2,2,true,stick2W,stick2H,pairXOffset5,red);
   else if(v===6) grid3x2(stick2H,stick6W);
   else if(v===7) oneOnTopOf3x2(stick79W, stick2H);
   else if(v===9) col3(3, 1, stick79W, stick2H);
