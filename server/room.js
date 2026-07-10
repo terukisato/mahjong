@@ -251,11 +251,15 @@ class Room {
   }
 
   _updateFuriten(seat){
-    // Recalculate permanent furiten based on discards vs current waits
+    // Recalculate permanent furiten based on discards vs current waits.
+    // Always reassign (never bail out early) — if the hand isn't tenpai
+    // right now, ws is empty and ws.some(...) is naturally false, which is
+    // correct (furiten doesn't apply without a wait). An early return here
+    // used to leave a stale `true` from an earlier tenpai shape in place
+    // while passing through a non-tenpai stretch of the hand.
     const g=this.game;
     const hand=g.hands[seat];
     const ws=waits(hand,g.melds[seat]);
-    if(!ws.length) return;
     const myDiscards=g.discards[seat].map(key);
     g.furiten[seat]=ws.some(w=>myDiscards.includes(w));
   }
@@ -1126,13 +1130,21 @@ class Room {
       // Calculate waits from 13-tile hand (excluding draw tile if present)
       const dt=g.turn===seat?g.drawTile:null;
       const w=waits(hand,g.melds[seat]);
+      // "Full" (post-draw) hand size shrinks below 14 once any kan has been
+      // called this hand — same accounting as isWin/waits in mahjong.js:
+      // hand.length === 14 - physicalMeldTiles + numKans. A flat 14 check
+      // here would wrongly hide Riichi/further-Ankan right after the first
+      // kan of the hand, even mid-turn with more kans still available.
+      const meldTileCount=g.melds[seat].reduce((n,m)=>n+(m.type==='kan'?4:3),0);
+      const numKans=g.melds[seat].filter(m=>m.type==='kan').length;
+      const fullHandSize=14-meldTileCount+numKans;
       let canRiichi=[];
       const hasOpenMeld=g.melds[seat].some(m=>m.type!=='kan'||m.kanType!=='ankan');
-      if(hand.length===14&&!hasOpenMeld&&!g.riichi[seat]&&g.scores[seat]>=1000){
+      if(hand.length===fullHandSize&&!hasOpenMeld&&!g.riichi[seat]&&g.scores[seat]>=1000){
         canRiichi=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id),g.melds[seat]).length>0).map(t=>t.id);
       }
       let canAnkan=[];
-      if(g.turn===seat&&hand.length===14){
+      if(g.turn===seat&&hand.length===fullHandSize){
         const c={};hand.forEach(t=>{c[key(t)]=(c[key(t)]||0)+1;});
         if(!g.riichi[seat]){
           canAnkan=Object.entries(c).filter(([k,n])=>n===4).map(([k])=>k);

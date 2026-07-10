@@ -1236,10 +1236,12 @@ function drawActions(m){
     if(m.canTsumo)
       ab(bar,'TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
 
-    // LEFT: ANKAN
+    // LEFT: ANKAN — one button per candidate tile, each showing the tile's
+    // face so multiple candidates (rare, but possible) aren't just two
+    // identically-labeled buttons.
     const canAnkan=m.canAnkan||[];
     canAnkan.forEach(tileKey=>{
-      ab(bar,'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey}}));
+      abTile(bar,keyToTile(tileKey),'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey}}));
     });
 
     // LEFT: KAKAN
@@ -1340,6 +1342,23 @@ function showChiPicker(sequences,discTile,myHand){
 
 function ab(c,l,cls,fn){const b=document.createElement('button');b.className='ba '+cls;b.textContent=l;b.onclick=fn;c.appendChild(b);}
 function hint(c,t){const h=document.createElement('span');h.className='hint';h.textContent=t;c.appendChild(h);}
+
+// "<v><suit>" tile key (e.g. "3m") -> a plain tile object usable by tsvg/mkEl.
+function keyToTile(k){ return {v:parseInt(k), s:k.slice(-1)}; }
+
+// Same as ab(), but shows the tile's face next to the label — used where
+// multiple same-labeled buttons could otherwise be indistinguishable (e.g.
+// two ANKAN candidates at once).
+function abTile(c,tile,l,cls,fn){
+  const b=document.createElement('button');b.className='ba ba-tile '+cls;
+  // mkElMd gives the tile its usual ivory face + gold border (same as
+  // discards/melds) — a bare tsvg() string has a transparent background and
+  // is unreadable against a dark button like .bkan's purple gradient.
+  b.appendChild(mkElMd(tile));
+  const span=document.createElement('span');span.textContent=l;
+  b.appendChild(span);
+  b.onclick=fn;c.appendChild(b);
+}
 
 function mkEl(tile,cls,w,h){
   const el=document.createElement('div');el.className='tile '+cls;

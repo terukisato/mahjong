@@ -308,6 +308,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .ba:hover{filter:brightness(1.2);transform:translateY(--0.3vmin);box-shadow:0 0.6vmin 2vmin rgba(0,0,0,.7);}
 .ba:active{transform:translateY(0);}
 .ba:disabled{opacity:.3;cursor:default;transform:none;filter:none;}
+.ba-tile{display:flex;align-items:center;gap:0.6vmin;}
+.ba-tile .tmd{width:2.46vmin;height:3.4vmin;flex-shrink:0;}
 .hint{display:none;}
 .bdis{background:#8a1818;color:#ffd8d8;border:0.2vmin solid #d44;}
 .btsu{background:#8a6500;color:#fff8d0;border:0.2vmin solid #f0d060;font-weight:900;}
