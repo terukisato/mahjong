@@ -1,6 +1,6 @@
 'use strict';
 const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
-       detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose} = require('./mahjong');
+       detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose,isMenzen} = require('./mahjong');
 const {botName,bestDiscard,botReact} = require('./bot');
 
 let _roomId=0;
@@ -484,7 +484,7 @@ class Room {
       const totalHan=han+dc;
       const decomps=decompose(hand);
       const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
-      const fu=decomps.length?calcFu(decomps[0],false,!g.melds[winSeat].length,key(tile),hasPinfu):30;
+      const fu=decomps.length?calcFu(decomps[0],false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu):30;
       const isWinnerDealer = winSeat === g.dealer;
       const bp=basePoints(totalHan,fu);
       const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300;
@@ -753,7 +753,7 @@ class Room {
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
     const decomps=decompose(hand);
     const winKey=g.drawTile?key(g.drawTile):null;
-    const fu=decomps.length?calcFu(decomps[0],true,!g.melds[seat].length,winKey,hasPinfu):30;
+    const fu=decomps.length?calcFu(decomps[0],true,isMenzen(g.melds[seat]),winKey,hasPinfu):30;
     const bp=basePoints(totalHan,fu);
     const isDealer=seat===g.dealer;
     const prevScores=[...g.scores];
@@ -791,7 +791,7 @@ class Room {
     const totalHan=han+dc;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
     const decomps=decompose(hand);
-    const fu=decomps.length?calcFu(decomps[0],false,!g.melds[winSeat].length,key(tile),hasPinfu):30;
+    const fu=decomps.length?calcFu(decomps[0],false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu):30;
     const bp=basePoints(totalHan,fu);
     const isWinnerDealer=winSeat===g.dealer;
     const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300+g.riichiSticks*1000;
@@ -1139,8 +1139,7 @@ class Room {
       const numKans=g.melds[seat].filter(m=>m.type==='kan').length;
       const fullHandSize=14-meldTileCount+numKans;
       let canRiichi=[];
-      const hasOpenMeld=g.melds[seat].some(m=>m.type!=='kan'||m.kanType!=='ankan');
-      if(hand.length===fullHandSize&&!hasOpenMeld&&!g.riichi[seat]&&g.scores[seat]>=1000){
+      if(hand.length===fullHandSize&&isMenzen(g.melds[seat])&&!g.riichi[seat]&&g.scores[seat]>=1000){
         canRiichi=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id),g.melds[seat]).length>0).map(t=>t.id);
       }
       let canAnkan=[];

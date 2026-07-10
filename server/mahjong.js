@@ -247,9 +247,18 @@ function getVal(k){ return parseInt(k); }
 //   winTileKey  "<value><suit>" key of the tile that completed the hand —
 //               needed to tell ankou from ron-completed minkou, tanki from
 //               shanpon, ryanmen from kanchan/penchan, etc.
+// Ankan (concealed kan) does NOT break menzen/closed-hand status, unlike
+// every other call type — a player can still declare/hold riichi after
+// ankan-ing. Only a non-ankan meld actually opens the hand. Shared between
+// detectYaku (menzen-gated yaku) and calcFu (menzen-ron fu bonus) so both
+// agree on what counts as "still closed" — keep them using this, not their
+// own melds.length checks, or they'll silently drift apart again.
+function isMenzen(melds){
+  return !melds.some(m=>m.type!=='kan'||m.kanType!=='ankan');
+}
+
 function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIppatsu, isDoubleRiichi, isRinshan, isChankan, isHaitei, isHoutei, isTenhou, isChiihou, winTileKey){
-  const open=melds.length>0;
-  const menzen=!open;
+  const menzen=isMenzen(melds);
   const allKeys=[...hand14.map(key),...melds.flatMap(m=>m.tiles.map(key))];
 
   // ── Tenhou / Chiihou (Yakuman, before anything else) ─────────────────────
@@ -347,10 +356,14 @@ function ym(name,jp,han){ return {han,yakuList:[{name,jp,han}],yakuman:true}; }
 //   tris/seqs   triplets/sequences from allGroups (concealed AND called) —
 //               use these for yaku that don't care about openness
 //               (Toitoi, Yakuhai, Sanshoku, Ittsu, Chanta, ...)
-//   closedTris  triplets from `groups` only, MINUS any triplet whose last
-//               tile was won by ron (a ron-completed triplet is a minkou,
-//               not an ankou, even though its tiles are physically in the
-//               closed hand) — use this only for Sanankou/Suuankou
+//   closedTris  triplets from `groups`, MINUS any triplet whose last tile
+//               was won by ron (a ron-completed triplet is a minkou, not an
+//               ankou, even though its tiles are physically in the closed
+//               hand), PLUS any ankan (concealed kan) melds — those never
+//               appear in `groups` (their tiles were moved out of hand14
+//               into `melds` the moment the kan was declared) but are still
+//               fully concealed, unlike daiminkan/kakan which are genuinely
+//               open. Use closedTris only for Sanankou/Suuankou.
 function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen,winTileKey){
   const yl=[]; let han=0;
   const allKeys=[...hand14.map(key),...melds.flatMap(m=>m.tiles.map(key))];
@@ -361,7 +374,10 @@ function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIp
   const tris=allGroups.filter(g=>g.t==='tri');
   // A triplet completed by the winning tile via ron counts as open (minkou),
   // not concealed (ankou), even though its tiles sit in the closed hand.
-  const closedTris=groups.filter(g=>g.t==='tri'&&!(!isTsumo&&g.k[0]===winTileKey));
+  // Ankan melds are added back in separately since they're fully concealed
+  // but live in `melds`, not `groups` (see closedTris comment above).
+  const ankanTris=melds.filter(m=>m.type==='kan'&&m.kanType==='ankan').map(m=>({t:'tri',k:m.tiles.map(key)}));
+  const closedTris=[...groups.filter(g=>g.t==='tri'&&!(!isTsumo&&g.k[0]===winTileKey)),...ankanTris];
   const pairKey=pairs[0]?.k[0];
 
   // ── Yakuman checks within decomp ──────────────────────────────────────────
@@ -582,7 +598,10 @@ function waitFu(groups, winTileKey){
 function calcFu(groups, isTsumo, menzen, winTileKey, isPinfu){
   // Pinfu tsumo = fixed 20 fu (no rounding needed)
   if(isPinfu && isTsumo) return 20;
-  let fu = isTsumo ? 20 : menzen ? 30 : 30;
+  // Base fu is 20 across the board; the menzen-ron +10 bonus (up to the
+  // familiar 30 floor) is applied by the "Minimum 30 for menzen ron" clamp
+  // below, not here — open ron has no such bonus and stays at a 20 base.
+  let fu = 20;
   for(const g of groups){
     if(g.t==='tri'||g.t==='kan'){
       const k=g.k[0];
@@ -638,4 +657,4 @@ function handLabel(han){
 }
 
 module.exports = {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
-  detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose};
+  detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose,isMenzen};
