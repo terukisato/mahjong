@@ -3,7 +3,7 @@
 // Plain Node assertions, no framework — run with: node server/mahjong.test.js
 
 const assert = require('assert');
-const { detectYaku, waitFu, isWin, countDora, calcFu, isMenzen } = require('./mahjong');
+const { detectYaku, waitFu, isWin, countDora, calcFu, isMenzen, basePoints } = require('./mahjong');
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -796,6 +796,38 @@ test('calcFu: open-hand ron with genuinely nothing extra can land below 30 befor
     { t: 'pair', k: ['9m', '9m'] },
   ];
   assert.strictEqual(calcFu(groups, false, false, '6m', false), 30, 'must not be 40 — that was the pre-fix bug');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// basePoints (server/mahjong.js) — yakuman/double-yakuman were paying out
+// exactly 2x the correct amount (8000->16000, 16000->32000 base). Pinned
+// here against the universally-referenced standard payout table so a
+// regression is caught immediately, not just "looks plausible".
+// ══════════════════════════════════════════════════════════════════════════
+
+function ronPay(han, fu, isDealer) {
+  return Math.ceil(basePoints(han, fu) * (isDealer ? 6 : 4) / 100) * 100;
+}
+
+test('basePoints: mangan/haneman/baiman/sanbaiman ron payouts match the standard table', () => {
+  assert.strictEqual(ronPay(5, 30, false), 8000);   // mangan
+  assert.strictEqual(ronPay(5, 30, true), 12000);
+  assert.strictEqual(ronPay(6, 30, false), 12000);  // haneman
+  assert.strictEqual(ronPay(6, 30, true), 18000);
+  assert.strictEqual(ronPay(8, 30, false), 16000);  // baiman
+  assert.strictEqual(ronPay(8, 30, true), 24000);
+  assert.strictEqual(ronPay(11, 30, false), 24000); // sanbaiman
+  assert.strictEqual(ronPay(11, 30, true), 36000);
+});
+
+test('basePoints: yakuman ron payout is 32000/48000, not double', () => {
+  assert.strictEqual(ronPay(13, 0, false), 32000);
+  assert.strictEqual(ronPay(13, 0, true), 48000);
+});
+
+test('basePoints: double yakuman ron payout is 64000/96000, not double', () => {
+  assert.strictEqual(ronPay(26, 0, false), 64000);
+  assert.strictEqual(ronPay(26, 0, true), 96000);
 });
 
 // ══════════════════════════════════════════════════════════════════════════

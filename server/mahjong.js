@@ -635,8 +635,8 @@ function calcFu(groups, isTsumo, menzen, winTileKey, isPinfu){
 // the other three players individually. han>=5 is capped/fixed regardless of
 // fu (mangan and up), which is why fu stops mattering past that point.
 function basePoints(han,fu){
-  if(han>=26) return 32000; // double yakuman
-  if(han>=13) return 16000; // yakuman (dealer: 48000, non-dealer: 32000 / 16000)
+  if(han>=26) return 16000; // double yakuman (non-dealer ron 64000, dealer ron 96000)
+  if(han>=13) return 8000;  // yakuman (non-dealer ron 32000, dealer ron 48000)
   if(han>=11) return 6000;  // sanbaiman
   if(han>=8)  return 4000;  // baiman
   if(han>=6)  return 3000;  // haneman

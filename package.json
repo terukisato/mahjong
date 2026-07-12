@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
-    "test": "node server/mahjong.test.js"
+    "test": "node server/mahjong.test.js && node server/room.test.js"
   },
   "keywords": [
     "mahjong",

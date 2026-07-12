@@ -1566,8 +1566,8 @@ function limitLabel(han,fu){
   if(han>=8)  return {label:'倍満',en:'Baiman',cls:'lbl-baiman'};
   if(han>=6)  return {label:'跳満',en:'Haneman',cls:'lbl-haneman'};
   if(han>=5)  return {label:'満貫',en:'Mangan',cls:'lbl-mangan'};
-  if(han===4&&fu>=30) return {label:'満貫',en:'Mangan',cls:'lbl-mangan'};
-  if(han===3&&fu>=70) return {label:'満貫',en:'Mangan',cls:'lbl-mangan'};
+  if(han===4&&fu>=40) return {label:'満貫',en:'Mangan',cls:'lbl-mangan'}; // kiriage mangan: 4han/40fu already hits the 2000-base cap
+  if(han===3&&fu>=70) return {label:'満貫',en:'Mangan',cls:'lbl-mangan'}; // ditto, 3han/70fu
   return null;
 }
 

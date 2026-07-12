@@ -1034,14 +1034,16 @@ class Room {
   // simultaneously. Dealer-repeat rule: dealer stays if THEY qualified.
   _resolveNagashi(nagashiSeats){
     const g=this.game;
-    // Nagashi Mangan: 8000 base. Dealer pays/receives double.
+    // Nagashi Mangan: scored exactly like a tsumo mangan (2000 base points,
+    // same ×1/×2 tsumo split as any other tsumo win) — dealer-as-winner
+    // collects double from everyone, dealer-as-payer pays double.
     for(let winner=0;winner<4;winner++){
       if(!nagashiSeats[winner]) continue;
       const isDealer=winner===g.dealer;
       let gain=0;
       for(let payer=0;payer<4;payer++){
         if(payer===winner) continue;
-        const pay=Math.ceil((isDealer?8000*2:payer===g.dealer?8000*2:8000)/100)*100;
+        const pay=Math.ceil((isDealer?2000*2:payer===g.dealer?2000*2:2000)/100)*100;
         g.scores[payer]-=pay; gain+=pay;
       }
       g.scores[winner]+=gain;
