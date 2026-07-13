@@ -515,9 +515,9 @@ function onMsg(m){
   if(!inGame) return;
   if(m.type==='game_state'){const prev=lastState;lastState=m;discarding=false;renderState(m,prev);}
   else if(m.type==='riichi'){onRiichi(m);}
-  else if(m.type==='kan'){toast((m.name||'Player')+' — カン！');}
-  else if(m.type==='pon'){toast((m.name||'Player')+' — ポン！');}
-  else if(m.type==='chi'){toast((m.name||'Player')+' — チー！');}
+  else if(m.type==='kan'){callBanner('kan',m.name||'Player','カン');}
+  else if(m.type==='pon'){callBanner('pon',m.name||'Player','ポン');}
+  else if(m.type==='chi'){callBanner('chi',m.name||'Player','チー');}
   else if(m.type==='chat'){showChatMsg(m.seat,m.name,m.text);}
 }
 
@@ -1383,6 +1383,28 @@ function mkElDora(tile){
   return mkEl(tile,'tdora',w,h);
 }
 
+// Shared meld renderer for the round-end panel (winner's hand reveal, and
+// tenpai-hand reveal at an exhaustive draw) — flat, no rotation, since
+// there's no "seat" to orient toward here. Ankan stays half face-down even
+// at final reveal, matching table convention; every other meld type shows
+// fully face-up with the originally-called tile marked.
+function appendEndPanelMeld(container,meld){
+  const calledId=meld.calledTileId;
+  if(meld.kanType==='ankan'){
+    const back=()=>{const d=document.createElement('div');d.className='kan-back re-kan-back';return d;};
+    container.appendChild(back());
+    container.appendChild(mkElMd(meld.tiles[1]));
+    container.appendChild(mkElMd(meld.tiles[2]));
+    container.appendChild(back());
+  } else {
+    for(const t of meld.tiles){
+      const el=mkElMd(t);
+      if(t.id===calledId) el.classList.add('called');
+      container.appendChild(el);
+    }
+  }
+}
+
 
 // CHAT
 const SEAT_COLORS=['#ffdd44','#ff8844','#44ddff','#88ff88'];
@@ -1454,12 +1476,49 @@ function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(
 function onRiichi(m){
   $('rs'+pid(m.seat)).style.display='block';
   const label=m.isDouble?'ダブルリーチ':'リーチ';
-  toast((m.name||'Player')+' — '+label);
+  callBanner('riichi',m.name||'Player',label);
 }
 function toast(msg){
   const tc=$('tc'),t=document.createElement('div');
   t.className='toast';t.textContent=msg;
   tc.appendChild(t);setTimeout(()=>t.remove(),3000);
+}
+
+// Call banner (pon/kan/chi/riichi) — slides in from the bottom-left and
+// settles across the felt; see .call-banner / @keyframes cb-slide.
+function callBanner(type,name,label){
+  const layer=$('cb-layer'); if(!layer) return;
+  const b=document.createElement('div');
+  b.className='call-banner';b.dataset.type=type;
+  const content=document.createElement('div');content.className='cb-content';
+  const lb=document.createElement('span');lb.className='cb-label';lb.textContent=label;
+  const nm=document.createElement('span');nm.className='cb-name';
+  const who=document.createElement('b');who.textContent=name;
+  nm.appendChild(who);nm.appendChild(document.createTextNode(' called'));
+  content.appendChild(lb);content.appendChild(nm);
+  b.appendChild(content);
+  layer.appendChild(b);setTimeout(()=>b.remove(),3000);
+}
+
+// Round-start title card (wind + round + honba) — see .rs-plate / @keyframes
+// rs-wind-in. Separate from callBanner() since this fires once per hand and
+// is meant to be read together with the "dealing tiles" loading overlay
+// rather than as a reactive notification.
+function roundStartBanner(wind,round,honba){
+  const layer=$('rs-layer'); if(!layer) return;
+  layer.innerHTML='';
+  const scrim=document.createElement('div');scrim.className='rs-scrim';
+  const plate=document.createElement('div');plate.className='rs-plate';
+  const w=document.createElement('div');w.className='rs-wind';w.textContent=wind;
+  const sub=document.createElement('div');sub.className='rs-sub';
+  const r=document.createElement('span');r.textContent=round;
+  const dot=document.createElement('i');dot.textContent='·';
+  const h=document.createElement('span');h.textContent=honba;
+  sub.appendChild(r);sub.appendChild(dot);sub.appendChild(h);
+  const start=document.createElement('div');start.className='rs-start';start.textContent='開始';
+  plate.appendChild(w);plate.appendChild(sub);plate.appendChild(start);
+  layer.appendChild(scrim);layer.appendChild(plate);
+  setTimeout(()=>{scrim.remove();plate.remove();},3400);
 }
 
 
@@ -1532,7 +1591,7 @@ function onRoundStart(m){
   $('cw-wind').textContent = windChar[wind-1];
   $('cw-kyoku').textContent = rnd + '局';
   $('ci').textContent = '';
-  toast(windChar[wind-1]+rnd+'局 · '+(m.honba||0)+'本場 開始');
+  roundStartBanner(windChar[wind-1], rnd+'局', (m.honba||0)+'本場');
 }
 
 function onGameOver(m){
@@ -1627,30 +1686,25 @@ function onEnd(m){
   const tileRow=document.createElement('div');tileRow.className='re-tile-row';
   for(const t of(m.hand||[])) if(t) tileRow.appendChild(mkElMd(t));
   // Render melds right of closed hand, separated by a gap
-  for(const meld of(m.melds||[])){
-    const sep=document.createElement('div');sep.className='re-meld-sep';
-    tileRow.appendChild(sep);
-    // For the win panel we show melds flat (winner's perspective, no rotation)
-    // Reuse renderMeld logic but simplified: called tile gets .called class for visual marker
-    const calledId=meld.calledTileId;
-    const kanType=meld.kanType;
-    if(meld.type==='ankan'){
-      // Ankan: show face-down / face-up / face-up / face-down
-      const back=()=>{const d=document.createElement('div');d.className='kan-back re-kan-back';return d;};
-      tileRow.appendChild(back());
-      tileRow.appendChild(mkElMd(meld.tiles[1]));
-      tileRow.appendChild(mkElMd(meld.tiles[2]));
-      tileRow.appendChild(back());
-    } else {
-      // Chi, pon, daiminkan, kakan — show all tiles face-up, mark called tile
-      for(const t of meld.tiles){
-        const el=mkElMd(t);
-        if(t.id===calledId) el.classList.add('called');
-        tileRow.appendChild(el);
-      }
-    }
-  }
+  for(const meld of(m.melds||[])) appendEndPanelMeld(tileRow,meld);
   wt.appendChild(tileRow);
+  // Tenpai reveal (exhaustive draw only) — name + hand for each tenpai
+  // player; noten hands stay private (server sends null for those seats).
+  const tp=$('re-tenpai');tp.innerHTML='';
+  if(m.reason==='draw'&&Array.isArray(m.tenpaiHands)){
+    m.tenpaiHands.forEach((hand,seat)=>{
+      if(!hand) return;
+      const row=document.createElement('div');row.className='re-tenpai-row';
+      const nameEl=document.createElement('div');nameEl.className='re-tenpai-name';
+      nameEl.textContent=seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
+      row.appendChild(nameEl);
+      const tiles=document.createElement('div');tiles.className='re-tile-row';
+      for(const t of hand) tiles.appendChild(mkElMd(t));
+      for(const meld of(m.tenpaiMelds?.[seat]||[])) appendEndPanelMeld(tiles,meld);
+      row.appendChild(tiles);
+      tp.appendChild(row);
+    });
+  }
   // Score table with delta column
   const tbl=$('rest');tbl.innerHTML='';
   const sorted=[...(m.scores||[]).map((sc,seat)=>({sc,seat}))].sort((a,b)=>b.sc-a.sc);

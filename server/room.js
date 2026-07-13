@@ -976,7 +976,7 @@ class Room {
     let drawNewRound=g.round; if(!inTenpai[g.dealer]) drawNewRound=g.round+1;
     const drawGameOver=drawBust>=0||drawNewRound>drawMaxRound;
     this._broadcastAll({type:'round_end',reason:'draw',scores:g.scores,
-      inTenpai,payments,tenpaiHands,
+      inTenpai,payments,tenpaiHands,tenpaiMelds:g.melds,
       playerNames:this.seats.map(p=>p?.name||'—'),
       dora:g.dora,
       uraDora:g.deadWall.slice(9,9+g.dora.length),
