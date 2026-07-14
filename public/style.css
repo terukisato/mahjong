@@ -391,13 +391,6 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   cursor:pointer;padding:0;transition:transform .15s,border-color .15s;}
 .chat-color-swatch:hover{transform:scale(1.12);}
 .chat-color-swatch.selected{border-color:var(--gl);}
-/* Sender-name toggle — off (name hidden) by default */
-.chat-name-toggle{width:calc(var(--ui-vmin) * 3.611);height:calc(var(--ui-vmin) * 3.611);
-  border-radius:7px;border:1px solid rgba(201,168,76,.25);background:rgba(0,0,0,.35);
-  color:rgba(245,237,216,.4);font-size:calc(var(--ui-vmin) * 1.806);line-height:1;
-  cursor:pointer;flex-shrink:0;padding:0;transition:all .2s;}
-.chat-name-toggle:hover{border-color:rgba(201,168,76,.5);color:rgba(245,237,216,.7);}
-.chat-name-toggle[aria-pressed="true"]{background:rgba(26,107,69,.5);border-color:var(--jl);color:var(--cream);}
 .chat-send{padding:0 calc(var(--ui-vmin) * 1.389);height:calc(var(--ui-vmin) * 3.611);background:rgba(26,107,69,.8);
   border:1px solid var(--jl);border-radius:7px;color:var(--cream);
   font-size:calc(var(--ui-vmin) * 1.528);cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}

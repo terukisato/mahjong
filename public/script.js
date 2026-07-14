@@ -1413,22 +1413,12 @@ function appendEndPanelMeld(container,meld){
 const CHAT_COLORS=['#ffffff','#f0d080','#ff6b6b','#6bff8f','#6bb6ff','#ff8fd6','#6bfff0','#ffb366'];
 let myChatColor=CHAT_COLORS[0];
 let chatOpen=false, unreadCount=0, colorPickerOpen=false;
-// Floating danmaku messages hide the sender's name by default — this is a
-// local display preference (toggled via #chat-name-toggle), not synced to
-// the server, so it only changes what YOU see, not what others see.
-let showChatName=false;
 
-// $() guards below: these UI pieces (colour swatch, name toggle) may not
-// be present in every build of index.html. A thrown error here would
-// abort the rest of the startup script — including connect() — leaving
-// every button that depends on the websocket silently non-functional, so
-// each function bails out early instead of assuming the elements exist.
-function toggleChatName(){
-  showChatName=!showChatName;
-  const btn=$('chat-name-toggle'); if(!btn) return;
-  btn.setAttribute('aria-pressed',String(showChatName));
-}
-
+// $() guards below: the colour swatch button/popup may not be present in
+// every build of index.html. A thrown error here would abort the rest of
+// the startup script — including connect() — leaving every button that
+// depends on the websocket silently non-functional, so each function
+// bails out early instead of assuming the elements exist.
 function initColorPicker(){
   const picker=$('chat-color-picker'), btn=$('chat-color-btn');
   if(!picker||!btn) return;
@@ -1494,8 +1484,7 @@ function showChatMsg(name,text,color){
   div.className='chat-msg';
   div.style.color=msgColor;
   div.style.top=(10+Math.random()*72)+'%'; // stay clear of the topbar and action bar
-  const whoHtml=showChatName?`<span class="chat-who">${escHtml(name)}</span>`:'';
-  div.innerHTML=`${whoHtml}${escHtml(text)}`;
+  div.textContent=text; // no sender name — that's already visible in chat history
   cf.appendChild(div);
   setTimeout(()=>div.remove(),7100);
 
@@ -1909,6 +1898,5 @@ $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};
 $('chat-hist-btn').onclick=toggleChat;
 $('chat-close').onclick=toggleChat;
 if($('chat-color-btn')) $('chat-color-btn').onclick=()=>toggleColorPicker();
-if($('chat-name-toggle')) $('chat-name-toggle').onclick=toggleChatName;
 initColorPicker();
 connect();

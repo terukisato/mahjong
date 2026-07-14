@@ -297,6 +297,7 @@
   </div><!-- end .table -->
   <!-- Always-visible chat input bar (shown during game) -->
   <div class="chat-bar" id="chat-bar">
+    <button class="chat-color-btn" id="chat-color-btn" title="Message colour" aria-label="Choose message colour" aria-expanded="false"></button>
     <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off" aria-label="Chat message">
     <button class="chat-send" id="chat-send">Send</button>
     <button class="chat-hist-btn" id="chat-hist-btn" title="Chat history">
@@ -304,6 +305,9 @@
       <span class="badge" id="chat-badge">0</span>
     </button>
   </div>
+
+  <!-- Colour palette popup — opens upward from the swatch button -->
+  <div class="chat-color-picker" id="chat-color-picker"></div>
 
   <!-- History popup -->
   <div class="chat-panel" id="chat-panel">
