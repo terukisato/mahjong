@@ -518,7 +518,7 @@ function onMsg(m){
   else if(m.type==='kan'){callBanner('kan',m.name||'Player','カン');}
   else if(m.type==='pon'){callBanner('pon',m.name||'Player','ポン');}
   else if(m.type==='chi'){callBanner('chi',m.name||'Player','チー');}
-  else if(m.type==='chat'){showChatMsg(m.seat,m.name,m.text);}
+  else if(m.type==='chat'){showChatMsg(m.name,m.text,m.color);}
 }
 
 
@@ -1407,8 +1407,50 @@ function appendEndPanelMeld(container,meld){
 
 
 // CHAT
-const SEAT_COLORS=['#ffdd44','#ff8844','#44ddff','#88ff88'];
-let chatOpen=false, unreadCount=0;
+// Palette for the swatch picker next to the chat bar — message text colour
+// (both the floating danmaku and the "<name>:" tag in history) is white
+// by default, overridable per-player via this picker.
+const CHAT_COLORS=['#ffffff','#f0d080','#ff6b6b','#6bff8f','#6bb6ff','#ff8fd6','#6bfff0','#ffb366'];
+let myChatColor=CHAT_COLORS[0];
+let chatOpen=false, unreadCount=0, colorPickerOpen=false;
+// Floating danmaku messages hide the sender's name by default — this is a
+// local display preference (toggled via #chat-name-toggle), not synced to
+// the server, so it only changes what YOU see, not what others see.
+let showChatName=false;
+
+function toggleChatName(){
+  showChatName=!showChatName;
+  $('chat-name-toggle').setAttribute('aria-pressed',String(showChatName));
+}
+
+function initColorPicker(){
+  const picker=$('chat-color-picker');
+  picker.innerHTML='';
+  CHAT_COLORS.forEach(c=>{
+    const sw=document.createElement('button');
+    sw.className='chat-color-swatch'+(c===myChatColor?' selected':'');
+    sw.style.background=c;
+    sw.type='button';
+    sw.setAttribute('aria-label','Set message colour to '+c);
+    sw.onclick=()=>selectChatColor(c);
+    picker.appendChild(sw);
+  });
+  $('chat-color-btn').style.background=myChatColor;
+}
+
+function selectChatColor(c){
+  myChatColor=c;
+  $('chat-color-btn').style.background=c;
+  toggleColorPicker(false);
+  initColorPicker();
+}
+
+function toggleColorPicker(force){
+  colorPickerOpen=force!==undefined?force:!colorPickerOpen;
+  $('chat-color-picker').classList.toggle('open',colorPickerOpen);
+  $('chat-color-btn').classList.toggle('open',colorPickerOpen);
+  $('chat-color-btn').setAttribute('aria-expanded',String(colorPickerOpen));
+}
 
 function toggleChat(){
   chatOpen=!chatOpen;
@@ -1428,24 +1470,25 @@ function sendChat(){
   const inp=$('chat-input');
   const text=inp.value.trim();
   if(!text) return;
-  wss({type:'chat',text});
+  wss({type:'chat',text,color:myChatColor});
   inp.value='';
 }
 
-function showChatMsg(seat,name,text){
-  const relSeat=(seat-mySeat+4)%4;
-  const color=SEAT_COLORS[relSeat]||'#fff';
+function showChatMsg(name,text,color){
+  // Server validates color against its own copy of the palette and falls
+  // back to white — see room.js chat().
+  const msgColor=color||'#fff';
 
-  // ── Floating big message — top of mat, centred ──
+  // ── Floating danmaku message — random height, slides right-to-left ──
   const cf=$('chat-float');
-  cf.className='chat-float';
   const div=document.createElement('div');
   div.className='chat-msg';
-  div.style.color=color;
-  div.innerHTML=`<span class="chat-who">${escHtml(name)}</span>${escHtml(text)}`;
-  div.style.whiteSpace='nowrap';
+  div.style.color=msgColor;
+  div.style.top=(10+Math.random()*72)+'%'; // stay clear of the topbar and action bar
+  const whoHtml=showChatName?`<span class="chat-who">${escHtml(name)}</span>`:'';
+  div.innerHTML=`${whoHtml}${escHtml(text)}`;
   cf.appendChild(div);
-  setTimeout(()=>div.remove(),5200);
+  setTimeout(()=>div.remove(),7100);
 
   // ── History entry ──
   const history=$('chat-history');
@@ -1454,7 +1497,7 @@ function showChatMsg(seat,name,text){
   const entry=document.createElement('div');
   entry.className='chat-entry';
   entry.innerHTML=
-    `<span class="chat-entry-who" style="color:${color}">${escHtml(name)}</span>`+
+    `<span class="chat-entry-who" style="color:${msgColor}">${escHtml(name)}</span>`+
     `<span class="chat-entry-text">${escHtml(text)}</span>`+
     `<span class="chat-entry-time">${time}</span>`;
   history.appendChild(entry);
@@ -1642,7 +1685,7 @@ function onEnd(m){
   const loader=$('game-loading'); if(loader) loader.style.display='none';
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
-  const reasonLabels={tsumo:'ツモ - TSUMO',ron:'ロン - RON',draw:'流局 - Exhaustive Draw',suukaikan:'四開槓 - Suukaikan',nagashi:'流し満貫 - Mangan at Draw'};
+  const reasonLabels={tsumo:'ツモ - TSUMO',ron:'ロン - RON',draw:'流局 - Exhaustive Draw',suukaikan:'四開槓 - Suukaikan',nagashi:'流し満貫 - Mangan at Draw',kyuushu:'九種九牌 - Kyuushu Kyuuhai'};
   $('ret').textContent=reasonLabels[m.reason]||'Round Over';
   if(m.reason==='tsumo'||m.reason==='ron'){
     if(m.reason==='ron') playSfx('sfx-ron', m.winner);
@@ -1856,4 +1899,7 @@ $('chat-send').onclick=sendChat;
 $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};
 $('chat-hist-btn').onclick=toggleChat;
 $('chat-close').onclick=toggleChat;
+$('chat-color-btn').onclick=()=>toggleColorPicker();
+$('chat-name-toggle').onclick=toggleChatName;
+initColorPicker();
 connect();

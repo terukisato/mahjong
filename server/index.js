@@ -71,7 +71,7 @@ wss.on('connection',(ws)=>{
 
     if(msg.type==='action'&&myRoom) myRoom.action(myId,msg.action);
 
-    if(msg.type==='chat'&&myRoom) myRoom.chat(myId,msg.text||'');
+    if(msg.type==='chat'&&myRoom) myRoom.chat(myId,msg.text||'',msg.color);
 
     if(msg.type==='leave'){
       if(myRoom){myRoom.removeHuman(myId);myRoom=null;}

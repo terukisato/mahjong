@@ -5,6 +5,10 @@ const {botName,bestDiscard,botReact} = require('./bot');
 
 let _roomId=0;
 const BOT_DELAY=1200; // pause before a bot acts, so its move is readable on screen
+// Chat message colour palette — must match CHAT_COLORS in public/script.js.
+// Validated server-side rather than trusting the client's `color` field
+// verbatim, since it gets echoed straight into another player's page.
+const CHAT_COLORS=new Set(['#ffffff','#f0d080','#ff6b6b','#6bff8f','#6bb6ff','#ff8fd6','#6bfff0','#ffb366']);
 
 // ── Dead wall layout (14 tiles) ─────────────────────────────────────────────
 // [0-3]  = rinshan tiles (drawn on kan)
@@ -97,12 +101,13 @@ class Room {
     }
   }
 
-  chat(playerId, text){
+  chat(playerId, text, color){
     const p=this.seats.find(p=>p&&!p.isBot&&p.id===playerId);
     if(!p) return;
     const msg=text.trim().slice(0,60);
     if(!msg) return;
-    this._broadcastAll({type:'chat',seat:p.seat,name:p.name,text:msg});
+    const safeColor=CHAT_COLORS.has(color)?color:'#ffffff';
+    this._broadcastAll({type:'chat',seat:p.seat,name:p.name,text:msg,color:safeColor});
   }
 
   // ── Game lifecycle ─────────────────────────────────────────────────────────
@@ -291,7 +296,14 @@ class Room {
     }
     if(!g||this.phase!=='playing') return;
     if(act.type==='discard'&&g.turn===seat) this._discard(seat,act.tileId);
-    else if(act.type==='kyuushu'&&g.turn===seat) this._endRound('draw');
+    // 'kyuushu', not 'draw': kyuushu kyuuhai is an abortive draw (like
+    // suukaikan) — honba+1, dealer/round unchanged, no scoring. Passing
+    // 'draw' here routed it through _endRound's exhaustive-draw branch,
+    // which checks nagashi mangan eligibility; since kyuushu fires on
+    // turn 1 before anyone's discarded a non-terminal tile, every seat's
+    // nagashi flag was still true and it was incorrectly paying out a
+    // mangan instead of ending scorelessly.
+    else if(act.type==='kyuushu'&&g.turn===seat) this._endRound('kyuushu');
     else if(act.type==='tsumo'&&g.turn===seat) this._tsumo(seat);
     else if(act.type==='riichi'&&g.turn===seat) this._riichi(seat,act.tileId);
     else if(act.type==='ankan'&&g.turn===seat) this._ankan(seat,act.tileKey);

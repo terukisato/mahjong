@@ -376,6 +376,28 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   border:1px solid rgba(201,168,76,.2);border-radius:7px;
   color:var(--cream);font-size:calc(var(--ui-vmin) * 1.667);outline:none;font-family:'Noto Sans JP',sans-serif;}
 .chat-input:focus{border-color:var(--jl);}
+/* Message colour swatch + popup palette */
+.chat-color-btn{width:calc(var(--ui-vmin) * 3.611);height:calc(var(--ui-vmin) * 3.611);
+  border-radius:50%;border:2px solid rgba(201,168,76,.4);background:#fff;
+  cursor:pointer;flex-shrink:0;padding:0;transition:border-color .2s,transform .15s;}
+.chat-color-btn:hover{border-color:var(--gl);transform:scale(1.08);}
+.chat-color-btn.open{border-color:var(--gl);}
+.chat-color-picker{position:fixed;bottom:70px;right:20px;z-index:66;display:none;
+  grid-template-columns:repeat(4,1fr);gap:8px;padding:10px;
+  background:rgba(3,12,6,.97);border:1px solid rgba(201,168,76,.3);border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.7);}
+.chat-color-picker.open{display:grid;}
+.chat-color-swatch{width:24px;height:24px;border-radius:50%;border:2px solid transparent;
+  cursor:pointer;padding:0;transition:transform .15s,border-color .15s;}
+.chat-color-swatch:hover{transform:scale(1.12);}
+.chat-color-swatch.selected{border-color:var(--gl);}
+/* Sender-name toggle — off (name hidden) by default */
+.chat-name-toggle{width:calc(var(--ui-vmin) * 3.611);height:calc(var(--ui-vmin) * 3.611);
+  border-radius:7px;border:1px solid rgba(201,168,76,.25);background:rgba(0,0,0,.35);
+  color:rgba(245,237,216,.4);font-size:calc(var(--ui-vmin) * 1.806);line-height:1;
+  cursor:pointer;flex-shrink:0;padding:0;transition:all .2s;}
+.chat-name-toggle:hover{border-color:rgba(201,168,76,.5);color:rgba(245,237,216,.7);}
+.chat-name-toggle[aria-pressed="true"]{background:rgba(26,107,69,.5);border-color:var(--jl);color:var(--cream);}
 .chat-send{padding:0 calc(var(--ui-vmin) * 1.389);height:calc(var(--ui-vmin) * 3.611);background:rgba(26,107,69,.8);
   border:1px solid var(--jl);border-radius:7px;color:var(--cream);
   font-size:calc(var(--ui-vmin) * 1.528);cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
@@ -418,18 +440,29 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   border-radius:6px;padding:4px 8px;line-height:1.4;word-break:break-word;}
 .chat-entry-time{font-size:8px;color:rgba(245,237,216,.3);margin-top:1px;}
 
-/* Floating chat messages — appear at top of playing mat, centred */
-.chat-float{position:fixed;z-index:300;pointer-events:none;
-  top:25%;left:50%;transform:translateX(-50%);
-  display:flex;flex-direction:column;align-items:center;gap:8px;
-  width:auto;max-width:70vw;}
-.chat-msg{font-family:'Noto Serif JP',serif;font-size:clamp(28px,5vw,52px);font-weight:900;
-  text-shadow:0 0 20px rgba(201,168,76,.9),0 2px 10px rgba(0,0,0,.95),0 0 40px rgba(201,168,76,.5);
-  letter-spacing:2px;animation:chatFloat 5s ease forwards;line-height:1.3;
-  word-break:break-word;text-align:center;}
+/* Floating chat messages — niconico-style danmaku: each message spawns at
+   a random height and slides right-to-left across the full screen at a
+   constant opacity, disappearing (clipped by .chat-float's overflow, no
+   fade) once it crosses the left edge. .chat-float is a clipped
+   full-viewport layer; each .chat-msg carries its own random `top` (set
+   inline in JS, see showChatMsg) and animates independently rather than
+   the old centred fade-in-place stack. Default text colour is white;
+   see .chat-color-picker for the per-player colour override. */
+.chat-float{position:fixed;inset:0;z-index:300;pointer-events:none;overflow:hidden;}
+.chat-msg{position:absolute;left:100%;white-space:nowrap;color:#fff;
+  font-family:'MS Gothic','ＭＳ ゴシック',monospace;font-weight:700;
+  font-size:clamp(20px,3.2vmin,34px);letter-spacing:1px;
+  text-shadow:0 0 6px rgba(0,0,0,.9),0 0 16px rgba(0,0,0,.6),1px 1px 3px rgba(0,0,0,.95);
+  animation:chatSlide 7s linear forwards;}
 .chat-msg .chat-who{font-size:.7em;color:var(--gl);display:inline;letter-spacing:1px;}
 .chat-msg .chat-who::after{content:": ";color:rgba(240,208,128,.6);}
-@keyframes chatFloat{0%{opacity:0;transform:translateY(-10px) scale(.9);}10%{opacity:1;transform:translateY(0) scale(1);}75%{opacity:1;}100%{opacity:0;transform:translateY(-16px) scale(.95);}}
+/* Travels its own width plus the full viewport width, so it always fully
+   exits past the left edge regardless of message length. No opacity
+   animation — .chat-float's overflow:hidden is what makes it disappear. */
+@keyframes chatSlide{
+  0%{transform:translateX(0);}
+  100%{transform:translateX(calc(-100vw - 100%));}
+}
 
 /* ── Toast notifications ── */
 .tc{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:200;pointer-events:none;}
