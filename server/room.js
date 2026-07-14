@@ -43,7 +43,11 @@ class Room {
   addHuman(player){
     const openSeats=this.seats.reduce((acc,s,i)=>{if(s===null)acc.push(i);return acc;},[]);
     if(openSeats.length===0) return false;
-    const seat=openSeats[Math.floor(Math.random()*openSeats.length)];
+    // Fill the lowest-numbered open seat first — the lobby's matchmaking
+    // slots (public/index.html #slots) render seats[i] straight into
+    // .slot #i left-to-right, so this fills the panel from the left as
+    // players join instead of dropping them into a random slot.
+    const seat=openSeats[0];
     player.seat=seat;
     this.seats[seat]=player;
     this._broadcastRoomUpdate();

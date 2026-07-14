@@ -22,55 +22,94 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* ════════════════════════════════════════════════════════════
    LOBBY SCREEN
    ════════════════════════════════════════════════════════════ */
-#s-lobby{flex-direction:column;gap:18px;}
+/* Same clamped scale-unit approach as #s-start (see .logo-k/#bstart notes
+   below) — every font-size/letter-spacing/padding in the hall-entry card
+   multiplies this ONE variable, so they all stay proportional to each
+   other at any resolution instead of each hitting its own px cap at a
+   different screen size. */
+#s-lobby{--ui-vmin:clamp(6px,1vmin,10px);flex-direction:column;gap:18px;}
 #s-start{flex-direction:column;align-items:center;justify-content:center;gap:32px;}
 .logo{text-align:center;animation:float 5s ease-in-out infinite;}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-.logo-k{font-family:'Noto Serif JP',serif;font-size:clamp(40px,10vw,72px);font-weight:900;letter-spacing:clamp(4px,2vw,12px);
+/* Plain vmin (no clamp min/max), same fix as the game banners: logo-k was
+   capped at 72px above a 720px-wide viewport while logo-s kept scaling on
+   vw until 560px — in between, the two drifted out of proportion with each
+   other. Coefficients chosen so a ~720px-vmin screen (e.g. 1280x720) still
+   renders at the old capped 72px/14px look. */
+.logo-k{font-family:'Noto Serif JP',serif;font-size:10vmin;font-weight:900;letter-spacing:1.7vmin;
   background:linear-gradient(135deg,#ffe680,#c9a84c,#8a6b20);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;filter:drop-shadow(0 0 24px rgba(201,168,76,.7));}
-.logo-s{font-family:'Cinzel Decorative',serif;font-size:clamp(10px,2.5vw,14px);color:var(--jl);letter-spacing:clamp(3px,1.5vw,8px);margin-top:2px;}
+.logo-s{font-family:'Cinzel Decorative',serif;font-size:2vmin;color:var(--jl);letter-spacing:1.1vmin;margin-top:2px;}
 .card{background:linear-gradient(155deg,rgba(20,55,35,.95),rgba(8,20,12,.98));border:1px solid rgba(201,168,76,.35);border-radius:16px;
-  padding:clamp(20px,4vw,34px) clamp(18px,5vw,46px);width:min(440px,96vw);
+  padding:calc(var(--ui-vmin) * 4.722) calc(var(--ui-vmin) * 6.389);
+  /* Was a flat min(440px,96vw) — the box stayed capped at 440px while its
+     own font-size/padding kept scaling up to --ui-vmin's 10px ceiling, so
+     on a 4K screen the (now larger) text read as cramped into a box that
+     never grew. Tying width to the same --ui-vmin (61.11 * 7.2 = 440, so
+     it still renders at 440px at the same ~720px-vmin reference screen)
+     lets it grow in step with its own content instead of stalling. */
+  width:min(calc(var(--ui-vmin) * 61.11), 96vw);
   box-shadow:0 0 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(201,168,76,.25);position:relative;overflow:hidden;}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);}
-.card h2{font-family:'Cinzel Decorative',serif;font-size:11px;letter-spacing:5px;color:var(--gold);opacity:.75;margin-bottom:18px;text-align:center;}
-.ig{margin-bottom:16px;}.ig label{display:block;font-size:10px;letter-spacing:3px;color:var(--gold);opacity:.65;margin-bottom:6px;text-transform:uppercase;}
-.ig input{width:100%;background:rgba(0,0,0,.5);border:1px solid rgba(201,168,76,.2);border-radius:10px;padding:11px 14px;color:var(--cream);font-size:16px;outline:none;transition:border-color .3s;font-family:'Noto Sans JP',sans-serif;}
+.card h2{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin) * 1.528);letter-spacing:calc(var(--ui-vmin) * .694);color:var(--gold);opacity:.75;margin-bottom:18px;text-align:center;}
+.ig{margin-bottom:16px;}.ig label{display:block;font-size:calc(var(--ui-vmin) * 1.389);letter-spacing:calc(var(--ui-vmin) * .417);color:var(--gold);opacity:.65;margin-bottom:6px;text-transform:uppercase;}
+.ig input{width:100%;background:rgba(0,0,0,.5);border:1px solid rgba(201,168,76,.2);border-radius:10px;
+  padding:calc(var(--ui-vmin) * 1.528) calc(var(--ui-vmin) * 1.944);color:var(--cream);
+  font-size:calc(var(--ui-vmin) * 2.222);outline:none;transition:border-color .3s;font-family:'Noto Sans JP',sans-serif;}
 .ig input:focus{border-color:var(--jl);}
-.bp{width:100%;padding:13px;background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);border-radius:10px;color:var(--cream);font-size:13px;font-family:'Cinzel Decorative',serif;letter-spacing:3px;cursor:pointer;transition:all .25s;}
+.bp{width:100%;padding:calc(var(--ui-vmin) * 1.806);background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);border-radius:10px;color:var(--cream);
+  font-size:calc(var(--ui-vmin) * 1.806);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;}
 .bp:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(26,107,69,.55);border-color:var(--gold);}
 .bp:disabled{opacity:.4;cursor:default;transform:none;}
-.bs{width:100%;padding:10px;background:transparent;border:1px solid rgba(201,168,76,.3);border-radius:10px;color:rgba(245,237,216,.65);font-size:12px;font-family:'Cinzel Decorative',serif;letter-spacing:3px;cursor:pointer;transition:all .25s;margin-top:8px;}
+.bs{width:100%;padding:calc(var(--ui-vmin) * 1.389);background:transparent;border:1px solid rgba(201,168,76,.3);border-radius:10px;color:rgba(245,237,216,.65);
+  font-size:calc(var(--ui-vmin) * 1.667);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;margin-top:8px;}
 .bs:hover{border-color:var(--gold);color:var(--gl);}
 .wa{display:none;margin-top:14px;}
-.wm{text-align:center;color:var(--jl);font-size:12px;letter-spacing:2px;animation:pulse 1.5s infinite;}
+.wm{text-align:center;color:var(--jl);font-size:calc(var(--ui-vmin) * 1.667);letter-spacing:calc(var(--ui-vmin) * .278);animation:pulse 1.5s infinite;}
 @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
 @keyframes ld-bounce{0%,80%,100%{transform:scale(0);opacity:.3}40%{transform:scale(1);opacity:1}}
 .ld-dot{width:10px;height:10px;border-radius:50%;background:var(--gold);animation:ld-bounce 1.2s ease-in-out infinite;}
-.slots{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap;}
-.slot{width:80px;min-height:64px;border-radius:10px;border:2px solid rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;background:rgba(0,0,0,.4);transition:all .4s;padding:6px 4px;}
-.slot .si{font-size:20px;line-height:1;}.slot .sn{font-size:9px;color:rgba(245,237,216,.7);font-weight:600;}.slot .sr{font-size:8px;margin-top:2px;}
+.slots{display:flex;gap:8px;justify-content:center;margin-top:12px;}
+/* flex-shrink instead of a rigid 80px: on a narrow phone, .card can end up
+   narrower than 4*80px + gaps (e.g. 96vw at 320px wide is well under the
+   344px the four slots need), so they'd wrap unpredictably into 2x2 —
+   changing the panel's layout depending on screen width. flex:0 1 80px
+   keeps the current 80px look on any screen with room for it (matches
+   .mode-btn's flex:1 above, already used for this same "N equal items in
+   a row" problem) while letting them shrink together, in one row, rather
+   than wrap, when space is tight. */
+.slot{flex:0 1 80px;min-width:0;min-height:64px;border-radius:10px;border:2px solid rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;background:rgba(0,0,0,.4);transition:all .4s;padding:6px 4px;}
+.slot .si{font-size:calc(var(--ui-vmin) * 2.778);line-height:1;}.slot .sn{font-size:calc(var(--ui-vmin) * 1.25);color:rgba(245,237,216,.7);font-weight:600;}.slot .sr{font-size:calc(var(--ui-vmin) * 1.111);margin-top:2px;}
 .slot.filled{border-color:var(--jl);background:rgba(26,107,69,.25);}
 .slot.bot{border-color:rgba(201,168,76,.35);background:rgba(50,35,5,.4);}
 .slot.rdy{border-color:#4eff9a;box-shadow:0 0 14px rgba(78,255,154,.3);}
-.cd{font-size:10px;color:rgba(201,168,76,.55);text-align:center;margin-top:8px;letter-spacing:1px;}
-.mode-btn{flex:1;padding:10px 6px;background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.6);font-size:13px;font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
+.cd{font-size:calc(var(--ui-vmin) * 1.389);color:rgba(201,168,76,.55);text-align:center;margin-top:8px;letter-spacing:calc(var(--ui-vmin) * .139);}
+.mode-btn{flex:1;padding:calc(var(--ui-vmin) * 1.389) calc(var(--ui-vmin) * .833);background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.6);font-size:calc(var(--ui-vmin) * 1.806);font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
 .mode-btn.active{background:rgba(26,107,69,.4);border-color:var(--jl);color:var(--cream);box-shadow:0 0 12px rgba(42,158,103,.3);}
 .mode-btn:hover:not(.active){border-color:rgba(201,168,76,.4);color:var(--cream);}
-.ready-btn{width:100%;padding:12px;background:linear-gradient(135deg,#0a5a2a,#1a8840);border:2px solid #4eff9a;border-radius:10px;color:#c0ffd8;font-size:14px;font-family:'Cinzel Decorative',serif;letter-spacing:3px;cursor:pointer;transition:all .25s;margin-top:12px;position:relative;overflow:hidden;}
+.ready-btn{width:100%;padding:calc(var(--ui-vmin) * 1.667);background:linear-gradient(135deg,#0a5a2a,#1a8840);border:2px solid #4eff9a;border-radius:10px;color:#c0ffd8;font-size:calc(var(--ui-vmin) * 1.944);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;margin-top:12px;position:relative;overflow:hidden;}
 .ready-btn:hover{transform:translateY(-2px);box-shadow:0 0 20px rgba(78,255,154,.4);}
 .ready-btn.pressed{opacity:.6;cursor:default;transform:none;}
-.ready-btn.pressed::after{content:'✓ Ready!';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a5a2a,#1a8840);font-size:14px;letter-spacing:3px;}
+.ready-btn.pressed::after{content:'✓ Ready!';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a5a2a,#1a8840);font-size:calc(var(--ui-vmin) * 1.944);letter-spacing:calc(var(--ui-vmin) * .417);}
 
 /* ════════════════════════════════════════════════════════════
    GAME SCREEN — LAYOUT
    ════════════════════════════════════════════════════════════ */
 #s-game:not(.hidden){display:block;}
-.topbar{position:fixed;top:0;left:0;right:0;height:36px;background:rgba(3,10,5,.97);border-bottom:1px solid rgba(201,168,76,.18);display:flex;align-items:center;justify-content:space-between;padding:0 10px;z-index:50;}
-.tb-title{font-family:'Noto Serif JP',serif;font-size:14px;color:var(--gold);letter-spacing:2px;}
-.tb-st{font-size:14px;color:rgba(245,237,216,.5);max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* --ui-vmin: same clamped-scale-unit approach as #s-start/#s-lobby/
+   #dora-panel/.chat-bar, but with a lower ceiling (7.5px vs 10px) — the
+   topbar's own height stays a fixed 36px (.table hardcodes top:36px to
+   sit right below it, so growing the bar means re-plumbing that too),
+   so its contents need to stop scaling well before a 10px unit would
+   make .bl (height 3.611 * unit) crowd a 36px-tall strip. At 7.5px the
+   bar renders almost identically to the original fixed-px sizes on any
+   normal-to-large screen, only shrinking further on small phones (floor
+   still 6px). */
+.topbar{--ui-vmin:clamp(6px,1vmin,7.5px);
+  position:fixed;top:0;left:0;right:0;height:36px;background:rgba(3,10,5,.97);border-bottom:1px solid rgba(201,168,76,.18);display:flex;align-items:center;justify-content:space-between;padding:0 10px;z-index:50;}
+.tb-title{font-family:'Noto Serif JP',serif;font-size:calc(var(--ui-vmin) * 1.944);color:var(--gold);letter-spacing:calc(var(--ui-vmin) * .278);}
+.tb-st{font-size:calc(var(--ui-vmin) * 1.944);color:rgba(245,237,216,.5);max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .tb-st.my{color:#ffdd44;font-weight:700;animation:pulse 1.5s infinite;}
-.bl{padding:0 10px;height:26px;background:rgba(120,20,20,.8);border:1px solid rgba(200,60,60,.4);border-radius:6px;color:rgba(255,180,180,.85);font-size:13px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
+.bl{padding:0 calc(var(--ui-vmin) * 1.389);height:calc(var(--ui-vmin) * 3.611);background:rgba(120,20,20,.8);border:1px solid rgba(200,60,60,.4);border-radius:6px;color:rgba(255,180,180,.85);font-size:calc(var(--ui-vmin) * 1.806);cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
 .bl:hover{background:rgba(160,30,30,.9);}
 
 /* ── Table container ── */
@@ -324,32 +363,35 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    CHAT
    ════════════════════════════════════════════════════════════ */
 /* Chat bar: fixed to bottom-right, sits above action bar */
-.chat-bar{
+/* --ui-vmin: same clamped-scale-unit approach as #s-start/#s-lobby/
+   #dora-panel — everything below multiplies this one variable so it
+   scales together instead of drifting apart across resolutions. */
+.chat-bar{--ui-vmin:clamp(6px,1vmin,10px);
   position:fixed;bottom:20px;right:20px;
   display:none;flex-direction:row;align-items:center;gap:5px;
   background:rgba(3,12,6,.95);border:1px solid rgba(201,168,76,.25);
-  border-radius:10px;padding:5px 8px;z-index:65;
+  border-radius:10px;padding:calc(var(--ui-vmin) * .694) calc(var(--ui-vmin) * 1.111);z-index:65;
   box-shadow:0 4px 16px rgba(0,0,0,.6);}
-.chat-input{width:160px;padding:5px 8px;background:rgba(0,0,0,.45);
+.chat-input{width:calc(var(--ui-vmin) * 22.22);padding:calc(var(--ui-vmin) * .694) calc(var(--ui-vmin) * 1.111);background:rgba(0,0,0,.45);
   border:1px solid rgba(201,168,76,.2);border-radius:7px;
-  color:var(--cream);font-size:12px;outline:none;font-family:'Noto Sans JP',sans-serif;}
+  color:var(--cream);font-size:calc(var(--ui-vmin) * 1.667);outline:none;font-family:'Noto Sans JP',sans-serif;}
 .chat-input:focus{border-color:var(--jl);}
-.chat-send{padding:0 10px;height:26px;background:rgba(26,107,69,.8);
+.chat-send{padding:0 calc(var(--ui-vmin) * 1.389);height:calc(var(--ui-vmin) * 3.611);background:rgba(26,107,69,.8);
   border:1px solid var(--jl);border-radius:7px;color:var(--cream);
-  font-size:11px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
+  font-size:calc(var(--ui-vmin) * 1.528);cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
 .chat-send:hover{background:rgba(42,158,103,.9);}
 /* History button */
-.chat-hist-btn{position:relative;padding:0 10px;height:26px;
+.chat-hist-btn{position:relative;padding:0 calc(var(--ui-vmin) * 1.389);height:calc(var(--ui-vmin) * 3.611);
   background:none;border:none;border-left:1px solid rgba(201,168,76,.2);
-  color:rgba(201,168,76,.6);font-size:11px;letter-spacing:1px;cursor:pointer;
+  color:rgba(201,168,76,.6);font-size:calc(var(--ui-vmin) * 1.528);letter-spacing:calc(var(--ui-vmin) * .139);cursor:pointer;
   font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;
   transition:color .2s;}
 .chat-hist-btn:hover{color:var(--gl);}
 .chat-hist-btn.open{color:var(--gl);}
 .chat-hist-btn .badge{position:absolute;top:-5px;right:2px;
-  background:#c02020;color:#fff;font-size:8px;font-weight:700;
-  min-width:14px;height:14px;border-radius:7px;display:none;
-  align-items:center;justify-content:center;padding:0 2px;}
+  background:#c02020;color:#fff;font-size:calc(var(--ui-vmin) * 1.111);font-weight:700;
+  min-width:calc(var(--ui-vmin) * 1.944);height:calc(var(--ui-vmin) * 1.944);border-radius:7px;display:none;
+  align-items:center;justify-content:center;padding:0 calc(var(--ui-vmin) * .278);}
 .chat-hist-btn .badge.show{display:flex;}
 /* History popup — opens upward from chat bar */
 .chat-panel{position:fixed;bottom:106px;right:12px;
@@ -494,18 +536,22 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   opacity:0;animation:rs-scrim-hold 3.2s ease forwards;}
 .rs-plate{position:relative;z-index:1;display:flex;flex-direction:column;
   align-items:center;gap:6px;
-  padding:clamp(28px,6vmin,56px) clamp(40px,9vmin,84px);
+  /* Plain vmin (no clamp min/max) — same fix as the call banner: a px
+     cap on padding/font-size would stop scaling before the others do at
+     large or small resolutions and throw them out of proportion with
+     each other. */
+  padding:6vmin 9vmin;
   animation:rs-hold 3.2s ease forwards;}
 .rs-wind{font-family:'Noto Serif JP',serif;font-weight:900;color:var(--gl);
-  font-size:clamp(64px,16vmin,160px);line-height:1;
+  font-size:16vmin;line-height:1;
   text-shadow:0 0 30px rgba(201,168,76,.55),0 0 60px rgba(201,168,76,.25);
   opacity:0;animation:rs-wind-in 1s cubic-bezier(.2,.8,.3,1) forwards;}
 .rs-sub{font-family:'Cinzel Decorative',serif;letter-spacing:.12em;color:var(--cream);
-  font-size:clamp(13px,2.4vmin,20px);display:flex;align-items:center;gap:10px;
+  font-size:2.4vmin;display:flex;align-items:center;gap:10px;
   opacity:0;animation:rs-fade-up .5s ease forwards;animation-delay:.55s;}
 .rs-sub i{color:var(--gold);font-style:normal;opacity:.7;}
 .rs-start{font-family:'Cinzel Decorative',serif;letter-spacing:.4em;text-transform:uppercase;
-  font-size:clamp(9px,1.3vmin,12px);color:rgba(245,237,216,.5);
+  font-size:1.3vmin;color:rgba(245,237,216,.5);
   opacity:0;animation:rs-fade-up .5s ease forwards;animation-delay:.55s;}
 @keyframes rs-wind-in{
   0%{opacity:0;filter:blur(10px);transform:scale(1.3);}
@@ -580,13 +626,26 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .sp-theme-list{display:flex;flex-direction:column;gap:6px;}
 
 /* ── Start screen button ── */
-#bstart{padding:16px 48px;font-family:'Cinzel Decorative',serif;
-  font-size:14px;letter-spacing:4px;
+/* Raw vmin works for the logo (large coefficients stay legible even at
+   tiny vmin), but these are small text — 1.4vmin on a 320px phone is a
+   4.5px caption. Route them through one clamped scale unit instead: it
+   still tracks vmin (and everything below stays proportional to
+   everything else, since they all multiply the SAME variable — no
+   independent caps to decouple), but never drops below a readable floor
+   or balloons past a sensible ceiling on very large screens. Scoped to
+   #s-start (inherited by its descendants) rather than :root, so it
+   doesn't affect anything outside the start screen. */
+#s-start{--ui-vmin:clamp(6px,1vmin,10px);}
+#bstart{padding:calc(var(--ui-vmin) * 2.2) calc(var(--ui-vmin) * 6.7);
+  font-family:'Cinzel Decorative',serif;
+  font-size:calc(var(--ui-vmin) * 1.9);letter-spacing:calc(var(--ui-vmin) * .56);
   background:linear-gradient(135deg,rgba(26,107,69,.5),rgba(13,61,40,.5));
   border:1px solid var(--jl);border-radius:4px;color:var(--cream);cursor:pointer;
   animation:pulse 1.5s ease-in-out infinite;transition:all .2s;}
-.start-copy{font-size:10px;color:rgba(245,237,216,.3);letter-spacing:2px;}
-.about-link{font-size:10px;color:rgba(245,237,216,.4);letter-spacing:1px;
+.start-copy{font-size:calc(var(--ui-vmin) * 1.4);color:rgba(245,237,216,.3);
+  letter-spacing:calc(var(--ui-vmin) * .28);}
+.about-link{font-size:calc(var(--ui-vmin) * 1.4);color:rgba(245,237,216,.4);
+  letter-spacing:calc(var(--ui-vmin) * .14);
   text-decoration:underline;margin-top:6px;cursor:pointer;transition:color .2s;}
 .about-link:hover{color:var(--gold);}
 .about-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;}
@@ -612,13 +671,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .leave-btn-stay:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(26,107,69,.5);}
 .leave-btn-confirm{background:rgba(120,20,20,.85);border:1px solid rgba(200,60,60,.5);color:rgba(255,200,200,.9);}
 .leave-btn-confirm:hover{background:rgba(160,30,30,.95);transform:translateY(-2px);}
+/* font-size here relies on --ui-vmin from whichever ancestor this button
+   is currently in — #s-start, #s-lobby, or .topbar (via .tb-right) — all
+   three declare the same clamp(6px,1vmin,10px), so the icon reads as one
+   consistent scale wherever it's shown. */
 .settings-icon-btn{position:absolute;top:12px;right:14px;background:none;border:none;
-  color:#888;font-size:20px;cursor:pointer;z-index:10;letter-spacing:-1px;}
+  color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.778);cursor:pointer;z-index:10;letter-spacing:-1px;}
 
 /* ── Topbar inline elements ── */
 .tb-right .settings-icon-btn{position:static;z-index:auto;}
-.tb-mode-label{font-size:10px;opacity:.6;margin-left:6px;}
-.tb-version{font-size:9px;opacity:.4;margin-left:6px;letter-spacing:1px;font-family:var(--font-sans);}
+.tb-mode-label{font-size:calc(var(--ui-vmin) * 1.389);opacity:.6;margin-left:6px;}
+.tb-version{font-size:calc(var(--ui-vmin) * 1.25);opacity:.4;margin-left:6px;letter-spacing:calc(var(--ui-vmin) * .139);font-family:var(--font-sans);}
 .about-version{font-size:10px;opacity:.5;margin-left:6px;letter-spacing:1px;font-family:var(--font-sans);}
 .tb-right{display:flex;align-items:center;gap:6px;}
 
@@ -638,16 +701,26 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .ctr-mid-rel{position:absolute;}
 
 /* ── Riichi stick positions ── */
-.rs-bottom{display:none;position:absolute;bottom:0.3vmin;right:1.45vmin;;z-index:16;}
-.rs-top{display:none;position:absolute;bottom: 0.3vmin;;right:1.45vmin;;;z-index:16;}
-.rs-left{display:none;position:absolute;bottom:0.3vmin;right:1.45vmin;z-index:16;}
-.rs-right{display:none;position:absolute;bottom:0.3vmin;right:1.45vmin;z-index:16;}
+/* top:50% + translateY(-50%) instead of a bottom:0.3vmin anchor — the old
+   anchor left the stick offset from its row's centre (.ctr-score, the
+   same box for all four sides; rotate(90/-90deg) on .ctr-score-left/
+   -right just remaps which screen axis "vertical" ends up on, so the
+   same bottom-anchor offset showed up as a Y gap for top/bottom seats
+   and an X gap for left/right seats). Percentage-based positioning is
+   resolution-independent by construction — no vmin/px value to fall out
+   of proportion at another screen size. (Pixel-matching this to
+   .ctr-score-val's own padding-shifted centre made it sit noticeably
+   high in practice, so this centers on the row's own box instead.) */
+.rs-bottom{display:none;position:absolute;top:50%;right:1.45vmin;transform:translateY(-50%);z-index:16;}
+.rs-top{display:none;position:absolute;top:50%;right:1.45vmin;transform:translateY(-50%);z-index:16;}
+.rs-left{display:none;position:absolute;top:50%;right:1.45vmin;transform:translateY(-50%);z-index:16;}
+.rs-right{display:none;position:absolute;top:50%;right:1.45vmin;transform:translateY(-50%);z-index:16;}
 
 /* ── Riichi stick size ── */
-.rs-bottom svg{width:6vmin;height:auto;}
-.rs-top svg{width:6vmin;height:auto;}
-.rs-left svg{width:6vmin;height:auto;}
-.rs-right svg{width:6vmin;height:auto;}
+.rs-bottom svg{width:6vmin;height:auto;display:block;}
+.rs-top svg{width:6vmin;height:auto;display:block;}
+.rs-left svg{width:6vmin;height:auto;display:block;}
+.rs-right svg{width:6vmin;height:auto;display:block;}
 
 /* ── Meld containers ── */
 .ml-b{position:absolute;bottom:0;right:0;display:flex;flex-direction:row;align-items:flex-end;z-index:15;}
@@ -665,13 +738,20 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .np-flip{transform:rotate(180deg); transform-origin:center center;}
 
 /* ── Dora panel ── */
-#dora-panel{position:fixed;top:44px;left:8px;z-index:80;pointer-events:none;
+/* --ui-vmin: same clamped-scale-unit approach as #s-start/#s-lobby, so
+   padding/font-size/margins stay proportional to each other at any
+   resolution instead of drifting apart. .dora-slot's own tile size isn't
+   touched here — it already comes from --tlg-w/h, computed in JS as a
+   fraction of the felt's own (already-consistent) size, not px/clamp. */
+#dora-panel{--ui-vmin:clamp(6px,1vmin,10px);
+  position:fixed;top:44px;left:8px;z-index:80;pointer-events:none;
   background:rgba(8,25,12,.97);border:2px solid rgba(201,168,76,.5);border-radius:12px;
-  padding:14px 16px 16px;display:none;
+  padding:calc(var(--ui-vmin) * 1.944) calc(var(--ui-vmin) * 2.222) calc(var(--ui-vmin) * 2.222);
+  display:none;
   box-shadow:0 4px 24px rgba(0,0,0,.8),inset 0 1px 0 rgba(201,168,76,.2);}
-.dora-title{font-size:11px;letter-spacing:4px;color:rgba(201,168,76,.9);
-  margin-bottom:10px;font-family:'Cinzel Decorative',serif;text-align:center;
-  border-bottom:1px solid rgba(201,168,76,.25);padding-bottom:8px;}
+.dora-title{font-size:calc(var(--ui-vmin) * 1.528);letter-spacing:calc(var(--ui-vmin) * .556);color:rgba(201,168,76,.9);
+  margin-bottom:calc(var(--ui-vmin) * 1.389);font-family:'Cinzel Decorative',serif;text-align:center;
+  border-bottom:1px solid rgba(201,168,76,.25);padding-bottom:calc(var(--ui-vmin) * 1.111);}
 .dora-slots{display:flex;gap:6px;align-items:flex-end;}
 
 /* ── Round end screen ── */
@@ -679,7 +759,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .ready-status{margin-top:8px;font-size:11px;color:rgba(245,237,216,.5);letter-spacing:1px;text-align:center;}
 
 /* ── Mode button sub-label ── */
-.mode-sub{font-size:9px;letter-spacing:1px;opacity:.7;}
+.mode-sub{font-size:calc(var(--ui-vmin) * 1.25);letter-spacing:calc(var(--ui-vmin) * .139);opacity:.7;}
 
 /* ── Lobby mode row ── */
 .mode-row{display:flex;gap:8px;margin-top:4px;}
