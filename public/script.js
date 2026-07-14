@@ -1418,13 +1418,20 @@ let chatOpen=false, unreadCount=0, colorPickerOpen=false;
 // the server, so it only changes what YOU see, not what others see.
 let showChatName=false;
 
+// $() guards below: these UI pieces (colour swatch, name toggle) may not
+// be present in every build of index.html. A thrown error here would
+// abort the rest of the startup script — including connect() — leaving
+// every button that depends on the websocket silently non-functional, so
+// each function bails out early instead of assuming the elements exist.
 function toggleChatName(){
   showChatName=!showChatName;
-  $('chat-name-toggle').setAttribute('aria-pressed',String(showChatName));
+  const btn=$('chat-name-toggle'); if(!btn) return;
+  btn.setAttribute('aria-pressed',String(showChatName));
 }
 
 function initColorPicker(){
-  const picker=$('chat-color-picker');
+  const picker=$('chat-color-picker'), btn=$('chat-color-btn');
+  if(!picker||!btn) return;
   picker.innerHTML='';
   CHAT_COLORS.forEach(c=>{
     const sw=document.createElement('button');
@@ -1435,21 +1442,23 @@ function initColorPicker(){
     sw.onclick=()=>selectChatColor(c);
     picker.appendChild(sw);
   });
-  $('chat-color-btn').style.background=myChatColor;
+  btn.style.background=myChatColor;
 }
 
 function selectChatColor(c){
   myChatColor=c;
-  $('chat-color-btn').style.background=c;
+  const btn=$('chat-color-btn'); if(btn) btn.style.background=c;
   toggleColorPicker(false);
   initColorPicker();
 }
 
 function toggleColorPicker(force){
   colorPickerOpen=force!==undefined?force:!colorPickerOpen;
-  $('chat-color-picker').classList.toggle('open',colorPickerOpen);
-  $('chat-color-btn').classList.toggle('open',colorPickerOpen);
-  $('chat-color-btn').setAttribute('aria-expanded',String(colorPickerOpen));
+  const picker=$('chat-color-picker'), btn=$('chat-color-btn');
+  if(!picker||!btn) return;
+  picker.classList.toggle('open',colorPickerOpen);
+  btn.classList.toggle('open',colorPickerOpen);
+  btn.setAttribute('aria-expanded',String(colorPickerOpen));
 }
 
 function toggleChat(){
@@ -1899,7 +1908,7 @@ $('chat-send').onclick=sendChat;
 $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};
 $('chat-hist-btn').onclick=toggleChat;
 $('chat-close').onclick=toggleChat;
-$('chat-color-btn').onclick=()=>toggleColorPicker();
-$('chat-name-toggle').onclick=toggleChatName;
+if($('chat-color-btn')) $('chat-color-btn').onclick=()=>toggleColorPicker();
+if($('chat-name-toggle')) $('chat-name-toggle').onclick=toggleChatName;
 initColorPicker();
 connect();
