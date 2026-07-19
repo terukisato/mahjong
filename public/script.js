@@ -1529,6 +1529,11 @@ function toast(msg){
 // settles across the felt; see .call-banner / @keyframes cb-slide.
 function callBanner(type,name,label){
   const layer=$('cb-layer'); if(!layer) return;
+  // .cb-layer is a flex row container, so a second banner appended while the
+  // first is still fading out would sit beside it (split left/right) rather
+  // than replace it. Drop any banner still in flight immediately so only the
+  // newest call is ever shown.
+  layer.querySelectorAll('.call-banner').forEach(el=>el.remove());
   const b=document.createElement('div');
   b.className='call-banner';b.dataset.type=type;
   const content=document.createElement('div');content.className='cb-content';
@@ -1538,7 +1543,7 @@ function callBanner(type,name,label){
   nm.appendChild(who);nm.appendChild(document.createTextNode(' called'));
   content.appendChild(lb);content.appendChild(nm);
   b.appendChild(content);
-  layer.appendChild(b);setTimeout(()=>b.remove(),3000);
+  layer.appendChild(b);setTimeout(()=>b.remove(),2400);
 }
 
 // Round-start title card (wind + round + honba) — see .rs-plate / @keyframes

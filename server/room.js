@@ -138,6 +138,7 @@ class Room {
     g.pending=null;
     g.drawTile=null;
     g.riichiTile={};
+    g.riichiTileCalled={};
     g.kanCount=0;
     g.kanSeats=[];
     g.isRinshan=false;
@@ -172,7 +173,7 @@ class Room {
     if(g.wall.length===0&&!fromRinshan){this._endRound('draw');return;}
     let t;
     if(fromRinshan){
-      t=g.deadWall.shift();
+      t=g.deadWall[g.kanCount-1];
       g.isRinshan=true;
     } else {
       t=g.wall.shift();
@@ -335,8 +336,16 @@ class Room {
     const idx=g.hands[seat].findIndex(t=>t.id===tileId);
     if(idx===-1) return;
     const [tile]=g.hands[seat].splice(idx,1);
-    const isRiichiDiscard=g.riichiTile&&g.riichiTile[seat]===tile.id;
-    if(isRiichiDiscard) tile.riichi=true;
+    // Normally the marker is the tile riichi was declared on. If that tile
+    // was since called away by another player, the marker moves to this
+    // (the next) discard instead — the sideways tile records *when* riichi
+    // was declared, so calling it away can't erase the record.
+    const isRiichiDiscard=(g.riichiTile&&g.riichiTile[seat]===tile.id)||(g.riichiTileCalled&&g.riichiTileCalled[seat]);
+    if(isRiichiDiscard){
+      tile.riichi=true;
+      g.riichiTile[seat]=tile.id;
+      if(g.riichiTileCalled) g.riichiTileCalled[seat]=false;
+    }
     g.discards[seat].push(tile);
     g.drawTile=null;
     g.isRinshan=false;
@@ -429,16 +438,16 @@ class Room {
     if(resp.type==='ron'){this._resolveReactions();return;}
     if(resp.type==='kan'){const tile=g.pending.tile,fromSeat=g.pending.fromSeat;g.pending=null;this._daiminkan(seat,tile,fromSeat);return;}
 
+    // A human just called pon/chi/pass — any other pending seat here is a bot
+    // whose only role is to settle priority (a hidden ron always outranks a
+    // pon/chi). There's no bot move being displayed to pace for readability,
+    // so decide immediately instead of parking behind BOT_DELAY — that pause
+    // exists for the bots'-own-turn path in _discard(), not this one.
     const tile=g.pending.tile;
     for(const r of g.pending.options){
       const s=r.seat;
       if(this.seats[s]?.isBot&&!g.pending.responses[s]){
-        const dec=botReact(g.hands[s],tile,r.options);
-        setTimeout(()=>{
-          if(!g.pending) return;
-          g.pending.responses[s]=dec;
-          if(g.pending.seats.every(s2=>g.pending.responses[s2])) this._resolveReactions();
-        },BOT_DELAY);
+        g.pending.responses[s]=botReact(g.hands[s],tile,r.options);
       }
     }
     if(g.pending.seats.every(s=>g.pending.responses[s])) this._resolveReactions();
@@ -541,6 +550,19 @@ class Room {
       results.length>1?results.slice(1):null,prevScores,g.melds[primary.winSeat]);
   }
 
+  // Removes a called tile from its discarder's pond. If it was their rotated
+  // riichi-declaration marker, flag the seat so their *next* discard picks up
+  // the marker instead — the sideways tile records when riichi was declared,
+  // so calling that discard away can't erase the record, just relocate it.
+  _removeFromDiscards(fromSeat,tile){
+    const g=this.game;
+    if(tile.riichi){
+      if(!g.riichiTileCalled) g.riichiTileCalled={};
+      g.riichiTileCalled[fromSeat]=true;
+    }
+    g.discards[fromSeat]=g.discards[fromSeat].filter(t=>t.id!==tile.id);
+  }
+
   // ── Pon / Chi ──────────────────────────────────────────────────────────────
   _pon(seat,tile,fromSeat){
     const g=this.game;
@@ -549,7 +571,7 @@ class Room {
     const used=matches.slice(0,2);
     g.hands[seat]=hand.filter(t=>!used.map(u=>u.id).includes(t.id));
     g.melds[seat].push({type:'pon',tiles:[...used,tile],calledTileId:tile.id,fromSeat});
-    g.discards[fromSeat]=g.discards[fromSeat].filter(t=>t.id!==tile.id); // called tile leaves their pond
+    this._removeFromDiscards(fromSeat,tile); // called tile leaves their pond
     g.nagashi[seat]=false;
     g.nagashi[fromSeat]=false; // their discard was called — nagashi requires no discard ever be taken
     g.turn=seat;
@@ -565,7 +587,7 @@ class Room {
     const used=hand.filter(t=>tileIds.includes(t.id));
     g.hands[seat]=hand.filter(t=>!tileIds.includes(t.id));
     g.melds[seat].push({type:'chi',tiles:sort([...used,tile]),calledTileId:tile.id,fromSeat});
-    g.discards[fromSeat]=g.discards[fromSeat].filter(t=>t.id!==tile.id); // called tile leaves their pond
+    this._removeFromDiscards(fromSeat,tile); // called tile leaves their pond
     g.nagashi[seat]=false;
     g.nagashi[fromSeat]=false; // their discard was called — nagashi requires no discard ever be taken
     g.turn=seat;
@@ -595,7 +617,7 @@ class Room {
     if(matches.length<3) return;
     g.hands[seat]=hand.filter(t=>!matches.map(u=>u.id).includes(t.id));
     g.melds[seat].push({type:'kan',kanType:'daiminkan',tiles:[...matches,tile],calledTileId:tile.id,fromSeat,open:true});
-    if(fromSeat!=null) g.discards[fromSeat]=g.discards[fromSeat].filter(t=>t.id!==tile.id); // called tile leaves their pond
+    if(fromSeat!=null) this._removeFromDiscards(fromSeat,tile); // called tile leaves their pond
     g.kanCount++;g.kanSeats.push(seat);
     g.nagashi[seat]=false;
     if(fromSeat!=null) g.nagashi[fromSeat]=false; // their discard was called — nagashi requires no discard ever be taken
