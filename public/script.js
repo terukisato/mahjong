@@ -20,7 +20,7 @@ function tsvg(t,w,h){
 const MAN_K=['','一','二','三','四','伍','六','七','八','九'];
 function svgMan(v,w,h,red=false){
   const fs=Math.round(h*.45);
-  const numColor=red?'#c82020':'#1a1a1a';
+  const numColor=red?'#c52626':'#1a1a1a';
   const base=Math.min(w,h);
   // Red dotted marker in the top-left corner (5-man)
   const marker=red?`<circle cx="${w*.18}" cy="${h*.15}" r="${base*.06}" fill="#c82020" opacity="0.9"/>`:'';
@@ -60,8 +60,8 @@ function svgPin(v,w,h,red=false){
 }
 
 function pinCircle(cx,cy,r,isRed,hasRedOuter,hasRedInner,forceRedInner){
-  const ringCol=(isRed||hasRedInner||forceRedInner)?'#c82020':'#1a3a8a';
-  const outerCol=hasRedOuter?'#c82020':'#1a3a8a';
+  const ringCol=(isRed||hasRedInner||forceRedInner)?'#c82020':'#1a1a1a';
+  const outerCol=hasRedOuter?'#c82020':'#1a1a1a';
   const outerSW=Math.max(1.2,r*.25);
   const petalR=r*.60;
   const petalCount=6;
@@ -200,7 +200,7 @@ function souBird(w,h){
     // Head
     `<circle cx="${hx}" cy="${hy}" r="${hr}" fill="#1c7530"/>`,
     // Eye
-    `<circle cx="${hx+hr*0.38}" cy="${hy-hr*0.28}" r="${hr*0.23}" fill="#111"/>`,
+    `<circle cx="${hx+hr*0.38}" cy="${hy-hr*0.28}" r="${hr*0.23}" fill="#1a1a1a"/>`,
     `<circle cx="${hx+hr*0.42}" cy="${hy-hr*0.31}" r="${hr*0.08}" fill="#fff" opacity="0.8"/>`,
     // Beak — long thin, angling down
     `<path d="M${beakX1},${beakY1} L${beakX2},${beakY2} L${beakX2-beakW},${beakY2+beakW*0.5} L${beakX1-beakW*0.3},${beakY1+beakW*0.5} Z" fill="#c8a020" clip-path="url(#${clipId})"/>`,
