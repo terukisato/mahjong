@@ -3,7 +3,7 @@
 // Plain Node assertions, no framework — run with: node server/mahjong.test.js
 
 const assert = require('assert');
-const { detectYaku, waitFu, isWin, countDora, calcFu, isMenzen, basePoints } = require('./mahjong');
+const { detectYaku, waitFu, isWin, countDora, calcFu, isMenzen, basePoints, waits, shanten } = require('./mahjong');
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -846,6 +846,47 @@ test('dora: wind indicator wraps within winds only (North -> East, not White Dra
 test('dora: dragon indicator wraps within dragons only (Chun -> Haku, not East)', () => {
   assert.strictEqual(countDora([T(5, 'z')], [T(7, 'z')]), 1);
   assert.strictEqual(countDora([T(1, 'z')], [T(7, 'z')]), 0);
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Shanten (tiles-away-from-tenpai)
+// ══════════════════════════════════════════════════════════════════════════
+
+test('shanten: complete 14-tile hand is -1', () => {
+  const hand = [...seq(1, 'm'), ...seq(4, 'm'), ...seq(1, 'p'), ...tri(5, 's'), ...pairT(1, 'z')];
+  assert.strictEqual(shanten(hand, []), -1);
+});
+
+test('shanten: tenpai (tanki wait) 13-tile hand is 0, matches waits()', () => {
+  const hand = [...seq(1, 'm'), ...seq(4, 'm'), ...seq(1, 'p'), ...tri(5, 's'), T(1, 'z')];
+  assert.strictEqual(shanten(hand, []), 0);
+  assert.ok(waits(hand, []).includes('1z'));
+});
+
+test('shanten: 1-shanten hand (3 sets + 1 partial run + 2 isolated honors)', () => {
+  const hand = [...seq(1, 'm'), ...seq(4, 'm'), ...seq(1, 'p'), T(5, 's'), T(6, 's'), T(7, 'z'), T(1, 'z')];
+  assert.strictEqual(hand.length, 13);
+  assert.strictEqual(shanten(hand, []), 1);
+});
+
+test('shanten: fully scattered 13-tile hand falls back to chiitoitsu shanten (6)', () => {
+  const hand = [
+    T(1, 'm'), T(4, 'm'), T(7, 'm'), T(1, 'p'), T(4, 'p'), T(7, 'p'),
+    T(1, 's'), T(4, 's'), T(7, 's'), T(1, 'z'), T(2, 'z'), T(3, 'z'), T(4, 'z'),
+  ];
+  assert.strictEqual(hand.length, 13);
+  // No pairs, no adjacent/near tiles anywhere -> standard-form shanten (8) is
+  // worse than chiitoitsu-form shanten (6-0 pairs+max(0,7-13 kinds)=6), so
+  // shanten() must pick the chiitoitsu path.
+  assert.strictEqual(shanten(hand, []), 6);
+});
+
+test('shanten: open hand (1 pon meld) tenpai on a tanki wait', () => {
+  const melds = [meld('pon', tri(5, 'p'))];
+  const concealed = [...seq(1, 'm'), ...seq(4, 'm'), ...seq(1, 'p'), T(7, 'z')];
+  assert.strictEqual(concealed.length, 10); // base13 for 1 pon meld: 13-3+0
+  assert.strictEqual(shanten(concealed, melds), 0);
+  assert.ok(waits(concealed, melds).includes('7z'));
 });
 
 // ══════════════════════════════════════════════════════════════════════════

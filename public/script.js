@@ -752,6 +752,7 @@ function toggleMusic(){
 
 // LOBBY
 let gameMode='tonpuu'; // 'tonpuu' or 'hanchan'
+let botDifficulty='normal'; // 'easy'|'normal'|'hard'
 
 function setMode(mode){
   gameMode=mode;
@@ -759,9 +760,16 @@ function setMode(mode){
   $('btn-hanchan').classList.toggle('active', mode==='hanchan');
 }
 
+function setDifficulty(level){
+  botDifficulty=level;
+  $('btn-diff-easy').classList.toggle('active', level==='easy');
+  $('btn-diff-normal').classList.toggle('active', level==='normal');
+  $('btn-diff-hard').classList.toggle('active', level==='hard');
+}
+
 function findMatch(){
   playLobbyMusic();
-  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,voiceTheme:currentVoiceTheme});
+  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,difficulty:botDifficulty,voiceTheme:currentVoiceTheme});
 }
 
 function showWaiting(){

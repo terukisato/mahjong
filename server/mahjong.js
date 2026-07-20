@@ -86,6 +86,98 @@ function _dec(counts, groups, results, total) {
   }
 }
 
+// Shanten (tiles-away-from-tenpai) for the standard 4-sets+pair hand shape.
+// Unlike decompose() (which only recognizes *complete* hands), this also
+// scores partial groups (a spare pair held as a proto-triplet, or a
+// two-tile run shape) so it works on any hand size. Exhaustive backtracking
+// search, structurally mirroring _dec above, because a greedy single pass
+// gets the "is this pair the head, or a partial triplet?" choice wrong for
+// some hands — only exploring every branch and keeping the minimum shanten
+// is reliable. `sets`/`partials` count logical groups (a meld — kan
+// included — is exactly ONE set here, same convention decompose/isWin use),
+// never physical tile counts.
+function shantenStandard(hand, meldCount){
+  const counts = {};
+  for(const t of hand){ const k=key(t); counts[k]=(counts[k]||0)+1; }
+  let best = Infinity;
+  _shanten(counts, meldCount||0, 0, false);
+  return best;
+
+  function _shanten(counts, sets, partials, hasPair){
+    const keys = Object.keys(counts).filter(k=>counts[k]>0).sort((a,b)=>{
+      const sa=a.slice(-1),sb=b.slice(-1);
+      return sa!==sb ? (sa<sb?-1:1) : parseInt(a)-parseInt(b);
+    });
+    if(!keys.length){
+      const cap = Math.max(0, 4-sets);
+      const usedPartials = Math.min(partials, cap);
+      const s = 2*(4-sets) - usedPartials - (hasPair?1:0);
+      if(s<best) best=s;
+      return;
+    }
+    const k=keys[0], suit=k.slice(-1), val=parseInt(k);
+    const canGrow = sets+partials < 4;
+
+    // Complete triplet
+    if(canGrow && counts[k]>=3){
+      counts[k]-=3; _shanten(counts,sets+1,partials,hasPair); counts[k]+=3;
+    }
+    // Complete sequence
+    if(canGrow && suit!=='z'){
+      const k2=`${val+1}${suit}`,k3=`${val+2}${suit}`;
+      if(counts[k2]>0&&counts[k3]>0){
+        counts[k]--;counts[k2]--;counts[k3]--;
+        _shanten(counts,sets+1,partials,hasPair);
+        counts[k]++;counts[k2]++;counts[k3]++;
+      }
+    }
+    // Pair as the head — a separate slot from the 4 sets, so not gated by
+    // canGrow (a hand can already have 4 sets and still need its head pair).
+    if(!hasPair && counts[k]>=2){
+      counts[k]-=2; _shanten(counts,sets,partials,true); counts[k]+=2;
+    }
+    // Pair held as a proto-triplet (partial), distinct from the head-pair
+    // branch above — explored separately since only the search itself can
+    // tell, per hand, which use is better.
+    if(canGrow && counts[k]>=2){
+      counts[k]-=2; _shanten(counts,sets,partials+1,hasPair); counts[k]+=2;
+    }
+    // Partial sequence: ryanmen/penchan (k,k+1) or kanchan (k,k+2)
+    if(canGrow && suit!=='z'){
+      for(const off of [1,2]){
+        const k1=`${val+off}${suit}`;
+        if(counts[k1]>0){
+          counts[k]--;counts[k1]--;
+          _shanten(counts,sets,partials+1,hasPair);
+          counts[k]++;counts[k1]++;
+        }
+      }
+    }
+    // Floater: leave one copy of this tile unused, recurse on the rest
+    counts[k]--; _shanten(counts,sets,partials,hasPair); counts[k]++;
+  }
+}
+
+// Chiitoitsu (7 distinct pairs) shanten — doesn't fit the sets+pair shape
+// above, so scored separately. Closed hands only (chiitoitsu can never
+// include a called meld).
+function shantenChiitoi(hand){
+  const c={}; for(const t of hand){ c[key(t)]=(c[key(t)]||0)+1; }
+  const pairs = Object.values(c).filter(n=>n>=2).length;
+  const kinds = Object.keys(c).length;
+  return 6-pairs+Math.max(0,7-kinds);
+}
+
+// Public shanten entry point — minimum tiles-away-from-tenpai across every
+// hand shape that applies (standard, plus chiitoitsu when the hand is
+// closed). -1 means already a complete winning hand, 0 means tenpai.
+function shanten(hand, melds){
+  const meldCount = melds ? melds.length : 0;
+  let s = shantenStandard(hand, meldCount);
+  if(meldCount===0) s = Math.min(s, shantenChiitoi(hand));
+  return s;
+}
+
 // Chiitoitsu (7 pairs): 14 tiles, exactly 7 distinct keys, each appearing twice.
 function isChiitoitsu(hand){
   if(hand.length!==14) return false;
@@ -657,4 +749,5 @@ function handLabel(han){
 }
 
 module.exports = {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
-  detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose,isMenzen};
+  detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose,isMenzen,
+  shanten,shantenStandard,shantenChiitoi};

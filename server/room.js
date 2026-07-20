@@ -33,10 +33,11 @@ const CHAT_COLORS=new Set(['#ffffff','#f0d080','#ff6b6b','#6bff8f','#6bb6ff','#f
 //   {tile, fromSeat, seats:[...reacting seats], options:[{seat,options}],
 //    responses:{seat: {type, ...}}, timer, isChankan?}
 class Room {
-  constructor(gameMode='tonpuu'){
+  constructor(gameMode='tonpuu', difficulty='normal'){
     this.id=++_roomId;
     this.phase='waiting';
     this.gameMode=gameMode; // 'tonpuu' (4 rounds) or 'hanchan' (8 rounds)
+    this.difficulty=difficulty; // 'easy'|'normal'|'hard', stamped onto bots at _makeBot time
     this.seats=[null,null,null,null];
     this.ready=new Set();
     this.roundReady=new Set();
@@ -82,7 +83,7 @@ class Room {
   }
 
   _makeBot(seat){
-    return {id:`bot-${seat}-${Date.now()}`,name:botName(),seat,isBot:true};
+    return {id:`bot-${seat}-${Date.now()}`,name:botName(),seat,isBot:true,difficulty:this.difficulty};
   }
 
   setReady(playerId){
@@ -233,13 +234,22 @@ class Room {
       this._discard(seat,g.drawTile.id);
       return;
     }
-    this._discard(seat,bestDiscard(hand));
+    this._discard(seat,bestDiscard(hand,g.melds[seat],this.seats[seat].difficulty,this._dangerSetsFor(seat)));
   }
 
   _findRiichiTile(seat){
     const hand=this.game.hands[seat];
     for(const t of hand){if(waits(hand.filter(x=>x.id!==t.id)).length>0) return t.id;}
     return null;
+  }
+
+  // Discard-key piles of every OTHER seat currently in riichi — used by
+  // bot.js's 'hard' difficulty to find genbutsu-safe tiles. A tile is only
+  // treated as safe if it's genbutsu against every riichi opponent at once
+  // (bot.js itself enforces the "every" part; this just gathers the piles).
+  _dangerSetsFor(seat){
+    const g=this.game;
+    return g.riichi.map((r,s)=>(r&&s!==seat)?g.discards[s].map(key):null).filter(Boolean);
   }
 
   _findAnkan(seat){
@@ -373,7 +383,7 @@ class Room {
       this._sendState();
       if(!humanInReactions){
         for(const r of reactions){
-          const dec=botReact(g.hands[r.seat],tile,r.options);
+          const dec=botReact(g.hands[r.seat],tile,r.options,g.melds[r.seat],this.seats[r.seat].difficulty);
           setTimeout(()=>{
             if(!g.pending) return;
             g.pending.responses[r.seat]=dec;
@@ -447,7 +457,7 @@ class Room {
     for(const r of g.pending.options){
       const s=r.seat;
       if(this.seats[s]?.isBot&&!g.pending.responses[s]){
-        g.pending.responses[s]=botReact(g.hands[s],tile,r.options);
+        g.pending.responses[s]=botReact(g.hands[s],tile,r.options,g.melds[s],this.seats[s].difficulty);
       }
     }
     if(g.pending.seats.every(s=>g.pending.responses[s])) this._resolveReactions();
@@ -578,7 +588,7 @@ class Room {
     g.ippatsu=g.ippatsu.map(()=>false);
     this._broadcastAll({type:'pon',seat,name:this.seats[seat]?.name});
     this._sendState();
-    if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat])),BOT_DELAY);
+    if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat],g.melds[seat],this.seats[seat].difficulty,this._dangerSetsFor(seat))),BOT_DELAY);
   }
 
   _chi(seat,tile,tileIds,fromSeat){
@@ -594,7 +604,7 @@ class Room {
     g.ippatsu=g.ippatsu.map(()=>false);
     this._broadcastAll({type:'chi',seat,name:this.seats[seat]?.name});
     this._sendState();
-    if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat])),BOT_DELAY);
+    if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat],g.melds[seat],this.seats[seat].difficulty,this._dangerSetsFor(seat))),BOT_DELAY);
   }
 
   // ── Kan types ──────────────────────────────────────────────────────────────
@@ -667,7 +677,7 @@ class Room {
       this._sendState();
       for(const r of reactions){
         if(this.seats[r.seat]?.isBot){
-          const dec=botReact(g.hands[r.seat],addTile,r.options);
+          const dec=botReact(g.hands[r.seat],addTile,r.options,g.melds[r.seat],this.seats[r.seat].difficulty);
           setTimeout(()=>{if(!g.pending)return;g.pending.responses[r.seat]=dec;this._checkChankanReacted(seat,addTile,ponIdx);},BOT_DELAY);
         }
       }
