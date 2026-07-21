@@ -38,6 +38,16 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    renders at the old capped 72px/14px look. */
 .logo-k{font-family:'Noto Serif JP',serif;font-size:10vmin;font-weight:900;letter-spacing:1.7vmin;
   background:linear-gradient(135deg,#ffe680,#c9a84c,#8a6b20);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;filter:drop-shadow(0 0 24px rgba(201,168,76,.7));}
+/* Start-press kanji burst — a brief brighten+scale flash on the 雀心
+   characters, layered on top of the screen-out fade (see enterLobby()).
+   Lives on .logo-k (not .logo, which already owns the infinite float
+   animation) so the two animations don't fight over the shorthand. */
+.logo-k.burst{animation:logoBurst .45s ease;}
+@keyframes logoBurst{
+  0%{filter:drop-shadow(0 0 24px rgba(201,168,76,.7));transform:scale(1);}
+  40%{filter:drop-shadow(0 0 48px rgba(255,224,102,1)) brightness(1.3);transform:scale(1.1);}
+  100%{filter:drop-shadow(0 0 24px rgba(201,168,76,.7));transform:scale(1);}
+}
 .logo-s{font-family:'Cinzel Decorative',serif;font-size:2vmin;color:var(--jl);letter-spacing:1.1vmin;margin-top:2px;}
 .card{background:linear-gradient(155deg,rgba(20,55,35,.95),rgba(8,20,12,.98));border:1px solid rgba(201,168,76,.35);border-radius:16px;
   padding:calc(var(--ui-vmin) * 4.722) calc(var(--ui-vmin) * 6.389);
@@ -77,11 +87,19 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    .mode-btn's flex:1 above, already used for this same "N equal items in
    a row" problem) while letting them shrink together, in one row, rather
    than wrap, when space is tight. */
-.slot{flex:0 1 80px;min-width:0;min-height:64px;border-radius:10px;border:2px solid rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;background:rgba(0,0,0,.4);transition:all .4s;padding:6px 4px;}
+.slot{position:relative;flex:0 1 80px;min-width:0;min-height:64px;border-radius:10px;border:2px solid rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;background:rgba(0,0,0,.4);transition:all .4s;padding:6px 4px;}
 .slot .si{font-size:calc(var(--ui-vmin) * 2.778);line-height:1;}.slot .sn{font-size:calc(var(--ui-vmin) * 1.25);color:rgba(245,237,216,.7);font-weight:600;}.slot .sr{font-size:calc(var(--ui-vmin) * 1.111);margin-top:2px;}
 .slot.filled{border-color:var(--jl);background:rgba(26,107,69,.25);}
 .slot.bot{border-color:rgba(201,168,76,.35);background:rgba(50,35,5,.4);}
 .slot.rdy{border-color:#4eff9a;box-shadow:0 0 14px rgba(78,255,154,.3);}
+.slot.clickable-bot{cursor:pointer;}
+.slot .sd{font-size:calc(var(--ui-vmin) * 1.0);color:var(--gold);opacity:.75;margin-top:1px;}
+/* Small inline Easy/Normal/Hard picker anchored under a clicked bot slot —
+   populated in renderDiffPopup() (script.js). */
+.diff-popup{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:6px;
+  display:flex;gap:4px;background:#0a160c;border:1px solid rgba(201,168,76,.4);border-radius:8px;
+  padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.6);z-index:50;}
+.diff-popup-btn{padding:5px 8px;font-size:10px;white-space:nowrap;}
 .cd{font-size:calc(var(--ui-vmin) * 1.389);color:rgba(201,168,76,.55);text-align:center;margin-top:8px;letter-spacing:calc(var(--ui-vmin) * .139);}
 .mode-btn{flex:1;padding:calc(var(--ui-vmin) * 1.389) calc(var(--ui-vmin) * .833);background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.6);font-size:calc(var(--ui-vmin) * 1.806);font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
 .mode-btn.active{background:rgba(26,107,69,.4);border-color:var(--jl);color:var(--cream);box-shadow:0 0 12px rgba(42,158,103,.3);}
@@ -292,7 +310,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   display:inline-flex;align-items:center;justify-content:center;}
 .tsm{
   display:inline-flex;
-  width:var(--tsm-w,16px);height:var(--tsm-h,22px);border: radius 0.3vmin;
+  width:var(--tsm-w,16px);height:var(--tsm-h,22px);border-radius:0.3vmin;
   background:linear-gradient(145deg,#1a5c70,#0e3a48);
   border:0.1vmin solid #3a90aa;
   flex-shrink:0;position:relative;}
@@ -633,6 +651,12 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .re-tenpai{display:flex;flex-direction:column;gap:8px;margin:10px 0;}
 .re-tenpai-row{display:flex;flex-direction:column;align-items:center;gap:4px;}
 .re-tenpai-name{font-size:11px;color:var(--gold);letter-spacing:1px;}
+/* Riichi-stick/honba pot carrying into next round — hidden (no text, no
+   margin/border) when the round ended the game or nothing's on the table,
+   set in onEnd() (script.js). */
+.re-carryover{font-size:11px;color:var(--gold);letter-spacing:.5px;
+  padding-top:8px;margin-top:4px;border-top:1px solid rgba(201,168,76,.15);}
+.re-carryover:empty{display:none;padding:0;margin:0;border:none;}
 /* ── Settings panel ── */
 #settings-panel{position:fixed;top:0;right:0;bottom:0;width:240px;
   background:rgba(6,12,7,.97);border-left:1px solid rgba(201,168,76,.2);
@@ -671,6 +695,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   background:linear-gradient(135deg,rgba(26,107,69,.5),rgba(13,61,40,.5));
   border:1px solid var(--jl);border-radius:4px;color:var(--cream);cursor:pointer;
   animation:pulse 1.5s ease-in-out infinite;transition:all .2s;}
+#bstart.pressed{transform:scale(.9);}
+
+/* Start -> lobby transition: press-pulse the button (via .pressed above),
+   fade+scale the start screen out, then fade+scale the lobby in once
+   show() has swapped which screen has display:none — see enterLobby(). */
+#s-start.screen-out{animation:screenOut .27s ease forwards;}
+#s-lobby.screen-in{animation:screenIn .315s ease .045s backwards;}
+@keyframes screenOut{to{opacity:0;transform:scale(.96);}}
+@keyframes screenIn{from{opacity:0;transform:scale(1.03);}to{opacity:1;transform:scale(1);}}
 .start-copy{font-size:calc(var(--ui-vmin) * 1.4);color:rgba(245,237,216,.3);
   letter-spacing:calc(var(--ui-vmin) * .28);}
 .about-link{font-size:calc(var(--ui-vmin) * 1.4);color:rgba(245,237,216,.4);
@@ -678,8 +711,16 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   text-decoration:underline;margin-top:6px;cursor:pointer;transition:color .2s;}
 .about-link:hover{color:var(--gold);}
 .about-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;}
+/* Fixed width (not vw-based) so the panel — and everything inside it, since
+   .about-title/.about-body/.about-section-title/.about-close/.about-version
+   are all already plain px font-sizes, never --ui-vmin-scaled — renders at
+   the exact same size on every display, from a small laptop to a 4K
+   monitor. max-width is only a safety net for viewports narrower than the
+   panel itself (360px + this 24px margin), so it still can't overflow a
+   phone screen; every normal desktop/tablet/most-phones size sees the
+   identical fixed 360px panel. */
 .about-modal{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:min(90vw,360px);background:#0a160c;border:1px solid rgba(201,168,76,.3);
+  width:360px;max-width:calc(100vw - 24px);background:#0a160c;border:1px solid rgba(201,168,76,.3);
   border-radius:8px;padding:24px;z-index:301;box-shadow:0 12px 48px rgba(0,0,0,.8);}
 .about-backdrop.visible,.about-modal.visible{display:block;}
 .about-close{position:absolute;top:10px;right:12px;background:none;border:none;
@@ -778,10 +819,47 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   padding:calc(var(--ui-vmin) * 1.944) calc(var(--ui-vmin) * 2.222) calc(var(--ui-vmin) * 2.222);
   display:none;
   box-shadow:0 4px 24px rgba(0,0,0,.8),inset 0 1px 0 rgba(201,168,76,.2);}
-.dora-title{font-size:calc(var(--ui-vmin) * 1.528);letter-spacing:calc(var(--ui-vmin) * .556);color:rgba(201,168,76,.9);
-  margin-bottom:calc(var(--ui-vmin) * 1.389);font-family:'Cinzel Decorative',serif;text-align:center;
-  border-bottom:1px solid rgba(201,168,76,.25);padding-bottom:calc(var(--ui-vmin) * 1.111);}
 .dora-slots{display:flex;gap:6px;align-items:flex-end;}
+/* Live riichi-stick/honba pot, shown alongside the dora indicators for the
+   duration of the round (unlike .re-carryover on the round-end screen,
+   which reports what carries into the NEXT round) — populated in
+   renderState() from the same game_state fields. Always visible (counts
+   start from 0), unlike .re-carryover which hides when there's nothing to
+   report — this is a persistent live counter, not a one-off callout. */
+.dora-sticks{display:flex;gap:calc(var(--ui-vmin) * 2.5);align-items:center;justify-content:center;
+  margin-top:calc(var(--ui-vmin) * 1.111);padding-top:calc(var(--ui-vmin) * 1.111);
+  border-top:1px solid rgba(201,168,76,.25);}
+.stick-item{display:flex;align-items:center;gap:6px;}
+/* A stick's own shape/gradient mirrors .tlg's tile styling (cream face,
+   gold border) for visual consistency, kept nearly rectangular (a small
+   corner radius, not a pill) to read as a physical wooden stick. The
+   riichi stick's red centre dot mirrors the aka-dora red marker already
+   drawn on tiles (see svgMan's `marker` in script.js) — same "red mark =
+   special/valuable" convention. Real 100-point sticks have no red mark at
+   all (see the honba::after 4x2 black-dot grid below), which is exactly
+   why it's the visually "odd one out" of a real riichi stick set. */
+.stick{position:relative;flex-shrink:0;width:44px;height:9px;border-radius:1.5px;
+  background:linear-gradient(170deg,#fffdf4,#f0e8d0);border:1px solid #c8a84a;
+  box-shadow:0 1px 2px rgba(0,0,0,.4);}
+.stick-riichi::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:4px;height:4px;border-radius:50%;background:#c82020;}
+/* 4 columns x 2 rows of small black dots — one real dot (top-left of the
+   grid) plus 7 box-shadow copies at column/row offsets, a standard
+   single-element "dot grid" trick (each shadow inherits the base dot's
+   border-radius, so every copy renders as a circle too). Positioned
+   relative to the stick's PADDING box (border excluded from an absolutely
+   positioned child's containing block) — with box-sizing:border-box
+   (global reset) .stick's 44x9px already includes its 1px border, so the
+   real interior to fit dots in is 42x7px, not 44x9. Real 100-point sticks
+   cluster the dots tightly in the middle third of the stick rather than
+   spreading them across the full length — columns at 16/19/22/25 (pitch 3,
+   centered in the 42px interior) and rows at 1.5/4.5 (pitch 3, centered
+   in the 7px interior) reproduce that tight, centered grid. */
+.stick-honba::after{content:'';position:absolute;top:1.5px;left:16px;width:1.5px;height:1.5px;border-radius:50%;
+  background:#1a1a1a;
+  box-shadow:3px 0 0 #1a1a1a,6px 0 0 #1a1a1a,9px 0 0 #1a1a1a,
+             0 3px 0 #1a1a1a,3px 3px 0 #1a1a1a,6px 3px 0 #1a1a1a,9px 3px 0 #1a1a1a;}
+.stick-count{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin) * 1.4);color:var(--gold);font-weight:700;}
 
 /* ── Round end screen ── */
 .reb-btn{max-width:200px;}

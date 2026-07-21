@@ -19,9 +19,9 @@ app.use(express.static(path.join(__dirname,'../public')));
 // whatever's currently open is the entire matchmaking model.
 let waitingRoom=null;
 
-function getWaitingRoom(mode,difficulty){
+function getWaitingRoom(mode){
   if(waitingRoom&&waitingRoom.phase==='waiting'&&waitingRoom.gameMode===mode) return waitingRoom;
-  waitingRoom=new Room(mode,difficulty);
+  waitingRoom=new Room(mode);
   return waitingRoom;
 }
 
@@ -53,18 +53,19 @@ wss.on('connection',(ws)=>{
       player.name=(msg.name||'Player').slice(0,20);
       player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
       const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
-      const difficulty=['easy','normal','hard'].includes(msg.difficulty)?msg.difficulty:'normal';
-      myRoom=getWaitingRoom(mode,difficulty);
+      myRoom=getWaitingRoom(mode);
       // Race fallback: the shared waitingRoom could have filled up (or
       // moved past 'waiting') between getWaitingRoom's check and here if
       // multiple joins land close together — just spin up a fresh one.
       if(!myRoom.addHuman(player)){
-        waitingRoom=new Room(mode,difficulty);myRoom=waitingRoom;myRoom.addHuman(player);
+        waitingRoom=new Room(mode);myRoom=waitingRoom;myRoom.addHuman(player);
       }
       ws.send(JSON.stringify({type:'joined',seat:player.seat}));
     }
 
     if(msg.type==='ready'&&myRoom) myRoom.setReady(myId);
+
+    if(msg.type==='set_bot_difficulty'&&myRoom) myRoom.setBotDifficulty(myId,Number(msg.seat),msg.difficulty);
 
     if(msg.type==='start_now'&&myRoom&&myRoom.phase==='waiting'){
       myRoom.fillBots();myRoom.start();

@@ -46,16 +46,21 @@ class Room {
   }
 
   addHuman(player){
-    const openSeats=this.seats.reduce((acc,s,i)=>{if(s===null)acc.push(i);return acc;},[]);
-    if(openSeats.length===0) return false;
     // Fill the lowest-numbered open seat first — the lobby's matchmaking
     // slots (public/index.html #slots) render seats[i] straight into
     // .slot #i left-to-right, so this fills the panel from the left as
-    // players join instead of dropping them into a random slot.
-    const seat=openSeats[0];
+    // players join instead of dropping them into a random slot. Seats are
+    // always kept bot-filled while waiting (see fillBots() below and
+    // removeHuman()), so a truly empty (null) seat is rare — when there
+    // isn't one, evict the lowest-numbered BOT seat instead, so a second
+    // real human can still join an already-bot-filled room rather than
+    // being bounced into a brand-new one.
+    let seat=this.seats.findIndex(s=>s===null);
+    if(seat===-1) seat=this.seats.findIndex(s=>s&&s.isBot);
+    if(seat===-1) return false;
     player.seat=seat;
     this.seats[seat]=player;
-    this._broadcastRoomUpdate();
+    this.fillBots(); // also broadcasts room_update — top up any other empty seats immediately
     return true;
   }
 
@@ -63,12 +68,9 @@ class Room {
     const seat=this.seats.findIndex(p=>p&&!p.isBot&&p.id===playerId);
     if(seat===-1) return;
     this.ready.delete(playerId);
-    if(this.phase==='playing'){
-      const bot=this._makeBot(seat);
-      this.seats[seat]=bot;
-    } else {
-      this.seats[seat]=null;
-    }
+    // Always refill with a fresh bot (not null) so the table stays full —
+    // matches fillBots()/addHuman() always keeping every seat occupied.
+    this.seats[seat]=this._makeBot(seat);
     this._broadcastRoomUpdate();
   }
 
@@ -92,6 +94,22 @@ class Room {
     this.ready.add(playerId);
     this._broadcastRoomUpdate();
     this._checkAllReady();
+  }
+
+  // Any seated human may adjust any bot's difficulty pre-game — a shared
+  // table setting, not exclusive to whoever's "closest" to that seat. Takes
+  // effect immediately: every bot-decision call site (_botTurn, botReact,
+  // the post-pon/chi discards, the kakan reaction loop) reads
+  // this.seats[seat].difficulty fresh at decision time, no caching.
+  setBotDifficulty(playerId, seat, difficulty){
+    const p=this.seats.find(p=>p&&!p.isBot&&p.id===playerId);
+    if(!p||this.phase!=='waiting') return;
+    if(!Number.isInteger(seat)||seat<0||seat>3) return;
+    if(!['easy','normal','hard'].includes(difficulty)) return;
+    const bot=this.seats[seat];
+    if(!bot||!bot.isBot) return;
+    bot.difficulty=difficulty;
+    this._broadcastRoomUpdate();
   }
 
   _checkAllReady(){
@@ -950,6 +968,10 @@ class Room {
       prevScores:prevScores||null,
       melds:melds||[],
       gameOver:isGameOver,
+      // Honba/riichi-stick pot carrying into the next round — a win always
+      // claims every riichi stick on the table (newRiichiSticks is 0 here
+      // regardless of who won), computed above before this broadcast.
+      honba:newHonba,riichiSticks:newRiichiSticks,
     });
 
     // Game over conditions
@@ -1023,6 +1045,9 @@ class Room {
     const drawMaxRound=this.gameMode==="hanchan"?8:4;
     let drawNewRound=g.round; if(!inTenpai[g.dealer]) drawNewRound=g.round+1;
     const drawGameOver=drawBust>=0||drawNewRound>drawMaxRound;
+    // Every draw adds a honba regardless of dealer-repeat/advance; riichi
+    // sticks are never claimed on a draw, so they carry over unchanged.
+    const newHonba=g.honba+1;
     this._broadcastAll({type:'round_end',reason:'draw',scores:g.scores,
       inTenpai,payments,tenpaiHands,tenpaiMelds:g.melds,
       playerNames:this.seats.map(p=>p?.name||'—'),
@@ -1030,11 +1055,11 @@ class Room {
       uraDora:g.deadWall.slice(9,9+g.dora.length),
       prevScores,
       gameOver:drawGameOver,
+      honba:newHonba,riichiSticks:g.riichiSticks,
     });
 
     // Dealer tenpai = repeat; dealer noten = advance
     const dealerTenpai=inTenpai[g.dealer];
-    const newHonba=g.honba+1;
     let newDealer=g.dealer;
     let newRound=g.round;
     if(!dealerTenpai){
@@ -1099,12 +1124,16 @@ class Room {
     const nagashiMaxRound=this.gameMode==="hanchan"?8:4;
     const nagashiNewRound=nagashiSeats[g.dealer]?g.round:g.round+1;
     const nagashiGameOver=nagashiNewRound>nagashiMaxRound;
+    // Nagashi mangan is scored as a tsumo but is still fundamentally a draw
+    // outcome — every seat's discards were exhausted, nobody called ron/
+    // tsumo on a discard — so riichi sticks are never claimed here either.
+    const newHonba=g.honba+1;
     this._broadcastAll({type:'round_end',reason:'nagashi',nagashiSeats,scores:g.scores,
-      playerNames:this.seats.map(p=>p?.name||'—'),dora:g.dora,gameOver:nagashiGameOver});
+      playerNames:this.seats.map(p=>p?.name||'—'),dora:g.dora,gameOver:nagashiGameOver,
+      honba:newHonba,riichiSticks:g.riichiSticks});
 
     // Nagashi: dealer repeat if dealer is nagashi winner
     const dealerNagashi=nagashiSeats[g.dealer];
-    const newHonba=g.honba+1;
     let newDealer=g.dealer,newRound=g.round;
     if(!dealerNagashi){
       newDealer=(g.dealer+1)%4;
@@ -1255,7 +1284,7 @@ class Room {
     }
   }
 
-  _seatInfo(){ return this.seats.map(p=>p?{name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default'}:null); }
+  _seatInfo(){ return this.seats.map(p=>p?{name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default',difficulty:p.difficulty||null}:null); }
 
   _broadcastRoomUpdate(){
     const readyIds=Array.from(this.ready);

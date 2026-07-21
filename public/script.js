@@ -752,7 +752,6 @@ function toggleMusic(){
 
 // LOBBY
 let gameMode='tonpuu'; // 'tonpuu' or 'hanchan'
-let botDifficulty='normal'; // 'easy'|'normal'|'hard'
 
 function setMode(mode){
   gameMode=mode;
@@ -760,16 +759,9 @@ function setMode(mode){
   $('btn-hanchan').classList.toggle('active', mode==='hanchan');
 }
 
-function setDifficulty(level){
-  botDifficulty=level;
-  $('btn-diff-easy').classList.toggle('active', level==='easy');
-  $('btn-diff-normal').classList.toggle('active', level==='normal');
-  $('btn-diff-hard').classList.toggle('active', level==='hard');
-}
-
 function findMatch(){
   playLobbyMusic();
-  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,difficulty:botDifficulty,voiceTheme:currentVoiceTheme});
+  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,voiceTheme:currentVoiceTheme});
 }
 
 function showWaiting(){
@@ -779,22 +771,57 @@ function showWaiting(){
   $('cdiv').textContent='Press Ready when you are set to start';
 }
 
+// Cached across calls so toggling a bot's difficulty popup can re-render
+// the slots locally (without waiting on a server round-trip) — see
+// renderDiffPopup()/the click-outside listener below.
+let lastSeats=null, openDiffPopupSeat=null;
+
 function updateSlots(seats){
+  lastSeats=seats;
   $('wmsg').textContent=`${seats.filter(Boolean).length}/4 players`;
   document.querySelectorAll('.slot').forEach((sl,i)=>{
-    const p=seats[i]; sl.innerHTML='';sl.className='slot';
+    const p=seats[i]; sl.innerHTML='';sl.className='slot';sl.onclick=null;
     if(p){
       sl.classList.add('filled');
       if(p.isBot) sl.classList.add('bot');
       if(p.ready) sl.classList.add('rdy');
-      const icon=p.isBot?'🤖':p.name[0].toUpperCase();
+      const iconHtml=p.isBot?'':`<span class="si">${p.name[0].toUpperCase()}</span>`;
       const rdyTxt=p.isBot?'<span class="sr" style="color:#4eff9a">✓ BOT</span>':(p.ready?'<span class="sr" style="color:#4eff9a">✓ Ready</span>':'<span class="sr" style="color:rgba(245,237,216,.4)">Not ready</span>');
-      sl.innerHTML=`<span class="si">${icon}</span><span class="sn">${p.isBot?p.name.slice(0,8):p.name.slice(0,8)}</span>${rdyTxt}`;
+      sl.innerHTML=`${iconHtml}<span class="sn">${p.name.slice(0,8)}</span>${rdyTxt}`;
+      if(p.isBot){
+        const diff=p.difficulty||'normal';
+        sl.classList.add('clickable-bot');
+        const lbl=document.createElement('span');
+        lbl.className='sd';
+        lbl.textContent=diff[0].toUpperCase()+diff.slice(1);
+        sl.appendChild(lbl);
+        sl.onclick=(e)=>{e.stopPropagation();openDiffPopupSeat=openDiffPopupSeat===i?null:i;updateSlots(lastSeats);};
+        if(openDiffPopupSeat===i) renderDiffPopup(sl,i,diff);
+      }
     } else {
       sl.innerHTML='<span class="si">🀄</span>';
     }
   });
 }
+
+// Small inline Easy/Normal/Hard picker anchored under a clicked bot slot.
+// Reuses .mode-btn's existing styling (same visual language as Game Mode)
+// rather than inventing a new button style — see .diff-popup-btn (style.css).
+function renderDiffPopup(sl,seat,current){
+  const pop=document.createElement('div');pop.className='diff-popup';
+  pop.onclick=e=>e.stopPropagation();
+  for(const level of['easy','normal','hard']){
+    const btn=document.createElement('button');
+    btn.className='mode-btn diff-popup-btn'+(level===current?' active':'');
+    btn.textContent=level[0].toUpperCase()+level.slice(1);
+    btn.onclick=e=>{e.stopPropagation();wss({type:'set_bot_difficulty',seat,difficulty:level});openDiffPopupSeat=null;updateSlots(lastSeats);};
+    pop.appendChild(btn);
+  }
+  sl.appendChild(pop);
+}
+document.addEventListener('click',e=>{
+  if(openDiffPopupSeat!==null&&!e.target.closest('.slot')){openDiffPopupSeat=null;if(lastSeats)updateSlots(lastSeats);}
+});
 
 function pressReady(){
   if(isReady) return;
@@ -923,6 +950,8 @@ function renderState(m, prev){
   $('cwl').textContent=`${m.wallCount} tiles`;
   const h=m.honba||0,rs=m.riichiSticks||0;
   $('chonba').textContent=h?`${h} Honba` :'';
+  const riichiCountEl=$('stick-riichi-count'); if(riichiCountEl) riichiCountEl.textContent=rs;
+  const honbaCountEl=$('stick-honba-count'); if(honbaCountEl) honbaCountEl.textContent=h;
 
   // Dora
   // Fill up to 5 fixed dora slots
@@ -1777,6 +1806,17 @@ function onEnd(m){
     row.innerHTML=`<td><span style="color:${colour};font-weight:700;margin-right:10px;">${ordinal}</span>${escHtml(name)}</td><td><span id="${scoreSpanId}">${startScore.toLocaleString()}</span></td><td class="re-td-delta">${deltaHtml}</td>`;
     tbl.appendChild(row);
   });
+  // Riichi-stick/honba pot carrying into next round — server omits both
+  // fields on a game-ending round_end (no next round to carry into), and
+  // .re-carryover:empty (style.css) collapses itself when left blank.
+  const co=$('re-carryover');
+  if(co){
+    const sticks=m.riichiSticks||0, honba=m.honba||0;
+    const parts=[];
+    if(sticks) parts.push(`${sticks} Riichi Stick${sticks>1?'s':''} (${(sticks*1000).toLocaleString()}pt)`);
+    if(honba) parts.push(`${honba} Honba (${(honba*100).toLocaleString()}pt)`);
+    co.textContent=(!m.gameOver&&parts.length)?`Carries over: ${parts.join(' · ')}`:'';
+  }
   // Animate score count-up after a short delay
   setTimeout(()=>{
     (m.scores||[]).forEach((sc,seat)=>{
@@ -1896,8 +1936,19 @@ try{
 renderVoiceThemes();
 // Start music on first user interaction — via Press Start button
 function enterLobby(){
-  playLobbyMusic();
-  show('s-lobby');
+  const btn=$('bstart');
+  btn.classList.add('pressed');
+  setTimeout(()=>btn.classList.remove('pressed'),135);
+  const logoK=document.querySelector('.logo-k');
+  if(logoK){ logoK.classList.add('burst'); setTimeout(()=>logoK.classList.remove('burst'),450); }
+  $('s-start').classList.add('screen-out');
+  setTimeout(()=>{
+    playLobbyMusic();
+    show('s-lobby');
+    $('s-start').classList.remove('screen-out');
+    $('s-lobby').classList.add('screen-in');
+    setTimeout(()=>$('s-lobby').classList.remove('screen-in'),360);
+  },252);
 }
 $('bstart').onclick=enterLobby;
 $('bfind').onclick=findMatch;

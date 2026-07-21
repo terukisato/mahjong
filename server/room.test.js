@@ -207,6 +207,81 @@ test('Tenpai payments: 2 tenpai players each receive 1500, each noten pays 1500'
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+// Always-full-table seating: addHuman/removeHuman + per-bot difficulty
+// ══════════════════════════════════════════════════════════════════════════
+
+test('addHuman: evicts the lowest-indexed bot seat when no null seat remains', () => {
+  const room = freshRoom(0); // all 4 seats are bots, none null
+  const human = { id: 'human1', name: 'Human', isBot: false };
+  const ok = room.addHuman(human);
+  assert.strictEqual(ok, true);
+  assert.strictEqual(human.seat, 0, 'should land in the lowest-indexed seat');
+  assert.strictEqual(room.seats[0], human, 'seat 0 now holds the human, not the old bot');
+  assert.strictEqual(room.seats[0].isBot, false);
+  for (const i of [1, 2, 3]) assert.strictEqual(room.seats[i].isBot, true, `seat ${i} should still be a bot`);
+});
+
+test('addHuman: fills a genuinely empty (null) seat before evicting any bot', () => {
+  const room = freshRoom(0);
+  room.seats[2] = null;
+  const human = { id: 'human1', name: 'Human', isBot: false };
+  room.addHuman(human);
+  assert.strictEqual(human.seat, 2, 'the null seat should be preferred over evicting a bot');
+});
+
+test('removeHuman: vacated seat is refilled with a fresh bot, not left null', () => {
+  const room = freshRoom(0);
+  room.seats[1] = { id: 'human1', name: 'Human', isBot: false };
+  room.removeHuman('human1');
+  assert.notStrictEqual(room.seats[1], null);
+  assert.strictEqual(room.seats[1].isBot, true);
+});
+
+function waitingRoomWithHuman() {
+  const room = freshRoom(0);
+  room.phase = 'waiting';
+  room.seats[3] = { id: 'human1', name: 'Human', isBot: false };
+  return room;
+}
+
+test('setBotDifficulty: a seated human can set a bot seat\'s difficulty', () => {
+  const room = waitingRoomWithHuman();
+  room.setBotDifficulty('human1', 0, 'hard');
+  assert.strictEqual(room.seats[0].difficulty, 'hard');
+});
+
+test('setBotDifficulty: rejected when the caller is not a seated human', () => {
+  const room = waitingRoomWithHuman();
+  room.setBotDifficulty('nobody', 0, 'hard');
+  assert.strictEqual(room.seats[0].difficulty, undefined);
+});
+
+test('setBotDifficulty: rejected outside the waiting phase', () => {
+  const room = waitingRoomWithHuman();
+  room.phase = 'playing';
+  room.setBotDifficulty('human1', 0, 'hard');
+  assert.strictEqual(room.seats[0].difficulty, undefined);
+});
+
+test('setBotDifficulty: rejected for an out-of-range seat', () => {
+  const room = waitingRoomWithHuman();
+  assert.doesNotThrow(() => room.setBotDifficulty('human1', 5, 'hard'));
+  for (const s of room.seats) if (s) assert.strictEqual(s.difficulty, undefined);
+});
+
+test('setBotDifficulty: rejected for an invalid difficulty value', () => {
+  const room = waitingRoomWithHuman();
+  room.setBotDifficulty('human1', 0, 'godlike');
+  assert.strictEqual(room.seats[0].difficulty, undefined);
+});
+
+test('setBotDifficulty: rejected when the target seat holds a human, not a bot', () => {
+  const room = waitingRoomWithHuman();
+  room.setBotDifficulty('human1', 3, 'hard'); // seat 3 is the human itself
+  assert.strictEqual(room.seats[3].difficulty, undefined);
+});
+
+// ══════════════════════════════════════════════════════════════════════════
 // Summary
 // ══════════════════════════════════════════════════════════════════════════
 

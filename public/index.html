@@ -139,14 +139,6 @@
         <button class="mode-btn" id="btn-hanchan" onclick="setMode('hanchan')">半荘戦<br><span class="mode-sub">HANCHAN · 8 rounds</span></button>
       </div>
     </div>
-    <div class="ig">
-      <label>Bot Difficulty</label>
-      <div class="mode-row">
-        <button class="mode-btn" id="btn-diff-easy" onclick="setDifficulty('easy')">Easy<br><span class="mode-sub">アーセン</span></button>
-        <button class="mode-btn active" id="btn-diff-normal" onclick="setDifficulty('normal')">Normal<br><span class="mode-sub">ドミネーター</span></button>
-        <button class="mode-btn" id="btn-diff-hard" onclick="setDifficulty('hard')">Hard<br><span class="mode-sub">シェイ</span></button>
-      </div>
-    </div>
     </div>
     <button class="bp" id="bfind">⚔ Find Match</button>
     <div class="wa" id="wa">
@@ -337,6 +329,7 @@
     <div class="yl" id="reyl"></div><div class="wt" id="rewt"></div>
     <div class="re-tenpai" id="re-tenpai"></div>
     <table class="st" id="rest"></table>
+    <div class="re-carryover" id="re-carryover"></div>
     <div class="reb">
       <button id="bround-ready" class="ready-btn reb-btn" onclick="sendRoundReady()">✓ Ready</button>
       <button id="bview-results" class="bp reb-btn" style="display:none;" onclick="showGameOverResults()">View Results</button>
@@ -354,13 +347,22 @@
      DORA INDICATOR PANEL (fixed top-left)
      ════════════════════════════════════════════════════════════ -->
 <div id="dora-panel">
-  <div class="dora-title">DORA</div>
   <div class="dora-slots">
     <div id="dora-slot-0" class="dora-slot"></div>
     <div id="dora-slot-1" class="dora-slot"></div>
     <div id="dora-slot-2" class="dora-slot"></div>
     <div id="dora-slot-3" class="dora-slot"></div>
     <div id="dora-slot-4" class="dora-slot"></div>
+  </div>
+  <div class="dora-sticks" id="dora-sticks">
+    <div class="stick-item">
+      <div class="stick stick-riichi"></div>
+      <span class="stick-count" id="stick-riichi-count">0</span>
+    </div>
+    <div class="stick-item">
+      <div class="stick stick-honba"></div>
+      <span class="stick-count" id="stick-honba-count">0</span>
+    </div>
   </div>
 </div>
 
