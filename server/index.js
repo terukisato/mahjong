@@ -4,6 +4,7 @@ const http=require('http');
 const WebSocket=require('ws');
 const path=require('path');
 const {Room}=require('./room');
+const {getStats}=require('./stats');
 
 const app=express();
 const server=http.createServer(app);
@@ -11,17 +12,20 @@ const wss=new WebSocket.Server({server});
 
 app.use(express.static(path.join(__dirname,'../public')));
 
-// Matchmaking: a single shared "waiting room" per game mode at a time.
-// Whoever joins first claims it; once it starts (or if its mode doesn't
-// match), the next joiner gets a brand-new Room instead. There's no
-// support for multiple concurrent waiting rooms of the same mode, private
-// rooms, or joining a specific room by ID — first-come-first-served into
-// whatever's currently open is the entire matchmaking model.
+// Matchmaking: a single shared "waiting room" per (game mode, player count)
+// pair at a time. Whoever joins first claims it; once it starts (or if its
+// mode/player-count doesn't match), the next joiner gets a brand-new Room
+// instead. There's no support for multiple concurrent waiting rooms of the
+// same mode, private rooms, or joining a specific room by ID —
+// first-come-first-served into whatever's currently open is the entire
+// matchmaking model. Sanma (numPlayers=3) and yonma (numPlayers=4) rooms
+// are always separate — a sanma joiner must never land in a yonma waiting
+// room or vice versa.
 let waitingRoom=null;
 
-function getWaitingRoom(mode){
-  if(waitingRoom&&waitingRoom.phase==='waiting'&&waitingRoom.gameMode===mode) return waitingRoom;
-  waitingRoom=new Room(mode);
+function getWaitingRoom(mode,rules,numPlayers){
+  if(waitingRoom&&waitingRoom.phase==='waiting'&&waitingRoom.gameMode===mode&&waitingRoom.numPlayers===numPlayers) return waitingRoom;
+  waitingRoom=new Room(mode,'normal',rules,numPlayers);
   return waitingRoom;
 }
 
@@ -53,12 +57,23 @@ wss.on('connection',(ws)=>{
       player.name=(msg.name||'Player').slice(0,20);
       player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
       const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
-      myRoom=getWaitingRoom(mode);
+      const numPlayers=msg.variant==='sanma'?3:4;
+      // Rule variants — picked once in the lobby, like gameMode. Not part
+      // of the shared-waiting-room reuse check below (same as gameMode's
+      // sibling settings, voiceTheme/difficulty): the first joiner's picks
+      // apply to a shared public room, a deliberate simplicity tradeoff.
+      const rules={
+        akaDora: msg.rules?.akaDora!==false,
+        kuitanAri: msg.rules?.kuitanAri!==false,
+        doubleRon: msg.rules?.doubleRon!==false,
+        nagashiMangan: msg.rules?.nagashiMangan!==false,
+      };
+      myRoom=getWaitingRoom(mode,rules,numPlayers);
       // Race fallback: the shared waitingRoom could have filled up (or
       // moved past 'waiting') between getWaitingRoom's check and here if
       // multiple joins land close together — just spin up a fresh one.
       if(!myRoom.addHuman(player)){
-        waitingRoom=new Room(mode);myRoom=waitingRoom;myRoom.addHuman(player);
+        waitingRoom=new Room(mode,'normal',rules,numPlayers);myRoom=waitingRoom;myRoom.addHuman(player);
       }
       ws.send(JSON.stringify({type:'joined',seat:player.seat}));
     }
@@ -74,6 +89,11 @@ wss.on('connection',(ws)=>{
     if(msg.type==='action'&&myRoom) myRoom.action(myId,msg.action);
 
     if(msg.type==='chat'&&myRoom) myRoom.chat(myId,msg.text||'',msg.color);
+
+    if(msg.type==='get_stats'){
+      const name=(msg.name||'Player').slice(0,20);
+      ws.send(JSON.stringify({type:'stats',name,stats:getStats(name)}));
+    }
 
     if(msg.type==='leave'){
       if(myRoom){myRoom.removeHuman(myId);myRoom=null;}

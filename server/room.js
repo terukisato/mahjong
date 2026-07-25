@@ -2,6 +2,7 @@
 const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
        detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose,isMenzen} = require('./mahjong');
 const {botName,bestDiscard,botReact} = require('./bot');
+const {recordGameResult} = require('./stats');
 
 let _roomId=0;
 const BOT_DELAY=1200; // pause before a bot acts, so its move is readable on screen
@@ -15,8 +16,9 @@ const CHAT_COLORS=new Set(['#ffffff','#f0d080','#ff6b6b','#6bff8f','#6bb6ff','#f
 // [4-8]  = dora indicators  (dora[0] = deadWall[4], revealed on kan = deadWall[5..8])
 // [9-13] = ura dora indicators (revealed only on riichi win)
 
-// One Room = one 4-seat table for a full game (tonpuu/hanchan). `this.seats`
-// holds up to 4 player-or-bot entries (index = seat number, stable for the
+// One Room = one table (this.numPlayers seats — 4 for standard yonma, 3 for
+// sanma) for a full game (tonpuu/hanchan). `this.seats` holds up to
+// numPlayers player-or-bot entries (index = seat number, stable for the
 // whole game); `this.game` holds all per-game/per-round mutable state and is
 // null until start() is called. mahjong.js has no knowledge of turn order or
 // the wall — this class owns the state machine and calls into mahjong.js
@@ -26,23 +28,46 @@ const CHAT_COLORS=new Set(['#ffffff','#f0d080','#ff6b6b','#6bff8f','#6bb6ff','#f
 // Call priority when a discard can be reacted to (ron/pon/kan/chi): ron
 // always wins if anyone can ron; among calls, pon/kan (either) beat chi;
 // chi is further restricted to the player sitting immediately after the
-// discarder. See _checkReactions/_resolveReactions.
+// discarder — and is disabled entirely in sanma (this.rules.sanma). See
+// _checkReactions/_resolveReactions.
 //
 // `g.pending` (set while waiting on ron/pon/chi/kan responses to a discard,
 // or on chankan responses to an added kan) has the shape:
 //   {tile, fromSeat, seats:[...reacting seats], options:[{seat,options}],
 //    responses:{seat: {type, ...}}, timer, isChankan?}
 class Room {
-  constructor(gameMode='tonpuu', difficulty='normal'){
+  constructor(gameMode='tonpuu', difficulty='normal', rules={}, numPlayers=4){
     this.id=++_roomId;
     this.phase='waiting';
-    this.gameMode=gameMode; // 'tonpuu' (4 rounds) or 'hanchan' (8 rounds)
+    this.gameMode=gameMode; // 'tonpuu' (3/4 rounds) or 'hanchan' (6/8 rounds)
     this.difficulty=difficulty; // 'easy'|'normal'|'hard', stamped onto bots at _makeBot time
-    this.seats=[null,null,null,null];
+    this.numPlayers=numPlayers===3?3:4; // 3 (sanma) or 4 (yonma, default)
+    // Rule variants, picked once in the lobby before the match starts (like
+    // gameMode) — !==false means anything other than an explicit `false`
+    // (including undefined) stays on, matching each toggle's "opt out" framing.
+    // `sanma` is derived from numPlayers, not independently settable — it's
+    // the single source of truth every 3-vs-4-seat branch reads from.
+    this.rules={
+      akaDora: rules.akaDora!==false,
+      kuitanAri: rules.kuitanAri!==false,
+      doubleRon: rules.doubleRon!==false,
+      nagashiMangan: rules.nagashiMangan!==false,
+      sanma: this.numPlayers===3,
+    };
+    this.seats=new Array(this.numPlayers).fill(null);
     this.ready=new Set();
     this.roundReady=new Set();
     this.pendingNextRound=null;
     this.game=null;
+  }
+
+  // Hands per wind round = number of dealers = numPlayers (3 for sanma, 4
+  // for yonma). tonpuu (East only) = numPlayers hands; hanchan (East+South)
+  // = numPlayers*2. Centralizing this avoids the `gameMode==="hanchan"?8:4`
+  // ternary (previously repeated verbatim at every round/game-end site)
+  // silently drifting out of sync with numPlayers.
+  _maxRound(){
+    return this.numPlayers*(this.gameMode==='hanchan'?2:1);
   }
 
   addHuman(player){
@@ -78,7 +103,7 @@ class Room {
   totalCount(){ return this.seats.filter(Boolean).length; }
 
   fillBots(){
-    for(let i=0;i<4;i++){
+    for(let i=0;i<this.numPlayers;i++){
       if(!this.seats[i]) this.seats[i]=this._makeBot(i);
     }
     this._broadcastRoomUpdate();
@@ -104,7 +129,7 @@ class Room {
   setBotDifficulty(playerId, seat, difficulty){
     const p=this.seats.find(p=>p&&!p.isBot&&p.id===playerId);
     if(!p||this.phase!=='waiting') return;
-    if(!Number.isInteger(seat)||seat<0||seat>3) return;
+    if(!Number.isInteger(seat)||seat<0||seat>=this.numPlayers) return;
     if(!['easy','normal','hard'].includes(difficulty)) return;
     const bot=this.seats[seat];
     if(!bot||!bot.isBot) return;
@@ -138,22 +163,23 @@ class Room {
   // _resolveNagashi (next round after a win/draw).
   _initRound(){
     const g=this.game;
-    const wall=shuffle(buildWall());
-    const hands=[0,1,2,3].map(()=>[]);
-    for(let i=0;i<52;i++) hands[i%4].push(wall.shift());
+    const n=this.numPlayers;
+    const wall=shuffle(buildWall(this.rules.akaDora,this.rules.sanma));
+    const hands=Array.from({length:n},()=>[]);
+    for(let i=0;i<13*n;i++) hands[i%n].push(wall.shift());
     const deadWall=wall.splice(-14);
 
     g.wall=wall;
     g.deadWall=deadWall;
     g.hands=hands.map(h=>sort(h));
-    g.discards=[[],[],[],[]];
-    g.melds=[[],[],[],[]];
+    g.discards=Array.from({length:n},()=>[]);
+    g.melds=Array.from({length:n},()=>[]);
     g.dora=[deadWall[4]];
-    g.riichi=[false,false,false,false];
-    g.doubleRiichi=[false,false,false,false]; // track double riichi separately
-    g.ippatsu=[false,false,false,false];
-    g.furiten=[false,false,false,false];     // permanent furiten (discarded own wait)
-    g.tempFuriten=[false,false,false,false]; // temporary furiten (passed a ron opportunity)
+    g.riichi=new Array(n).fill(false);
+    g.doubleRiichi=new Array(n).fill(false); // track double riichi separately
+    g.ippatsu=new Array(n).fill(false);
+    g.furiten=new Array(n).fill(false);     // permanent furiten (discarded own wait)
+    g.tempFuriten=new Array(n).fill(false); // temporary furiten (passed a ron opportunity)
     g.pending=null;
     g.drawTile=null;
     g.riichiTile={};
@@ -164,24 +190,33 @@ class Room {
     g.haiteiNext=false;
     g.firstRound=true;   // for double riichi / tenhou / chiihou detection
     g.turnCount=0;       // total discards this round
-    g.nagashi=[true,true,true,true]; // nagashi eligibility per seat
+    g.nagashi=new Array(n).fill(true); // nagashi eligibility per seat
+    g.kita=Array.from({length:n},()=>[]); // sanma: banked North-tile bonus draws per seat
   }
 
   start(){
-    if(this.phase!=='waiting'||this.totalCount()<4) return;
+    if(this.phase!=='waiting'||this.totalCount()<this.numPlayers) return;
     this.phase='playing';
-    const startDealer=Math.floor(Math.random()*4);
+    const startDealer=Math.floor(Math.random()*this.numPlayers);
+    // Sanma conventionally starts with more points per player (one fewer
+    // opponent to redistribute among) — 35000 is the standard Tenhou/club
+    // default; yonma keeps the existing 25000.
+    const startScore=this.rules.sanma?35000:25000;
     this.game={
-      scores:[25000,25000,25000,25000],
+      scores:new Array(this.numPlayers).fill(startScore),
       turn:startDealer,
       dealer:startDealer,
-      round:1,        // overall hand counter: 1-4=East round, 5-8=South round (hanchan)
+      round:1,        // overall hand counter: 1..numPlayers=East round, next numPlayers=South (hanchan)
       roundWind:1,    // derived from round: 1=East, 2=South (see _roundWindValue)
       honba:0,
       riichiSticks:0,
+      // Per-game (not per-round — persists across _initRound calls) hand
+      // stats accumulator, fed into recordGameResult() at game end. See
+      // _finishGame/_recordHandWin.
+      stats:new Array(this.numPlayers).fill(0).map(()=>({riichi:0,wins:0,tsumo:0,ron:0,dealIn:0,bestHan:0,bestScore:0,yaku:{}})),
     };
     this._initRound();
-    this._broadcastAll({type:'game_start',seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer});
+    this._broadcastAll({type:'game_start',seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma});
     setTimeout(()=>this._draw(),2000);
   }
 
@@ -220,11 +255,16 @@ class Room {
     this._botTurn(seat);
   }
 
-  // Bot's own-turn decision priority: ankan > tsumo > riichi > (forced
-  // discard of the drawn tile if already in riichi) > best discard. Note a
-  // riichi'd bot never attempts ankan here even though it can be legal
-  // (see _ankan's wait-preserving check) — this is a deliberate simplicity
-  // tradeoff in the bot AI, not a rules bug.
+  // Bot's own-turn decision priority: ankan > tsumo > kita (sanma only) >
+  // riichi > (forced discard of the drawn tile if already in riichi) > best
+  // discard. Note a riichi'd bot never attempts ankan here even though it
+  // can be legal (see _ankan's wait-preserving check) — this is a
+  // deliberate simplicity tradeoff in the bot AI, not a rules bug. Kita is
+  // checked after tsumo (never forgo an available win to bank a bonus
+  // tile first) but before riichi — it's strictly beneficial (free future
+  // han, no downside) whenever available and un-riichi'd, and ends in a
+  // fresh replacement draw that re-enters _botTurn via the BOT_DELAY
+  // callback _kita schedules, so this function runs again on the new tile.
   _botTurn(seat){
     const g=this.game;
     if(!g||g.turn!==seat||this.phase!=='playing') return;
@@ -240,8 +280,13 @@ class Room {
       const isHaitei=g.haiteiNext&&!g.isRinshan;
       const winKey=g.drawTile?key(g.drawTile):null;
       const {han}=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),
-        g.riichi[seat],g.ippatsu[seat],g.doubleRiichi[seat],g.isRinshan,false,isHaitei,false,false,false,winKey);
+        g.riichi[seat],g.ippatsu[seat],g.doubleRiichi[seat],g.isRinshan,false,isHaitei,false,false,false,winKey,
+        {kuitanAri:this.rules.kuitanAri});
       if(han>0){this._tsumo(seat);return;}
+    }
+    if(this.rules.sanma&&!g.riichi[seat]){
+      const kitaTile=hand.find(t=>key(t)==='4z');
+      if(kitaTile){this._kita(seat,kitaTile.id);return;}
     }
     if(!g.riichi[seat]&&!g.melds[seat].length&&g.scores[seat]>=1000){
       const tid=this._findRiichiTile(seat);
@@ -257,7 +302,7 @@ class Room {
 
   _findRiichiTile(seat){
     const hand=this.game.hands[seat];
-    for(const t of hand){if(waits(hand.filter(x=>x.id!==t.id)).length>0) return t.id;}
+    for(const t of hand){if(waits(hand.filter(x=>x.id!==t.id),undefined,this.rules.sanma).length>0) return t.id;}
     return null;
   }
 
@@ -297,7 +342,7 @@ class Room {
     // while passing through a non-tenpai stretch of the hand.
     const g=this.game;
     const hand=g.hands[seat];
-    const ws=waits(hand,g.melds[seat]);
+    const ws=waits(hand,g.melds[seat],this.rules.sanma);
     const myDiscards=g.discards[seat].map(key);
     g.furiten[seat]=ws.some(w=>myDiscards.includes(w));
   }
@@ -337,6 +382,7 @@ class Room {
     else if(act.type==='riichi'&&g.turn===seat) this._riichi(seat,act.tileId);
     else if(act.type==='ankan'&&g.turn===seat) this._ankan(seat,act.tileKey);
     else if(act.type==='kakan'&&g.turn===seat) this._kakan(seat,act.tileId);
+    else if(act.type==='kita'&&g.turn===seat) this._kita(seat,act.tileId);
     else if(act.type==='ron') this._reactResponse(seat,{type:'ron'});
     else if(act.type==='pon') this._reactResponse(seat,{type:'pon'});
     else if(act.type==='kan') this._reactResponse(seat,{type:'kan'});
@@ -389,7 +435,7 @@ class Room {
     if(!isTermHon) g.nagashi[seat]=false;
 
     // After first discard by all players, firstRound ends
-    if(g.turnCount>=4) g.firstRound=false;
+    if(g.turnCount>=this.numPlayers) g.firstRound=false;
 
     // Update permanent furiten for this player
     this._updateFuriten(seat);
@@ -418,14 +464,15 @@ class Room {
   // Collects every seat's available reaction options to a just-discarded
   // tile (ron/pon/kan/chi). This only computes what's *offered* to each
   // seat — it does not resolve priority between them; that happens once all
-  // responses are in, in _resolveReactions. seat===(fromSeat+1)%4 is the
-  // discarder's shimocha (the seat that plays right after them in turn
+  // responses are in, in _resolveReactions. seat===(fromSeat+1)%numPlayers is
+  // the discarder's shimocha (the seat that plays right after them in turn
   // order) — the discarder is THAT player's kamicha, and chi may only be
-  // called from your kamicha, so this is the only seat ever offered chi.
+  // called from your kamicha, so this is the only seat ever offered chi
+  // (sanma disables chi outright — see the sanma check below).
   _checkReactions(fromSeat,tile){
     const g=this.game;
     const reactions=[];
-    for(let seat=0;seat<4;seat++){
+    for(let seat=0;seat<this.numPlayers;seat++){
       if(seat===fromSeat) continue;
       const hand=g.hands[seat],opts=[];
 
@@ -434,13 +481,18 @@ class Room {
         const sw=this._seatWindOf(seat);
         const isDblRiichi=g.doubleRiichi[seat];
         const {han}=detectYaku([...hand,tile],g.melds[seat],false,sw,this._roundWindValue(),
-          g.riichi[seat],g.ippatsu[seat],isDblRiichi,false,false,false,g.haiteiNext,false,false,key(tile));
+          g.riichi[seat],g.ippatsu[seat],isDblRiichi,false,false,false,g.haiteiNext,false,false,key(tile),
+          {kuitanAri:this.rules.kuitanAri});
         if(han>0) opts.push({type:'ron'});
       }
       if(!g.riichi[seat]){
         if(canPon(hand,tile)) opts.push({type:'pon'});
         if(canKan(hand,tile)&&g.kanCount<4) opts.push({type:'kan'});
-        if(seat===(fromSeat+1)%4){
+        // Chi is disabled entirely in sanma (standard rule — there's no
+        // well-defined "player to your left" call worth keeping with only
+        // 3 seats), so this branch is skipped outright rather than just
+        // narrowing eligibility.
+        if(!this.rules.sanma&&seat===(fromSeat+1)%this.numPlayers){
           const seqs=canChi(hand,tile);
           if(seqs.length) opts.push({type:'chi',sequences:seqs});
         }
@@ -522,6 +574,17 @@ class Room {
   // ── Multiple Ron ───────────────────────────────────────────────────────────
   _multiRon(winSeats,loseSeat,tile){
     const g=this.game;
+    // Atama-hane: when double/triple ron is disabled, only the winner
+    // closest to the discarder (in turn order) actually wins — the others
+    // are dropped before any scoring happens. Same distance formula the
+    // riichi-stick assignment below already uses for this same "closest to
+    // loseSeat" question.
+    if(!this.rules.doubleRon && winSeats.length>1){
+      winSeats=[winSeats.reduce((best,s)=>{
+        const dist=(s-loseSeat+this.numPlayers)%this.numPlayers, bestDist=(best-loseSeat+this.numPlayers)%this.numPlayers;
+        return dist<bestDist?s:best;
+      },winSeats[0])];
+    }
     const results=[];
     for(const winSeat of winSeats){
       const hand=[...g.hands[winSeat],tile];
@@ -529,19 +592,21 @@ class Room {
       const isHoutei=g.haiteiNext&&!g.isRinshan;
       const isDblRiichi=g.doubleRiichi[winSeat];
       const {han,yakuList}=detectYaku(hand,g.melds[winSeat],false,sw,this._roundWindValue(),
-        g.riichi[winSeat],g.ippatsu[winSeat],isDblRiichi,false,false,false,isHoutei,false,false,key(tile));
+        g.riichi[winSeat],g.ippatsu[winSeat],isDblRiichi,false,false,false,isHoutei,false,false,key(tile),
+        {kuitanAri:this.rules.kuitanAri});
       if(han===0) continue;
       // Ura dora for riichi players
       const uraDora=g.riichi[winSeat]?this._countUraDora(hand):0;
+      const kitaCount=g.kita[winSeat].length;
       const dc=countDora(hand,g.dora)+uraDora+countAkaDora(hand);
-      const totalHan=han+dc;
+      const totalHan=han+dc+kitaCount;
       const decomps=decompose(hand);
       const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
       const fu=decomps.length?calcFu(decomps[0],false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu):30;
       const isWinnerDealer = winSeat === g.dealer;
       const bp=basePoints(totalHan,fu);
       const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300;
-      results.push({winSeat,hand,yakuList,han:totalHan,fu,pay,uraDora,dc});
+      results.push({winSeat,hand,yakuList,han:totalHan,fu,pay,uraDora,dc,kitaCount});
     }
     if(!results.length){this._sendState();return;}
 
@@ -549,8 +614,8 @@ class Room {
     const totalRiichiSticks=g.riichiSticks;
     // Winner closest to loser in turn order gets the riichi sticks
     const closestWinner=winSeats.reduce((best,s)=>{
-      const dist=(s-loseSeat+4)%4;
-      const bestDist=(best-loseSeat+4)%4;
+      const dist=(s-loseSeat+this.numPlayers)%this.numPlayers;
+      const bestDist=(best-loseSeat+this.numPlayers)%this.numPlayers;
       return dist<bestDist?s:best;
     },winSeats[0]);
 
@@ -574,6 +639,7 @@ class Room {
     const yl=primaryRegularDc>0?[...primary.yakuList,{name:'Dora',jp:'ドラ',han:primaryRegularDc}]:[...primary.yakuList];
     if(primary.uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:primary.uraDora});
     if(primaryAkaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:primaryAkaDora});
+    if(primary.kitaCount>0) yl.push({name:'Kita',jp:'北',han:primary.kitaCount});
     this._endRound('ron',primary.winSeat,loseSeat,primary.hand,yl,primary.han,primary.fu,totalLoss,
       results.length>1?results.slice(1):null,prevScores,g.melds[primary.winSeat]);
   }
@@ -664,9 +730,9 @@ class Room {
     const matches=hand.filter(t=>key(t)===tileKey);
     if(matches.length<4) return;
     if(g.riichi[seat]){
-      const before=waits(hand.filter(t=>key(t)!==tileKey));
+      const before=waits(hand.filter(t=>key(t)!==tileKey),undefined,this.rules.sanma);
       // After removing 3 copies, remaining hand (1 copy stays) — compute waits
-      const after=waits(hand.filter(t=>!matches.slice(0,3).map(u=>u.id).includes(t.id)));
+      const after=waits(hand.filter(t=>!matches.slice(0,3).map(u=>u.id).includes(t.id)),undefined,this.rules.sanma);
       const sameWaits=before.length===after.length&&before.every(w=>after.includes(w));
       if(!sameWaits) return;
     }
@@ -704,19 +770,63 @@ class Room {
     this._completeChankan(seat,addTile,ponIdx);
   }
 
+  // ── Kita (sanma only) ────────────────────────────────────────────────────
+  // Banking a North (4z) tile: set it face-up (removed from hand, not part
+  // of any meld), then take an immediate bonus draw. Each banked kita tile
+  // is a flat +1 han bonus on this seat's eventual winning hand (applied in
+  // _tsumo/_multiRon/_ron alongside dora), never a yaku on its own.
+  //
+  // Disallowed once in riichi — same simplicity tradeoff already made for
+  // kakan (see _kakan above): rather than re-deriving whether removing this
+  // exact tile could ever change a locked-in wait, just don't allow it.
+  //
+  // The replacement draw is popped from the TAIL of the live wall, not the
+  // dead wall's 4 rinshan slots — those are reserved for kan and capped at
+  // exactly 4 kans; sourcing kita from the same slots risks running past
+  // that cap (kan count + kita count could exceed 4) and colliding with the
+  // dora-indicator slots just past them. This mirrors how the dead wall
+  // itself was carved from the wall's tail at round start (_initRound) — a
+  // real, once-only tile, just sourced differently than a kan's rinshan
+  // draw. Deliberately does NOT set g.isRinshan: kita isn't a kan, so it
+  // carries no Rinshan Kaihou eligibility.
+  _kita(seat,tileId){
+    const g=this.game;
+    if(!this.rules.sanma||g.riichi[seat]) return;
+    if(g.wall.length===0) return; // nothing left to draw as a replacement
+    const hand=g.hands[seat];
+    const tile=hand.find(t=>t.id===tileId&&key(t)==='4z');
+    if(!tile) return;
+    g.hands[seat]=hand.filter(t=>t.id!==tileId);
+    g.kita[seat].push(tile);
+    g.nagashi[seat]=false; // self-initiated action, same precedent as calling pon/chi/kan on your own turn
+    this._broadcastAll({type:'kita',seat,name:this.seats[seat]?.name,count:g.kita[seat].length});
+    const draw=g.wall.pop();
+    if(g.wall.length===0) g.haiteiNext=true;
+    g.drawTile=draw;
+    g.hands[seat]=sort([...g.hands[seat],draw]);
+    g.tempFuriten[seat]=false;
+    // Not a rinshan draw — clear any stale flag from an earlier kan this
+    // same turn so a win off this replacement tile can't wrongly claim
+    // Rinshan Kaihou.
+    g.isRinshan=false;
+    this._sendState();
+    if(this.seats[seat]?.isBot) setTimeout(()=>this._botAct(seat),BOT_DELAY);
+  }
+
   // Any tenpai (non-furiten) player waiting on the tile being added to a kan
   // may rob it, not just players in riichi — riichi is just one of several
   // ways to have a valid yaku, same as for a normal ron.
   _checkChankan(fromSeat,tile){
     const g=this.game;
     const reactions=[];
-    for(let seat=0;seat<4;seat++){
+    for(let seat=0;seat<this.numPlayers;seat++){
       if(seat===fromSeat) continue;
       const hand=g.hands[seat];
       if(!this._isFuriten(seat)&&isWin([...hand,tile],g.melds[seat])){
         const sw=this._seatWindOf(seat);
         const {han}=detectYaku([...hand,tile],g.melds[seat],false,sw,this._roundWindValue(),
-          g.riichi[seat],g.ippatsu[seat],g.doubleRiichi[seat],false,true,false,false,false,false,key(tile));
+          g.riichi[seat],g.ippatsu[seat],g.doubleRiichi[seat],false,true,false,false,false,false,key(tile),
+          {kuitanAri:this.rules.kuitanAri});
         if(han>0) reactions.push({seat,options:[{type:'ron'}]});
       }
     }
@@ -780,9 +890,10 @@ class Room {
     const g=this.game;
     if(g.riichi[seat]||g.scores[seat]<1000) return;
     const hand=g.hands[seat];
-    if(waits(hand.filter(t=>t.id!==tileId),g.melds[seat]).length===0) return;
+    if(waits(hand.filter(t=>t.id!==tileId),g.melds[seat],this.rules.sanma).length===0) return;
     g.riichi[seat]=true;
     g.ippatsu[seat]=true;
+    g.stats[seat].riichi++;
     // Double riichi: declared on first discard before any calls have been made
     const isDouble=g.firstRound&&g.melds.every(m=>m.length===0);
     g.doubleRiichi[seat]=isDouble;
@@ -809,13 +920,14 @@ class Room {
 
     const {han,yakuList}=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),
       g.riichi[seat],g.ippatsu[seat],isDblRiichi,g.isRinshan,false,isHaitei,false,isTenhou,isChiihou,
-      g.drawTile?key(g.drawTile):null);
+      g.drawTile?key(g.drawTile):null,{kuitanAri:this.rules.kuitanAri});
     if(han===0) return;
 
     // Ura dora (only on riichi)
     const uraDora=g.riichi[seat]?this._countUraDora(hand):0;
+    const kitaCount=g.kita[seat].length;
     const dc=countDora(hand,g.dora)+uraDora+countAkaDora(hand);
-    const totalHan=han+dc;
+    const totalHan=han+dc+kitaCount;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
     const decomps=decompose(hand);
     const winKey=g.drawTile?key(g.drawTile):null;
@@ -824,7 +936,7 @@ class Room {
     const isDealer=seat===g.dealer;
     const prevScores=[...g.scores];
     let gain=0;
-    for(let i=0;i<4;i++){
+    for(let i=0;i<this.numPlayers;i++){
       if(i===seat) continue;
       const pay=Math.ceil((isDealer?bp*2:i===g.dealer?bp*2:bp)/100)*100+g.honba*100;
       g.scores[i]-=pay;gain+=pay;
@@ -835,6 +947,7 @@ class Room {
     const yl=regularDc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:regularDc}]:yakuList;
     if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
     if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
+    if(kitaCount>0) yl.push({name:'Kita',jp:'北',han:kitaCount});
     this._endRound('tsumo',seat,null,hand,yl,totalHan,fu,gain,undefined,prevScores,g.melds[seat]);
   }
 
@@ -849,12 +962,14 @@ class Room {
     const isHoutei=g.haiteiNext&&!g.isRinshan;
     const isDblRiichi=g.doubleRiichi[winSeat];
     const {han,yakuList}=detectYaku(hand,g.melds[winSeat],false,sw,this._roundWindValue(),
-      g.riichi[winSeat],g.ippatsu[winSeat],isDblRiichi,false,isChankan,false,isHoutei,false,false,key(tile));
+      g.riichi[winSeat],g.ippatsu[winSeat],isDblRiichi,false,isChankan,false,isHoutei,false,false,key(tile),
+      {kuitanAri:this.rules.kuitanAri});
     if(han===0){this._sendState();return;}
 
     const uraDora=g.riichi[winSeat]?this._countUraDora(hand):0;
+    const kitaCount=g.kita[winSeat].length;
     const dc=countDora(hand,g.dora)+uraDora+countAkaDora(hand);
-    const totalHan=han+dc;
+    const totalHan=han+dc+kitaCount;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
     const decomps=decompose(hand);
     const fu=decomps.length?calcFu(decomps[0],false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu):30;
@@ -868,6 +983,7 @@ class Room {
     const yl=regularDc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:regularDc}]:yakuList;
     if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
     if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
+    if(kitaCount>0) yl.push({name:'Kita',jp:'北',han:kitaCount});
     this._endRound('ron',winSeat,loseSeat,hand,yl,totalHan,fu,pay,undefined,prevScores,g.melds[winSeat]);
   }
 
@@ -884,10 +1000,57 @@ class Room {
   // Agariyame: if this is the last kyoku of the game and the dealer both won
   // and is already in the lead, the game ends immediately instead of
   // offering an honba repeat.
+  // Records one won hand into this game's per-seat stats accumulator
+  // (g.stats — see start()). yakuList may be null (multi-ron secondary
+  // winners don't carry a full yaku breakdown, only han/fu/payment).
+  _recordHandWin(seat,reason,han,fu,yakuList,payment){
+    const g=this.game;
+    const st=g.stats[seat];
+    st.wins++;
+    if(reason==='tsumo') st.tsumo++; else st.ron++;
+    if(han>st.bestHan) st.bestHan=han;
+    if(payment>st.bestScore) st.bestScore=payment;
+    if(yakuList) for(const y of yakuList) st.yaku[y.name]=(st.yaku[y.name]||0)+1;
+  }
+
+  // Ranks seats by final score, descending; ties keep seat order (stable
+  // sort), matching the client's own placement sort in onGameOver.
+  _computePlacements(scores){
+    const order=scores.map((s,i)=>i).sort((a,b)=>scores[b]-scores[a]);
+    const placements=new Array(scores.length);
+    order.forEach((seat,rank)=>{placements[seat]=rank+1;});
+    return placements;
+  }
+
+  // Single place every "the game is over" path funnels through — guarantees
+  // recordGameResult fires exactly once per game regardless of which ending
+  // triggered it (bust/tobi, normal end-of-match, agariyame, draw-out,
+  // nagashi). `extra` carries reason-specific fields (e.g. {bust}).
+  _finishGame(reason,extra={}){
+    const g=this.game;
+    this.phase='done';
+    this._broadcastAll({type:'game_over',reason,scores:g.scores,
+      playerNames:this.seats.map(p=>p?.name||'—'),...extra});
+    recordGameResult({
+      playerNames:this.seats.map(p=>p?.name||null),
+      isBot:this.seats.map(p=>!p||p.isBot),
+      finalScores:g.scores,
+      placements:this._computePlacements(g.scores),
+      handStats:g.stats,
+    });
+  }
+
   _endRound(reason,winner,loser,hand,yakuList,han,fu,payment,extraWinners,prevScores,melds){
     const g=this.game;
     // Tobi check (bankruptcy)
     const bust=g.scores.findIndex(s=>s<0);
+
+    // Per-game hand-stats bookkeeping (feeds recordGameResult at game end).
+    if(reason==='tsumo'||reason==='ron'){
+      this._recordHandWin(winner,reason,han,fu,yakuList,payment);
+      if(reason==='ron') g.stats[loser].dealIn++;
+      if(extraWinners) for(const r of extraWinners) this._recordHandWin(r.winSeat,'ron',r.han,r.fu,null,r.pay);
+    }
 
     // Nagashi Mangan check (exhaustive draw only)
     if(reason==='draw'){
@@ -898,7 +1061,7 @@ class Room {
         // All discards must be terminals/honours (already tracked via nagashi flag)
         return true;
       });
-      if(nagashiSeats.some(Boolean)){
+      if(this.rules.nagashiMangan && nagashiSeats.some(Boolean)){
         this._resolveNagashi(nagashiSeats);
         return;
       }
@@ -919,8 +1082,7 @@ class Room {
       if(dealerWon){
         // Dealer wins → normally repeat (honba+1)
         // Agariyame: if it's the final kyoku and dealer is in 1st place, end instead
-        const maxRound=this.gameMode==="hanchan"?8:4;
-        const isLastKyoku=g.round>=maxRound;
+        const isLastKyoku=g.round>=this._maxRound();
         const dealerScore=g.scores[g.dealer];
         const dealerIsFirst=g.scores.every(s=>s<=dealerScore);
         if(isLastKyoku&&dealerIsFirst){
@@ -935,9 +1097,7 @@ class Room {
             melds:melds||[],
             gameOver:true,
           });
-          this.phase='done';
-          this._broadcastAll({type:'game_over',reason:'tobi',bust,scores:g.scores,
-  playerNames:this.seats.map(p=>p?.name||'—')});
+          this._finishGame('tobi',{bust});
           return;
         }
         newHonba=g.honba+1;
@@ -945,7 +1105,7 @@ class Room {
       } else {
         // Non-dealer wins → advance dealer and kyoku
         newHonba=0;
-        newDealer=(g.dealer+1)%4;
+        newDealer=(g.dealer+1)%this.numPlayers;
         newRound=g.round+1;
       }
     } else {
@@ -954,9 +1114,9 @@ class Room {
       newRiichiSticks=g.riichiSticks;
     }
 
-    // Derive wind from round number: rounds 1-4=East, 5-8=South
-    const newRoundWind=Math.ceil(newRound/4);
-    const maxRound=this.gameMode==="hanchan"?8:4;
+    // Derive wind from round number: first numPlayers hands=East, next numPlayers=South
+    const newRoundWind=Math.ceil(newRound/this.numPlayers);
+    const maxRound=this._maxRound();
     const isGameOver=bust>=0||newRound>maxRound;
 
     this._broadcastAll({type:'round_end',reason,winner,loser,hand,yakuList,han,fu,payment,
@@ -976,16 +1136,12 @@ class Room {
 
     // Game over conditions
     if(bust>=0){
-      this.phase='done';
-      this._broadcastAll({type:'game_over',reason:'tobi',bust,scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')});
+      this._finishGame('tobi',{bust});
       return;
     }
 
     if(newRound>maxRound){
-      this.phase='done';
-      this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')});
+      this._finishGame('end');
       return;
     }
 
@@ -1002,8 +1158,8 @@ class Room {
       if(this.phase!=='playing') return;
       g.turn=newDealer;
       this._initRound();
-      const dispWind=Math.ceil(newRound/4);
-      const dispRound=((newRound-1)%4)+1;
+      const dispWind=Math.ceil(newRound/this.numPlayers);
+      const dispRound=((newRound-1)%this.numPlayers)+1;
       this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:dispWind,displayRound:dispRound,
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
@@ -1019,30 +1175,30 @@ class Room {
   _resolveTenpaiPayments(){
     const g=this.game;
     const inTenpai=g.hands.map((hand,seat)=>{
-      return waits(hand,g.melds[seat]).length>0;
+      return waits(hand,g.melds[seat],this.rules.sanma).length>0;
     });
     const tenpaiCount=inTenpai.filter(Boolean).length;
-    const notenCount=4-tenpaiCount;
+    const notenCount=this.numPlayers-tenpaiCount;
 
-    let payments=[0,0,0,0];
+    let payments=new Array(this.numPlayers).fill(0);
     const prevScores=[...g.scores];
     if(tenpaiCount>0&&notenCount>0){
       // Standard: 3000 total split. Noten pays, tenpai receives.
       const totalPot=3000;
       const notPayEach=Math.floor(totalPot/notenCount);
       const tenpaiRecEach=Math.floor((notPayEach*notenCount)/tenpaiCount);
-      for(let i=0;i<4;i++){
+      for(let i=0;i<this.numPlayers;i++){
         if(inTenpai[i]) payments[i]=tenpaiRecEach;
         else { payments[i]=-notPayEach; g.scores[i]-=notPayEach; }
       }
-      for(let i=0;i<4;i++){
+      for(let i=0;i<this.numPlayers;i++){
         if(inTenpai[i]) g.scores[i]+=tenpaiRecEach;
       }
     }
 
     const tenpaiHands=g.hands.map((h,i)=>inTenpai[i]?h:null);
     const drawBust=g.scores.findIndex(s=>s<0);
-    const drawMaxRound=this.gameMode==="hanchan"?8:4;
+    const drawMaxRound=this._maxRound();
     let drawNewRound=g.round; if(!inTenpai[g.dealer]) drawNewRound=g.round+1;
     const drawGameOver=drawBust>=0||drawNewRound>drawMaxRound;
     // Every draw adds a honba regardless of dealer-repeat/advance; riichi
@@ -1063,23 +1219,19 @@ class Room {
     let newDealer=g.dealer;
     let newRound=g.round;
     if(!dealerTenpai){
-      newDealer=(g.dealer+1)%4;
+      newDealer=(g.dealer+1)%this.numPlayers;
       newRound=g.round+1;
     }
-    const newRoundWind=Math.ceil(newRound/4);
+    const newRoundWind=Math.ceil(newRound/this.numPlayers);
 
     const bust=g.scores.findIndex(s=>s<0);
     if(bust>=0){
-      this.phase='done';
-      this._broadcastAll({type:'game_over',reason:'tobi',bust,scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')});
+      this._finishGame('tobi',{bust});
       return;
     }
-    const maxRound=this.gameMode==="hanchan"?8:4;
+    const maxRound=this._maxRound();
     if(newRound>maxRound){
-      this.phase='done';
-      this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')});
+      this._finishGame('end');
       return;
     }
 
@@ -1091,8 +1243,8 @@ class Room {
       if(this.phase!=='playing') return;
       g.turn=newDealer;
       this._initRound();
-      const dispWind=Math.ceil(newRound/4);
-      const dispRound=((newRound-1)%4)+1;
+      const dispWind=Math.ceil(newRound/this.numPlayers);
+      const dispRound=((newRound-1)%this.numPlayers)+1;
       this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:dispWind,displayRound:dispRound,
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
@@ -1110,18 +1262,19 @@ class Room {
     // Nagashi Mangan: scored exactly like a tsumo mangan (2000 base points,
     // same ×1/×2 tsumo split as any other tsumo win) — dealer-as-winner
     // collects double from everyone, dealer-as-payer pays double.
-    for(let winner=0;winner<4;winner++){
+    for(let winner=0;winner<this.numPlayers;winner++){
       if(!nagashiSeats[winner]) continue;
+      g.stats[winner].wins++;
       const isDealer=winner===g.dealer;
       let gain=0;
-      for(let payer=0;payer<4;payer++){
+      for(let payer=0;payer<this.numPlayers;payer++){
         if(payer===winner) continue;
         const pay=Math.ceil((isDealer?2000*2:payer===g.dealer?2000*2:2000)/100)*100;
         g.scores[payer]-=pay; gain+=pay;
       }
       g.scores[winner]+=gain;
     }
-    const nagashiMaxRound=this.gameMode==="hanchan"?8:4;
+    const nagashiMaxRound=this._maxRound();
     const nagashiNewRound=nagashiSeats[g.dealer]?g.round:g.round+1;
     const nagashiGameOver=nagashiNewRound>nagashiMaxRound;
     // Nagashi mangan is scored as a tsumo but is still fundamentally a draw
@@ -1136,15 +1289,13 @@ class Room {
     const dealerNagashi=nagashiSeats[g.dealer];
     let newDealer=g.dealer,newRound=g.round;
     if(!dealerNagashi){
-      newDealer=(g.dealer+1)%4;
+      newDealer=(g.dealer+1)%this.numPlayers;
       newRound=g.round+1;
     }
-    const newRoundWind=Math.ceil(newRound/4);
-    const maxRound=this.gameMode==="hanchan"?8:4;
+    const newRoundWind=Math.ceil(newRound/this.numPlayers);
+    const maxRound=this._maxRound();
     if(newRound>maxRound){
-      this.phase='done';
-      this._broadcastAll({type:'game_over',reason:'end',scores:g.scores,
-        playerNames:this.seats.map(p=>p?.name||'—')});
+      this._finishGame('end');
       return;
     }
     g.dealer=newDealer;g.round=newRound;g.roundWind=newRoundWind;
@@ -1155,8 +1306,8 @@ class Room {
       if(this.phase!=='playing') return;
       g.turn=newDealer;
       this._initRound();
-      const dispWind=Math.ceil(newRound/4);
-      const dispRound=((newRound-1)%4)+1;
+      const dispWind=Math.ceil(newRound/this.numPlayers);
+      const dispRound=((newRound-1)%this.numPlayers)+1;
       this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:dispWind,displayRound:dispRound,
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
@@ -1166,15 +1317,17 @@ class Room {
 
   _nextTurn(){
     const g=this.game;
-    g.turn=(g.turn+1)%4;
+    g.turn=(g.turn+1)%this.numPlayers;
     this._draw();
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   _seatWindOf(seat){
-    // Seat wind relative to dealer: dealer=1(East), +1 each seat
+    // Seat wind relative to dealer: dealer=1(East), +1 each seat. In sanma
+    // this naturally only ever produces 1-3 (East/South/West) — seat 4
+    // (North) simply never exists as a seat to compute a wind for.
     const g=this.game;
-    return ((seat-g.dealer+4)%4)+1;
+    return ((seat-g.dealer+this.numPlayers)%this.numPlayers)+1;
   }
 
   // Round wind for yaku (1=East, 2=South). g.roundWind is already stored as
@@ -1202,13 +1355,13 @@ class Room {
   _sendState(){
     const g=this.game;
     if(!g) return;
-    for(let seat=0;seat<4;seat++){
+    for(let seat=0;seat<this.numPlayers;seat++){
       const p=this.seats[seat];
       if(!p||p.isBot) continue;
       const hand=g.hands[seat];
       // Calculate waits from 13-tile hand (excluding draw tile if present)
       const dt=g.turn===seat?g.drawTile:null;
-      const w=waits(hand,g.melds[seat]);
+      const w=waits(hand,g.melds[seat],this.rules.sanma);
       // "Full" (post-draw) hand size shrinks below 14 once any kan has been
       // called this hand — same accounting as isWin/waits in mahjong.js:
       // hand.length === 14 - physicalMeldTiles + numKans. A flat 14 check
@@ -1219,7 +1372,7 @@ class Room {
       const fullHandSize=14-meldTileCount+numKans;
       let canRiichi=[];
       if(hand.length===fullHandSize&&isMenzen(g.melds[seat])&&!g.riichi[seat]&&g.scores[seat]>=1000){
-        canRiichi=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id),g.melds[seat]).length>0).map(t=>t.id);
+        canRiichi=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id),g.melds[seat],this.rules.sanma).length>0).map(t=>t.id);
       }
       let canAnkan=[];
       if(g.turn===seat&&hand.length===fullHandSize){
@@ -1230,12 +1383,16 @@ class Room {
           // In riichi: only allow ankan if waits don't change
           canAnkan=Object.entries(c).filter(([k,n])=>{
             if(n!==4) return false;
-            const before=waits(hand.filter(t=>key(t)!==k));
+            const before=waits(hand.filter(t=>key(t)!==k),undefined,this.rules.sanma);
             const matches=hand.filter(t=>key(t)===k);
-            const after=waits(hand.filter(t=>!matches.slice(0,3).map(u=>u.id).includes(t.id)));
+            const after=waits(hand.filter(t=>!matches.slice(0,3).map(u=>u.id).includes(t.id)),undefined,this.rules.sanma);
             return before.length===after.length&&before.every(w=>after.includes(w));
           }).map(([k])=>k);
         }
+      }
+      let canKita=[];
+      if(this.rules.sanma&&g.turn===seat&&!g.riichi[seat]&&hand.length===fullHandSize&&g.wall.length>0){
+        canKita=hand.filter(t=>key(t)==='4z').map(t=>t.id);
       }
       let canKakan=[];
       if(g.turn===seat&&!g.riichi[seat]&&g.drawTile){
@@ -1259,7 +1416,8 @@ class Room {
         const isDblRiichi=g.doubleRiichi[seat];
         const winKey=g.drawTile?key(g.drawTile):null;
         const {han}=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),
-          g.riichi[seat],g.ippatsu[seat],isDblRiichi,g.isRinshan,false,g.haiteiNext,false,false,false,winKey);
+          g.riichi[seat],g.ippatsu[seat],isDblRiichi,g.isRinshan,false,g.haiteiNext,false,false,false,winKey,
+          {kuitanAri:this.rules.kuitanAri});
         return han>0;
       })();
       // Send hand split: main hand (without draw tile) + draw tile separately
@@ -1272,15 +1430,16 @@ class Room {
         new Set(hand.map(t=>key(t)).filter(k=>TERMINALS.includes(k))).size>=9;
       this._send(p,{type:'game_state',seat,myHand:mainHand,drawTile:dt,myMelds:g.melds[seat],
         discards:g.discards,melds:g.melds,scores:g.scores,turn:g.turn,
-        round:g.round,roundWind:g.roundWind,displayWind:Math.ceil(g.round/4),displayRound:((g.round-1)%4)+1,dealer:g.dealer,honba:g.honba,
+        round:g.round,roundWind:g.roundWind,displayWind:Math.ceil(g.round/this.numPlayers),displayRound:((g.round-1)%this.numPlayers)+1,dealer:g.dealer,honba:g.honba,
         seatVoiceThemes:this.seats.map(p=>p?.voiceTheme||'Default'),
         riichiSticks:g.riichiSticks,
         dora:g.dora,wallCount:g.wall.length,waits:w,riichi:g.riichi,
         doubleRiichi:g.doubleRiichi,
         furiten:g.furiten[seat]||g.tempFuriten[seat],
-        pending:pendingForMe,canTsumo,canRiichi,canAnkan,canKakan,canKyuushu,
+        pending:pendingForMe,canTsumo,canRiichi,canAnkan,canKakan,canKyuushu,canKita,
+        numPlayers:this.numPlayers,sanma:this.rules.sanma,kita:g.kita,
         oppHandSizes:g.hands.map((h,i)=>i===seat?null:h.length),
-        seatWinds:[0,1,2,3].map(s=>((s-g.dealer+4)%4))});
+        seatWinds:Array.from({length:this.numPlayers},(_,s)=>((s-g.dealer+this.numPlayers)%this.numPlayers))});
     }
   }
 

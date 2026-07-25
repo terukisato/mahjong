@@ -3,7 +3,7 @@
 // Plain Node assertions, no framework — run with: node server/mahjong.test.js
 
 const assert = require('assert');
-const { detectYaku, waitFu, isWin, countDora, calcFu, isMenzen, basePoints, waits, shanten } = require('./mahjong');
+const { detectYaku, waitFu, isWin, countDora, calcFu, isMenzen, basePoints, waits, shanten, buildWall } = require('./mahjong');
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -35,14 +35,14 @@ function Y(hand14, melds = [], opts = {}) {
   const o = Object.assign({
     isTsumo: false, seatWind: 1, roundWind: 1, isRiichi: false, isIppatsu: false,
     isDoubleRiichi: false, isRinshan: false, isChankan: false, isHaitei: false,
-    isHoutei: false, isTenhou: false, isChiihou: false, winTileKey: null,
+    isHoutei: false, isTenhou: false, isChiihou: false, winTileKey: null, rules: {},
   }, opts);
   assert.ok(isWin(hand14, melds),
     `Y(): hand+melds is not a structurally valid win (hand=${hand14.length} tiles, ` +
     `melds=${JSON.stringify(melds.map(m => ({ type: m.type, kanType: m.kanType, n: m.tiles.length })))})`);
   return detectYaku(hand14, melds, o.isTsumo, o.seatWind, o.roundWind, o.isRiichi,
     o.isIppatsu, o.isDoubleRiichi, o.isRinshan, o.isChankan, o.isHaitei, o.isHoutei,
-    o.isTenhou, o.isChiihou, o.winTileKey);
+    o.isTenhou, o.isChiihou, o.winTileKey, o.rules);
 }
 
 function hasYaku(result, name) { return result.yakuList.some(y => y.name === name); }
@@ -887,6 +887,62 @@ test('shanten: open hand (1 pon meld) tenpai on a tanki wait', () => {
   assert.strictEqual(concealed.length, 10); // base13 for 1 pon meld: 13-3+0
   assert.strictEqual(shanten(concealed, melds), 0);
   assert.ok(waits(concealed, melds).includes('7z'));
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Rule variants: aka dora on/off, kuitan ari/nashi
+// ══════════════════════════════════════════════════════════════════════════
+
+test('buildWall(false): no tile is marked as aka dora', () => {
+  const wall = buildWall(false);
+  assert.strictEqual(wall.filter(t => t.red).length, 0);
+});
+
+test('buildWall()/buildWall(true): exactly 3 tiles (one per suit) are aka dora', () => {
+  assert.strictEqual(buildWall().filter(t => t.red).length, 3);
+  assert.strictEqual(buildWall(true).filter(t => t.red).length, 3);
+});
+
+test('kuitanAri=false: Tanyao is disallowed on an OPEN all-simples hand', () => {
+  const hand = [...seq(2, 'm'), ...seq(4, 's'), ...tri(6, 'p'), ...pairT(8, 'p')];
+  const melds = [meld('pon', tri(4, 'p'))];
+  assertHas(Y(hand, melds, { rules: { kuitanAri: true } }), 'Tanyao');
+  assertNotHas(Y(hand, melds, { rules: { kuitanAri: false } }), 'Tanyao');
+});
+
+test('kuitanAri=false: Tanyao still scores on a CLOSED all-simples hand (menzen exemption)', () => {
+  const hand = [...seq(2, 'm'), ...seq(4, 'm'), ...seq(2, 's'), ...tri(6, 'p'), ...pairT(8, 'p')];
+  assertHas(Y(hand, [], { rules: { kuitanAri: false } }), 'Tanyao');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Sanma (3-player): sanma wall drops 2m-8m; waits() must never report a
+// wait on a tile that can't exist in that wall.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('buildWall(true, true): 108 tiles, no 2m-8m present', () => {
+  const wall = buildWall(true, true);
+  assert.strictEqual(wall.length, 108);
+  assert.strictEqual(wall.filter(t => t.s === 'm' && t.v >= 2 && t.v <= 8).length, 0);
+  assert.strictEqual(wall.filter(t => t.s === 'm' && (t.v === 1 || t.v === 9)).length, 8); // 4 copies each of 1m/9m
+});
+
+test('buildWall(true, false) (default): still 136 tiles, unaffected by the sanma param existing', () => {
+  assert.strictEqual(buildWall().length, 136);
+  assert.strictEqual(buildWall(true, false).length, 136);
+});
+
+test('waits(..., sanma=true): never reports a wait on 2m-8m', () => {
+  // Tenpai shape whose only "wait" region touches man numbers: 2m3m waiting
+  // on 1m/4m (a normal ryanmen) plus a filled-out rest of hand — swap in a
+  // shape that would, if evaluated in yonma, also produce a plausible
+  // 2-8m wait so the sanma gate is actually being exercised.
+  const hand = [...seq(2, 'p'), ...seq(4, 'p'), ...seq(2, 's'), ...pairT(9, 's'), T(2, 'm'), T(3, 'm')];
+  const yonmaWaits = waits(hand, []);
+  assert.ok(yonmaWaits.includes('1m') && yonmaWaits.includes('4m'));
+  const sanmaWaits = waits(hand, [], true);
+  assert.ok(!sanmaWaits.includes('4m'), 'sanma waits must never include a dropped tile like 4m');
+  assert.ok(!sanmaWaits.some(w => w.endsWith('m') && w !== '1m' && w !== '9m'));
 });
 
 // ══════════════════════════════════════════════════════════════════════════

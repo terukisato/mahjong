@@ -457,23 +457,34 @@ function svgHon(v,w,h){
 
 // APP STATE
 // Table layout: every seat-indexed value from the server (scores, discards,
-// melds, riichi flags, ...) is in ABSOLUTE seat order (0-3, stable for the
-// whole game). To place a player at a screen position, rotate by your own
-// seat: abs=(mySeat+i)%4, id=P[i] — i.e. P[0]='b' is always mySeat itself
-// (bottom), P[1]='r' is mySeat+1 (your shimocha / next player, drawn on your
-// right per real mahjong table convention), P[2]='t' is across (toimen),
-// P[3]='l' is mySeat+3 (your kamicha / previous player, on your left). This
-// exact `abs=(mySeat+i)%4, id=P[i]` pattern repeats throughout this file
-// (renderState, onRoundStart, etc.) — keep it consistent if you touch it, a
-// mismatch here silently shows the wrong player's info in the wrong seat.
-const P=['b','r','t','l'];
+// melds, riichi flags, ...) is in ABSOLUTE seat order (0..numSeats-1, stable
+// for the whole game). To place a player at a screen position, rotate by
+// your own seat: abs=(mySeat+i)%numSeats, id=P[i] — i.e. P[0]='b' is always
+// mySeat itself (bottom), P[1]='r' is mySeat+1 (your shimocha / next
+// player, drawn on your right per real mahjong table convention), P[2]='t'
+// is across (toimen, 4-player only — sanma has no seat directly across, so
+// P drops it), and the last entry is your kamicha (previous player, on
+// your left). This exact `abs=(mySeat+i)%numSeats, id=P[i]` pattern repeats
+// throughout this file (renderState, onRoundStart, etc.) — keep it
+// consistent if you touch it, a mismatch here silently shows the wrong
+// player's info in the wrong seat. numSeats/P are set once per game, from
+// game_start's numPlayers field (see startGame) — 3 for sanma, 4 otherwise.
+let numSeats=4;
+let P=['b','r','t','l'];
 
 // Core client state — mostly set by onMsg's handlers below. `lastState` is
 // the previous game_state message, kept around so renderState can diff
 // against it (e.g. "did a new pon just happen" for sound effects).
 let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false, discarding=false, pendingGameOver=null;
 
-function show(id){['s-start','s-lobby','s-game','s-end'].forEach(s=>$(s).classList.toggle('hidden',s!==id));}
+// Showing 's-end' deliberately leaves 's-game' un-hidden underneath, so the
+// final board state shows through the darkened round-end/game-over overlay
+// (see #s-end in style.css) instead of a blank screen. Every other target
+// screen still hides all three others as normal.
+function show(id){['s-start','s-lobby','s-game','s-end'].forEach(s=>{
+  if(id==='s-end'&&s==='s-game') return;
+  $(s).classList.toggle('hidden',s!==id);
+});}
 function $(id){return document.getElementById(id);}
 
 
@@ -512,6 +523,7 @@ function onMsg(m){
     return;
   }
   if(m.type==='ready_status'){onReadyStatus(m);return;}
+  if(m.type==='stats'){renderStats(m);return;}
   if(!inGame) return;
   if(m.type==='game_state'){const prev=lastState;lastState=m;discarding=false;renderState(m,prev);}
   else if(m.type==='riichi'){onRiichi(m);}
@@ -539,6 +551,57 @@ function toggleAbout(){
   const open=modal.classList.contains('visible');
   modal.classList.toggle('visible',!open);
   backdrop.classList.toggle('visible',!open);
+}
+
+function toggleRulesModal(){
+  const modal=$('rules-modal');
+  const backdrop=$('rules-backdrop');
+  const open=modal.classList.contains('visible');
+  modal.classList.toggle('visible',!open);
+  backdrop.classList.toggle('visible',!open);
+}
+
+// Fetches this browser's currently-entered name's stats from the server and
+// opens the modal once the response lands (renderStats reveals it) — avoids
+// flashing stale/placeholder content from a previous open.
+function toggleStats(){
+  const modal=$('stats-modal');
+  const backdrop=$('stats-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('stats-body').textContent='Loading…';
+  wss({type:'get_stats',name:($('iname').value.trim()||'Player')});
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+function renderStats(m){
+  const body=$('stats-body');
+  const s=m.stats;
+  if(!s||s.gamesPlayed===0){
+    body.innerHTML=`<p>No games recorded yet for <strong>${escHtml(m.name)}</strong>. Play a full match to start building stats.</p>`;
+    return;
+  }
+  const winRate=((s.gamesWon/s.gamesPlayed)*100).toFixed(1);
+  const avgScore=Math.round(s.totalFinalScore/s.gamesPlayed);
+  const dealInRate=s.handsWon+s.dealIns>0?((s.dealIns/(s.handsWon+s.dealIns))*100).toFixed(1):'0.0';
+  const topYaku=Object.entries(s.yaku).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  let rows=`
+    <div class="sp-row"><span class="sp-label">Games Played</span><span>${s.gamesPlayed}</span></div>
+    <div class="sp-row"><span class="sp-label">1st-Place Finishes</span><span>${s.gamesWon} (${winRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Placements</span><span>1st ${s.placements[0]} · 2nd ${s.placements[1]} · 3rd ${s.placements[2]} · 4th ${s.placements[3]}</span></div>
+    <div class="sp-row"><span class="sp-label">Avg Final Score</span><span>${avgScore.toLocaleString()}</span></div>
+    <div class="sp-row"><span class="sp-label">Hands Won</span><span>${s.handsWon} (Tsumo ${s.tsumoWon} / Ron ${s.ronWon})</span></div>
+    <div class="sp-row"><span class="sp-label">Riichi Declared</span><span>${s.riichiDeclared}</span></div>
+    <div class="sp-row"><span class="sp-label">Deal-Ins</span><span>${s.dealIns} (${dealInRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Best Hand</span><span>${s.bestHan} Han · ${s.bestScore.toLocaleString()} pts</span></div>
+  `;
+  if(topYaku.length){
+    rows+=`<div class="about-section"><div class="about-section-title">Most Common Yaku</div>`;
+    rows+=topYaku.map(([name,count])=>`<div class="sp-row"><span class="sp-label">${escHtml(name)}</span><span>${count}</span></div>`).join('');
+    rows+=`</div>`;
+  }
+  body.innerHTML=rows;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -752,6 +815,7 @@ function toggleMusic(){
 
 // LOBBY
 let gameMode='tonpuu'; // 'tonpuu' or 'hanchan'
+let variant='yonma'; // 'yonma' (4-player, default) or 'sanma' (3-player)
 
 function setMode(mode){
   gameMode=mode;
@@ -759,9 +823,40 @@ function setMode(mode){
   $('btn-hanchan').classList.toggle('active', mode==='hanchan');
 }
 
+function setVariant(v){
+  variant=v;
+  $('btn-yonma').classList.toggle('active', v==='yonma');
+  $('btn-sanma').classList.toggle('active', v==='sanma');
+  const n=v==='sanma'?3:4;
+  $('tonpuu-sub').textContent=`TONPUU · ${n} rounds`;
+  $('hanchan-sub').textContent=`HANCHAN · ${n*2} rounds`;
+  updateSlotCount();
+}
+
+// Waiting-room slot count follows the selected variant even before a
+// room_update confirms it server-side — updateSlots() (below) re-renders
+// with real seat data once the server responds, this just keeps the
+// lobby's placeholder slot count from looking wrong in the meantime.
+function updateSlotCount(){
+  const wrap=$('slots'); if(!wrap) return;
+  const n=variant==='sanma'?3:4;
+  wrap.querySelectorAll('.slot').forEach((el,i)=>{el.style.display=i<n?'':'none';});
+}
+
+// Rule variants — picked once in the lobby, sent with 'join' like gameMode.
+let rules={akaDora:true,kuitanAri:true,doubleRon:true,nagashiMangan:true};
+function toggleRule(name){
+  rules[name]=!rules[name];
+  const btn=$('btn-rule-'+name); if(!btn) return;
+  const on=rules[name];
+  btn.textContent=on?'ON':'OFF';
+  btn.style.background=on?'rgba(42,158,103,.3)':'rgba(80,0,0,.3)';
+  btn.style.borderColor=on?'var(--jl)':'#c82020';
+}
+
 function findMatch(){
   playLobbyMusic();
-  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,voiceTheme:currentVoiceTheme});
+  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,variant,rules,voiceTheme:currentVoiceTheme});
 }
 
 function showWaiting(){
@@ -778,8 +873,12 @@ let lastSeats=null, openDiffPopupSeat=null;
 
 function updateSlots(seats){
   lastSeats=seats;
-  $('wmsg').textContent=`${seats.filter(Boolean).length}/4 players`;
+  $('wmsg').textContent=`${seats.filter(Boolean).length}/${seats.length} players`;
   document.querySelectorAll('.slot').forEach((sl,i)=>{
+    // seats.length is the room's real numPlayers (3 for sanma, 4 otherwise)
+    // — hide any static slot div past that (there are always 4 in the DOM).
+    if(i>=seats.length){ sl.style.display='none'; return; }
+    sl.style.display='';
     const p=seats[i]; sl.innerHTML='';sl.className='slot';sl.onclick=null;
     if(p){
       sl.classList.add('filled');
@@ -839,7 +938,8 @@ function resetLobby(){
   $('cdiv').textContent='';
   $('bready').classList.remove('pressed');
   $('bready').disabled=false;
-  document.querySelectorAll('.slot').forEach(sl=>{sl.innerHTML='<span class="si">🀄</span>';sl.className='slot';});
+  document.querySelectorAll('.slot').forEach(sl=>{sl.innerHTML='<span class="si">🀄</span>';sl.className='slot';sl.style.display='';});
+  updateSlotCount();
   // Hide dora panel and reset chat badge
   $('dora-panel').style.display='none';
   $('chat-bar').style.display='none';
@@ -891,23 +991,30 @@ function startGame(m){
   const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display='none';
   pendingGameOver=null;
   const status=$('ready-status'); if(status) status.textContent='';
+  // numSeats/P are fixed for the whole game — set once here from
+  // game_start's numPlayers (3=sanma, 4=yonma default).
+  numSeats=m.numPlayers||4;
+  P=numSeats===3?['b','r','l']:['b','r','t','l'];
+  document.querySelector('.table')?.classList.toggle('sanma',numSeats===3);
   const seats=m.seats;
-  for(let i=0;i<4;i++){
-    const abs=(mySeat+i)%4,id=P[i],p=seats[abs];
+  for(let i=0;i<numSeats;i++){
+    const abs=(mySeat+i)%numSeats,id=P[i],p=seats[abs];
     $('pn'+id).textContent=i===0?($('iname').value.trim()||'Player'):(p?.name||'—');
     if(i>0){const bt=$('bt'+id);if(bt)bt.textContent=p?.isBot?'CPU':'';}
     $('rs'+id).style.display='none';
   }
-  // Clear board (same as onRoundStart)
+  // Clear board (same as onRoundStart) — clears all 4 positions unconditionally
+  // even in sanma (the 'top' ones are simply hidden via CSS, but stay clean
+  // in case the tab later starts a 4-player game).
   ['hdb','hdt','hdl','hdr','mlb','mlt','mll','mlr'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
   ['dzb','dzt','dzl','dzr'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
   // Set seat winds based on dealer
   const windLabels=['東','南','西','北'];
   const dealer=m.dealer??0;
-  for(let i=0;i<4;i++){
-    const abs=(mySeat+i)%4, id=P[i];
+  for(let i=0;i<numSeats;i++){
+    const abs=(mySeat+i)%numSeats, id=P[i];
     const wb=$('wb'+id);
-    if(wb) wb.textContent=windLabels[(abs-dealer+4)%4];
+    if(wb) wb.textContent=windLabels[(abs-dealer+numSeats)%numSeats];
   }
   // Show game mode in topbar
   const modeLabel=m.gameMode==='hanchan'?'半荘戦':'東風戦';
@@ -920,9 +1027,9 @@ function startGame(m){
 }
 
 // Absolute seat -> screen position id ('b'/'r'/'t'/'l'). The inverse of the
-// `abs=(mySeat+i)%4` pattern used everywhere else — use this one when you
-// have an absolute seat number and need to know where on screen it lives.
-function pid(abs){return P[(abs-mySeat+4)%4];}
+// `abs=(mySeat+i)%numSeats` pattern used everywhere else — use this one when
+// you have an absolute seat number and need to know where on screen it lives.
+function pid(abs){return P[(abs-mySeat+numSeats)%numSeats];}
 
 
 // RENDER STATE — called every time a game_state message arrives (`m` = new
@@ -970,11 +1077,11 @@ function renderState(m, prev){
   $('dora-panel').style.flexDirection='column';
 
   // Scores in centre panel (compass layout: b=bottom=me, t=top, l=left, r=right)
-  // P = ['b','r','t','l'], indexed by (abs - mySeat + 4) % 4
+  // P = ['b','r','t','l'] (or ['b','r','l'] in sanma), indexed by (abs - mySeat + numSeats) % numSeats
   const ctrIds={b:'ctr-s-b',r:'ctr-s-r',t:'ctr-s-t',l:'ctr-s-l'};
   const windLabels=['東','南','西','北'];
-  for(let i=0;i<4;i++){
-    const abs=(mySeat+i)%4,id=P[i];
+  for(let i=0;i<numSeats;i++){
+    const abs=(mySeat+i)%numSeats,id=P[i];
     if(m.scores?.[abs]!==undefined){
       const ctrEl=$(ctrIds[id]);
       if(ctrEl) ctrEl.textContent=m.scores[abs];
@@ -1032,8 +1139,9 @@ function renderState(m, prev){
 
   // Opponent hands — back tiles
   // top: rot180. left/right: now column-layout rotated in CSS, tiles horizontal
-  [[1,'r'],[2,'t'],[3,'l']].forEach(([i,id])=>{
-    const abs=(mySeat+i)%4;
+  // (sanma has no 'top'/toimen opponent — P.slice(1) is just ['r','l'] there)
+  P.slice(1).map((id,idx)=>[idx+1,id]).forEach(([i,id])=>{
+    const abs=(mySeat+i)%numSeats;
     const hd=$('hd'+id);
     if(!hd) return;
     hd.innerHTML='';
@@ -1099,8 +1207,8 @@ function renderState(m, prev){
     if(newDblCount>prevDblCount) playSfx('sfx-double-riichi',riichiSeat>=0?riichiSeat:null);
     else playSfx('sfx-riichi',riichiSeat>=0?riichiSeat:null);
   }
-  for(let i=0;i<4;i++){
-    const abs=(mySeat+i)%4,id=P[i];
+  for(let i=0;i<numSeats;i++){
+    const abs=(mySeat+i)%numSeats,id=P[i];
     const dz=$(dzMap[id]);dz.innerHTML='';
     const tiles=m.discards?.[abs]||[];
     let row=null;
@@ -1128,8 +1236,8 @@ function renderState(m, prev){
     ml.prepend(g);
   }
   // Opponent melds
-  [[1,'r'],[2,'t'],[3,'l']].forEach(([i,id])=>{
-    const abs=(mySeat+i)%4;
+  P.slice(1).map((id,idx)=>[idx+1,id]).forEach(([i,id])=>{
+    const abs=(mySeat+i)%numSeats;
     const ml2=$('ml'+id);
     if(!ml2) return;
     ml2.innerHTML='';
@@ -1143,6 +1251,22 @@ function renderState(m, prev){
       else ml2.prepend(g);          // right: anchor top-right, first meld at top, grows down
     }
   });
+
+  // Kita (sanma only) — banked North tiles, shown face-up in each seat's
+  // meld row (same .mr flex container melds already render into) with a
+  // distinguishing outline (.kita-mg) rather than a whole new positioned
+  // element, since the meld row's layout/positioning is already correct.
+  if(m.sanma&&m.kita){
+    for(let i=0;i<numSeats;i++){
+      const abs=(mySeat+i)%numSeats,id=P[i];
+      const mlEl=$('ml'+id); if(!mlEl) continue;
+      for(const t of(m.kita[abs]||[])){
+        const g=document.createElement('div');g.className='mg kita-mg';
+        g.appendChild(mkElMd(t));
+        mlEl.appendChild(g);
+      }
+    }
+  }
 
   $('tpb').style.display=(m.waits?.length>0&&!m.riichi?.[mySeat]&&!m.furiten)?'':'none';
   let furitenEl=$('furiten-badge');
@@ -1289,6 +1413,13 @@ function drawActions(m){
       else if(canKakan.length===1&&!selId)
         ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:canKakan[0]}}));
     }
+
+    // LEFT: KITA (sanma only) — banks a North tile for a +1 han bonus later;
+    // any candidate tile is functionally identical (they're all 4z), so a
+    // single button covers however many copies happen to be in hand.
+    const canKita=m.canKita||[];
+    if(canKita.length>0)
+      abTile(bar,keyToTile('4z'),'KITA','bkan',()=>wss({type:'action',action:{type:'kita',tileId:canKita[0]}}));
 
     // LEFT: RIICHI
     const canRiichi=m.canRiichi||[];
@@ -1638,10 +1769,10 @@ function onRoundStart(m){
   // ── Update seat winds based on new dealer ────────────────────────────────
   const windLabels2=['東','南','西','北'];
   const dealer=m.dealer??0;
-  for(let i=0;i<4;i++){
-    const abs=(mySeat+i)%4, id=P[i];
+  for(let i=0;i<numSeats;i++){
+    const abs=(mySeat+i)%numSeats, id=P[i];
     const wb=$('wb'+id);
-    if(wb) wb.textContent=windLabels2[(abs-dealer+4)%4];
+    if(wb) wb.textContent=windLabels2[(abs-dealer+numSeats)%numSeats];
   }
 
   // ── Full board reset ──────────────────────────────────────────────────────
@@ -1949,6 +2080,16 @@ function enterLobby(){
     $('s-lobby').classList.add('screen-in');
     setTimeout(()=>$('s-lobby').classList.remove('screen-in'),360);
   },252);
+}
+// Back to the start screen from the lobby — sends 'leave' unconditionally
+// (a no-op server-side if we hadn't actually joined a room yet, e.g. before
+// ever pressing Find Match) and reuses resetLobby()'s cleanup, then
+// redirects the screen it lands on from s-lobby to s-start.
+function backToMenu(){
+  wss({type:'leave'});
+  resetLobby();
+  stopLobbyMusic();
+  show('s-start');
 }
 $('bstart').onclick=enterLobby;
 $('bfind').onclick=findMatch;

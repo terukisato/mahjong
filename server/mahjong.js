@@ -14,13 +14,17 @@
 
 const SUITS = ['m','p','s'];
 
-function buildWall() {
+function buildWall(akaDora=true, sanma=false) {
   const tiles = []; let id = 0;
   for (const s of SUITS) {
     for (let v=1;v<=9;v++) {
+      // Sanma (3-player) drops 2m-8m entirely — only 1m/9m remain, acting
+      // like an extra pair of terminals rather than a sequenceable suit.
+      if (sanma && s==='m' && v>=2 && v<=8) continue;
       for (let c=0;c<4;c++) {
-        // One copy of 5m, 5p, 5s is a red 5 (c===0)
-        const red = (v===5 && c===0) ? true : undefined;
+        // One copy of 5m, 5p, 5s is a red 5 (c===0), unless the aka-dora
+        // rule is turned off for this room.
+        const red = (akaDora && v===5 && c===0) ? true : undefined;
         tiles.push({s,v,id:id++, ...(red?{red:true}:{})});
       }
     }
@@ -253,7 +257,7 @@ function isWin(hand, melds){
   return decompose(hand).length>0;
 }
 
-function waits(hand, melds){
+function waits(hand, melds, sanma=false){
   const meldCount = melds ? melds.reduce((n,m)=>n+(m.type==='kan'?4:3),0) : 0;
   const numKans = melds ? melds.filter(m=>m.type==='kan').length : 0;
   const handLen = hand.length;
@@ -267,7 +271,7 @@ function waits(hand, melds){
     const waitSet = new Set();
     for(const t of hand){
       const reduced = hand.filter(x=>x.id!==t.id);
-      for(const w of waits(reduced, melds)) waitSet.add(w);
+      for(const w of waits(reduced, melds, sanma)) waitSet.add(w);
     }
     return [...waitSet];
   }
@@ -276,6 +280,9 @@ function waits(hand, melds){
   for(const s of['m','p','s','z']){
     const max=s==='z'?7:9;
     for(let v=1;v<=max;v++){
+      // Sanma has no 2m-8m in the wall — reporting a "wait" on one would be
+      // a phantom wait nobody could ever actually draw.
+      if(sanma && s==='m' && v>=2 && v<=8) continue;
       if(isWin([...hand,{s,v,id:99999}],melds)) w.push(`${v}${s}`);
     }
   }
@@ -349,7 +356,8 @@ function isMenzen(melds){
   return !melds.some(m=>m.type!=='kan'||m.kanType!=='ankan');
 }
 
-function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIppatsu, isDoubleRiichi, isRinshan, isChankan, isHaitei, isHoutei, isTenhou, isChiihou, winTileKey){
+function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIppatsu, isDoubleRiichi, isRinshan, isChankan, isHaitei, isHoutei, isTenhou, isChiihou, winTileKey, rules={}){
+  const {kuitanAri=true}=rules;
   const menzen=isMenzen(melds);
   const allKeys=[...hand14.map(key),...melds.flatMap(m=>m.tiles.map(key))];
 
@@ -422,7 +430,7 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
   let best={han:0,yakuList:[]};
   if(chiitoi) best=chiitoi;
   for(const groups of decomps){
-    const r=evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen,winTileKey);
+    const r=evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen,winTileKey,kuitanAri);
     if(r.yakuman||r.han>best.han) best=r;
     if(r.yakuman) break;
   }
@@ -456,7 +464,7 @@ function ym(name,jp,han){ return {han,yakuList:[{name,jp,han}],yakuman:true}; }
 //               into `melds` the moment the kan was declared) but are still
 //               fully concealed, unlike daiminkan/kakan which are genuinely
 //               open. Use closedTris only for Sanankou/Suuankou.
-function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen,winTileKey){
+function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIppatsu,isDoubleRiichi,isRinshan,isChankan,isHaitei,isHoutei,menzen,winTileKey,kuitanAri=true){
   const yl=[]; let han=0;
   const allKeys=[...hand14.map(key),...melds.flatMap(m=>m.tiles.map(key))];
   const allGroups=[...groups,...melds.map(m=>({t:m.type==='chi'?'seq':'tri',k:m.tiles.map(key),open:true}))];
@@ -523,8 +531,9 @@ function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIp
   // Houtei Raoyui (last tile ron)
   if(isHoutei&&!isTsumo){yl.push({name:'Houtei',jp:'河底撈魚',han:1});han++;}
 
-  // Tanyao
-  if(allKeys.every(isSimple)&&melds.every(m=>m.tiles.every(t=>isSimple(key(t))))){
+  // Tanyao — kuitan-nashi (kuitanAri===false) only suppresses this on an
+  // OPEN hand; a closed hand always keeps it regardless of the rule.
+  if((kuitanAri||menzen)&&allKeys.every(isSimple)&&melds.every(m=>m.tiles.every(t=>isSimple(key(t))))){
     yl.push({name:'Tanyao',jp:'断么九',han:1});han++;
   }
 

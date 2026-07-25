@@ -34,7 +34,8 @@ function freshRoom(dealer = 0) {
   const room = new Room('tonpuu');
   room.seats = [0, 1, 2, 3].map(seat => ({ isBot: true, seat, name: `Seat${seat}` }));
   room.phase = 'playing';
-  room.game = { scores: [25000, 25000, 25000, 25000], turn: dealer, dealer, round: 1, roundWind: 1, honba: 0, riichiSticks: 0 };
+  room.game = { scores: [25000, 25000, 25000, 25000], turn: dealer, dealer, round: 1, roundWind: 1, honba: 0, riichiSticks: 0,
+    stats: [0, 1, 2, 3].map(() => ({ riichi: 0, wins: 0, tsumo: 0, ron: 0, dealIn: 0, bestHan: 0, bestScore: 0, yaku: {} })) };
   room._initRound();
   // _initRound deals from a randomly shuffled wall, so g.dora would
   // otherwise be a random indicator that may or may not happen to match
@@ -279,6 +280,54 @@ test('setBotDifficulty: rejected when the target seat holds a human, not a bot',
   const room = waitingRoomWithHuman();
   room.setBotDifficulty('human1', 3, 'hard'); // seat 3 is the human itself
   assert.strictEqual(room.seats[3].difficulty, undefined);
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Rule variants: atama-hane vs double ron, nagashi mangan on/off
+// ══════════════════════════════════════════════════════════════════════════
+
+test('doubleRon=false (atama-hane): only the winner closest to the discarder is paid on simultaneous ron', () => {
+  const room = freshRoom(0); // seat 0 is dealer/discarder
+  room.rules.doubleRon = false;
+  const g = room.game;
+  g.hands[1] = pinfuTenpai13();
+  g.hands[2] = pinfuTenpai13().map(t => ({ ...t, id: _id++ }));
+  const tile = winTile();
+  const prev = [...g.scores];
+  room._multiRon([1, 2], 0, tile); // seat1 (dist 1) is closer to seat0 than seat2 (dist 2)
+  assert.ok(g.scores[1] > prev[1], 'closest winner (seat1) should be paid');
+  assert.strictEqual(g.scores[2], prev[2], 'seat2 should receive nothing under atama-hane');
+});
+
+test('doubleRon=true (default): both simultaneous ron winners are paid', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  g.hands[1] = pinfuTenpai13();
+  g.hands[2] = pinfuTenpai13().map(t => ({ ...t, id: _id++ }));
+  const tile = winTile();
+  const prev = [...g.scores];
+  room._multiRon([1, 2], 0, tile);
+  assert.ok(g.scores[1] > prev[1]);
+  assert.ok(g.scores[2] > prev[2]);
+});
+
+test('nagashiMangan=false: exhaustive draw never calls _resolveNagashi', () => {
+  const room = freshRoom(0);
+  room.rules.nagashiMangan = false;
+  let called = false;
+  room._resolveNagashi = () => { called = true; };
+  const g = room.game;
+  room._endRound('draw', undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, [...g.scores], undefined);
+  assert.strictEqual(called, false);
+});
+
+test('nagashiMangan=true (default): a genuinely nagashi-eligible exhaustive draw calls _resolveNagashi', () => {
+  const room = freshRoom(0);
+  let called = false;
+  room._resolveNagashi = () => { called = true; };
+  const g = room.game;
+  room._endRound('draw', undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, [...g.scores], undefined);
+  assert.strictEqual(called, true);
 });
 
 // ══════════════════════════════════════════════════════════════════════════

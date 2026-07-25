@@ -134,6 +134,21 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .table{position:fixed;top: 36px;;left:0;right:0;bottom:0;overflow:hidden;
   display:flex;align-items:center;justify-content:center;}
 
+/* Sanma (3-player): no seat sits directly across (toimen), so the whole
+   'top' position is hidden rather than rendered empty — script.js toggles
+   this class on .table once per game, from game_start's numPlayers. */
+.table.sanma .pa-t,
+.table.sanma .np-wrap-t,
+.table.sanma .ml-t,
+.table.sanma .dzt,
+.table.sanma .ctr-score-top,
+.table.sanma .rs-top{display:none;}
+
+/* Kita (sanma only) — banked North tiles rendered into the same meld row
+   as real melds (see renderState in script.js), set apart with a gold
+   outline so they don't read as an actual pon/chi/kan. */
+.kita-mg{outline:1.5px solid var(--gold, #c9a84c);outline-offset:-1px;border-radius:2px;}
+
 /* ── Sizing variable — single source of truth ── */
 :root{
   --table-size: 110vmin;
@@ -615,7 +630,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* ════════════════════════════════════════════════════════════
    ROUND END SCREEN
    ════════════════════════════════════════════════════════════ */
-#s-end{background:rgba(0,0,0,.93);z-index:250;flex-direction:column;}
+/* Darkened overlay, not a solid screen — #s-game is deliberately left
+   visible underneath (see show() in script.js) so the final board state
+   reads as a dimmed backdrop instead of a blank black screen. Matches the
+   existing modal-backdrop darkness (.about-backdrop) for consistency. */
+#s-end{background:rgba(0,0,0,.6);z-index:250;flex-direction:column;}
 .rec{background:linear-gradient(155deg,rgba(18,52,30,.98),rgba(6,16,9,.99));border:2px solid var(--gold);border-radius:16px;
   padding:clamp(20px,4vw,36px) clamp(16px,5vw,52px);text-align:center;
   box-shadow:0 0 100px rgba(201,168,76,.35);width:min(560px,96vw);position:relative;}
@@ -668,6 +687,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .sp-section{display:flex;flex-direction:column;gap:12px;}
 .sp-header{font-size:10px;letter-spacing:2px;color:rgba(245,237,216,.45);}
 .sp-row{display:flex;align-items:center;justify-content:space-between;}
+/* .sp-row's rows normally get their vertical spacing from the settings
+   panel's .sp-section{gap:12px} wrapper — the Rules modal's .about-body
+   uses bare .sp-row divs with no such wrapper, so give them their own
+   breathing room here instead. */
+.about-body .sp-row{padding:4px 0;}
 .sp-label{font-size:12px;color:var(--cream);}
 .sp-toggle{padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
   background:rgba(42,158,103,.3);border:1px solid var(--jl);
@@ -710,6 +734,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   letter-spacing:calc(var(--ui-vmin) * .14);
   text-decoration:underline;margin-top:6px;cursor:pointer;transition:color .2s;}
 .about-link:hover{color:var(--gold);}
+/* Moved out from right above #bfind (where it visually crowded the Find
+   Match button) to sit under the "Enter the Hall" heading instead —
+   .card's own children aren't centered by default (unlike #s-start's
+   flex column), so this needs its own centering. */
+.rules-link-lobby{display:block;text-align:center;margin:-10px 0 16px;}
 .about-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;}
 /* Fixed width (not vw-based) so the panel — and everything inside it, since
    .about-title/.about-body/.about-section-title/.about-close/.about-version
@@ -747,6 +776,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    consistent scale wherever it's shown. */
 .settings-icon-btn{position:absolute;top:12px;right:14px;background:none;border:none;
   color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.778);cursor:pointer;z-index:10;letter-spacing:-1px;}
+/* Mirrors .settings-icon-btn's position/sizing on the opposite corner —
+   only shown on #s-lobby (there's nowhere "back" from #s-start itself). */
+.back-icon-btn{position:absolute;top:12px;left:14px;background:none;border:none;
+  color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.778);cursor:pointer;z-index:10;}
 
 /* ── Topbar inline elements ── */
 .tb-right .settings-icon-btn{position:static;z-index:auto;}
