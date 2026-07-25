@@ -91,6 +91,7 @@ wss.on('connection',(ws)=>{
         kuitanAri: msg.rules?.kuitanAri!==false,
         doubleRon: msg.rules?.doubleRon!==false,
         nagashiMangan: msg.rules?.nagashiMangan!==false,
+        chonbo: msg.rules?.chonbo===true,
       };
       myRoom=getWaitingRoom(mode,rules,numPlayers);
       // Race fallback: the shared waitingRoom could have filled up (or

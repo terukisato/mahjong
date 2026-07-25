@@ -96,7 +96,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version">v0.12.0</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version">v0.12.1</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -136,6 +136,7 @@
       <div class="sp-row"><span class="sp-label">Kuitan (Open Tanyao)</span><button class="sp-toggle" id="btn-rule-kuitanAri" onclick="toggleRule('kuitanAri')">ON</button></div>
       <div class="sp-row"><span class="sp-label">Double Ron</span><button class="sp-toggle" id="btn-rule-doubleRon" onclick="toggleRule('doubleRon')">ON</button></div>
       <div class="sp-row"><span class="sp-label">Nagashi Mangan</span><button class="sp-toggle" id="btn-rule-nagashiMangan" onclick="toggleRule('nagashiMangan')">ON</button></div>
+      <div class="sp-row"><span class="sp-label">Chonbo (False Declaration Penalty)</span><button class="sp-toggle" id="btn-rule-chonbo" onclick="toggleRule('chonbo')" style="background:rgba(80,0,0,.3);border-color:#c82020;">OFF</button></div>
     </div>
   </div>
 </div>
@@ -249,7 +250,6 @@
             </div>
             <div class="ci" id="ci"></div>
             <div class="cwl" id="cwl"></div>
-            <div class="ch" id="chonba"></div>
           </div>
         </div>
         <div class="ctr-score ctr-score-right">

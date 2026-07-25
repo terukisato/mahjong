@@ -477,6 +477,13 @@ let P=['b','r','t','l'];
 // against it (e.g. "did a new pon just happen" for sound effects).
 let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false, discarding=false, pendingGameOver=null;
 
+// True for exactly as long as the round-start card (.rs-layer.blocking) is
+// visible — see roundStartBanner and onMsg's deferred-game_state handling
+// just above it. pendingBannerGameState holds the latest game_state that
+// arrived during that window (only the latest matters — nothing in
+// between was ever shown), applied the instant the card clears.
+let roundStartBannerActive=false, pendingBannerGameState=null;
+
 // Showing 's-end' deliberately leaves 's-game' un-hidden underneath, so the
 // final board state shows through the darkened round-end/game-over overlay
 // (see #s-end in style.css) instead of a blank screen. Every other target
@@ -525,6 +532,18 @@ function onMsg(m){
   if(m.type==='ready_status'){onReadyStatus(m);return;}
   if(m.type==='stats'){renderStats(m);return;}
   if(!inGame) return;
+  // While the round-start card ("東2局") is up, the board underneath is
+  // already click-blocked (see .rs-layer.blocking / roundStartBanner), but
+  // the game itself is NOT paused server-side — bots keep acting on their
+  // own timers underneath it. Without this, a bot's kita/discard/etc during
+  // that window would silently update the board (or pop a call banner)
+  // while the player is still looking at last round's-end state, then the
+  // card disappears onto an already-advanced board — looking like the
+  // round "started" before they could see it. Game-state-affecting
+  // messages are deferred here (queued, latest-wins) and only ever
+  // rendered once the card actually clears — see roundStartBanner's timer.
+  if(roundStartBannerActive && m.type==='game_state'){ pendingBannerGameState=m; return; }
+  if(roundStartBannerActive && (m.type==='riichi'||m.type==='kan'||m.type==='pon'||m.type==='chi'||m.type==='kita')) return;
   if(m.type==='game_state'){const prev=lastState;lastState=m;discarding=false;renderState(m,prev);}
   else if(m.type==='riichi'){onRiichi(m);}
   else if(m.type==='kan'){callBanner('kan',m.name||'Player','カン');}
@@ -859,7 +878,10 @@ function updateSlotCount(){
 }
 
 // Rule variants — picked once in the lobby, sent with 'join' like gameMode.
-let rules={akaDora:true,kuitanAri:true,doubleRon:true,nagashiMangan:true};
+// chonbo defaults OFF (opt-in) unlike the others — it removes a safety
+// net (Tsumo/Ron become declarable before the server's confirmed they're
+// valid), not something a casual match should suddenly get by default.
+let rules={akaDora:true,kuitanAri:true,doubleRon:true,nagashiMangan:true,chonbo:false};
 function toggleRule(name){
   rules[name]=!rules[name];
   applyRuleButton(name);
@@ -1008,6 +1030,7 @@ function startGame(m){
   stopLobbyMusic();
   playGameMusic();
   inGame=true;selId=null;lastState=null;
+  declareWarningShown=false; // chonbo's declare-confirm message shows once per game, not once per browser session
   // Restore Ready button visibility for new game
   const btn=$('bround-ready'); if(btn){ btn.style.display=''; btn.disabled=false; btn.textContent='✓ Ready'; btn.style.opacity='1'; }
   const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='none';
@@ -1047,8 +1070,14 @@ function startGame(m){
   // game (Main Menu -> Find Match again in the same tab) shows the PREVIOUS
   // game's dora tiles during this loading screen, since this is the only
   // path into a round that never went through onRoundStart's own clear.
+  // Riichi-stick/honba counts need the same treatment — they're only ever
+  // written from real game_state data (renderState), never reset here or
+  // in onRoundStart, so a leftover "2 Honba" from the previous game would
+  // otherwise sit there until this new game's first game_state arrives.
   const doraPanel=$('dora-panel');
   if(doraPanel) doraPanel.querySelectorAll('.dora-slot').forEach(s=>{s.innerHTML='';s.className='dora-slot';});
+  const riichiCountEl0=$('stick-riichi-count'); if(riichiCountEl0) riichiCountEl0.textContent='0';
+  const honbaCountEl0=$('stick-honba-count'); if(honbaCountEl0) honbaCountEl0.textContent='0';
   $('dora-panel').style.display='flex';
   show('s-game');
   // Show loading overlay until first game_state arrives
@@ -1085,7 +1114,6 @@ function renderState(m, prev){
   $('ci').textContent = '';
   $('cwl').textContent=`${m.wallCount} tiles`;
   const h=m.honba||0,rs=m.riichiSticks||0;
-  $('chonba').textContent=h?`${h} Honba` :'';
   const riichiCountEl=$('stick-riichi-count'); if(riichiCountEl) riichiCountEl.textContent=rs;
   const honbaCountEl=$('stick-honba-count'); if(honbaCountEl) honbaCountEl.textContent=h;
 
@@ -1282,8 +1310,13 @@ function renderState(m, prev){
     const melds=m.melds?.[abs]||[];
     for(const meld of melds){
       const g=document.createElement('div');g.className='mg';
-      // top/left/right all need dir 1↔3 swapped due to their container rotation
-      renderMeld(g, meld, abs);
+      // top/left/right all need dir 1↔3 swapped due to their container
+      // rotation — this loop only ever produces id 'r'/'t'/'l' (never 'b',
+      // handled separately above), so every position here is rotated and
+      // flipped must always be true. Previously this argument was never
+      // actually passed, so it silently defaulted to false and no opponent
+      // meld ever got the swap the comment describes.
+      renderMeld(g, meld, abs, true);
       if(id==='t') ml2.prepend(g); // top: anchor top-left, first meld leftmost, grows right
       else if(id==='l') ml2.prepend(g); // left: anchor bottom-left, first meld at bottom, grows up
       else ml2.prepend(g);          // right: anchor top-right, first meld at top, grows down
@@ -1306,7 +1339,13 @@ function renderState(m, prev){
     }
   }
 
-  $('tpb').style.display=(m.waits?.length>0&&!m.riichi?.[mySeat]&&!m.furiten)?'':'none';
+  // With rules.chonbo on, these hints would defeat the point of the rule —
+  // furiten in particular would tell the player in advance that a ron
+  // attempt is unsafe, removing the actual risk the rule exists to
+  // introduce. Suppressed outright rather than left accurate, since
+  // chonbo is meant to make the player track their own hand the way a
+  // real physical game would require.
+  $('tpb').style.display=(!m.chonbo&&m.waits?.length>0&&!m.riichi?.[mySeat]&&!m.furiten)?'':'none';
   let furitenEl=$('furiten-badge');
   if(!furitenEl){
     furitenEl=document.createElement('span');
@@ -1315,7 +1354,7 @@ function renderState(m, prev){
     furitenEl.textContent='Furiten';
     document.querySelector('.felt').appendChild(furitenEl);
   }
-  furitenEl.style.display=m.furiten?'block':'none';
+  furitenEl.style.display=(!m.chonbo&&m.furiten)?'block':'none';
   drawActions(m);
 }
 
@@ -1354,7 +1393,22 @@ function renderMeld(container, meld, viewerSeat, flipped=false){
   const tiles = meld.tiles;
   const calledId = meld.calledTileId;
   const fromSeat = meld.fromSeat;
-  let dir = fromSeat !== undefined ? (fromSeat - viewerSeat + 4) % 4 : 1;
+  // dir 1=shimocha (called tile at the END) / 2=toimen (MIDDLE) / 3=kamicha
+  // (START) — determined explicitly against numSeats rather than via a
+  // flat (fromSeat-viewerSeat+4)%4, which only worked by coincidence for a
+  // 4-seat table. In sanma (numSeats=3) a kamicha call lands on the SAME
+  // raw offset (2) that a 4-seat table uses for toimen — a position that
+  // doesn't exist in sanma — so without this, a call from the left renders
+  // with the "called from across" (middle) styling instead of "from the
+  // left" (start). Sanma only ever has kamicha/shimocha (dir 1 or 3); dir
+  // 2/toimen is only reachable at all when numSeats===4.
+  let dir = 1;
+  if(fromSeat !== undefined){
+    const kamicha=(viewerSeat-1+numSeats)%numSeats, shimocha=(viewerSeat+1)%numSeats;
+    if(fromSeat===shimocha) dir=1;
+    else if(fromSeat===kamicha) dir=3;
+    else dir=2;
+  }
   // flip dir 1↔3 for all rotated containers (top 180°, left 90°, right -90°)
   if(flipped){
     if(dir===1) dir=3;
@@ -1426,6 +1480,7 @@ function renderMeld(container, meld, viewerSeat, flipped=false){
 function drawActions(m){
   const bar=$('actbar'); bar.innerHTML='';
   const stalePicker=$('chi-picker'); if(stalePicker) stalePicker.remove();
+  const staleDeclare=$('declare-picker'); if(staleDeclare) staleDeclare.remove();
   if(!m) return;
   bar.className='act-overlay';
   const mine=m.turn===mySeat, react=m.pending?.isForMe;
@@ -1434,6 +1489,12 @@ function drawActions(m){
     // LEFT: TSUMO
     if(m.canTsumo)
       ab(bar,'TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
+    // LEFT: chonbo-only "attempt" declare — deliberately NOT a normal
+    // one-tap button (see showDeclareConfirm), since unlike canTsumo this
+    // isn't actually confirmed valid; a stray tap here can end the hand
+    // and cost real points, so it needs a second, explicit confirmation.
+    else if(m.canAttemptTsumo)
+      ab(bar,'⚠ Declare…','bchonbo',()=>showDeclareConfirm('tsumo'));
 
     // LEFT: ANKAN — one button per candidate tile, each showing the tile's
     // face so multiple candidates (rare, but possible) aren't just two
@@ -1477,8 +1538,14 @@ function drawActions(m){
   } else if(react){
     const opts=m.pending.options||[];
     // LEFT: RON, PON, KAN, CHI
-    if(opts.some(o=>o.type==='ron'))
+    // valid:false is a chonbo-only "attempt" option (rules.chonbo) — the
+    // server hasn't confirmed this ron is actually legal, so it gets the
+    // same recessed/confirm-required treatment as the tsumo attempt above
+    // instead of the normal one-tap RON button.
+    if(opts.some(o=>o.type==='ron'&&o.valid!==false))
       ab(bar,'RON','bron',()=>wss({type:'action',action:{type:'ron'}}));
+    else if(opts.some(o=>o.type==='ron'&&o.valid===false))
+      ab(bar,'⚠ Declare…','bchonbo',()=>showDeclareConfirm('ron'));
     if(opts.some(o=>o.type==='pon'))
       ab(bar,'PON','bpon',()=>wss({type:'action',action:{type:'pon'}}));
     if(opts.some(o=>o.type==='kan'))
@@ -1545,6 +1612,59 @@ function showChiPicker(sequences,discTile,myHand){
   picker.appendChild(cancelBtn);
   document.body.appendChild(picker);
 }
+
+// Chonbo (rules.chonbo) confirmation popup — a genuine second tap, not
+// just a bigger button, since the "⚠ Declare…" control it's behind covers
+// hands the server hasn't actually confirmed are winning. Deliberately
+// mirrors showChiPicker's overlay pattern rather than the normal one-tap
+// action bar buttons, specifically so an accidental tap on the recessed
+// declare control can't by itself end the hand / cost points. The
+// explanatory message only shows the first time this fires in a given
+// game (see declareWarningShown, reset in startGame) — the confirm/cancel
+// buttons themselves stay every time, so the "requires a second, deliberate
+// tap" protection never goes away, just the repeated explanation of why.
+let declareWarningShown=false;
+function showDeclareConfirm(type){
+  let picker=$('declare-picker');
+  // Re-tapping the "⚠ Declare…" button while its own popup is already
+  // open closes it (a toggle) rather than tearing it down and rebuilding
+  // an identical one — see also the document click-outside handler below,
+  // which covers dismissing it any other way.
+  if(picker){ picker.remove(); return; }
+  picker=document.createElement('div');
+  picker.id='declare-picker';
+  picker.className='chi-picker declare-picker';
+  if(!declareWarningShown){
+    const msg=document.createElement('div');
+    msg.className='declare-picker-msg';
+    msg.textContent=`Declare ${type==='tsumo'?'Tsumo':'Ron'}? If this hand isn't actually valid, you'll pay a chonbo penalty.`;
+    picker.appendChild(msg);
+    declareWarningShown=true;
+  }
+  const confirmBtn=document.createElement('button');
+  confirmBtn.className='ba bchonbo declare-picker-confirm';
+  confirmBtn.textContent=`Yes, Declare ${type==='tsumo'?'Tsumo':'Ron'}`;
+  confirmBtn.onclick=()=>{
+    wss({type:'action',action:{type}});
+    picker.remove();
+  };
+  picker.appendChild(confirmBtn);
+  const cancelBtn=document.createElement('button');
+  cancelBtn.className='ba bpas chi-picker-cancel';
+  cancelBtn.textContent='✕';
+  cancelBtn.onclick=()=>picker.remove();
+  picker.appendChild(cancelBtn);
+  document.body.appendChild(picker);
+}
+// Click-outside-to-dismiss for the declare-confirm popup — excludes the
+// "⚠ Declare…" button itself (.bchonbo) so the SAME click that opens it
+// (this listener also sees that click, since it bubbles to document)
+// doesn't immediately close it again; re-tapping that button is instead
+// handled as an explicit toggle inside showDeclareConfirm above.
+document.addEventListener('click',e=>{
+  const picker=$('declare-picker');
+  if(picker&&!e.target.closest('#declare-picker')&&!e.target.closest('.bchonbo')) picker.remove();
+});
 
 function ab(c,l,cls,fn){const b=document.createElement('button');b.className='ba '+cls;b.textContent=l;b.onclick=fn;c.appendChild(b);}
 function hint(c,t){const h=document.createElement('span');h.className='hint';h.textContent=t;c.appendChild(h);}
@@ -1776,7 +1896,17 @@ function roundStartBanner(wind,round,honba){
   // is still animating on top, letting an early tap/discard go through
   // before the player's actually had a chance to see the new hand.
   layer.classList.add('blocking');
-  setTimeout(()=>{scrim.remove();plate.remove();layer.classList.remove('blocking');},3400);
+  roundStartBannerActive=true;
+  setTimeout(()=>{
+    scrim.remove();plate.remove();layer.classList.remove('blocking');
+    roundStartBannerActive=false;
+    // Reveal whatever actually happened underneath (bots don't wait for
+    // this card) the instant it clears, rather than mid-animation.
+    if(pendingBannerGameState){
+      const m=pendingBannerGameState; pendingBannerGameState=null;
+      const prev=lastState; lastState=m; discarding=false; renderState(m,prev);
+    }
+  },3400);
 }
 
 
@@ -1900,7 +2030,7 @@ function onEnd(m){
   const loader=$('game-loading'); if(loader) loader.style.display='none';
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
-  const reasonLabels={tsumo:'ツモ - TSUMO',ron:'ロン - RON',draw:'流局 - Exhaustive Draw',suukaikan:'四開槓 - Suukaikan',nagashi:'流し満貫 - Mangan at Draw',kyuushu:'九種九牌 - Kyuushu Kyuuhai'};
+  const reasonLabels={tsumo:'ツモ - TSUMO',ron:'ロン - RON',draw:'流局 - Exhaustive Draw',suukaikan:'四開槓 - Suukaikan',nagashi:'流し満貫 - Mangan at Draw',kyuushu:'九種九牌 - Kyuushu Kyuuhai',chonbo:'チョンボ - Chonbo'};
   $('ret').textContent=reasonLabels[m.reason]||'Round Over';
   if(m.reason==='tsumo'||m.reason==='ron'){
     if(m.reason==='ron') playSfx('sfx-ron', m.winner);
@@ -1915,6 +2045,13 @@ function onEnd(m){
     $('rehn').innerHTML=`<span class="re-winner">${escHtml(winnerName)}</span>${limitHtml}${handInfo}`;
   } else if(m.reason==='draw'){
     $('rehn').textContent='';
+  } else if(m.reason==='chonbo'){
+    // room.js's _chonboPenalty passes the offender as `winner` (reusing
+    // the same field _endRound already broadcasts for tsumo/ron) — there's
+    // no actual winning hand here, just a penalty payment, which the
+    // score-delta table below already shows generically for any reason.
+    const offenderName=m.winner===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[m.winner]||`Seat ${m.winner}`);
+    $('rehn').innerHTML=`<span class="re-winner re-offender">${escHtml(offenderName)}</span><span class="re-hand"> declared a false win</span>`;
   } else { $('rehn').textContent=''; }
   // FIX 2: yaku pills only — dora tiles move to sit directly above the winning hand tiles
   const yl=$('reyl');yl.innerHTML='';
@@ -1968,7 +2105,11 @@ function onEnd(m){
   const sorted=[...(m.scores||[]).map((sc,seat)=>({sc,seat}))].sort((a,b)=>b.sc-a.sc);
   sorted.forEach(({sc,seat},rank)=>{
     const name=seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
-    const row=document.createElement('tr');if(seat===m.winner)row.className='w';
+    // reason==='chonbo' reuses the `winner` field for the OFFENDER (see
+    // _chonboPenalty in room.js) — they just paid a penalty, not won, so
+    // that row gets the loss (red) styling instead of the winner gold.
+    const row=document.createElement('tr');
+    if(seat===m.winner) row.className=m.reason==='chonbo'?'l':'w';
     const ordinal=['1st','2nd','3rd','4th'][rank]||`${rank+1}th`;
     const colours=['#f0d080','#c0c0c0','#cd7f32','var(--cream)'];
     const colour=colours[rank]||'var(--cream)';
@@ -1988,7 +2129,7 @@ function onEnd(m){
       if(startScore===sc) return;
       const span=document.getElementById(`re-sc-${seat}`);
       if(!span) return;
-      const duration=1800;
+      const duration=1200;
       const start=performance.now();
       const ease=t=>t<.5?2*t*t:(-1+(4-2*t)*t);
       function frame(now){

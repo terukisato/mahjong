@@ -47,12 +47,17 @@ class Room {
     // (including undefined) stays on, matching each toggle's "opt out" framing.
     // `sanma` is derived from numPlayers, not independently settable — it's
     // the single source of truth every 3-vs-4-seat branch reads from.
+    // `chonbo` is the one exception to the opt-out framing: it removes a
+    // safety net (Tsumo/Ron become declarable even when not yet confirmed
+    // valid — see _tsumo/_checkReactions/_chonboPenalty), so it defaults
+    // OFF and needs an explicit `true`, not just "anything but false".
     this.rules={
       akaDora: rules.akaDora!==false,
       kuitanAri: rules.kuitanAri!==false,
       doubleRon: rules.doubleRon!==false,
       nagashiMangan: rules.nagashiMangan!==false,
       sanma: this.numPlayers===3,
+      chonbo: rules.chonbo===true,
     };
     this.seats=new Array(this.numPlayers).fill(null);
     this.ready=new Set();
@@ -216,7 +221,7 @@ class Room {
       stats:new Array(this.numPlayers).fill(0).map(()=>({riichi:0,wins:0,tsumo:0,ron:0,dealIn:0,bestHan:0,bestScore:0,yaku:{}})),
     };
     this._initRound();
-    this._broadcastAll({type:'game_start',seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma});
+    this._broadcastAll({type:'game_start',seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,chonbo:this.rules.chonbo});
     setTimeout(()=>this._draw(),2000);
   }
 
@@ -476,14 +481,26 @@ class Room {
       if(seat===fromSeat) continue;
       const hand=g.hands[seat],opts=[];
 
-      // Ron: only if not in furiten
-      if(!this._isFuriten(seat)&&isWin([...hand,tile],g.melds[seat])){
-        const sw=this._seatWindOf(seat);
-        const isDblRiichi=g.doubleRiichi[seat];
-        const {han}=detectYaku([...hand,tile],g.melds[seat],false,sw,this._roundWindValue(),
-          g.riichi[seat],g.ippatsu[seat],isDblRiichi,false,false,false,g.haiteiNext,false,false,key(tile),
-          {kuitanAri:this.rules.kuitanAri});
-        if(han>0) opts.push({type:'ron'});
+      // Ron: furiten is an absolute block regardless of rules.chonbo — a
+      // furiten ron attempt isn't offered at all, chonbo or not.
+      if(!this._isFuriten(seat)){
+        const handWithTile=[...hand,tile];
+        if(isWin(handWithTile,g.melds[seat])){
+          const sw=this._seatWindOf(seat);
+          const isDblRiichi=g.doubleRiichi[seat];
+          const {han}=detectYaku(handWithTile,g.melds[seat],false,sw,this._roundWindValue(),
+            g.riichi[seat],g.ippatsu[seat],isDblRiichi,false,false,false,g.haiteiNext,false,false,key(tile),
+            {kuitanAri:this.rules.kuitanAri});
+          // Structurally a complete hand, but no yaku — a legitimate ron
+          // option only if it actually has han; with chonbo on, still
+          // offered (marked invalid) so it can be attempted and penalized.
+          if(han>0) opts.push({type:'ron',valid:true});
+          else if(this.rules.chonbo) opts.push({type:'ron',valid:false});
+        } else if(this.rules.chonbo){
+          // Not even a complete hand shape — an outright false declare,
+          // only offerable at all with chonbo on.
+          opts.push({type:'ron',valid:false});
+        }
       }
       if(!g.riichi[seat]){
         if(canPon(hand,tile)) opts.push({type:'pon'});
@@ -608,7 +625,18 @@ class Room {
       const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300;
       results.push({winSeat,hand,yakuList,han:totalHan,fu,pay,uraDora,dc,kitaCount});
     }
-    if(!results.length){this._sendState();return;}
+    if(!results.length){
+      // Every declarer turned out invalid. Scoped to the common case — a
+      // LONE false ron — so exactly one offender is unambiguous; if
+      // multiple players simultaneously declared and all were wrong, fall
+      // through to the existing silent no-op rather than picking one to
+      // blame (a rare edge case, not worth the extra complexity here).
+      if(this.rules.chonbo && winSeats.length===1){
+        this._chonboPenalty(winSeats[0]);
+        return;
+      }
+      this._sendState();return;
+    }
 
     // Each winner gets paid separately by loser; riichi sticks go to closest winner
     const totalRiichiSticks=g.riichiSticks;
@@ -904,11 +932,43 @@ class Room {
     this._discard(seat,tileId);
   }
 
+  // ── Chonbo (rules.chonbo only) ───────────────────────────────────────────────
+  // Penalizes a false tsumo/ron declaration. Off by default: normally the
+  // client only ever offers Tsumo/Ron once the server has already confirmed
+  // the hand is a legal win (canTsumo / _checkReactions' ron option both
+  // fully validate first), so a false declaration can't happen at all. With
+  // this rule on, _tsumo/_checkReactions additionally let a player declare
+  // any time it's structurally possible to ATTEMPT one (see canAttemptTsumo
+  // in _sendState and the ron `valid:false` option below) — this is what
+  // fires when that attempt turns out to be wrong. Offender pays every
+  // other seat a mangan-equivalent amount (same dealer-pays/receives-double
+  // convention as a real mangan tsumo, just with the money flowing the
+  // other way), then the hand is treated as an abortive draw — honba+1,
+  // dealer/riichi-sticks unchanged — via _endRound's generic fallback
+  // branch (anything that isn't 'tsumo'/'ron'/'draw' lands there already,
+  // same as kyuushu/suukaikan).
+  _chonboPenalty(offenderSeat){
+    const g=this.game;
+    const isDealer=offenderSeat===g.dealer;
+    const bp=basePoints(5,30); // mangan base — fu is irrelevant once han>=5
+    const prevScores=[...g.scores];
+    let total=0;
+    for(let i=0;i<this.numPlayers;i++){
+      if(i===offenderSeat) continue;
+      const pay=Math.ceil((isDealer?bp*2:i===g.dealer?bp*2:bp)/100)*100;
+      g.scores[i]+=pay; g.scores[offenderSeat]-=pay; total+=pay;
+    }
+    this._endRound('chonbo',offenderSeat,null,null,null,null,null,total,undefined,prevScores,undefined);
+  }
+
   // ── Win ─────────────────────────────────────────────────────────────────────
   _tsumo(seat){
     const g=this.game;
     const hand=g.hands[seat];
-    if(!isWin(hand,g.melds[seat])) return;
+    if(!isWin(hand,g.melds[seat])){
+      if(this.rules.chonbo) this._chonboPenalty(seat);
+      return;
+    }
     if(this._isFuriten(seat)) return;
     const sw=this._seatWindOf(seat);
     const isHaitei=g.haiteiNext&&!g.isRinshan;
@@ -921,7 +981,10 @@ class Room {
     const {han,yakuList}=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),
       g.riichi[seat],g.ippatsu[seat],isDblRiichi,g.isRinshan,false,isHaitei,false,isTenhou,isChiihou,
       g.drawTile?key(g.drawTile):null,{kuitanAri:this.rules.kuitanAri});
-    if(han===0) return;
+    if(han===0){
+      if(this.rules.chonbo) this._chonboPenalty(seat);
+      return;
+    }
 
     // Ura dora (only on riichi)
     const uraDora=g.riichi[seat]?this._countUraDora(hand):0;
@@ -1420,6 +1483,12 @@ class Room {
           {kuitanAri:this.rules.kuitanAri});
         return han>0;
       })();
+      // Chonbo-only: lets the client offer a deliberately-recessed "attempt
+      // a declare anyway" control even when canTsumo is false — any time
+      // it's this seat's turn with a full hand, regardless of whether it's
+      // actually a valid win. Only meaningful when canTsumo is false (a
+      // real win should always just use the normal, safe canTsumo button).
+      const canAttemptTsumo=this.rules.chonbo&&g.turn===seat&&hand.length===fullHandSize&&!canTsumo;
       // Send hand split: main hand (without draw tile) + draw tile separately
       const fullHand=hand;
       const mainHand=dt?fullHand.filter(t=>t.id!==dt.id):fullHand;
@@ -1436,8 +1505,8 @@ class Room {
         dora:g.dora,wallCount:g.wall.length,waits:w,riichi:g.riichi,
         doubleRiichi:g.doubleRiichi,
         furiten:g.furiten[seat]||g.tempFuriten[seat],
-        pending:pendingForMe,canTsumo,canRiichi,canAnkan,canKakan,canKyuushu,canKita,
-        numPlayers:this.numPlayers,sanma:this.rules.sanma,kita:g.kita,
+        pending:pendingForMe,canTsumo,canAttemptTsumo,canRiichi,canAnkan,canKakan,canKyuushu,canKita,
+        numPlayers:this.numPlayers,sanma:this.rules.sanma,kita:g.kita,chonbo:this.rules.chonbo,
         oppHandSizes:g.hands.map((h,i)=>i===seat?null:h.length),
         seatWinds:Array.from({length:this.numPlayers},(_,s)=>((s-g.dealer+this.numPlayers)%this.numPlayers))});
     }

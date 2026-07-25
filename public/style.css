@@ -215,8 +215,6 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   margin-top:2px;position:relative;z-index:1;}
 .cwl{font-size:clamp(9px,1.8vmin,15px);color:#2a9e67;font-weight:700;
   margin-top:1px;position:relative;z-index:1;}
-.ch{font-size:clamp(7px,1.3vmin,9px);color:rgba(245,237,216,.28);
-  margin-top:1px;position:relative;z-index:1;}
 /* ── Dora indicator strip ── */
 .dora-slot{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:5px;border:1px dashed rgba(201,168,76,.25);
   background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;}
@@ -387,6 +385,13 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   transform:translateY(-2px);}
 .chi-picker-disc{box-shadow:0 0 0 2px #00ffaa;border-radius:3px;}
 .chi-picker-cancel{height:auto;align-self:stretch;}
+/* Chonbo declare-confirm popup — reuses .chi-picker's overlay positioning
+   but stacks vertically (message, then confirm, then cancel) instead of a
+   row of tile options. */
+.declare-picker{flex-direction:column;align-items:stretch;gap:10px;
+  max-width:min(90vw,360px);border-color:rgba(255,128,64,.5);}
+.declare-picker-msg{font-size:12px;line-height:1.5;color:rgba(245,237,216,.85);text-align:center;}
+.declare-picker-confirm{width:100%;}
 .ba{padding:0 clamp(10px,1vmin,20px);height:4vmin;border:none;border-radius:0.6vmin;
   font-family:'Cinzel Decorative',serif;font-size:1.6vmin;
   letter-spacing:0.1vmin;cursor:pointer;transition:all .15s;font-weight:700;white-space:nowrap;
@@ -408,6 +413,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    convention as .bpon/.bchi/.bkan/.brii all matching their own banners. */
 .bkita{background:linear-gradient(135deg,#0a3a45,#0a6a80);color:#b0f0ff;border:0.2vmin solid #20b0c0;}
 .bpas{background:rgba(40,40,40,.95);color:rgba(245,237,216,.7);border:0.2vmin solid rgba(255,255,255,.2);}
+/* Chonbo (rules.chonbo) "attempt" declare — deliberately muted/dashed
+   rather than a bold solid colour like the other action buttons, so it
+   visually recedes instead of inviting a tap; the real confirmation is
+   the declare-picker popup this opens (.declare-picker-confirm below,
+   which DOES use the full warning colour, since that tap is the actual
+   deliberate commit). */
+.bchonbo{background:rgba(90,30,10,.55);color:#ffb080;border:0.2vmin dashed rgba(255,128,64,.6);opacity:.8;}
+.bchonbo:hover{opacity:1;}
+.declare-picker-confirm{background:linear-gradient(135deg,#5a1a0a,#9a3a1a);color:#ffd0b0;border:0.2vmin solid #ff8040;}
 
 /* ════════════════════════════════════════════════════════════
    CHAT
@@ -669,6 +683,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .ret{font-family:'Cinzel Decorative',serif;font-size:clamp(20px,5vw,30px);color:var(--gl);filter:drop-shadow(0 0 14px rgba(201,168,76,.6));margin-bottom:5px;}
 .rehn{font-size:clamp(11px,2.5vw,14px);color:var(--jl);letter-spacing:2px;margin-bottom:12px;}
 .re-hand{color:rgba(245,237,216,.6);font-size:0.9em;}
+/* Chonbo's offender name reuses .re-winner's markup (see onEnd in
+   script.js) but must NOT read as a win — .rehn's own green (--jl)
+   otherwise applies here by inheritance, same "success" colour used for
+   an actual winner. */
+.re-offender{color:#e07070;}
 .re-dora-row{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
 .re-dora-lbl{font-size:10px;color:var(--gold);letter-spacing:1px;}
 .re-ura-lbl{color:#f88;margin-left:6px;}
@@ -693,6 +712,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .yh{color:var(--gl);font-weight:700;margin-left:4px;}.yj{color:rgba(245,237,216,.4);font-size:8px;margin-left:3px;}
 .st{width:100%;border-collapse:collapse;margin:10px 0;}.st td{padding:6px 12px;font-size:12px;border-bottom:1px solid rgba(201,168,76,.1);text-align:left;}
 .st td:last-child{text-align:right;font-weight:700;color:var(--gl);}.st tr.w td{color:var(--gl);font-size:13px;}
+.st tr.l td{color:#e07070;font-size:13px;}
 .wt{display:flex;flex-direction:column;align-items:center;gap:4px;margin:10px 0;}
 .re-tenpai{display:flex;flex-direction:column;gap:8px;margin:10px 0;}
 .re-tenpai-row{display:flex;flex-direction:column;align-items:center;gap:4px;}

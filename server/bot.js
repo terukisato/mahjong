@@ -62,7 +62,7 @@ function _legacyBestDiscard(hand14){
 // considers kan reactions — the options array may include one but it's
 // simply not checked, so bots always pass on kan-on-discard.
 function _legacyBotReact(hand,disc,options){
-  if(options.some(o=>o.type==='ron')) return {type:'ron'};
+  if(options.some(o=>o.type==='ron'&&o.valid!==false)) return {type:'ron'};
   const inTenpai=waits(hand).length>0;
   if(!inTenpai&&options.some(o=>o.type==='pon')){
     const matches=hand.filter(t=>key(t)===key(disc));
@@ -148,7 +148,12 @@ function bestDiscard(hand14, melds=[], difficulty='normal', dangerSets=[]){
 }
 
 function botReact(hand, disc, options, melds=[], difficulty='normal'){
-  if(options.some(o=>o.type==='ron')) return {type:'ron'};
+  // valid:false marks a chonbo-only "attempt" option (rules.chonbo — see
+  // room.js's _checkReactions), offered so a HUMAN could mis-declare a
+  // false ron. Bots never misplay, so they must only ever take a ron
+  // that's actually valid — options.some(o=>o.type==='ron') alone would
+  // happily grab the false one and chonbo the bot against itself.
+  if(options.some(o=>o.type==='ron'&&o.valid!==false)) return {type:'ron'};
   if(difficulty==='easy') return _legacyBotReact(hand, disc, options);
   return _shantenBotReact(hand, disc, options, melds);
 }
