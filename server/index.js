@@ -12,6 +12,28 @@ const wss=new WebSocket.Server({server});
 
 app.use(express.static(path.join(__dirname,'../public')));
 
+// Detect and clean up dead connections the browser never tells us about.
+// Mobile OSes routinely suspend a backgrounded tab's socket without firing
+// a close event on either end — the connection just goes silent, `readyState`
+// still reports OPEN, and a player can sit there tapping a discard that's
+// actually going nowhere (see room.js's removeHuman, which only ever runs
+// off a real close event). Standard `ws` library pattern: ping every
+// interval, and if a client never answered the PREVIOUS ping with a pong,
+// terminate() it — that forces a real close event, so the room correctly
+// hands the seat to a bot instead of stalling on a phantom human forever
+// (e.g. a pending ron/pon/chi/kan decision that would otherwise never
+// resolve — see Room._resolveReactions' humanResponded check).
+const HEARTBEAT_INTERVAL_MS=30000;
+function markAlive(){ this.isAlive=true; }
+const heartbeatTimer=setInterval(()=>{
+  wss.clients.forEach((ws)=>{
+    if(ws.isAlive===false) return ws.terminate();
+    ws.isAlive=false;
+    ws.ping();
+  });
+},HEARTBEAT_INTERVAL_MS);
+wss.on('close',()=>clearInterval(heartbeatTimer));
+
 // Matchmaking: a single shared "waiting room" per (game mode, player count)
 // pair at a time. Whoever joins first claims it; once it starts (or if its
 // mode/player-count doesn't match), the next joiner gets a brand-new Room
@@ -34,6 +56,8 @@ function getWaitingRoom(mode,rules,numPlayers){
 // join/leave/reconnect-to-a-new-room within this connection's lifetime, so
 // Room can freely stash extra fields on it (seat, isBot, etc).
 wss.on('connection',(ws)=>{
+  ws.isAlive=true;
+  ws.on('pong',markAlive);
   let myRoom=null;
   const myId=`h-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
   const player={id:myId,ws,name:'Player',seat:-1,isBot:false};

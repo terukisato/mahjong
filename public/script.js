@@ -530,6 +530,7 @@ function onMsg(m){
   else if(m.type==='kan'){callBanner('kan',m.name||'Player','カン');}
   else if(m.type==='pon'){callBanner('pon',m.name||'Player','ポン');}
   else if(m.type==='chi'){callBanner('chi',m.name||'Player','チー');}
+  else if(m.type==='kita'){callBanner('kita',m.name||'Player','北');}
   else if(m.type==='chat'){showChatMsg(m.name,m.text,m.color);}
 }
 
@@ -655,8 +656,8 @@ const voiceThemes=[
 ];
 let currentVoiceTheme='Default';
 
-const fxFiles=['Pon','Chii','Kan','Riichi','Double_riichi','Ron','Tsumo'];
-const fxExts={Pon:'mp3',Chii:'mp3',Kan:'mp3',Riichi:'mp3',Double_riichi:'mp3',Ron:'mp3',Tsumo:'mp3'};
+const fxFiles=['Pon','Chii','Kan','Riichi','Double_riichi','Ron','Tsumo','Kita'];
+const fxExts={Pon:'mp3',Chii:'mp3',Kan:'mp3',Riichi:'mp3',Double_riichi:'mp3',Ron:'mp3',Tsumo:'mp3',Kita:'mp3'};
 
 function applyVoiceTheme(themeId){
   currentVoiceTheme=themeId;
@@ -706,7 +707,7 @@ function getFxAudioCtx(){
 }
 
 function allFxTracks(){
-  return ['sfx-pon','sfx-chii','sfx-kan','sfx-riichi','sfx-double-riichi','sfx-ron','sfx-tsumo'].map(id=>$(id)).filter(Boolean);
+  return ['sfx-pon','sfx-chii','sfx-kan','sfx-riichi','sfx-double-riichi','sfx-ron','sfx-tsumo','sfx-kita'].map(id=>$(id)).filter(Boolean);
 }
 
 // Track which audio elements have already been connected to the gain node
@@ -821,6 +822,8 @@ function setMode(mode){
   gameMode=mode;
   $('btn-tonpuu').classList.toggle('active', mode==='tonpuu');
   $('btn-hanchan').classList.toggle('active', mode==='hanchan');
+  try{ localStorage.setItem('mj-game-mode',mode); }catch(e){}
+  updateMatchSummary();
 }
 
 function setVariant(v){
@@ -831,6 +834,18 @@ function setVariant(v){
   $('tonpuu-sub').textContent=`TONPUU · ${n} rounds`;
   $('hanchan-sub').textContent=`HANCHAN · ${n*2} rounds`;
   updateSlotCount();
+  try{ localStorage.setItem('mj-variant',v); }catch(e){}
+  updateMatchSummary();
+}
+
+// One-line readout of the current Match Settings, shown on the lobby card
+// itself since Game Mode/Players moved into the settings modal — without
+// this there'd be no way to tell what you're about to queue for.
+function updateMatchSummary(){
+  const el=$('match-summary'); if(!el) return;
+  const modeLabel=gameMode==='hanchan'?'半荘戦 HANCHAN':'東風戦 TONPUU';
+  const variantLabel=variant==='sanma'?'三人麻雀 SANMA':'四人麻雀 YONMA';
+  el.textContent=`${modeLabel} · ${variantLabel}`;
 }
 
 // Waiting-room slot count follows the selected variant even before a
@@ -847,6 +862,14 @@ function updateSlotCount(){
 let rules={akaDora:true,kuitanAri:true,doubleRon:true,nagashiMangan:true};
 function toggleRule(name){
   rules[name]=!rules[name];
+  applyRuleButton(name);
+  try{ localStorage.setItem('mj-rules',JSON.stringify(rules)); }catch(e){}
+}
+
+// Syncs one rule's ON/OFF button to the current `rules` state — split out
+// from toggleRule so boot-time restore can apply saved values without
+// re-flipping them.
+function applyRuleButton(name){
   const btn=$('btn-rule-'+name); if(!btn) return;
   const on=rules[name];
   btn.textContent=on?'ON':'OFF';
@@ -1020,6 +1043,12 @@ function startGame(m){
   const modeLabel=m.gameMode==='hanchan'?'半荘戦':'東風戦';
   $('tb-mode').textContent=modeLabel;
   $('chat-bar').style.display='flex'; chatOpen=false; unreadCount=0; $('chat-history').innerHTML='';
+  // Clear dora panel — same as onRoundStart. Without this, starting a new
+  // game (Main Menu -> Find Match again in the same tab) shows the PREVIOUS
+  // game's dora tiles during this loading screen, since this is the only
+  // path into a round that never went through onRoundStart's own clear.
+  const doraPanel=$('dora-panel');
+  if(doraPanel) doraPanel.querySelectorAll('.dora-slot').forEach(s=>{s.innerHTML='';s.className='dora-slot';});
   $('dora-panel').style.display='flex';
   show('s-game');
   // Show loading overlay until first game_state arrives
@@ -1074,7 +1103,6 @@ function renderState(m, prev){
     }
   }
   $('dora-panel').style.display='flex';
-  $('dora-panel').style.flexDirection='column';
 
   // Scores in centre panel (compass layout: b=bottom=me, t=top, l=left, r=right)
   // P = ['b','r','t','l'] (or ['b','r','l'] in sanma), indexed by (abs - mySeat + numSeats) % numSeats
@@ -1195,6 +1223,16 @@ function renderState(m, prev){
   else if(newOppKan>prevOppKan){
     const seat=m.melds?.findIndex((ms,i)=>i!==mySeat&&(ms?.filter(ml=>ml?.type==='kan').length||0)>(prev?.melds?.[i]?.filter(ml=>ml?.type==='kan').length||0));
     playSfx('sfx-kan',seat>=0?seat:null);
+  }
+
+  // Kita (sanma only) — one seat's banked-tile count went up
+  if(m.sanma&&m.kita){
+    const prevKitaTotal=(prev?.kita||[]).reduce((n,arr)=>n+(arr?.length||0),0);
+    const newKitaTotal=m.kita.reduce((n,arr)=>n+(arr?.length||0),0);
+    if(newKitaTotal>prevKitaTotal){
+      const seat=m.kita.findIndex((arr,i)=>(arr?.length||0)>(prev?.kita?.[i]?.length||0));
+      playSfx('sfx-kita',seat>=0?seat:null);
+    }
   }
 
   // Riichi
@@ -1419,7 +1457,7 @@ function drawActions(m){
     // single button covers however many copies happen to be in hand.
     const canKita=m.canKita||[];
     if(canKita.length>0)
-      abTile(bar,keyToTile('4z'),'KITA','bkan',()=>wss({type:'action',action:{type:'kita',tileId:canKita[0]}}));
+      ab(bar,'KITA','bkita',()=>wss({type:'action',action:{type:'kita',tileId:canKita[0]}}));
 
     // LEFT: RIICHI
     const canRiichi=m.canRiichi||[];
@@ -1732,7 +1770,13 @@ function roundStartBanner(wind,round,honba){
   const start=document.createElement('div');start.className='rs-start';start.textContent='開始';
   plate.appendChild(w);plate.appendChild(sub);plate.appendChild(start);
   layer.appendChild(scrim);layer.appendChild(plate);
-  setTimeout(()=>{scrim.remove();plate.remove();},3400);
+  // Block interaction with the board underneath for exactly as long as
+  // this card is visible — otherwise the round becomes playable (game_state
+  // usually arrives well under a second after round_start) while "東2局"
+  // is still animating on top, letting an early tap/discard go through
+  // before the player's actually had a chance to see the new hand.
+  layer.classList.add('blocking');
+  setTimeout(()=>{scrim.remove();plate.remove();layer.classList.remove('blocking');},3400);
 }
 
 
@@ -1937,17 +1981,6 @@ function onEnd(m){
     row.innerHTML=`<td><span style="color:${colour};font-weight:700;margin-right:10px;">${ordinal}</span>${escHtml(name)}</td><td><span id="${scoreSpanId}">${startScore.toLocaleString()}</span></td><td class="re-td-delta">${deltaHtml}</td>`;
     tbl.appendChild(row);
   });
-  // Riichi-stick/honba pot carrying into next round — server omits both
-  // fields on a game-ending round_end (no next round to carry into), and
-  // .re-carryover:empty (style.css) collapses itself when left blank.
-  const co=$('re-carryover');
-  if(co){
-    const sticks=m.riichiSticks||0, honba=m.honba||0;
-    const parts=[];
-    if(sticks) parts.push(`${sticks} Riichi Stick${sticks>1?'s':''} (${(sticks*1000).toLocaleString()}pt)`);
-    if(honba) parts.push(`${honba} Honba (${(honba*100).toLocaleString()}pt)`);
-    co.textContent=(!m.gameOver&&parts.length)?`Carries over: ${parts.join(' · ')}`:'';
-  }
   // Animate score count-up after a short delay
   setTimeout(()=>{
     (m.scores||[]).forEach((sc,seat)=>{
@@ -1955,7 +1988,7 @@ function onEnd(m){
       if(startScore===sc) return;
       const span=document.getElementById(`re-sc-${seat}`);
       if(!span) return;
-      const duration=900;
+      const duration=1800;
       const start=performance.now();
       const ease=t=>t<.5?2*t*t:(-1+(4-2*t)*t);
       function frame(now){
@@ -2065,6 +2098,27 @@ try{
   if(savedTheme) currentVoiceTheme=savedTheme;
 }catch(e){}
 renderVoiceThemes();
+
+// Restore last-picked match settings (game mode, player count, rule
+// toggles) — same "remember what you last used" treatment as the audio/
+// voice-theme prefs above. setMode/setVariant already update their own
+// buttons + localStorage + the match-summary line, so just feed them
+// whatever was saved (or leave the built-in defaults if nothing was).
+try{
+  const savedGameMode=localStorage.getItem('mj-game-mode');
+  if(savedGameMode==='hanchan'||savedGameMode==='tonpuu') setMode(savedGameMode);
+  const savedVariant=localStorage.getItem('mj-variant');
+  if(savedVariant==='sanma'||savedVariant==='yonma') setVariant(savedVariant);
+  const savedRules=localStorage.getItem('mj-rules');
+  if(savedRules){
+    const parsed=JSON.parse(savedRules);
+    for(const k of Object.keys(rules)){
+      if(typeof parsed[k]==='boolean') rules[k]=parsed[k];
+      applyRuleButton(k);
+    }
+  }
+}catch(e){}
+updateMatchSummary();
 // Start music on first user interaction — via Press Start button
 function enterLobby(){
   const btn=$('bstart');

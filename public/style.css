@@ -101,7 +101,13 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.6);z-index:50;}
 .diff-popup-btn{padding:5px 8px;font-size:10px;white-space:nowrap;}
 .cd{font-size:calc(var(--ui-vmin) * 1.389);color:rgba(201,168,76,.55);text-align:center;margin-top:8px;letter-spacing:calc(var(--ui-vmin) * .139);}
-.mode-btn{flex:1;padding:calc(var(--ui-vmin) * 1.389) calc(var(--ui-vmin) * .833);background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.6);font-size:calc(var(--ui-vmin) * 1.806);font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
+/* Fallback (7.2px), same value/reason as .about-close below: .mode-btn is
+   used both in #s-lobby (defines --ui-vmin) and, since Game Mode/Players
+   moved into #rules-modal, inside a modal that never defines it — without
+   the fallback, --ui-vmin resolves to nothing there, calc() goes invalid,
+   and padding (not an inherited property) collapses to 0, pinning the
+   label text against the button edges. */
+.mode-btn{flex:1;padding:calc(var(--ui-vmin, 7.2px) * 1.389) calc(var(--ui-vmin, 7.2px) * .833);background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.6);font-size:calc(var(--ui-vmin, 7.2px) * 1.806);font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
 .mode-btn.active{background:rgba(26,107,69,.4);border-color:var(--jl);color:var(--cream);box-shadow:0 0 12px rgba(42,158,103,.3);}
 .mode-btn:hover:not(.active){border-color:rgba(201,168,76,.4);color:var(--cream);}
 .ready-btn{width:100%;padding:calc(var(--ui-vmin) * 1.667);background:linear-gradient(135deg,#0a5a2a,#1a8840);border:2px solid #4eff9a;border-radius:10px;color:#c0ffd8;font-size:calc(var(--ui-vmin) * 1.944);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;margin-top:12px;position:relative;overflow:hidden;}
@@ -134,15 +140,23 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .table{position:fixed;top: 36px;;left:0;right:0;bottom:0;overflow:hidden;
   display:flex;align-items:center;justify-content:center;}
 
-/* Sanma (3-player): no seat sits directly across (toimen), so the whole
-   'top' position is hidden rather than rendered empty — script.js toggles
-   this class on .table once per game, from game_start's numPlayers. */
+/* Sanma (3-player): no seat sits directly across (toimen), so that
+   player-area is hidden — script.js toggles this class on .table once per
+   game, from game_start's numPlayers. The centre score panel's top strip
+   (.ctr-score-top) is deliberately NOT included here: it's one of four
+   ridge-bordered segments that visually close into a single rectangular
+   frame (see .ctr/.ctr-score), not a per-player element on its own —
+   hiding the whole strip leaves that frame open on one side. Its content
+   (the score value and riichi-stick icon) IS hidden below, via
+   visibility:hidden rather than display:none, so the frame segment stays
+   in place but reads as empty rather than showing a "—" placeholder or a
+   stray riichi stick for a seat nobody occupies. */
 .table.sanma .pa-t,
 .table.sanma .np-wrap-t,
 .table.sanma .ml-t,
-.table.sanma .dzt,
-.table.sanma .ctr-score-top,
-.table.sanma .rs-top{display:none;}
+.table.sanma .dzt{display:none;}
+.table.sanma #ctr-s-t,
+.table.sanma .rs-top{visibility:hidden;}
 
 /* Kita (sanma only) — banked North tiles rendered into the same meld row
    as real melds (see renderState in script.js), set apart with a gold
@@ -390,6 +404,9 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .bchi{background:#145a14;color:#c0ffc0;border:0.2vmin solid #4d4;}
 .bpon{background:#6a3800;color:#ffe0b0;border:0.2vmin solid #ca0;}
 .bkan{background:linear-gradient(135deg,#3a0a5a,#6a1a9a);color:#e8d0ff;border:0.2vmin solid #a060d0;}
+/* Matches .call-banner[data-type="kita"]'s accent colours, same pairing
+   convention as .bpon/.bchi/.bkan/.brii all matching their own banners. */
+.bkita{background:linear-gradient(135deg,#0a3a45,#0a6a80);color:#b0f0ff;border:0.2vmin solid #20b0c0;}
 .bpas{background:rgba(40,40,40,.95);color:rgba(245,237,216,.7);border:0.2vmin solid rgba(255,255,255,.2);}
 
 /* ════════════════════════════════════════════════════════════
@@ -575,6 +592,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .call-banner[data-type="kan"]{--accent:#e8d0ff;--accent-strong:#a060d0;--accent-glow:rgba(160,96,208,.4);}
 .call-banner[data-type="chi"]{--accent:#c0ffc0;--accent-strong:#4d4;--accent-glow:rgba(68,221,68,.35);}
 .call-banner[data-type="riichi"]{--accent:#d0d0ff;--accent-strong:#77f;--accent-glow:rgba(119,119,255,.4);}
+.call-banner[data-type="kita"]{--accent:#b0f0ff;--accent-strong:#20b0c0;--accent-glow:rgba(32,176,192,.4);}
 @keyframes cb-slide{
   0%{opacity:0;transform:translate(-58vw,42vh) scale(.55);}
   20%{opacity:.90;}
@@ -591,6 +609,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    rather than racing it. ── */
 .rs-layer{position:fixed;inset:0;z-index:210;pointer-events:none;
   display:flex;align-items:center;justify-content:center;}
+/* While the round-start card is actually showing, block clicks on the
+   board underneath — #game-loading (round 1's "dealing tiles" overlay)
+   already does this naturally since it has no pointer-events:none, but it
+   hides as soon as the next game_state arrives (often well under a
+   second), while this card keeps animating for its full 3.4s. Without
+   this, round 2+ becomes clickable/discardable underneath a still-visible
+   "東2局" announcement. Toggled by roundStartBanner() in script.js,
+   on for exactly as long as the scrim/plate are in the DOM. */
+.rs-layer.blocking{pointer-events:auto;}
 .rs-scrim{position:absolute;inset:0;z-index:0;background:rgba(0,0,0,.85);
   opacity:0;animation:rs-scrim-hold 3.2s ease forwards;}
 .rs-plate{position:relative;z-index:1;display:flex;flex-direction:column;
@@ -739,6 +766,13 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    .card's own children aren't centered by default (unlike #s-start's
    flex column), so this needs its own centering. */
 .rules-link-lobby{display:block;text-align:center;margin:-10px 0 16px;}
+/* Readout of the current Match Settings (game mode + player count) on the
+   lobby card itself — those pickers now live inside the settings modal
+   (see #rules-modal), so without this there'd be no way to tell what
+   you're about to queue for without opening it. */
+.match-summary{text-align:center;font-size:calc(var(--ui-vmin) * 1.389);
+  letter-spacing:calc(var(--ui-vmin) * .417);color:var(--gold);opacity:.65;
+  margin:-4px 0 16px;text-transform:uppercase;}
 .about-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;}
 /* Fixed width (not vw-based) so the panel — and everything inside it, since
    .about-title/.about-body/.about-section-title/.about-close/.about-version
@@ -846,11 +880,18 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    resolution instead of drifting apart. .dora-slot's own tile size isn't
    touched here — it already comes from --tlg-w/h, computed in JS as a
    fraction of the felt's own (already-consistent) size, not px/clamp. */
+/* flex-direction:column lives here (not set inline from JS) specifically
+   so the panel has the same shape the instant it's shown — several call
+   sites toggle `style.display='flex'` (game_start's loading state,
+   round_start, ...) and only renderState() used to also set flexDirection,
+   so the panel briefly rendered its two rows (slots/sticks) SIDE BY SIDE
+   during the loading overlay before snapping to the stacked layout once
+   the first game_state arrived. */
 #dora-panel{--ui-vmin:clamp(6px,1vmin,10px);
   position:fixed;top:44px;left:8px;z-index:80;pointer-events:none;
   background:rgba(8,25,12,.97);border:2px solid rgba(201,168,76,.5);border-radius:12px;
   padding:calc(var(--ui-vmin) * 1.944) calc(var(--ui-vmin) * 2.222) calc(var(--ui-vmin) * 2.222);
-  display:none;
+  display:none;flex-direction:column;
   box-shadow:0 4px 24px rgba(0,0,0,.8),inset 0 1px 0 rgba(201,168,76,.2);}
 .dora-slots{display:flex;gap:6px;align-items:flex-end;}
 /* Live riichi-stick/honba pot, shown alongside the dora indicators for the
@@ -899,7 +940,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .ready-status{margin-top:8px;font-size:11px;color:rgba(245,237,216,.5);letter-spacing:1px;text-align:center;}
 
 /* ── Mode button sub-label ── */
-.mode-sub{font-size:calc(var(--ui-vmin) * 1.25);letter-spacing:calc(var(--ui-vmin) * .139);opacity:.7;}
+.mode-sub{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);opacity:.7;}
 
 /* ── Lobby mode row ── */
 .mode-row{display:flex;gap:8px;margin-top:4px;}
