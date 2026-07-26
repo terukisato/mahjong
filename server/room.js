@@ -6,6 +6,13 @@ const {recordGameResult} = require('./stats');
 
 let _roomId=0;
 const BOT_DELAY=1200; // pause before a bot acts, so its move is readable on screen
+// Must match roundStartBanner()'s 3400ms timer in public/script.js — the
+// client blocks all clicks (human) for that long while the "東2局" card is
+// up, but bots aren't aware of it and act on their own timers regardless.
+// Holding the dealer's first draw off until the card would have cleared
+// keeps a bot from drawing/discarding/calling while the card is still on
+// screen, instead of just hiding the result until it clears.
+const ROUND_START_DELAY=3400;
 // Chat message colour palette — must match CHAT_COLORS in public/script.js.
 // Validated server-side rather than trusting the client's `color` field
 // verbatim, since it gets echoed straight into another player's page.
@@ -484,22 +491,28 @@ class Room {
       // Ron: furiten is an absolute block regardless of rules.chonbo — a
       // furiten ron attempt isn't offered at all, chonbo or not.
       if(!this._isFuriten(seat)){
-        const handWithTile=[...hand,tile];
-        if(isWin(handWithTile,g.melds[seat])){
-          const sw=this._seatWindOf(seat);
-          const isDblRiichi=g.doubleRiichi[seat];
-          const {han}=detectYaku(handWithTile,g.melds[seat],false,sw,this._roundWindValue(),
-            g.riichi[seat],g.ippatsu[seat],isDblRiichi,false,false,false,g.haiteiNext,false,false,key(tile),
-            {kuitanAri:this.rules.kuitanAri});
-          // Structurally a complete hand, but no yaku — a legitimate ron
-          // option only if it actually has han; with chonbo on, still
-          // offered (marked invalid) so it can be attempted and penalized.
-          if(han>0) opts.push({type:'ron',valid:true});
-          else if(this.rules.chonbo) opts.push({type:'ron',valid:false});
-        } else if(this.rules.chonbo){
-          // Not even a complete hand shape — an outright false declare,
-          // only offerable at all with chonbo on.
+        if(this.rules.chonbo){
+          // Chonbo removes the safety net entirely — the client is never
+          // told whether this is actually a winning hand, even when it
+          // genuinely is. Every non-furiten seat always gets the same
+          // "attempt" (valid:false) option and must manually declare +
+          // confirm; the server still validates for real once the ron
+          // action actually arrives (see _multiRon), so a correct declare
+          // still wins normally, it just isn't hinted here.
           opts.push({type:'ron',valid:false});
+        } else {
+          const handWithTile=[...hand,tile];
+          if(isWin(handWithTile,g.melds[seat])){
+            const sw=this._seatWindOf(seat);
+            const isDblRiichi=g.doubleRiichi[seat];
+            const {han}=detectYaku(handWithTile,g.melds[seat],false,sw,this._roundWindValue(),
+              g.riichi[seat],g.ippatsu[seat],isDblRiichi,false,false,false,g.haiteiNext,false,false,key(tile),
+              {kuitanAri:this.rules.kuitanAri});
+            // A legitimate (safe, one-tap) ron option only if it actually
+            // has han — without chonbo on, a no-yaku hand isn't offered at
+            // all, since there's no "attempt anyway" path to fall back to.
+            if(han>0) opts.push({type:'ron',valid:true});
+          }
         }
       }
       if(!g.riichi[seat]){
@@ -524,10 +537,16 @@ class Room {
     if(!g.pending||!g.pending.seats.includes(seat)) return;
     g.pending.responses[seat]=resp;
 
-    // If player passes a valid ron, set temporary furiten
+    // If player passes a valid ron, set temporary furiten. A chonbo-only
+    // "attempt anyway" option (valid:false) isn't a real ron opportunity —
+    // it must NOT count here, or passing on it (as you should, every time
+    // it isn't actually a win) wrongly sets furiten and hides every other
+    // seat's declare/ron option until your next draw resets it. Since your
+    // own draw always precedes your shimocha's discard, that bug made the
+    // option only ever reappear for that one seat.
     if(resp.type==='pass'){
       const myOpts=g.pending.options.find(r=>r.seat===seat);
-      if(myOpts&&myOpts.options.some(o=>o.type==='ron')){
+      if(myOpts&&myOpts.options.some(o=>o.type==='ron'&&o.valid!==false)){
         g.tempFuriten[seat]=true;
       }
     }
@@ -1226,7 +1245,7 @@ class Room {
       this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:dispWind,displayRound:dispRound,
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
-      setTimeout(()=>this._draw(),300);
+      setTimeout(()=>this._draw(),ROUND_START_DELAY);
     };
   }
 
@@ -1311,7 +1330,7 @@ class Room {
       this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:dispWind,displayRound:dispRound,
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
-      setTimeout(()=>this._draw(),300);
+      setTimeout(()=>this._draw(),ROUND_START_DELAY);
     };
   }
 
@@ -1374,7 +1393,7 @@ class Room {
       this._broadcastAll({type:'round_start',round:newRound,roundWind:newRoundWind,displayWind:dispWind,displayRound:dispRound,
         dealer:newDealer,honba:newHonba,scores:g.scores,
         playerNames:this.seats.map(p=>p?.name||'—')});
-      setTimeout(()=>this._draw(),300);
+      setTimeout(()=>this._draw(),ROUND_START_DELAY);
     };
   }
 
@@ -1484,11 +1503,12 @@ class Room {
         return han>0;
       })();
       // Chonbo-only: lets the client offer a deliberately-recessed "attempt
-      // a declare anyway" control even when canTsumo is false — any time
-      // it's this seat's turn with a full hand, regardless of whether it's
-      // actually a valid win. Only meaningful when canTsumo is false (a
-      // real win should always just use the normal, safe canTsumo button).
-      const canAttemptTsumo=this.rules.chonbo&&g.turn===seat&&hand.length===fullHandSize&&!canTsumo;
+      // a declare anyway" control any time it's this seat's turn with a
+      // full hand — including when canTsumo is actually true. Chonbo
+      // removes the safety net entirely, so the client is never told a
+      // hand is a genuine win either; see drawActions in script.js, which
+      // gates the safe one-tap canTsumo button on !m.chonbo for this reason.
+      const canAttemptTsumo=this.rules.chonbo&&g.turn===seat&&hand.length===fullHandSize;
       // Send hand split: main hand (without draw tile) + draw tile separately
       const fullHand=hand;
       const mainHand=dt?fullHand.filter(t=>t.id!==dt.id):fullHand;

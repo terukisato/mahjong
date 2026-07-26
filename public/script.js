@@ -1182,11 +1182,23 @@ function renderState(m, prev){
     el.classList.add('play','drw');
     el.dataset.tid=drawTile.id;
     el.onclick=()=>clickTile(drawTile.id);
-    // Auto-select draw tile when in riichi
-    if(m.riichi?.[mySeat]) el.classList.add('sel');
+    // Auto-select draw tile when in riichi — also sets selId (not just the
+    // CSS class) so the DISCARD button is immediately available without an
+    // extra tap, which matters once chonbo disables the auto-discard timer
+    // below and a manual discard becomes the only way to pass.
+    if(m.riichi?.[mySeat]){ el.classList.add('sel'); selId=drawTile.id; }
     hc.appendChild(el);
-    // Auto-discard after riichi — unless tsumo or ankan available
-    if(m.riichi?.[mySeat] && !m.canTsumo && !(m.canAnkan?.length) && !m.canKyuushu){
+    // Auto-discard after riichi — unless tsumo/ankan/kyuushu is available.
+    // Also skipped whenever canAttemptTsumo is set (chonbo only): with
+    // chonbo on, the server never confirms whether this draw is actually a
+    // win (canTsumo alone can't be used to gate this — see the tsumo/ron
+    // hint removal elsewhere), so if this timer kept auto-discarding every
+    // *non*-winning draw while only holding off on the winning one, the
+    // presence/absence of the auto-discard itself would silently tell the
+    // player which draw won — exactly the hint chonbo is meant to remove.
+    // Skipping it unconditionally under chonbo means the player must
+    // always manually choose Declare vs. Discard, so timing reveals nothing.
+    if(m.riichi?.[mySeat] && !m.canTsumo && !m.canAttemptTsumo && !(m.canAnkan?.length) && !m.canKyuushu){
       setTimeout(()=>{
         if(lastState===m) wss({type:'action',action:{type:'discard',tileId:drawTile.id}});
       }, 600);
@@ -1310,13 +1322,12 @@ function renderState(m, prev){
     const melds=m.melds?.[abs]||[];
     for(const meld of melds){
       const g=document.createElement('div');g.className='mg';
-      // top/left/right all need dir 1↔3 swapped due to their container
-      // rotation — this loop only ever produces id 'r'/'t'/'l' (never 'b',
-      // handled separately above), so every position here is rotated and
-      // flipped must always be true. Previously this argument was never
-      // actually passed, so it silently defaulted to false and no opponent
-      // meld ever got the swap the comment describes.
-      renderMeld(g, meld, abs, true);
+      // No extra flip needed here — renderMeld's dir is computed against
+      // the meld owner's own kamicha/shimocha regardless of which screen
+      // position they're rendered at, and each opponent container's CSS
+      // rotation (.ml-t 180°, .ml-l 90°, .ml-r -90°) already carries that
+      // row to the correct on-screen position on its own (see renderMeld).
+      renderMeld(g, meld, abs);
       if(id==='t') ml2.prepend(g); // top: anchor top-left, first meld leftmost, grows right
       else if(id==='l') ml2.prepend(g); // left: anchor bottom-left, first meld at bottom, grows up
       else ml2.prepend(g);          // right: anchor top-right, first meld at top, grows down
@@ -1382,20 +1393,33 @@ function clickTile(id){
 // MELD RENDERING
 // Draws chi/pon/kan groups with correct orientation per player. Real riichi
 // tables sideways-rotate the called tile within the group to show which
-// neighbor it was called from: `dir` (called-from seat, relative to whoever
-// owns this meld) is 1=kamicha(left) -> called tile goes on the left end,
-// 2=toimen(across) -> called tile goes in the middle, 3=shimocha(right) ->
-// called tile goes on the right end. `viewerSeat` is the OWNER of the meld
-// (not the person looking at the screen) — ankan has no `fromSeat` (self-
-// declared) so it defaults to dir=1, though ankan's rendering below doesn't
-// actually use dir since all 4 tiles are drawn face-down/symmetric anyway.
-function renderMeld(container, meld, viewerSeat, flipped=false){
+// neighbor it was called from, in terms of the meld OWNER's own seat (as if
+// sitting in their chair looking at their own hand) — dir 1=shimocha
+// (their right) -> called tile at the END of the row, 2=toimen (across) ->
+// MIDDLE, 3=kamicha (their left) -> START of the row. `viewerSeat` is the
+// OWNER of the meld (not the person looking at the screen) — ankan has no
+// `fromSeat` (self-declared) so it defaults to dir=1, though ankan's
+// rendering below doesn't actually use dir since all 4 tiles are drawn
+// face-down/symmetric anyway.
+//
+// This dir/row-order is computed once, independent of which screen
+// position (bottom/right/top/left) the owner is actually rendered at — the
+// CSS rotation each opponent's meld container carries (.ml-t 180°, .ml-l
+// 90°, .ml-r -90°) is a pure rotation with no mirroring, so it already
+// carries the owner's own left-to-right row to the correct on-screen
+// position by itself. An earlier version of this code additionally
+// swapped dir 1<->3 for every rotated container ("flipped"), on the theory
+// that all three needed it — verified directly (rendering real melds at
+// each position and measuring on-screen distance to the calling seat) that
+// this swap is wrong for all three, not just some: it's what caused a
+// sanma left-seat pon called from the bottom player to render with the
+// sideways tile on the wrong end. Removed.
+function renderMeld(container, meld, viewerSeat){
   const tiles = meld.tiles;
   const calledId = meld.calledTileId;
   const fromSeat = meld.fromSeat;
-  // dir 1=shimocha (called tile at the END) / 2=toimen (MIDDLE) / 3=kamicha
-  // (START) — determined explicitly against numSeats rather than via a
-  // flat (fromSeat-viewerSeat+4)%4, which only worked by coincidence for a
+  // Determined explicitly against numSeats rather than via a flat
+  // (fromSeat-viewerSeat+4)%4, which only worked by coincidence for a
   // 4-seat table. In sanma (numSeats=3) a kamicha call lands on the SAME
   // raw offset (2) that a 4-seat table uses for toimen — a position that
   // doesn't exist in sanma — so without this, a call from the left renders
@@ -1409,12 +1433,6 @@ function renderMeld(container, meld, viewerSeat, flipped=false){
     else if(fromSeat===kamicha) dir=3;
     else dir=2;
   }
-  // flip dir 1↔3 for all rotated containers (top 180°, left 90°, right -90°)
-  if(flipped){
-    if(dir===1) dir=3;
-    else if(dir===3) dir=1;
-  }
-  // tile order only reverses for top player (180° rotation)
   const add = (el) => container.appendChild(el);
   const mkC = t => { const el=mkElMd(t); el.classList.add('called'); return el; };
 
@@ -1481,13 +1499,17 @@ function drawActions(m){
   const bar=$('actbar'); bar.innerHTML='';
   const stalePicker=$('chi-picker'); if(stalePicker) stalePicker.remove();
   const staleDeclare=$('declare-picker'); if(staleDeclare) staleDeclare.remove();
+  const staleRiichi=$('riichi-picker'); if(staleRiichi) staleRiichi.remove();
   if(!m) return;
   bar.className='act-overlay';
   const mine=m.turn===mySeat, react=m.pending?.isForMe;
 
   if(mine){
-    // LEFT: TSUMO
-    if(m.canTsumo)
+    // LEFT: TSUMO — the safe one-tap button only exists without chonbo;
+    // with chonbo on, the server never confirms a win at all (see
+    // canAttemptTsumo in room.js), so every tsumo goes through the manual
+    // declare+confirm path below instead, valid or not.
+    if(m.canTsumo&&!m.chonbo)
       ab(bar,'TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
     // LEFT: chonbo-only "attempt" declare — deliberately NOT a normal
     // one-tap button (see showDeclareConfirm), since unlike canTsumo this
@@ -1520,10 +1542,18 @@ function drawActions(m){
     if(canKita.length>0)
       ab(bar,'KITA','bkita',()=>wss({type:'action',action:{type:'kita',tileId:canKita[0]}}));
 
-    // LEFT: RIICHI
+    // LEFT: RIICHI — like CHI's sequence picker, pick which tile to
+    // discard when more than one keeps the hand tenpai; a single option
+    // skips the picker for a normal one-tap button. Doesn't require a
+    // tile to already be selected — the button itself is the entry point
+    // into choosing one, the same as CHI never requires pre-selecting the
+    // hand tiles that make up a sequence.
     const canRiichi=m.canRiichi||[];
-    if(canRiichi.length>0&&selId&&canRiichi.includes(selId))
-      ab(bar,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:selId}});selId=null;});
+    if(canRiichi.length===1){
+      ab(bar,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:canRiichi[0]}});selId=null;});
+    } else if(canRiichi.length>1){
+      ab(bar,'RIICHI','brii',()=>showRiichiPicker(canRiichi,m.myHand||[],m.drawTile||null));
+    }
 
     // RIGHT: DISCARD
     if(selId)
@@ -1603,6 +1633,39 @@ function showChiPicker(sequences,discTile,myHand){
       if(t.id===discTile.id) el.classList.add('chi-picker-disc');
       optBtn.appendChild(el);
     });
+    picker.appendChild(optBtn);
+  });
+  const cancelBtn=document.createElement('button');
+  cancelBtn.className='ba bpas chi-picker-cancel';
+  cancelBtn.textContent='✕';
+  cancelBtn.onclick=()=>picker.remove();
+  picker.appendChild(cancelBtn);
+  document.body.appendChild(picker);
+}
+
+// Shows a small overlay letting the player pick which tile to discard when
+// declaring riichi, whenever more than one discard keeps the hand tenpai —
+// same overlay pattern as showChiPicker, just one tile per option instead
+// of a 3-tile sequence. tileIds can include the just-drawn tile (server's
+// canRiichi checks the full post-draw hand), which isn't in myHand — that's
+// why drawTile is looked up as a fallback.
+function showRiichiPicker(tileIds,myHand,drawTile){
+  let picker=$('riichi-picker');
+  if(picker) picker.remove();
+  picker=document.createElement('div');
+  picker.id='riichi-picker';
+  picker.className='chi-picker';
+  tileIds.forEach(id=>{
+    const t=myHand.find(x=>x.id===id)||(drawTile&&drawTile.id===id?drawTile:null);
+    if(!t) return;
+    const optBtn=document.createElement('button');
+    optBtn.className='chi-picker-opt';
+    optBtn.onclick=()=>{
+      wss({type:'action',action:{type:'riichi',tileId:id}});
+      selId=null;
+      picker.remove();
+    };
+    optBtn.appendChild(mkElMd(t));
     picker.appendChild(optBtn);
   });
   const cancelBtn=document.createElement('button');
@@ -1936,9 +1999,14 @@ function onRoundStart(m){
   const status=$('ready-status'); if(status) status.textContent='';
   $('chat-bar').style.display='flex';
   $('dora-panel').style.display='flex';
-  // Show loading overlay until next game_state arrives
-  const loader=$('game-loading');
-  if(loader) loader.style.display='flex';
+  // Deliberately NOT showing #game-loading here (unlike startGame()) — the
+  // round-start card below (roundStartBanner) already covers this same
+  // "hand is being dealt" gap with its own opaque scrim, at a HIGHER
+  // z-index (.rs-layer:210 vs #game-loading:200). Turning the loader on
+  // here just hides it completely behind that scrim for the card's entire
+  // ~3.4s run, then flashes it briefly the instant the card clears if
+  // game_state hasn't arrived yet — i.e. the loading spinner would visibly
+  // appear AFTER the round-start card instead of before/during it.
 
   // ── Update seat winds based on new dealer ────────────────────────────────
   const windLabels2=['東','南','西','北'];

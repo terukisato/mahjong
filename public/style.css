@@ -374,7 +374,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .act-overlay{display:flex;gap:1vmin;align-items:center;
   z-index:40;pointer-events:none;flex-wrap:nowrap;flex-shrink:0;}
 .act-overlay.visible{pointer-events:auto;}
-.chi-picker{position:fixed;left:50%;bottom:18vmin;transform:translateX(-50%);
+.chi-picker{position:fixed;left:50%;bottom:18vh;transform:translateX(-50%);
   display:flex;gap:1.4vmin;align-items:center;z-index:60;
   background:rgba(8,18,12,.92);border:1px solid rgba(201,168,76,.35);
   border-radius:10px;padding:10px 14px;box-shadow:0 8px 28px rgba(0,0,0,.7);}
