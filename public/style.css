@@ -13,6 +13,20 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{height:100%;overflow:hidden;}
 body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation;}
+/* Themed scrollbar — replaces the OS-default bar with the gold-on-dark
+   look everywhere content can scroll (About/User Profile/etc. modals via
+   .about-modal, the Settings side panel, in-game chat history). Global
+   (`*`) rather than listing each scrollable selector individually so any
+   future scrolling container picks it up automatically; harmless on
+   non-scrolling elements since these only render where a scrollbar
+   actually appears. Firefox uses the scrollbar-width/color shorthand;
+   everything Chromium/WebKit-based (including this app's target browsers)
+   uses the ::-webkit-scrollbar-* pseudo-elements instead. */
+*{scrollbar-width:thin;scrollbar-color:rgba(201,168,76,.5) rgba(0,0,0,.3);}
+*::-webkit-scrollbar{width:8px;height:8px;}
+*::-webkit-scrollbar-track{background:rgba(0,0,0,.3);}
+*::-webkit-scrollbar-thumb{background:rgba(201,168,76,.5);border-radius:4px;}
+*::-webkit-scrollbar-thumb:hover{background:var(--gold);}
 /* ════ BACKGROUND LAYERS ════ */
 .bg{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse at 20% 85%,rgba(26,107,69,.3),transparent 55%),radial-gradient(ellipse at 80% 15%,rgba(201,168,76,.14),transparent 55%),radial-gradient(ellipse at 50% 50%,rgba(12,35,20,.85),#040a05 100%);}
 .screen{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;}
@@ -60,12 +74,26 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   width:min(calc(var(--ui-vmin) * 61.11), 96vw);
   box-shadow:0 0 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(201,168,76,.25);position:relative;overflow:hidden;}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);}
-.card h2{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin) * 1.528);letter-spacing:calc(var(--ui-vmin) * .694);color:var(--gold);opacity:.75;margin-bottom:18px;text-align:center;}
-.ig{margin-bottom:16px;}.ig label{display:block;font-size:calc(var(--ui-vmin) * 1.389);letter-spacing:calc(var(--ui-vmin) * .417);color:var(--gold);opacity:.65;margin-bottom:6px;text-transform:uppercase;}
-.ig input{width:100%;background:rgba(0,0,0,.5);border:1px solid rgba(201,168,76,.2);border-radius:10px;
-  padding:calc(var(--ui-vmin) * 1.528) calc(var(--ui-vmin) * 1.944);color:var(--cream);
-  font-size:calc(var(--ui-vmin) * 2.222);outline:none;transition:border-color .3s;font-family:'Noto Sans JP',sans-serif;}
+.card h2{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin) * 1.528);letter-spacing:calc(var(--ui-vmin) * .694);color:var(--gold);margin-bottom:18px;text-align:center;}
+/* var(--ui-vmin, 7.2px) — same fallback convention as .mode-btn/.about
+   .settings-icon-btn: --ui-vmin is only ever defined on #s-lobby/#s-start,
+   so .ig used inside a .about-modal (Profile Picker, Developer Settings)
+   has no ancestor defining it — without the fallback, the calc() goes
+   invalid and padding collapses to 0, leaving input text flush against
+   the left edge. */
+.ig{margin-bottom:16px;}.ig label{display:block;font-size:calc(var(--ui-vmin, 7.2px) * 1.389);letter-spacing:calc(var(--ui-vmin, 7.2px) * .417);color:var(--gold);opacity:.9;margin-bottom:6px;text-transform:uppercase;}
+.ig input{width:100%;background:rgba(0,0,0,.5);border:1px solid rgba(201,168,76,.2);border-radius:0;
+  padding:calc(var(--ui-vmin, 7.2px) * 1.528) calc(var(--ui-vmin, 7.2px) * 1.944);color:var(--cream);
+  font-size:calc(var(--ui-vmin, 7.2px) * 2.222);outline:none;transition:border-color .3s;font-family:'Noto Sans JP',sans-serif;}
 .ig input:focus{border-color:var(--jl);}
+.ig select{width:100%;background:rgba(0,0,0,.5);border:1px solid rgba(201,168,76,.2);border-radius:0;
+  padding:calc(var(--ui-vmin, 7.2px) * 1.528) calc(var(--ui-vmin, 7.2px) * 1.944);color:var(--cream);
+  font-size:calc(var(--ui-vmin, 7.2px) * 2.222);outline:none;transition:border-color .3s;font-family:'Noto Sans JP',sans-serif;}
+.ig select:focus{border-color:var(--jl);}
+.ig input[readonly]{cursor:pointer;opacity:.85;}
+/* Error text for the profile-picker/dev-panel forms — small, unobtrusive
+   until something actually goes wrong. */
+.profile-error{color:#ff8080;font-size:calc(var(--ui-vmin, 7.2px) * 1.667);min-height:calc(var(--ui-vmin, 7.2px) * 2.222);margin:calc(var(--ui-vmin, 7.2px) * .833) 0;}
 .bp{width:100%;padding:calc(var(--ui-vmin) * 1.806);background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);border-radius:10px;color:var(--cream);
   font-size:calc(var(--ui-vmin) * 1.806);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;}
 .bp:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(26,107,69,.55);border-color:var(--gold);}
@@ -87,11 +115,30 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    .mode-btn's flex:1 above, already used for this same "N equal items in
    a row" problem) while letting them shrink together, in one row, rather
    than wrap, when space is tight. */
-.slot{position:relative;flex:0 1 80px;min-width:0;min-height:64px;border-radius:10px;border:2px solid rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;background:rgba(0,0,0,.4);transition:all .4s;padding:6px 4px;}
-.slot .si{font-size:calc(var(--ui-vmin) * 2.778);line-height:1;}.slot .sn{font-size:calc(var(--ui-vmin) * 1.25);color:rgba(245,237,216,.7);font-weight:600;}.slot .sr{font-size:calc(var(--ui-vmin) * 1.111);margin-top:2px;}
+.slot{position:relative;flex:0 1 80px;min-width:0;min-height:64px;border-radius:10px;border:2px solid rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;background:rgba(0,0,0,.4);transition:border-color .4s,background .4s,box-shadow .4s;padding:6px 4px;}
+.slot .si{font-size:calc(var(--ui-vmin) * 2.778);line-height:1;}
+/* Real player icon (see iconSvg in script.js) — bots keep the plain
+   letter-avatar .si above instead, since they have no profile icon. */
+.slot .s-icon{width:calc(var(--ui-vmin) * 7y);height:calc(var(--ui-vmin) * 7);display:block;}
+.slot .s-icon svg{width:100%;height:100%;display:block;}
+.slot .sn{font-size:calc(var(--ui-vmin) * 1.25);color:rgba(245,237,216,.7);font-weight:600;}
 .slot.filled{border-color:var(--jl);background:rgba(26,107,69,.25);}
 .slot.bot{border-color:rgba(201,168,76,.35);background:rgba(50,35,5,.4);}
+/* Ready state is communicated purely by frame colour/glow now — no more
+   "Not ready"/"✓ Ready" text (see updateSlots in script.js). */
 .slot.rdy{border-color:#4eff9a;box-shadow:0 0 14px rgba(78,255,154,.3);}
+/* One-shot pulse the moment a slot actually TRANSITIONS to ready (added
+   only on that specific render — see the prevReady tracking in
+   updateSlots, which prevents this from replaying on every unrelated
+   room_update, e.g. another seat's difficulty change). Ends on exactly
+   .slot.rdy's steady box-shadow/scale so it blends into the persistent
+   glow instead of visibly snapping when the animation finishes. */
+@keyframes rdyFlash{
+  0%{box-shadow:0 0 0 rgba(78,255,154,0);transform:scale(1);}
+  35%{box-shadow:0 0 26px rgba(78,255,154,.85);transform:scale(1.07);}
+  100%{box-shadow:0 0 14px rgba(78,255,154,.3);transform:scale(1);}
+}
+.slot.rdy-flash{animation:rdyFlash .5s ease-out;}
 .slot.clickable-bot{cursor:pointer;}
 .slot .sd{font-size:calc(var(--ui-vmin) * 1.0);color:var(--gold);opacity:.75;margin-top:1px;}
 /* Small inline Easy/Normal/Hard picker anchored under a clicked bot slot —
@@ -100,14 +147,14 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   display:flex;gap:4px;background:#0a160c;border:1px solid rgba(201,168,76,.4);border-radius:8px;
   padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.6);z-index:50;}
 .diff-popup-btn{padding:5px 8px;font-size:10px;white-space:nowrap;}
-.cd{font-size:calc(var(--ui-vmin) * 1.389);color:rgba(201,168,76,.55);text-align:center;margin-top:8px;letter-spacing:calc(var(--ui-vmin) * .139);}
+.cd{font-size:calc(var(--ui-vmin) * 1.389);color:rgba(201,168,76,.9);text-align:center;margin-top:8px;letter-spacing:calc(var(--ui-vmin) * .139);}
 /* Fallback (7.2px), same value/reason as .about-close below: .mode-btn is
    used both in #s-lobby (defines --ui-vmin) and, since Game Mode/Players
    moved into #rules-modal, inside a modal that never defines it — without
    the fallback, --ui-vmin resolves to nothing there, calc() goes invalid,
    and padding (not an inherited property) collapses to 0, pinning the
    label text against the button edges. */
-.mode-btn{flex:1;padding:calc(var(--ui-vmin, 7.2px) * 1.389) calc(var(--ui-vmin, 7.2px) * .833);background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.6);font-size:calc(var(--ui-vmin, 7.2px) * 1.806);font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
+.mode-btn{flex:1;padding:calc(var(--ui-vmin, 7.2px) * 1.389) calc(var(--ui-vmin, 7.2px) * .833);background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.9);font-size:calc(var(--ui-vmin, 7.2px) * 1.806);font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
 .mode-btn.active{background:rgba(26,107,69,.4);border-color:var(--jl);color:var(--cream);box-shadow:0 0 12px rgba(42,158,103,.3);}
 .mode-btn:hover:not(.active){border-color:rgba(201,168,76,.4);color:var(--cream);}
 .ready-btn{width:100%;padding:calc(var(--ui-vmin) * 1.667);background:linear-gradient(135deg,#0a5a2a,#1a8840);border:2px solid #4eff9a;border-radius:10px;color:#c0ffd8;font-size:calc(var(--ui-vmin) * 1.944);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;margin-top:12px;position:relative;overflow:hidden;}
@@ -302,6 +349,12 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 @keyframes glow{0%,100%{box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 14px rgba(255,221,68,.4);}50%{box-shadow:0 0 0 2px rgba(255,221,68,.55),0 0 28px rgba(255,221,68,.7);}}
 .wb{font-family:'Noto Serif JP',serif;font-size:3vmin;font-weight:900;width:4vmin;height:4vmin;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;}
 .pname{font-size:1.8vmin;font-weight:700;color:#fff;max-width:none;overflow:hidden;text-overflow:ellipsis;}
+/* Title under the in-game nameplate's name (see startGame in script.js,
+   title in room.js's _seatInfo) — empty/collapses to nothing for
+   guests/bots, which have no profile to hold one. vmin-scaled like .pname
+   above rather than a fixed px, so it stays proportional at any window size. */
+.ptitle{font-size:1.2vmin;color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;
+  overflow:hidden;text-overflow:ellipsis;}
 .btag{font-size:10px;color:rgba(201,168,76,.5);}
 .tenpai{padding:0.4vmin 0.4vmin;border-radius:0.5vmin;background:linear-gradient(135deg,#6a0f0f,#c02020);color:#fff;font-size:1.2vmin;letter-spacing:1px;font-family:'Cinzel Decorative',serif;
   position:absolute;bottom:calc(var(--tlg-h) + 8vmin);left:15vmin;z-index:30;}
@@ -337,7 +390,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   display:inline-flex;align-items:center;justify-content:center;}
 .tsm{
   display:inline-flex;
-  width:var(--tsm-w,16px);height:var(--tsm-h,22px);border-radius:0.3vmin;
+  width:var(--tsm-w,16px);height:var(--tsm-h,22px);border-radius:0.4vmin;
   background:linear-gradient(145deg,#1a5c70,#0e3a48);
   border:0.1vmin solid #3a90aa;
   flex-shrink:0;position:relative;}
@@ -738,16 +791,102 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    panel's .sp-section{gap:12px} wrapper — the Rules modal's .about-body
    uses bare .sp-row divs with no such wrapper, so give them their own
    breathing room here instead. */
-.about-body .sp-row{padding:4px 0;}
-.sp-label{font-size:12px;color:var(--cream);}
-.sp-toggle{padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;
+.about-body .sp-row{padding:calc(var(--ui-vmin, 7.2px) * .556) 0;}
+/* Highlights the current player's own row in the Rankings list. */
+.sp-row-mine .sp-label{color:var(--gold);font-weight:700;}
+.sp-label{font-size:calc(var(--ui-vmin, 7.2px) * 1.667);color:var(--cream);}
+/* Placements mini bar-chart (see renderPlacementBar in script.js) —
+   replaces the old "1st 1 · 2nd 0 · 3rd 0 · 4th 0" text line, which was
+   hard to compare at a glance. One thin bar per rank, width = that rank's
+   % of games played; brightness fades rank-over-rank via .place-bar-1..4
+   (1st brightest gold, last dimmest) so "better placement" reads as
+   "brighter bar" without a legend. */
+.place-bars{margin:calc(var(--ui-vmin, 7.2px) * .556) 0;}
+.place-bar-row{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.111);
+  padding:calc(var(--ui-vmin, 7.2px) * .278) 0;}
+.place-bar-label{flex:0 0 calc(var(--ui-vmin, 7.2px) * 3.5);font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:rgba(245,237,216,.6);}
+.place-bar-track{flex:1;height:calc(var(--ui-vmin, 7.2px) * 1.111);border-radius:999px;
+  background:rgba(0,0,0,.35);overflow:hidden;}
+.place-bar-fill{height:100%;border-radius:999px;transition:width .4s ease;}
+.place-bar-1{background:rgba(201,168,76,1);}
+.place-bar-2{background:rgba(201,168,76,.75);}
+.place-bar-3{background:rgba(201,168,76,.5);}
+.place-bar-4{background:rgba(201,168,76,.3);}
+.place-bar-pct{flex:0 0 calc(var(--ui-vmin, 7.2px) * 8);text-align:right;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:rgba(245,237,216,.7);}
+/* Achievements panel (see renderAchievements in script.js) — one item per
+   achievement, reusing .place-bar-track/.place-bar-fill above for its
+   progress bar. Not-yet-earned ones are just dimmed via .achv-locked
+   (opacity, no lock icon) — that treatment is deliberately reserved for
+   the Title/Voice Theme pickers, which hide/disable instead. */
+.achv-item{padding:calc(var(--ui-vmin, 7.2px) * 1.111) 0;
+  border-bottom:1px solid rgba(201,168,76,.12);}
+.achv-item:last-child{border-bottom:none;}
+.achv-item.achv-locked{opacity:.45;}
+.achv-label{font-size:calc(var(--ui-vmin, 7.2px) * 1.667);color:var(--cream);}
+.achv-reward{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:var(--gold);opacity:.8;
+  margin:calc(var(--ui-vmin, 7.2px) * .278) 0 calc(var(--ui-vmin, 7.2px) * .417);}
+/* Achievement-unlock toast (see index.html/showAchievementUnlock in
+   script.js) — a corner banner, not a blocking modal: no backdrop, and
+   pointer-events is off while hidden/off-screen so it never intercepts
+   clicks to whatever's underneath (the round-end screen's View
+   Results/Main Menu/Ready buttons, specifically — a full about-modal here
+   used to sit right on top of them). Slides in from off-screen via
+   transform rather than display toggling, so it can auto-dismiss with a
+   visible animation instead of just vanishing. */
+.achv-toast{position:fixed;top:calc(var(--ui-vmin, 7.2px) * 2);right:calc(var(--ui-vmin, 7.2px) * 2);
+  z-index:350;width:min(320px,calc(100vw - 24px));
+  background:#0a160c;border:1px solid rgba(201,168,76,.4);border-radius:8px;
+  padding:calc(var(--ui-vmin, 7.2px) * 2.222);box-shadow:0 12px 32px rgba(0,0,0,.6);
+  transform:translateX(calc(100% + 24px));transition:transform .4s ease;
+  pointer-events:none;max-height:calc(100vh - 32px);overflow-y:auto;}
+.achv-toast.show{transform:translateX(0);pointer-events:auto;}
+.achv-toast-title{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 1.806);
+  color:var(--gold);margin-bottom:calc(var(--ui-vmin, 7.2px) * 1.389);padding-right:calc(var(--ui-vmin, 7.2px) * 2.778);}
+/* Wordless on/off switch (replaces the old "ON"/"OFF" text pill) — a knob
+   (::after) slides right when on, left when the .off class is added (see
+   toggleMusic/toggleFx/toggleDiscardSfx/applyRuleButton in script.js,
+   which now just toggle that class instead of writing textContent + two
+   inline styles). Track stays the same green-tinted "on"/red-tinted "off"
+   coding the old text buttons used, just via .off instead of inline style,
+   so this needs no localization and reads at a glance without reading
+   words. Buttons are now empty elements (see index.html) — the knob is the
+   entire visual, nothing else to lay out. */
+.sp-toggle{position:relative;width:calc(var(--ui-vmin, 7.2px) * 5.5);height:calc(var(--ui-vmin, 7.2px) * 2.8);
+  padding:0;border-radius:999px;cursor:pointer;flex-shrink:0;
   background:rgba(42,158,103,.3);border:1px solid var(--jl);
-  color:var(--cream);letter-spacing:1px;transition:all .2s;}
-.sp-vol{display:flex;flex-direction:column;gap:6px;}
+  transition:background .2s,border-color .2s;}
+.sp-toggle::after{content:'';position:absolute;top:calc(var(--ui-vmin, 7.2px) * .3);
+  left:calc(var(--ui-vmin, 7.2px) * 3.0);width:calc(var(--ui-vmin, 7.2px) * 2.2);height:calc(var(--ui-vmin, 7.2px) * 2.2);
+  border-radius:50%;background:var(--cream);box-shadow:0 1px 3px rgba(0,0,0,.4);
+  transition:left .2s;}
+.sp-toggle.off{background:rgba(80,0,0,.3);border-color:#c82020;}
+.sp-toggle.off::after{left:calc(var(--ui-vmin, 7.2px) * .3);}
+.sp-vol{display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .833);}
 .sp-vol-row{display:flex;justify-content:space-between;align-items:center;}
-.sp-vol-label{font-size:11px;color:var(--gold);}
+.sp-vol-label{font-size:calc(var(--ui-vmin, 7.2px) * 1.528);color:var(--gold);}
 .sp-slider{width:100%;accent-color:var(--gold);cursor:pointer;}
-.sp-theme-list{display:flex;flex-direction:column;gap:6px;}
+.sp-theme-list{display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .833);}
+/* Voice theme option buttons (see renderVoiceThemes in script.js) — base
+   look lives here now instead of an inline style.cssText, so sizing scales
+   with --ui-vmin like everything else in the modal; JS only ever toggles
+   .locked (via a class, not inline px) plus the per-theme active/hover
+   background swap already handled separately in applyVoiceTheme. */
+.theme-btn{padding:calc(var(--ui-vmin, 7.2px) * .972) calc(var(--ui-vmin, 7.2px) * 1.667);border-radius:4px;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.528);letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);
+  transition:all .2s;text-align:left;width:100%;
+  background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);
+  color:var(--cream);font-family:'Cinzel Decorative',serif;cursor:pointer;}
+.theme-btn.locked{opacity:.45;cursor:default;}
+/* Player Icon grid — User Profile modal only (see renderPlayerIcons in
+   script.js). Each icon is a small hand-coded SVG mark, not an uploaded
+   image — the app has no image-upload capability. */
+.icon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--ui-vmin, 7.2px) * 1.111);}
+.icon-btn{background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;
+  padding:calc(var(--ui-vmin, 7.2px) * .833);cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;}
+.icon-btn svg{width:calc(var(--ui-vmin, 7.2px) * 5);height:calc(var(--ui-vmin, 7.2px) * 5);display:block;}
+.icon-btn:hover{border-color:rgba(201,168,76,.5);}
+.icon-btn.active{background:rgba(201,168,76,.2);border-color:var(--gold);}
 
 /* ── Start screen button ── */
 /* Raw vmin works for the logo (large coefficients stay legible even at
@@ -790,36 +929,178 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    lobby card itself — those pickers now live inside the settings modal
    (see #rules-modal), so without this there'd be no way to tell what
    you're about to queue for without opening it. */
+/* Profile nameplate — icon left, name right, with a reserved line under
+   the name for a future title/grade (see #pnp-title, currently always
+   empty). Click anywhere on it to open the profile picker, same action
+   the old #iname text field had — see refreshProfileDisplay in script.js
+   for what keeps its icon/name in sync. */
+.profile-nameplate{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.389);width:100%;
+  background:rgba(0,0,0,.5);border:1px solid rgba(201,168,76,.2);border-radius:8px;
+  padding:calc(var(--ui-vmin, 7.2px) * 1.111) calc(var(--ui-vmin, 7.2px) * 1.667);cursor:pointer;transition:border-color .2s;position:relative;
+  text-align:left;margin-bottom:calc(var(--ui-vmin, 7.2px) * 2.222);}
+.profile-nameplate:hover{border-color:rgba(201,168,76,.5);}
+.pnp-icon{flex-shrink:0;width:calc(var(--ui-vmin, 7.2px) * 4.444);height:calc(var(--ui-vmin, 7.2px) * 4.444);}
+.pnp-icon svg{width:100%;height:100%;display:block;}
+.pnp-info{display:flex;flex-direction:column;flex:1;min-width:0;}
+.pnp-name{font-size:calc(var(--ui-vmin, 7.2px) * 1.944);color:var(--cream);font-family:'Cinzel Decorative',serif;
+  letter-spacing:calc(var(--ui-vmin, 7.2px) * .069);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pnp-title{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:var(--gold);opacity:.9;letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);min-height:calc(var(--ui-vmin, 7.2px) * 1.667);}
+.pnp-change{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.111);right:calc(var(--ui-vmin, 7.2px) * 1.667);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:rgba(245,237,216,.35);
+  letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);text-transform:uppercase;opacity:0;transition:opacity .2s;}
+.profile-nameplate:hover .pnp-change{opacity:1;}
+/* User Profile hub's header — same icon+name pairing as .profile-nameplate
+   above, boxed the same way (rounded corners, gold border) but centered and
+   non-interactive in place of .about-title's plain text (see #up-icon/
+   #up-name in index.html), with a brushed-gold/glossy finish to read as a
+   little metal nameplate rather than a flat panel: a dark gold-to-black
+   gradient for the "brushed metal" base, a diagonal light streak (::before)
+   for the glossy highlight, and inset+outer shadows for plate depth. */
+/* margin-left:0 lines the plate's left edge up with the hub links below
+   (.hub-link has no left inset either, both start flush at .about-body's
+   edge); margin-right alone pulls the right edge in enough to clear the
+   ✕ button's footprint (its right offset + icon size, see .about-close)
+   so the plate's own edge never sits underneath it. */
+.up-nameplate{display:flex;align-items:center;justify-content:left;gap:calc(var(--ui-vmin, 7.2px) * 1.389);
+  margin-left:0;margin-right:calc(var(--ui-vmin, 7.2px) * 1.2);
+  position:relative;overflow:hidden;padding:calc(var(--ui-vmin, 7.2px) * 1.389) calc(var(--ui-vmin, 7.2px) * 2.222);border-radius:2px;
+  transition:background .3s,border-color .3s;
+  /* Bronze — the default tier (under 10 combined wins, see
+     updateNameplateTier in script.js). .tier-silver/.tier-gold/
+     .tier-platinum below override both border and background together;
+     kept as plain modifier classes (not CSS vars) since each tier needs a
+     genuinely different multi-stop gradient, not just one swapped color. */
+  border:1px solid rgba(180,110,60,.6);
+  background:linear-gradient(145deg,#8a5a2e,#3a2410 40%,#1a0f06 55%,#3a2410 70%,#8a5a2e);
+  box-shadow:inset 0 1px 0 rgba(255,210,170,.2),inset 0 -1px 2px rgba(0,0,0,.7),0 3px 8px rgba(0,0,0,.5);}
+.up-nameplate.tier-silver{border-color:rgba(210,212,218,.6);
+  background:linear-gradient(145deg,#d4d6dc,#6c6e76 40%,#2c2d31 55%,#6c6e76 70%,#d4d6dc);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -1px 2px rgba(0,0,0,.7),0 3px 8px rgba(0,0,0,.5);}
+.up-nameplate.tier-gold{border-color:rgba(255,210,90,.7);
+  background:linear-gradient(145deg,#f5d67c,#b8892a 40%,#5a3d0a 55%,#b8892a 70%,#f5d67c);
+  box-shadow:inset 0 1px 0 rgba(255,245,200,.4),inset 0 -1px 2px rgba(0,0,0,.6),0 3px 8px rgba(0,0,0,.5);}
+.up-nameplate.tier-platinum{border-color:rgba(200,232,240,.65);
+  background:linear-gradient(145deg,#eaf6fa,#a9c9d2 40%,#54727a 55%,#a9c9d2 70%,#eaf6fa);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 2px rgba(0,20,30,.6),0 3px 8px rgba(0,0,0,.5);}
+.up-nameplate::before{content:'';position:absolute;top:0;left:-30%;width:35%;height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.22),transparent);
+  transform:skewX(-25deg);}
+.up-nameplate .pnp-icon{width:calc(var(--ui-vmin, 7.2px) * 6.5);height:calc(var(--ui-vmin, 7.2px) * 6.5);}
+/* Click affordance for #up-icon (see index.html) — it opens Player Icon
+   directly now instead of a separate hub link, so it needs to visibly read
+   as clickable. The SVG's outer <rect stroke="var(--gold)" stroke-width="2">
+   every playerIcons entry in script.js draws is thinned to 1.2 here
+   (scoped to just this one usage, not every icon-btn/profile-card
+   elsewhere that reuses the same SVGs) so the frame reads as delicate at
+   rest; hovering doesn't thicken it back up — instead the whole icon gets
+   a soft glow (drop-shadow, transitioned via blur radius 0 → 6px so it
+   animates smoothly rather than popping in) plus the frame brightening to
+   the lighter --gl gold, so the emphasis reads as "lit up" rather than
+   "outlined harder". `svg rect` only ever matches that one frame rect —
+   every other mark in playerIcons is a circle/line/text, never a second
+   rect — so this can't accidentally restyle anything else. */
+.up-icon-btn{cursor:pointer;}
+.up-icon-btn svg{transition:filter .25s;filter:drop-shadow(0 0 0 var(--gl));}
+.up-icon-btn svg rect{stroke-width:0.5;transition:stroke .25s;}
+.up-icon-btn:hover svg{filter:drop-shadow(0 0 6px var(--gl));}
+.up-icon-btn:hover svg rect{stroke:var(--gl);}
+.up-nameplate .pnp-name{position:relative;text-shadow:0 1px 1px rgba(0,0,0,.6);}
+/* #up-title (see index.html) — same text-shadow as .pnp-name above so it
+   stays legible against the metallic background. */
+.up-nameplate .pnp-title{position:relative;text-shadow:0 1px 1px rgba(0,0,0,.6);}
+/* Click affordance for #up-title — opens Title. Same "brighten, don't
+   frame" language as .up-icon-btn above: fades from --gold to the lighter
+   --gl on hover rather than adding a ring/shadow around the text. */
+.up-title-btn{cursor:pointer;transition:color .2s;}
+.up-title-btn:hover{color:var(--gl);}
 .match-summary{text-align:center;font-size:calc(var(--ui-vmin) * 1.389);
-  letter-spacing:calc(var(--ui-vmin) * .417);color:var(--gold);opacity:.65;
+  letter-spacing:calc(var(--ui-vmin) * .417);color:var(--gold);opacity:.9;
   margin:-4px 0 16px;text-transform:uppercase;}
 .about-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;}
-/* Fixed width (not vw-based) so the panel — and everything inside it, since
-   .about-title/.about-body/.about-section-title/.about-close/.about-version
-   are all already plain px font-sizes, never --ui-vmin-scaled — renders at
-   the exact same size on every display, from a small laptop to a 4K
-   monitor. max-width is only a safety net for viewports narrower than the
-   panel itself (360px + this 24px margin), so it still can't overflow a
-   phone screen; every normal desktop/tablet/most-phones size sees the
-   identical fixed 360px panel. */
-.about-modal{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:360px;max-width:calc(100vw - 24px);background:#0a160c;border:1px solid rgba(201,168,76,.3);
-  border-radius:8px;padding:24px;z-index:301;box-shadow:0 12px 48px rgba(0,0,0,.8);}
+/* Same clamped scale-unit approach as #s-lobby/#s-start/.topbar (see their
+   own --ui-vmin comments) — defining it here means every descendant below
+   (.about-title/.about-body/.about-section-title/.hub-link/.icon-grid/
+   .profile-nameplate/etc, plus .ig/.bp/.mode-btn which already read this
+   var with a static 7.2px fallback for when they're used with no such
+   ancestor) scales together with viewport size instead of every dialog
+   rendering at one fixed pixel size regardless of a 320px phone or a 4K
+   display. width is clamp()-driven the same way (50 * the 6–10px clamp
+   range = 300–500px) instead of a flat 360px, still bounded by max-width
+   so it can never overflow a narrow phone screen. Border/border-radius/
+   box-shadow stay plain px on purpose — hairline chrome like that doesn't
+   need to track viewport size, only content/spacing does. */
+/* height is fixed (not content-driven) so every panel in this family is
+   the same box, whether it's a short hub list or a long stats readout —
+   without this, switching between e.g. Voice Theme (short) and My Stats
+   (tall) or the User Profile hub and any of its children snaps the box to
+   a different size on every navigation, which reads as a jump rather than
+   a transition. 48 units matches the tallest common panel's natural
+   content height at the base 7.2px scale, so most panels just gain a
+   little breathing room at the bottom rather than looking empty; anything
+   that still overflows it (About's text, a long My Stats/Rankings list)
+   scrolls via overflow-y, same as before. max-height still wins over this
+   on short viewports, so it can't push the box off-screen. .leave-modal
+   (the in-game "Leave Game?" confirm) opts back out to height:auto below —
+   it's a standalone 2-button confirm, not a panel in this hub/child
+   navigation, so forcing it to the same tall box would just look broken. */
+.about-modal{--ui-vmin:clamp(6px,1vmin,10px);
+  display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:calc(var(--ui-vmin) * 50);height:calc(var(--ui-vmin) * 48);
+  max-width:calc(100vw - 24px);max-height:calc(100vh - 48px);overflow-y:auto;
+  background:#0a160c;border:1px solid rgba(201,168,76,.3);
+  border-radius:8px;padding:calc(var(--ui-vmin) * 3.333);z-index:301;box-shadow:0 12px 48px rgba(0,0,0,.8);}
 .about-backdrop.visible,.about-modal.visible{display:block;}
-.about-close{position:absolute;top:10px;right:12px;background:none;border:none;
-  color:#888;font-size:16px;cursor:pointer;}
-.about-title{font-family:'Cinzel Decorative',serif;font-size:14px;letter-spacing:2px;
-  color:var(--gold);margin-bottom:14px;text-align:center;}
-.about-body{font-size:12px;line-height:1.6;color:rgba(245,237,216,.75);}
-.about-body p{margin:0 0 10px;}
+.leave-modal{height:auto;}
+.about-close{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.389);right:calc(var(--ui-vmin, 7.2px) * 1.667);background:none;border:none;
+  color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.222);cursor:pointer;}
+/* Mirrors .about-close exactly (same top offset AND font-size, so the two
+   icons sit at the same y position) on the opposite corner — returns to
+   the Developer Settings hub instead of exiting it (see backToDevPanel in
+   script.js). Icon-only, same as .about-close's ✕. */
+.about-back{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.389);left:calc(var(--ui-vmin, 7.2px) * 1.667);background:none;border:none;
+  color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.222);cursor:pointer;}
+.about-back:hover{color:var(--gold);}
+.about-title{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 1.944);letter-spacing:calc(var(--ui-vmin, 7.2px) * .278);
+  color:var(--gold);margin-bottom:calc(var(--ui-vmin, 7.2px) * 1.944);text-align:center;}
+.about-body{font-size:calc(var(--ui-vmin, 7.2px) * 1.667);line-height:1.6;color:rgba(245,237,216,.75);}
+.about-body p{margin:0 0 calc(var(--ui-vmin, 7.2px) * 1.389);}
 .about-body p:last-child{margin-bottom:0;}
-.about-section{margin-top:14px;padding-top:14px;border-top:1px solid rgba(201,168,76,.15);}
-.about-section-title{font-size:10px;letter-spacing:2px;color:rgba(201,168,76,.7);
-  font-family:'Cinzel Decorative',serif;margin-bottom:6px;}
+.about-section{margin-top:calc(var(--ui-vmin, 7.2px) * 1.944);padding-top:calc(var(--ui-vmin, 7.2px) * 1.944);border-top:1px solid rgba(201,168,76,.15);}
+.about-section-title{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);letter-spacing:calc(var(--ui-vmin, 7.2px) * .278);color:rgba(201,168,76,.95);
+  font-family:'Cinzel Decorative',serif;margin-bottom:calc(var(--ui-vmin, 7.2px) * .833);}
+/* Yaku Achieved section header (see renderStatsBlock/toggleYakuSection in
+   script.js) — clickable to expand/collapse the achieved+not-yet-achieved
+   list below it. .yaku-caret flips ▸/▾ in JS; transition here just
+   smooths the color change on hover, same hover language as .hub-link. */
+.yaku-toggle{cursor:pointer;display:flex;align-items:center;gap:4px;transition:color .2s;}
+.yaku-toggle:hover{color:var(--gold);}
+/* Rows for yaku never achieved yet (count always 0) — dimmed so the
+   achieved ones above them still read as the "real" data at a glance. */
+.sp-row.yaku-not-achieved{opacity:.4;}
+/* Hub-panel links (Developer Settings, User Profile) — same golden look
+   .about-section-title had back when these were collapsible section
+   headers, kept even though they're plain links now (each opens its own
+   window instead of expanding inline). */
+.hub-link{display:block;font-size:calc(var(--ui-vmin, 7.2px) * 1.528);letter-spacing:calc(var(--ui-vmin, 7.2px) * .278);color:rgba(201,168,76,.95);
+  font-family:'Cinzel Decorative',serif;text-align:left;text-decoration:none;padding:calc(var(--ui-vmin, 7.2px) * 1.389) 0;
+  cursor:pointer;}
+.hub-link:hover{color:var(--gold);}
+/* Profile picker cards — icon on top, name below, one per profile (see
+   renderProfileList/selectProfileCard in script.js). Reuses .icon-grid's
+   3-column layout but each cell needs a taller, name-labeled card instead
+   of .icon-btn's icon-only square. */
+.profile-card{background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;
+  padding:calc(var(--ui-vmin, 7.2px) * 1.111) calc(var(--ui-vmin, 7.2px) * .556);cursor:pointer;transition:all .2s;display:flex;flex-direction:column;
+  align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .556);overflow:hidden;}
+.profile-card svg{width:calc(var(--ui-vmin, 7.2px) * 5);height:calc(var(--ui-vmin, 7.2px) * 5);display:block;}
+.profile-card-name{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:var(--cream);font-family:'Cinzel Decorative',serif;
+  letter-spacing:calc(var(--ui-vmin, 7.2px) * .069);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.profile-card:hover{border-color:rgba(201,168,76,.5);}
+.profile-card.active{background:rgba(201,168,76,.2);border-color:var(--gold);}
+#profile-code-section{margin-top:calc(var(--ui-vmin, 7.2px) * 2.222);}
 .leave-modal .about-body{text-align:center;}
-.leave-actions{display:flex;gap:10px;margin-top:18px;}
-.leave-actions button{flex:1;padding:11px;border-radius:10px;font-size:12px;
-  font-family:'Cinzel Decorative',serif;letter-spacing:2px;cursor:pointer;transition:all .25s;}
+.leave-actions{display:flex;gap:calc(var(--ui-vmin, 7.2px) * 1.389);margin-top:calc(var(--ui-vmin, 7.2px) * 2.5);}
+.leave-actions button{flex:1;padding:calc(var(--ui-vmin, 7.2px) * 1.528);border-radius:10px;font-size:calc(var(--ui-vmin, 7.2px) * 1.667);
+  font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin, 7.2px) * .278);cursor:pointer;transition:all .25s;}
 .leave-btn-stay{background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);color:var(--cream);}
 .leave-btn-stay:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(26,107,69,.5);}
 .leave-btn-confirm{background:rgba(120,20,20,.85);border:1px solid rgba(200,60,60,.5);color:rgba(255,200,200,.9);}
@@ -828,18 +1109,30 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    is currently in — #s-start, #s-lobby, or .topbar (via .tb-right) — all
    three declare the same clamp(6px,1vmin,10px), so the icon reads as one
    consistent scale wherever it's shown. */
-.settings-icon-btn{position:absolute;top:12px;right:14px;background:none;border:none;
+.settings-icon-btn{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.667);right:calc(var(--ui-vmin, 7.2px) * 1.944);background:none;border:none;
   color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.778);cursor:pointer;z-index:10;letter-spacing:-1px;}
-/* Mirrors .settings-icon-btn's position/sizing on the opposite corner —
-   only shown on #s-lobby (there's nowhere "back" from #s-start itself). */
-.back-icon-btn{position:absolute;top:12px;left:14px;background:none;border:none;
+/* Holds an inline SVG (the profile's chosen player icon, see
+   renderUserIconButton) instead of a text glyph like its .settings-icon-btn
+   sibling — sized to roughly the same footprint the ☰ glyph occupies.
+   calc(var(--ui-vmin))-based like everything else here (not raw vmin) so it
+   shares the same clamp(6px,1vmin,10px) floor/ceiling — a bare vmin value
+   would shrink with no floor on a short/narrow viewport and grow with no
+   ceiling on a huge one. */
+.user-icon-btn{display:flex;align-items:center;justify-content:center;padding:0;}
+.user-icon-btn svg{width:calc(var(--ui-vmin, 7.2px) * 6.111);height:calc(var(--ui-vmin, 7.2px) * 6.111);display:block;}
+/* Anchored to .card (position:relative) — the "Enter the Hall" panel's own
+   top-left corner, not the window's. Only shown on #s-lobby (there's
+   nowhere "back" from #s-start itself). Smaller offset than the
+   window-corner buttons since it now sits inside the card's own padding
+   instead of the screen's edge. */
+.back-icon-btn{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.389);left:calc(var(--ui-vmin, 7.2px) * 1.389);background:none;border:none;
   color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.778);cursor:pointer;z-index:10;}
 
 /* ── Topbar inline elements ── */
 .tb-right .settings-icon-btn{position:static;z-index:auto;}
-.tb-mode-label{font-size:calc(var(--ui-vmin) * 1.389);opacity:.6;margin-left:6px;}
-.tb-version{font-size:calc(var(--ui-vmin) * 1.25);opacity:.4;margin-left:6px;letter-spacing:calc(var(--ui-vmin) * .139);font-family:var(--font-sans);}
-.about-version{font-size:10px;opacity:.5;margin-left:6px;letter-spacing:1px;font-family:var(--font-sans);}
+.tb-mode-label{font-size:calc(var(--ui-vmin) * 1.389);opacity:.8;margin-left:6px;}
+.tb-version{font-size:calc(var(--ui-vmin) * 1.25);opacity:.65;margin-left:6px;letter-spacing:calc(var(--ui-vmin) * .139);font-family:var(--font-sans);}
+.about-version{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);opacity:.95;margin-left:calc(var(--ui-vmin, 7.2px) * .833);letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);font-family:var(--font-sans);}
 .tb-right{display:flex;align-items:center;gap:6px;}
 
 /* ── Game loading overlay ── */
@@ -960,7 +1253,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .ready-status{margin-top:8px;font-size:11px;color:rgba(245,237,216,.5);letter-spacing:1px;text-align:center;}
 
 /* ── Mode button sub-label ── */
-.mode-sub{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);opacity:.7;}
+.mode-sub{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);opacity:.9;}
 
 /* ── Lobby mode row ── */
 .mode-row{display:flex;gap:8px;margin-top:4px;}

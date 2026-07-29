@@ -30,7 +30,7 @@
     <div class="sp-header">AUDIO</div>
     <div class="sp-row">
       <span class="sp-label">Music</span>
-      <button id="bmute" class="sp-toggle" onclick="toggleMusic()">ON</button>
+      <button id="bmute" class="sp-toggle" onclick="toggleMusic()" title="Music on/off"></button>
     </div>
     <div class="sp-vol">
       <div class="sp-vol-row">
@@ -44,7 +44,7 @@
   <div class="sp-section">
     <div class="sp-row">
       <span class="sp-label">Voice</span>
-      <button id="bfx" class="sp-toggle" onclick="toggleFx()">ON</button>
+      <button id="bfx" class="sp-toggle" onclick="toggleFx()" title="Voice on/off"></button>
     </div>
     <div class="sp-vol">
       <div class="sp-vol-row">
@@ -58,7 +58,7 @@
   <div class="sp-section">
     <div class="sp-row">
       <span class="sp-label">FX</span>
-      <button id="bdiscard-sfx" class="sp-toggle" onclick="toggleDiscardSfx()">ON</button>
+      <button id="bdiscard-sfx" class="sp-toggle" onclick="toggleDiscardSfx()" title="FX on/off"></button>
     </div>
     <div class="sp-vol">
       <div class="sp-vol-row">
@@ -67,11 +67,6 @@
       </div>
       <input id="discard-vol-slider" class="sp-slider" type="range" min="0" max="100" value="30" oninput="setDiscardVolume(this.value)">
     </div>
-  </div>
-  <!-- Voice Theme section -->
-  <div class="sp-section">
-    <div class="sp-header">VOICE THEME</div>
-    <div id="voice-theme-list" class="sp-theme-list"></div>
   </div>
 </div>
 <div id="settings-backdrop" onclick="toggleSettings()"></div>
@@ -96,7 +91,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version">v0.12.2</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.0</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -132,21 +127,282 @@
     </div>
     <div class="about-section">
       <div class="about-section-title">Rules</div>
-      <div class="sp-row"><span class="sp-label">Aka Dora</span><button class="sp-toggle" id="btn-rule-akaDora" onclick="toggleRule('akaDora')">ON</button></div>
-      <div class="sp-row"><span class="sp-label">Kuitan (Open Tanyao)</span><button class="sp-toggle" id="btn-rule-kuitanAri" onclick="toggleRule('kuitanAri')">ON</button></div>
-      <div class="sp-row"><span class="sp-label">Double Ron</span><button class="sp-toggle" id="btn-rule-doubleRon" onclick="toggleRule('doubleRon')">ON</button></div>
-      <div class="sp-row"><span class="sp-label">Nagashi Mangan</span><button class="sp-toggle" id="btn-rule-nagashiMangan" onclick="toggleRule('nagashiMangan')">ON</button></div>
-      <div class="sp-row"><span class="sp-label">Chonbo (False Declaration Penalty)</span><button class="sp-toggle" id="btn-rule-chonbo" onclick="toggleRule('chonbo')" style="background:rgba(80,0,0,.3);border-color:#c82020;">OFF</button></div>
+      <div class="sp-row"><span class="sp-label">Aka Dora</span><button class="sp-toggle" id="btn-rule-akaDora" onclick="toggleRule('akaDora')" title="Aka Dora on/off"></button></div>
+      <div class="sp-row"><span class="sp-label">Kuitan (Open Tanyao)</span><button class="sp-toggle" id="btn-rule-kuitanAri" onclick="toggleRule('kuitanAri')" title="Kuitan on/off"></button></div>
+      <div class="sp-row"><span class="sp-label">Double Ron</span><button class="sp-toggle" id="btn-rule-doubleRon" onclick="toggleRule('doubleRon')" title="Double Ron on/off"></button></div>
+      <div class="sp-row"><span class="sp-label">Nagashi Mangan</span><button class="sp-toggle" id="btn-rule-nagashiMangan" onclick="toggleRule('nagashiMangan')" title="Nagashi Mangan on/off"></button></div>
+      <div class="sp-row"><span class="sp-label">Chonbo (False Declaration Penalty)</span><button class="sp-toggle off" id="btn-rule-chonbo" onclick="toggleRule('chonbo')" title="Chonbo on/off"></button></div>
     </div>
   </div>
 </div>
 
-<!-- Stats modal -->
-<div id="stats-backdrop" class="about-backdrop" onclick="toggleStats()"></div>
-<div id="stats-modal" class="about-modal">
-  <button class="about-close" onclick="toggleStats()">✕</button>
+<!-- Rankings modal -->
+<div id="rankings-backdrop" class="about-backdrop" onclick="toggleRankings()"></div>
+<div id="rankings-modal" class="about-modal">
+  <button class="about-close" onclick="toggleRankings()">✕</button>
+  <div class="about-title">Rankings</div>
+  <div class="about-body">
+    <!-- Sanma/yonma are scored on different scales (see stats.js), so the
+         leaderboard is per-variant too — this toggle picks which board
+         get_leaderboard fetches (see toggleLeaderboardVariant). -->
+    <div class="mode-row" style="margin-bottom:14px;">
+      <button class="mode-btn active" id="btn-rank-yonma" onclick="toggleLeaderboardVariant('yonma')">四人麻雀<br><span class="mode-sub">YONMA</span></button>
+      <button class="mode-btn" id="btn-rank-sanma" onclick="toggleLeaderboardVariant('sanma')">三人麻雀<br><span class="mode-sub">SANMA</span></button>
+    </div>
+    <div id="rankings-body">Loading…</div>
+  </div>
+</div>
+
+<!-- User Profile — only reachable once a profile is unlocked (see
+     user-icon-btn beside the settings icon). This is a hub, same pattern as
+     Developer Settings below: each heading is a link that closes this and
+     opens ITS OWN modal (see toggle*Modal below) rather than expanding
+     inline, so the hub stays a short scannable list no matter how many
+     profile settings get added later, and each setting gets full modal
+     space of its own. "← Back" on every child panel returns here (see
+     backToUserProfile); ✕ exits the whole hub. -->
+<div id="userprofile-backdrop" class="about-backdrop" onclick="toggleUserProfile()"></div>
+<div id="userprofile-modal" class="about-modal">
+  <button class="about-close" onclick="toggleUserProfile()">✕</button>
+  <!-- Header is the same icon+name+title readout as the lobby's
+       #profile-nameplate (see refreshProfileDisplay in script.js, which
+       keeps #up-icon/#up-name/#up-title in sync with it) — static here
+       aside from the icon/title themselves, since switching profiles is the
+       lobby nameplate's job, not this hub's. #up-icon opens Player Icon and
+       #up-title opens Title (see .up-icon-btn/.up-title-btn's cursor/hover
+       in style.css for the click affordance) — both replace what used to be
+       separate hub links below, clicking the thing itself IS the entry
+       point now. -->
+  <div class="about-title up-nameplate">
+    <span class="pnp-icon up-icon-btn" id="up-icon" onclick="toggleUserProfile();togglePlayerIconModal();" title="Change Player Icon"></span>
+    <span class="pnp-info">
+      <span class="pnp-name" id="up-name"></span>
+      <span class="pnp-title up-title-btn" id="up-title" onclick="toggleUserProfile();toggleTitleModal();" title="Change Title"></span>
+    </span>
+  </div>
+  <div class="about-body">
+    <a href="#" class="hub-link" onclick="toggleUserProfile();toggleVoiceThemeModal();return false;">Voice Theme</a>
+    <a href="#" class="hub-link" onclick="toggleUserProfile();toggleUserStatsModal();return false;">My Stats</a>
+    <a href="#" class="hub-link" onclick="toggleUserProfile();toggleAchievementsModal();return false;">Achievements</a>
+    <a href="#" class="hub-link" onclick="toggleUserProfile();toggleChangeUsernameModal();return false;">Change Username</a>
+    <a href="#" class="hub-link" onclick="toggleUserProfile();toggleChangeCodeModal();return false;">Change Key</a>
+  </div>
+</div>
+
+<!-- Player Icon — its own window, opened from the User Profile hub above.
+     "← Back" returns to the hub (see backToUserProfile) — ✕ exits out of
+     User Profile entirely, same as everywhere else. -->
+<div id="playericon-backdrop" class="about-backdrop" onclick="togglePlayerIconModal()"></div>
+<div id="playericon-modal" class="about-modal">
+  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-close" onclick="togglePlayerIconModal()">✕</button>
+  <div class="about-title">Player Icon</div>
+  <div class="about-body">
+    <div id="player-icon-list" class="icon-grid"></div>
+  </div>
+</div>
+
+<!-- Title — same pattern as Player Icon above, opened by clicking #up-title
+     instead of a hub link. Only "Beginner" exists right now — also every
+     profile's default (see TITLES in server/profiles.js) — more will be
+     added later without this panel's structure needing to change; see
+     renderTitles/applyPlayerTitle in script.js. -->
+<div id="title-backdrop" class="about-backdrop" onclick="toggleTitleModal()"></div>
+<div id="title-modal" class="about-modal">
+  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-close" onclick="toggleTitleModal()">✕</button>
+  <div class="about-title">Title</div>
+  <div class="about-body">
+    <div id="title-list" class="sp-theme-list"></div>
+  </div>
+</div>
+
+<!-- Voice Theme — same pattern as Player Icon above. #voice-theme-list
+     keeps its id from before this moved — renderVoiceThemes targets it
+     unchanged, it just lives here now instead of inline in User Profile. -->
+<div id="voicetheme-backdrop" class="about-backdrop" onclick="toggleVoiceThemeModal()"></div>
+<div id="voicetheme-modal" class="about-modal">
+  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-close" onclick="toggleVoiceThemeModal()">✕</button>
+  <div class="about-title">Voice Theme</div>
+  <div class="about-body">
+    <div id="voice-theme-list" class="sp-theme-list"></div>
+  </div>
+</div>
+
+<!-- My Stats — same pattern. #stats-body keeps its id from before this
+     moved — renderStats targets it unchanged. -->
+<div id="userstats-backdrop" class="about-backdrop" onclick="toggleUserStatsModal()"></div>
+<div id="userstats-modal" class="about-modal">
+  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-close" onclick="toggleUserStatsModal()">✕</button>
   <div class="about-title">My Stats</div>
-  <div class="about-body" id="stats-body">Loading…</div>
+  <div class="about-body">
+    <div id="stats-body">Loading…</div>
+  </div>
+</div>
+
+<!-- Achievements — same pattern as My Stats above. Every achievement is
+     listed (see renderAchievements in script.js), earned or not, each with
+     its own progress bar — not-yet-earned ones are just dimmed (no lock
+     icon; that's specifically for the Title/Voice Theme pickers, which
+     hide/disable rather than dim). -->
+<div id="achievements-backdrop" class="about-backdrop" onclick="toggleAchievementsModal()"></div>
+<div id="achievements-modal" class="about-modal">
+  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-close" onclick="toggleAchievementsModal()">✕</button>
+  <div class="about-title">Achievements</div>
+  <div class="about-body">
+    <div id="achievements-list">Loading…</div>
+  </div>
+</div>
+
+<!-- Change Username — owner-only: requires re-entering THIS profile's own
+     current code (see 'change_username' in server/index.js), not just an
+     already-unlocked session, since this changes login identity. On
+     success, #iname/the nameplate are refreshed to the new name (see
+     onChangeUsernameResult in script.js) so nothing else in this file needs
+     to know the name just changed. -->
+<div id="changeusername-backdrop" class="about-backdrop" onclick="toggleChangeUsernameModal()"></div>
+<div id="changeusername-modal" class="about-modal">
+  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-close" onclick="toggleChangeUsernameModal()">✕</button>
+  <div class="about-title">Change Username</div>
+  <div class="about-body">
+    <div class="ig"><label for="changeusername-current">Current Code</label>
+      <input type="password" id="changeusername-current" maxlength="20" placeholder="Enter current code">
+    </div>
+    <div class="ig"><label for="changeusername-new">New Username</label>
+      <input type="text" id="changeusername-new" maxlength="20">
+    </div>
+    <div id="changeusername-error" class="profile-error"></div>
+    <button class="bp" onclick="submitChangeUsername()">Save Username</button>
+  </div>
+</div>
+
+<!-- Change Key — same owner-only current-code gate as Change Username
+     above (see 'change_code' in server/index.js). -->
+<div id="changecode-backdrop" class="about-backdrop" onclick="toggleChangeCodeModal()"></div>
+<div id="changecode-modal" class="about-modal">
+  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-close" onclick="toggleChangeCodeModal()">✕</button>
+  <div class="about-title">Change Key</div>
+  <div class="about-body">
+    <div class="ig"><label for="changecode-current">Current Code</label>
+      <input type="password" id="changecode-current" maxlength="20" placeholder="Enter current code">
+    </div>
+    <div class="ig"><label for="changecode-new">New Code</label>
+      <input type="password" id="changecode-new" maxlength="20" placeholder="At least 4 characters">
+    </div>
+    <div id="changecode-error" class="profile-error"></div>
+    <button class="bp" onclick="submitChangeCode()">Save Key</button>
+  </div>
+</div>
+
+<!-- Profile picker modal — a card per profile (icon + name, see
+     renderProfileList/selectProfileCard in script.js), not a dropdown.
+     Picking a card reveals that profile's own code prompt below the grid;
+     unlockProfile() then unlocks it for the session
+     (see toggleProfilePicker/unlockProfile). -->
+<div id="profile-backdrop" class="about-backdrop" onclick="toggleProfilePicker()"></div>
+<div id="profile-modal" class="about-modal">
+  <button class="about-close" onclick="toggleProfilePicker()">✕</button>
+  <div class="about-title">Select Profile</div>
+  <div class="about-body">
+    <div id="profile-card-grid" class="icon-grid"></div>
+    <div id="profile-code-section" style="display:none;">
+      <div class="ig"><label id="profile-code-label" for="profile-code">Code</label>
+        <input type="password" id="profile-code" maxlength="20" placeholder="Enter code">
+      </div>
+      <div id="profile-error" class="profile-error"></div>
+      <button class="bp" onclick="unlockProfile()">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- Developer Settings — hidden from normal play; reached by tapping the
+     About panel's version number 10 times (see handleVersionTap in
+     script.js). Gated by a two-step flow: #devpanel-gate (just the key
+     prompt) is what's actually shown every time this panel opens; only a
+     correct key swaps it for #devpanel-content, a plain list of settings
+     (more to come over time). toggleDevPanel() resets back to the gate on
+     every open — the key is never remembered across opens, by design (see
+     verifiedDevSecret in script.js). Clicking a setting closes this hub
+     and opens ITS OWN modal (see toggleCreateProfileModal/
+     toggleDeleteProfileModal below) rather than expanding inline, so each
+     setting gets full modal space instead of being squeezed into a
+     dropdown. Every action inside those is still independently re-checked
+     against DEV_SECRET server-side (see server/index.js) regardless of
+     this gate. -->
+<!-- No onclick on this backdrop, unlike every other modal's — clicking
+     outside must NOT close Developer Settings here. The 10-tap gesture
+     that opens this panel means a stray 11th tap can easily land past the
+     small modal box, right where the backdrop now sits; if that closed
+     the panel, the very gesture used to open it could immediately close
+     it again. Only the ✕ button (toggleDevPanel) closes this one. -->
+<div id="devpanel-backdrop" class="about-backdrop"></div>
+<div id="devpanel-modal" class="about-modal">
+  <button class="about-close" onclick="toggleDevPanel()">✕</button>
+  <div class="about-title">Developer Settings</div>
+  <div class="about-body">
+    <div id="devpanel-gate">
+      <div class="ig"><label for="dev-secret">Developer Key</label>
+        <input type="password" id="dev-secret" maxlength="60">
+      </div>
+      <div id="devgate-error" class="profile-error"></div>
+      <button class="bp" onclick="submitDevKey()">Unlock</button>
+    </div>
+
+    <div id="devpanel-content" style="display:none;">
+      <a href="#" class="hub-link" onclick="toggleDevPanel();toggleCreateProfileModal();return false;">Create Profile</a>
+      <a href="#" class="hub-link" onclick="toggleDevPanel();toggleDeleteProfileModal();return false;">Delete Profile</a>
+    </div>
+  </div>
+</div>
+
+<!-- Create Profile (developer) — its own window, opened from the
+     Developer Settings hub above. Reachable only via that hub in normal
+     use, but create_profile is independently re-checked against
+     DEV_SECRET server-side regardless of how this modal was reached.
+     "← Back" returns to the hub (still unlocked, see backToDevPanel) — ✕
+     exits out of Developer Settings entirely, same as everywhere else. -->
+<div id="create-profile-backdrop" class="about-backdrop" onclick="toggleCreateProfileModal()"></div>
+<div id="create-profile-modal" class="about-modal">
+  <button class="about-back" onclick="backToDevPanel()">←</button>
+  <button class="about-close" onclick="toggleCreateProfileModal()">✕</button>
+  <div class="about-title">Create Profile</div>
+  <div class="about-body">
+    <div class="ig"><label for="dev-newname">Profile Name</label>
+      <input type="text" id="dev-newname" maxlength="20">
+    </div>
+    <div class="ig"><label for="dev-newcode">Unlock Code</label>
+      <input type="password" id="dev-newcode" maxlength="20" placeholder="At least 4 characters">
+    </div>
+    <div id="devpanel-error" class="profile-error"></div>
+    <button class="bp" onclick="submitCreateProfile()">Create Profile</button>
+  </div>
+</div>
+
+<!-- Delete Profile (developer) — same pattern as Create Profile above. -->
+<div id="delete-profile-backdrop" class="about-backdrop" onclick="toggleDeleteProfileModal()"></div>
+<div id="delete-profile-modal" class="about-modal">
+  <button class="about-back" onclick="backToDevPanel()">←</button>
+  <button class="about-close" onclick="toggleDeleteProfileModal()">✕</button>
+  <div class="about-title">Delete Profile</div>
+  <div class="about-body">
+    <div class="ig"><label for="dev-delete-select">Profile</label>
+      <select id="dev-delete-select"></select>
+    </div>
+    <div id="dev-delete-confirm-row" style="display:none;">
+      <p class="profile-error" style="min-height:auto;">Delete this profile and all its stats? This can't be undone.</p>
+      <div class="leave-actions">
+        <button class="leave-btn-stay" onclick="cancelDeleteProfile()">Cancel</button>
+        <button class="leave-btn-confirm" onclick="confirmDeleteProfile()">Delete</button>
+      </div>
+    </div>
+    <div id="devdelete-error" class="profile-error"></div>
+    <button class="bp" id="dev-delete-btn" onclick="armDeleteProfile()" style="background:linear-gradient(135deg,#5a1a0a,#9a3a1a);border-color:#ff8040;">Delete Profile</button>
+  </div>
 </div>
 
 <!-- Leave-game confirm modal -->
@@ -160,20 +416,65 @@
   </div>
 </div>
 
+<!-- Achievement-unlocked notification — a corner toast, NOT a blocking
+     modal (deliberately no backdrop/.about-modal here): it used to be a
+     full about-modal, but that blocked clicks straight through to the
+     round-end screen's View Results/Main Menu/Ready buttons (its backdrop
+     sat on top of them) right when a player would want those most. Slides
+     in from the top-right (see .achv-toast in style.css) and auto-dismisses
+     (see showAchievementUnlock/closeAchievementUnlock in script.js) so it
+     never requires an explicit dismissal to keep playing — the ✕ is just
+     for closing it early. Fires whenever an 'achievements_unlocked'
+     message arrives (see onMsg), which the server sends right after a
+     finished game if this connection's own seat just earned any new
+     achievements (see _finishGame in server/room.js). Lists every
+     achievement earned that game plus its reward, reusing the same
+     .achv-item styling as the Achievements panel — just without the
+     dimmed/not-yet-earned rows, since everything shown here was JUST
+     earned. -->
+<div id="achv-toast" class="achv-toast">
+  <button class="about-close" onclick="closeAchievementUnlock()">✕</button>
+  <div class="achv-toast-title">Achievement Unlocked!</div>
+  <div id="achv-unlock-body"></div>
+</div>
+
 <!-- ════════════════════════════════════════════════════════════
      LOBBY SCREEN
      ════════════════════════════════════════════════════════════ -->
 <div class="screen hidden" id="s-lobby">
-  <!-- Back-to-menu button top-left, settings button top-right -->
-  <button class="back-icon-btn" onclick="backToMenu()" title="Back to Menu">←</button>
+  <!-- Settings button top-right of the window, same as every other screen. -->
+  <!-- Hidden until a profile is unlocked (see onProfileUnlocked) — there's
+       no per-profile content to show before then. -->
+  <button class="settings-icon-btn user-icon-btn" id="user-icon-btn" onclick="toggleUserProfile()" title="User Profile" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 5.556);">人</button>
   <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Mahjong Online</div></div>
   <div class="card">
+    <!-- Back-to-menu now anchored to this panel's own top-left corner,
+         not the window's — see .back-icon-btn's position:absolute. -->
+    <button class="back-icon-btn" onclick="backToMenu()" title="Back to Menu">←</button>
     <h2>Enter the Hall</h2>
     <a href="#" class="about-link rules-link-lobby" onclick="toggleRulesModal();return false;">⚙ Match Settings</a>
-    <a href="#" class="about-link rules-link-lobby" onclick="toggleStats();return false;">My Stats</a>
+    <a href="#" class="about-link rules-link-lobby" onclick="toggleRankings();return false;">Rankings</a>
     <div id="lobby-inputs">
-    <div class="ig"><label for="iname">Your Name</label><input type="text" id="iname" placeholder="Player" maxlength="10" value="Player"></div>
+    <!-- Defaults to Guest — playable immediately with no profile chosen.
+         Guest play holds no data at all (see recordGameResult's isGuest
+         skip in stats.js); picking a real profile via the picker is only
+         needed for stats/rankings/unlocks to persist.
+         #iname stays the actual source of truth for the profile name (read
+         all over this file) — just hidden now; the nameplate below is a
+         pure display of it plus the icon, kept in sync by
+         refreshProfileDisplay(). -->
+    <input type="hidden" id="iname" value="Guest">
+    <button class="profile-nameplate" id="profile-nameplate" onclick="toggleProfilePicker()" title="Select Profile">
+      <span class="pnp-icon" id="pnp-icon"></span>
+      <span class="pnp-info">
+        <span class="pnp-name" id="pnp-name">Guest</span>
+        <!-- Kept in sync with currentPlayerTitle by refreshProfileDisplay()
+             in script.js, same as #pnp-name above. -->
+        <span class="pnp-title" id="pnp-title"></span>
+      </span>
+      <span class="pnp-change">Change</span>
+    </button>
     <div class="match-summary" id="match-summary"></div>
     </div>
     <button class="bp" id="bfind">⚔ Find Match</button>
@@ -291,7 +592,7 @@
       <!-- ── Nameplate ── -->
         <div class="np-wrap-b">
           <div class="np-inner">
-            <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div></div></div>
+            <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div><div class="ptitle" id="ptb"></div></div></div>
           </div>
           <div class="act-overlay actbar" id="actbar"></div>
         </div>
@@ -303,7 +604,7 @@
         <div class="hr" id="hdt"></div>
       </div>
         <div class="np-wrap-t">
-          <div class="np" id="npt"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="btag" id="btt"></div></div></div>
+          <div class="np" id="npt"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="ptitle" id="ptt"></div><div class="btag" id="btt"></div></div></div>
         </div>
       <div class="mr ml-t" id="mlt"></div>
 
@@ -312,7 +613,7 @@
         <div class="hr" id="hdl"></div>
       </div>
         <div class="np-wrap-l">
-          <div class="np" id="npl"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="btag" id="btl"></div></div></div>
+          <div class="np" id="npl"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="ptitle" id="ptl"></div><div class="btag" id="btl"></div></div></div>
         </div>
       <div class="mr ml-l" id="mll"></div>
 
@@ -322,7 +623,7 @@
       </div>
         <div class="np-wrap-r">
           <div class="np-flip">
-            <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="btag" id="btr"></div></div></div>
+            <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="ptitle" id="ptr"></div><div class="btag" id="btr"></div></div></div>
           </div>
         </div>
       <div class="mr ml-r" id="mlr"></div>

@@ -476,6 +476,11 @@ let P=['b','r','t','l'];
 // the previous game_state message, kept around so renderState can diff
 // against it (e.g. "did a new pon just happen" for sound effects).
 let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false, discarding=false, pendingGameOver=null;
+// Theme ids unlocked for the currently-entered name, refreshed whenever a
+// 'stats' response arrives (see onMsg) — gates the locked/unlocked styling
+// in renderVoiceThemes. 'Default' is always available even before any
+// stats round-trip has happened.
+let unlockedThemes=['Default'];
 
 // True for exactly as long as the round-start card (.rs-layer.blocking) is
 // visible — see roundStartBanner and onMsg's deferred-game_state handling
@@ -530,7 +535,33 @@ function onMsg(m){
     return;
   }
   if(m.type==='ready_status'){onReadyStatus(m);return;}
-  if(m.type==='stats'){renderStats(m);return;}
+  if(m.type==='stats'){
+    renderStats(m);
+    // Also refreshes theme/title-lock state (see renderVoiceThemes/
+    // renderTitles) — 'stats' is requested both by the My Stats modal and
+    // by opening Settings, so whichever one triggered this response still
+    // keeps unlockedThemes/unlockedTitles current.
+    unlockedThemes=m.stats?.unlockedThemes||['Default'];
+    renderVoiceThemes();
+    unlockedTitles=m.stats?.unlockedTitles||['Beginner'];
+    renderTitles();
+    renderAchievements(m.stats?.achievementsInfo);
+    // Combined wins (both variants — the nameplate is one identity, not
+    // split by mode) drive the User Profile hub's nameplate tier — see
+    // updateNameplateTier.
+    updateNameplateTier((m.stats?.yonma?.gamesWon||0)+(m.stats?.sanma?.gamesWon||0));
+    return;
+  }
+  if(m.type==='leaderboard'){renderLeaderboard(m);return;}
+  if(m.type==='achievements_unlocked'){showAchievementUnlock(m.achievements);return;}
+  if(m.type==='profiles'){renderProfileList(m);return;}
+  if(m.type==='profile_unlocked'){onProfileUnlocked(m);return;}
+  if(m.type==='guest_selected'){onGuestSelected();return;}
+  if(m.type==='dev_key_result'){onDevKeyResult(m);return;}
+  if(m.type==='create_profile_result'){onCreateProfileResult(m);return;}
+  if(m.type==='delete_profile_result'){onDeleteProfileResult(m);return;}
+  if(m.type==='change_username_result'){onChangeUsernameResult(m);return;}
+  if(m.type==='change_code_result'){onChangeCodeResult(m);return;}
   if(!inGame) return;
   // While the round-start card ("東2局") is up, the board underneath is
   // already click-blocked (see .rs-layer.blocking / roundStartBanner), but
@@ -563,6 +594,10 @@ function toggleSettings(){
   const open=panel.style.transform==='translateX(0%)';
   panel.style.transform=open?'translateX(100%)':'translateX(0%)';
   backdrop.style.display=open?'none':'block';
+  // Refresh theme-lock state for the current name each time the panel
+  // opens — onMsg's 'stats' handler updates unlockedThemes and re-renders
+  // the theme list once the response lands.
+  if(!open) wss({type:'get_stats',name:($('iname').value.trim()||'Player')});
 }
 
 function toggleAbout(){
@@ -581,47 +616,696 @@ function toggleRulesModal(){
   backdrop.classList.toggle('visible',!open);
 }
 
-// Fetches this browser's currently-entered name's stats from the server and
-// opens the modal once the response lands (renderStats reveals it) — avoids
-// flashing stale/placeholder content from a previous open.
-function toggleStats(){
-  const modal=$('stats-modal');
-  const backdrop=$('stats-backdrop');
+// Hub for everything specific to the unlocked profile (player icon, voice
+// theme, stats, username/key) — only reachable once a profile is unlocked
+// (see user-icon-btn, shown by onProfileUnlocked). Just a list of links;
+// each setting fetches/renders whatever it needs only once actually opened,
+// in its own toggle function below, not here — same pattern as
+// toggleDevPanel's hub.
+function toggleUserProfile(){
+  const modal=$('userprofile-modal');
+  const backdrop=$('userprofile-backdrop');
+  const open=modal.classList.contains('visible');
+  modal.classList.toggle('visible',!open);
+  backdrop.classList.toggle('visible',!open);
+}
+
+// "← Back" from any User Profile child panel — hides whichever one is
+// currently open and returns to the hub. Mirrors backToDevPanel, including
+// unconditionally clearing every child (not just the caller's own) so this
+// stays correct even if a future setting gets added here.
+function backToUserProfile(){
+  ['playericon','title','voicetheme','userstats','achievements','changeusername','changecode'].forEach(id=>{
+    $(id+'-modal').classList.remove('visible');
+    $(id+'-backdrop').classList.remove('visible');
+  });
+  $('userprofile-modal').classList.add('visible');
+  $('userprofile-backdrop').classList.add('visible');
+}
+
+function togglePlayerIconModal(){
+  const modal=$('playericon-modal');
+  const backdrop=$('playericon-backdrop');
   const open=modal.classList.contains('visible');
   if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
-  $('stats-body').textContent='Loading…';
-  wss({type:'get_stats',name:($('iname').value.trim()||'Player')});
+  renderPlayerIcons();
   modal.classList.add('visible');
   backdrop.classList.add('visible');
 }
 
-function renderStats(m){
-  const body=$('stats-body');
-  const s=m.stats;
-  if(!s||s.gamesPlayed===0){
-    body.innerHTML=`<p>No games recorded yet for <strong>${escHtml(m.name)}</strong>. Play a full match to start building stats.</p>`;
-    return;
+function toggleTitleModal(){
+  const modal=$('title-modal');
+  const backdrop=$('title-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  renderTitles();
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+function toggleVoiceThemeModal(){
+  const modal=$('voicetheme-modal');
+  const backdrop=$('voicetheme-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  renderVoiceThemes();
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+// Fetches stats fresh each open (renderStats reveals it, via onMsg's
+// 'stats' handler) so it never flashes stale content from a previous open,
+// same reasoning the old inline My Stats section had.
+function toggleUserStatsModal(){
+  const modal=$('userstats-modal');
+  const backdrop=$('userstats-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('stats-body').textContent='Loading…';
+  wss({type:'get_stats'});
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+// Same open/fetch pattern as My Stats above — 'stats' carries
+// achievementsInfo alongside the stat blocks (see onMsg), so both panels
+// piggyback on the same get_stats round trip.
+function toggleAchievementsModal(){
+  const modal=$('achievements-modal');
+  const backdrop=$('achievements-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('achievements-list').textContent='Loading…';
+  wss({type:'get_stats'});
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+// Reward text for one achievement — combines unlocksTitle/unlocksTheme
+// (an achievement could in principle grant both, even though none
+// currently do) into one line, or falls back to a plain "Achievement" tag
+// if somehow neither is set.
+function achievementRewardText(a){
+  const parts=[];
+  if(a.unlocksTitle) parts.push(`Title "${a.unlocksTitle}"`);
+  if(a.unlocksTheme) parts.push(`Voice Theme "${a.unlocksTheme}"`);
+  return parts.length?parts.join(' + '):'Achievement';
+}
+
+// Every achievement, earned or not — not-yet-earned ones are just dimmed
+// (.achv-locked; no lock icon, unlike the Title/Voice Theme pickers) so
+// the label/reward/progress bar stay fully readable, just visually
+// secondary. Progress bar reuses the same .place-bar-track/.place-bar-fill
+// language as the Placements chart in My Stats for visual consistency.
+function renderAchievements(list){
+  const body=$('achievements-list');
+  if(!list||!list.length){ body.innerHTML='<p>No achievements yet.</p>'; return; }
+  body.innerHTML=list.map(a=>{
+    const pct=a.target?Math.round((a.current/a.target)*100):0;
+    return `<div class="achv-item${a.earned?'':' achv-locked'}">
+      <div class="achv-label">${escHtml(a.label)}</div>
+      <div class="achv-reward">${escHtml(achievementRewardText(a))}</div>
+      <div class="place-bar-row">
+        <div class="place-bar-track"><div class="place-bar-fill place-bar-1" style="width:${pct}%"></div></div>
+        <span class="place-bar-pct">${a.current}/${a.target}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Auto-dismiss timer for the toast below — tracked so a second
+// 'achievements_unlocked' arriving while one's still showing (unlikely in
+// one game, but possible e.g. right at the start of a new one) resets the
+// clock instead of closing early under the new content.
+let achvToastTimer=null;
+
+// Pops up whenever the server sends 'achievements_unlocked' (see onMsg) —
+// right after a finished game, if this connection's own seat earned any
+// new achievements that game (see _finishGame in server/room.js, which
+// only ever sends a seat its OWN unlocks, never an opponent's). A corner
+// toast (see .achv-toast in style.css), not a blocking modal — it used to
+// be one, but its backdrop sat on top of the round-end screen's View
+// Results/Main Menu/Ready buttons right when a player would want those
+// most. Reuses .achv-item's styling from the Achievements panel, just
+// without the dimmed/not-yet-earned state — everything here was just
+// earned. Auto-dismisses after 8s; the ✕ (closeAchievementUnlock) still
+// works for closing it early.
+function showAchievementUnlock(list){
+  if(!list||!list.length) return;
+  $('achv-unlock-body').innerHTML=list.map(a=>`
+    <div class="achv-item">
+      <div class="achv-label">${escHtml(a.label)}</div>
+      <div class="achv-reward">${escHtml(achievementRewardText(a))}</div>
+    </div>
+  `).join('');
+  $('achv-toast').classList.add('show');
+  if(achvToastTimer) clearTimeout(achvToastTimer);
+  achvToastTimer=setTimeout(closeAchievementUnlock,8000);
+}
+
+function closeAchievementUnlock(){
+  $('achv-toast').classList.remove('show');
+  if(achvToastTimer){ clearTimeout(achvToastTimer); achvToastTimer=null; }
+}
+
+// Owner-only — see 'change_username' in server/index.js, which re-verifies
+// the profile's own current code before renaming anything. Fields are
+// cleared on every open, same "ask again" spirit as the profile picker's
+// code prompt, so a stale code/name from a previous attempt never lingers.
+function toggleChangeUsernameModal(){
+  const modal=$('changeusername-modal');
+  const backdrop=$('changeusername-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('changeusername-current').value='';
+  $('changeusername-new').value=$('iname').value;
+  $('changeusername-error').textContent='';
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+function submitChangeUsername(){
+  const currentCode=$('changeusername-current').value;
+  const newName=$('changeusername-new').value.trim();
+  if(!newName){ $('changeusername-error').textContent='Username required.'; return; }
+  wss({type:'change_username',currentCode,newName});
+}
+
+function onChangeUsernameResult(m){
+  if(m.ok){
+    $('iname').value=m.name;
+    refreshProfileDisplay();
+    $('changeusername-error').style.color='#8fffb0';
+    $('changeusername-error').textContent='Username updated.';
+  } else {
+    $('changeusername-error').style.color='';
+    $('changeusername-error').textContent=m.error||'Failed to update username';
   }
+}
+
+// Same owner-only gate as Change Username above (see 'change_code' in
+// server/index.js) — only the current code changes here, not the name.
+function toggleChangeCodeModal(){
+  const modal=$('changecode-modal');
+  const backdrop=$('changecode-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('changecode-current').value='';
+  $('changecode-new').value='';
+  $('changecode-error').textContent='';
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+function submitChangeCode(){
+  const currentCode=$('changecode-current').value;
+  const newCode=$('changecode-new').value;
+  wss({type:'change_code',currentCode,newCode});
+}
+
+function onChangeCodeResult(m){
+  if(m.ok){
+    $('changecode-current').value='';
+    $('changecode-new').value='';
+    $('changecode-error').style.color='#8fffb0';
+    $('changecode-error').textContent='Key updated.';
+  } else {
+    $('changecode-error').style.color='';
+    $('changecode-error').textContent=m.error||'Failed to update key';
+  }
+}
+
+// Every yaku name detectYaku() (server/mahjong.js) can ever attach to a
+// win, plus 'Dora' (a synthetic entry room.js adds alongside the real yaku
+// list whenever dora count > 0 — see _endRound/_recordHandWin). Kept here
+// rather than fetched from the server since there's no shared module
+// system between server (CommonJS) and this plain browser script — if
+// mahjong.js ever gains/renames a yaku, this list needs updating too.
+// Powers the "not yet achieved" rows in the Yaku Achieved section below,
+// which needs the full universe of possible names to know what's missing
+// from a player's own s.yaku (which only ever contains names they've
+// actually hit).
+const ALL_YAKU_NAMES=[
+  'Riichi','Double Riichi','Ippatsu','Menzen Tsumo','Pinfu','Tanyao',
+  'Iipeiko','Ryanpeiko','Haku','Hatsu','Chun','Seat Wind','Round Wind',
+  'Sanshoku Doujun','Sanshoku Doukou','Ittsu','Chanta','Junchan','Toitoi',
+  'San Ankou','Chiitoitsu','Honitsu','Chinitsu','Shousangen','Haitei',
+  'Houtei','Rinshan Kaihou','Chankan','Dora',
+  'Tenhou','Chiihou','Kokushi Musou','Kokushi Juusanmen','Suu Ankou',
+  'Suu Ankou Tanki','Daisangen','Shousuushii','Daisuushii','Tsuuiisou',
+  'Chinroutou','Ryuuiisou','Chuuren Poutou','Junsei Chuuren','Suu Kantsu',
+];
+
+// Expand/collapse for the Yaku Achieved section (see renderStatsBlock) —
+// starts collapsed (just the header) since the full achieved+not-yet-
+// achieved list can run to 40+ rows; variant is 'yonma'/'sanma' so the two
+// stat blocks' sections toggle independently.
+function toggleYakuSection(variant){
+  const list=$('yaku-list-'+variant); if(!list) return;
+  const caret=$('yaku-caret-'+variant);
+  const open=list.style.display!=='none';
+  list.style.display=open?'none':'';
+  if(caret) caret.textContent=open?'▸':'▾';
+}
+
+// Renders one variant's block (see the .yonma/.sanma split in
+// server/stats.js — sanma and yonma are scored on different scales, so
+// they're never combined into one set of numbers). Returns the HTML for
+// just this block; renderStats below wraps one of these per variant, each
+// under its own heading, rather than a variant picker/toggle — both are
+// short enough to just show together. `variant` ('yonma'/'sanma') just
+// namespaces the Yaku Achieved section's collapse-state ids so the two
+// blocks' sections don't collide/toggle each other.
+// One placement's bar row for the block below — width% is that rank's
+// share of total games played, so four/three of these stacked read as a
+// tiny distribution chart instead of a "1st 1 · 2nd 0 · ..." text line
+// that's hard to compare at a glance. Brightness fades rank-over-rank
+// (1st brightest, last dimmest) via the .place-bar-N classes in style.css,
+// so "better placement" reads as "brighter bar" without needing a legend.
+function renderPlacementBar(rank,count,total){
+  const pct=total?Math.round((count/total)*100):0;
+  const ord=['1st','2nd','3rd','4th'][rank-1];
+  return `<div class="place-bar-row">
+    <span class="place-bar-label">${ord}</span>
+    <div class="place-bar-track"><div class="place-bar-fill place-bar-${rank}" style="width:${pct}%"></div></div>
+    <span class="place-bar-pct">${count} (${pct}%)</span>
+  </div>`;
+}
+
+function renderStatsBlock(s,variant){
+  if(!s||s.gamesPlayed===0) return `<p>No games recorded yet in this mode. Play a full match to start building stats.</p>`;
   const winRate=((s.gamesWon/s.gamesPlayed)*100).toFixed(1);
   const avgScore=Math.round(s.totalFinalScore/s.gamesPlayed);
   const dealInRate=s.handsWon+s.dealIns>0?((s.dealIns/(s.handsWon+s.dealIns))*100).toFixed(1):'0.0';
-  const topYaku=Object.entries(s.yaku).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  // Achieved yaku, most-common first, followed by every yaku NOT yet
+  // achieved (count 0, dimmed, alphabetical) — see ALL_YAKU_NAMES above.
+  const achievedNames=new Set(Object.keys(s.yaku));
+  const achieved=Object.entries(s.yaku).sort((a,b)=>b[1]-a[1]);
+  const notAchieved=ALL_YAKU_NAMES.filter(n=>!achievedNames.has(n)).sort();
+  // Sanma is 3 players — placements[3] (4th) is always 0/unused there (see
+  // stats.js's own comment on the placements array), so only sanma's real
+  // three ranks get a bar; yonma still shows all four.
+  const numRanks=variant==='sanma'?3:4;
+  const placementBars=Array.from({length:numRanks},(_,i)=>renderPlacementBar(i+1,s.placements[i],s.gamesPlayed)).join('');
   let rows=`
     <div class="sp-row"><span class="sp-label">Games Played</span><span>${s.gamesPlayed}</span></div>
     <div class="sp-row"><span class="sp-label">1st-Place Finishes</span><span>${s.gamesWon} (${winRate}%)</span></div>
-    <div class="sp-row"><span class="sp-label">Placements</span><span>1st ${s.placements[0]} · 2nd ${s.placements[1]} · 3rd ${s.placements[2]} · 4th ${s.placements[3]}</span></div>
+    <div class="place-bars"><div class="sp-label">Placements</div>${placementBars}</div>
     <div class="sp-row"><span class="sp-label">Avg Final Score</span><span>${avgScore.toLocaleString()}</span></div>
     <div class="sp-row"><span class="sp-label">Hands Won</span><span>${s.handsWon} (Tsumo ${s.tsumoWon} / Ron ${s.ronWon})</span></div>
     <div class="sp-row"><span class="sp-label">Riichi Declared</span><span>${s.riichiDeclared}</span></div>
     <div class="sp-row"><span class="sp-label">Deal-Ins</span><span>${s.dealIns} (${dealInRate}%)</span></div>
     <div class="sp-row"><span class="sp-label">Best Hand</span><span>${s.bestHan} Han · ${s.bestScore.toLocaleString()} pts</span></div>
   `;
-  if(topYaku.length){
-    rows+=`<div class="about-section"><div class="about-section-title">Most Common Yaku</div>`;
-    rows+=topYaku.map(([name,count])=>`<div class="sp-row"><span class="sp-label">${escHtml(name)}</span><span>${count}</span></div>`).join('');
-    rows+=`</div>`;
+  rows+=`<div class="about-section">
+    <div class="about-section-title yaku-toggle" onclick="toggleYakuSection('${variant}')">Yaku Achieved <span class="yaku-caret" id="yaku-caret-${variant}">▸</span></div>
+    <div id="yaku-list-${variant}" style="display:none;">`;
+  rows+=achieved.map(([name,count])=>`<div class="sp-row"><span class="sp-label">${escHtml(name)}</span><span>${count}</span></div>`).join('');
+  rows+=notAchieved.map(name=>`<div class="sp-row yaku-not-achieved"><span class="sp-label">${escHtml(name)}</span><span>0</span></div>`).join('');
+  rows+=`</div></div>`;
+  return rows;
+}
+
+function renderStats(m){
+  const body=$('stats-body');
+  const s=m.stats;
+  if(!s||((s.yonma?.gamesPlayed||0)===0&&(s.sanma?.gamesPlayed||0)===0)){
+    body.innerHTML=`<p>No games recorded yet for <strong>${escHtml(m.name)}</strong>. Play a full match to start building stats.</p>`;
+    return;
   }
+  body.innerHTML=`
+    <div class="about-section-title">四人麻雀 YONMA</div>
+    ${renderStatsBlock(s.yonma,'yonma')}
+    <div class="about-section" style="margin-top:18px;">
+      <div class="about-section-title">三人麻雀 SANMA</div>
+      ${renderStatsBlock(s.sanma,'sanma')}
+    </div>
+  `;
+}
+
+// Same open/fetch/render pattern as toggleUserProfile/renderStats above,
+// just against the room-wide leaderboard instead of one name's own stats.
+// Reset to 'yonma' on every open, same "don't remember stale sub-state"
+// spirit as the profile picker's code prompt — see toggleLeaderboardVariant.
+let currentLeaderboardVariant='yonma';
+function toggleRankings(){
+  const modal=$('rankings-modal');
+  const backdrop=$('rankings-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  currentLeaderboardVariant='yonma';
+  $('btn-rank-yonma').classList.add('active');
+  $('btn-rank-sanma').classList.remove('active');
+  $('rankings-body').textContent='Loading…';
+  wss({type:'get_leaderboard',variant:'yonma'});
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+// Sanma/yonma leaderboards are scored on different scales (see
+// server/stats.js) so this re-fetches rather than filtering client-side —
+// there's no combined dataset to filter from, each variant is its own
+// query server-side.
+function toggleLeaderboardVariant(variant){
+  if(variant===currentLeaderboardVariant) return;
+  currentLeaderboardVariant=variant;
+  $('btn-rank-yonma').classList.toggle('active',variant==='yonma');
+  $('btn-rank-sanma').classList.toggle('active',variant==='sanma');
+  $('rankings-body').textContent='Loading…';
+  wss({type:'get_leaderboard',variant});
+}
+
+function renderLeaderboard(m){
+  // Guards against a stale response landing after the user already
+  // switched tabs again (two get_leaderboard requests in flight, an older
+  // one resolving after a newer one) — server echoes back which variant
+  // this response is for (see the get_leaderboard handler in index.js).
+  if(m.variant&&m.variant!==currentLeaderboardVariant) return;
+  const body=$('rankings-body');
+  const entries=m.entries||[];
+  if(!entries.length){
+    body.innerHTML=`<p>No games recorded yet. Play a full match to appear on the board.</p>`;
+    return;
+  }
+  const myName=$('iname').value.trim()||'Player';
+  const rows=entries.map((e,i)=>{
+    const mine=e.name===myName;
+    return `<div class="sp-row${mine?' sp-row-mine':''}">
+      <span class="sp-label">#${i+1} ${escHtml(e.name)}</span>
+      <span>${e.gamesWon}W / ${e.gamesPlayed}G · ${e.bestScore.toLocaleString()} pts</span>
+    </div>`;
+  }).join('');
   body.innerHTML=rows;
+}
+
+// ════════════════════════════════════════════════════════════
+// PROFILES — replaces free-typed names: play requires selecting an
+// existing profile and unlocking it with its code (see server/index.js's
+// unlockedName). Unlocking sets #iname's value/readonly text to the
+// confirmed name — every other place in this file that reads
+// $('iname').value keeps working unchanged, since it's now just always
+// the confirmed profile name instead of freely typed text.
+// ════════════════════════════════════════════════════════════
+// Which card the player has clicked in the picker grid, if any — the
+// actual login target once they submit a code (see unlockProfile). Reset
+// to null every time the picker (re)opens, same "ask again" spirit as
+// Developer Settings' own gate.
+let selectedProfileName=null;
+
+function toggleProfilePicker(){
+  const modal=$('profile-modal');
+  const backdrop=$('profile-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  selectedProfileName=null;
+  $('profile-error').textContent='';
+  $('profile-code').value='';
+  $('profile-code-section').style.display='none';
+  $('profile-card-grid').innerHTML='<p>Loading…</p>';
+  wss({type:'list_profiles'});
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+// Shared by the player-facing picker (icon+name cards, #profile-card-grid)
+// and Developer Settings' delete dropdown (#dev-delete-select, still a
+// plain name list) — both are driven by the same 'list_profiles'
+// request/response, just from different callers (toggleProfilePicker/
+// toggleDevPanel), so this fills in whichever of the two is present.
+function renderProfileList(m){
+  const profiles=m.profiles||[];
+  const grid=$('profile-card-grid');
+  if(grid){
+    grid.innerHTML='';
+    // Always present, first, regardless of how many real profiles exist —
+    // the no-code, no-data option (see select_guest in index.js). Unlike
+    // the real cards below, clicking it logs in immediately, no code
+    // prompt (see selectGuest).
+    const guestBtn=document.createElement('button');
+    guestBtn.className='profile-card';
+    guestBtn.innerHTML=`${guestIconSvg}<span class="profile-card-name">Guest</span>`;
+    guestBtn.onclick=selectGuest;
+    grid.appendChild(guestBtn);
+    profiles.forEach(p=>{
+      const btn=document.createElement('button');
+      btn.className='profile-card';
+      btn.dataset.name=p.name;
+      btn.innerHTML=`${iconSvg(p.icon)}<span class="profile-card-name">${escHtml(p.name)}</span>`;
+      btn.onclick=()=>selectProfileCard(p.name);
+      grid.appendChild(btn);
+    });
+  }
+  const del=$('dev-delete-select');
+  if(del){
+    del.innerHTML=profiles.length
+      ? profiles.map(p=>`<option value="${escHtml(p.name)}">${escHtml(p.name)}</option>`).join('')
+      : '<option value="">No profiles yet</option>';
+  }
+}
+
+// Clicking a card doesn't log in by itself — it just picks which profile
+// the code prompt below the grid now applies to (highlighted via .active,
+// same pattern as the theme/icon pickers elsewhere in this file). Picking
+// the profile that's already unlocked on this connection (#iname's value —
+// see the block comment above) is a no-op server-side, so skip the code
+// prompt entirely and just close the picker instead of asking to re-enter
+// a code that's already verified.
+function selectProfileCard(name){
+  if(name===$('iname').value){ toggleProfilePicker(); return; }
+  selectedProfileName=name;
+  document.querySelectorAll('.profile-card').forEach(c=>{
+    c.classList.toggle('active',c.dataset.name===name);
+  });
+  $('profile-code-label').textContent=`Code for ${name}`;
+  $('profile-error').textContent='';
+  $('profile-code').value='';
+  $('profile-code-section').style.display='';
+  $('profile-code').focus();
+}
+
+function unlockProfile(){
+  const name=selectedProfileName;
+  const code=$('profile-code').value;
+  if(!name){ $('profile-error').textContent='No profile selected.'; return; }
+  wss({type:'unlock_profile',name,code});
+}
+
+// Called from onMsg on 'profile_unlocked' — on success, confirms #iname
+// (readonly, so it can't be hand-edited back to an unverified name) and
+// unblocks Find Match; on failure, shows the error inline in the picker
+// rather than closing it, so the player can just retry the code.
+function onProfileUnlocked(m){
+  if(m.ok){
+    $('iname').value=m.name;
+    $('bfind').disabled=false;
+    $('user-icon-btn').style.display='';
+    // Sync to the profile's own stored icon/title (server-authoritative —
+    // see profiles.getIcon/getTitle), not whatever this browser last
+    // cached, in case this device previously had a different profile's
+    // icon/title cached.
+    currentPlayerIcon=m.icon||'default';
+    try{ localStorage.setItem('mj-player-icon',currentPlayerIcon); }catch(e){}
+    currentPlayerTitle=m.title||'Beginner';
+    try{ localStorage.setItem('mj-player-title',currentPlayerTitle); }catch(e){}
+    refreshProfileDisplay();
+    toggleProfilePicker();
+    // Refresh stats/theme-lock state for the now-confirmed profile.
+    wss({type:'get_stats'});
+  } else {
+    $('profile-error').textContent=m.error||'Incorrect code';
+  }
+}
+
+// Explicit "play as Guest" pick — no code prompt, logs in immediately
+// (see the Guest card in renderProfileList). Clears any profile this
+// connection had unlocked server-side too (see select_guest in
+// index.js), so switching to Guest after already unlocking a real
+// profile actually takes effect on the next join, not just cosmetically.
+function selectGuest(){
+  wss({type:'select_guest'});
+}
+
+function onGuestSelected(){
+  $('iname').value='Guest';
+  $('bfind').disabled=false;
+  // No profile to manage (no stats, no persisted icon/title) — same
+  // reasoning user-icon-btn stays hidden by default before any profile's
+  // unlocked. Deliberately does NOT touch currentPlayerIcon/
+  // currentPlayerTitle (unlike the old applyPlayerIcon('default') this
+  // used to call) — refreshProfileDisplay's isGuest check shows Guest's
+  // fixed icon/blank title regardless of those, and leaving them alone
+  // means a real profile's cached icon in localStorage doesn't get
+  // clobbered with 'default' just because Guest was picked in between.
+  $('user-icon-btn').style.display='none';
+  refreshProfileDisplay();
+  // Unlike icon/title above, the nameplate's win-tier class (see
+  // updateNameplateTier) persists on the DOM element itself, not through a
+  // variable refreshProfileDisplay re-reads — so switching to Guest DOES
+  // need to explicitly reset it back to Bronze, or a previous real
+  // profile's Silver/Gold/Platinum tier would keep showing.
+  updateNameplateTier(0);
+  toggleProfilePicker();
+}
+
+// Hidden entry point for Developer Settings — no link anywhere in normal
+// UI; reached only by tapping the About panel's version number 10 times
+// within DEV_TAP_WINDOW_MS of each other. A slow, one-tap-every-few-
+// minutes sequence doesn't count (almost certainly someone idly clicking,
+// not deliberately unlocking this), so the count resets whenever a tap
+// lands outside that window. This only keeps the panel out of everyday
+// view — every actual capability inside (create profile, etc.) is still
+// independently gated server-side by DEV_SECRET, so this taps-to-reveal
+// gesture isn't itself a real access control.
+const DEV_TAP_TARGET=10, DEV_TAP_WINDOW_MS=1500;
+let devTapCount=0, devTapLastTime=0;
+function handleVersionTap(){
+  const now=Date.now();
+  devTapCount=(now-devTapLastTime<=DEV_TAP_WINDOW_MS)?devTapCount+1:1;
+  devTapLastTime=now;
+  if(devTapCount>=DEV_TAP_TARGET){
+    devTapCount=0;
+    toggleAbout();
+    toggleDevPanel();
+  }
+}
+
+// Holds the key only after this specific panel-open has verified it —
+// reset to null every time toggleDevPanel opens the panel (see below), so
+// it's never carried over from a previous open, let alone across a page
+// reload. submitCreateProfile/confirmDeleteProfile read this rather than
+// the (now gate-only, hidden-post-unlock) #dev-secret field.
+let verifiedDevSecret=null;
+
+function toggleDevPanel(){
+  const modal=$('devpanel-modal');
+  const backdrop=$('devpanel-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  // Always reopen at the gate — the key is required every time the panel
+  // is accessed, never remembered from a previous open this session.
+  verifiedDevSecret=null;
+  $('dev-secret').value='';
+  $('devgate-error').textContent='';
+  $('devpanel-gate').style.display='';
+  $('devpanel-content').style.display='none';
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+// Create/Delete Profile each get their own window (opened from the
+// Developer Settings hub, which closes itself first — see the hub's
+// onclick in index.html) rather than expanding inline, so each gets full
+// modal space instead of being squeezed into a dropdown.
+function toggleCreateProfileModal(){
+  const modal=$('create-profile-modal');
+  const backdrop=$('create-profile-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('devpanel-error').textContent='';
+  $('devpanel-error').style.color='';
+  $('dev-newname').value='';
+  $('dev-newcode').value='';
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+function toggleDeleteProfileModal(){
+  const modal=$('delete-profile-modal');
+  const backdrop=$('delete-profile-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('devdelete-error').textContent='';
+  $('devdelete-error').style.color='';
+  $('dev-delete-select').innerHTML='<option>Loading…</option>';
+  cancelDeleteProfile();
+  wss({type:'list_profiles'});
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+// "← Back" from Create/Delete Profile — returns to the Developer Settings
+// hub's list, not the key gate. Deliberately does NOT go through
+// toggleDevPanel (that always resets to the gate on open); #devpanel-gate/
+// #devpanel-content's display state is exactly as onDevKeyResult left it
+// when the key was verified, so just re-showing the modal is enough.
+function backToDevPanel(){
+  $('create-profile-modal').classList.remove('visible');
+  $('create-profile-backdrop').classList.remove('visible');
+  $('delete-profile-modal').classList.remove('visible');
+  $('delete-profile-backdrop').classList.remove('visible');
+  $('devpanel-modal').classList.add('visible');
+  $('devpanel-backdrop').classList.add('visible');
+}
+
+function submitDevKey(){
+  wss({type:'verify_dev_key',devSecret:$('dev-secret').value});
+}
+
+// Called from onMsg on 'dev_key_result'. On success, swaps the gate for
+// the hub's list of settings — each setting fetches whatever it needs
+// (e.g. Delete Profile's dropdown) only once actually opened, in its own
+// toggle function, not here.
+function onDevKeyResult(m){
+  if(m.ok){
+    verifiedDevSecret=$('dev-secret').value;
+    $('devpanel-gate').style.display='none';
+    $('devpanel-content').style.display='';
+  } else {
+    $('devgate-error').textContent='Incorrect developer key';
+    $('dev-secret').value='';
+    $('dev-secret').focus();
+  }
+}
+
+function submitCreateProfile(){
+  const name=$('dev-newname').value.trim();
+  const code=$('dev-newcode').value;
+  wss({type:'create_profile',devSecret:verifiedDevSecret,name,code});
+}
+
+function onCreateProfileResult(m){
+  if(m.ok){
+    $('devpanel-error').style.color='#8fffb0';
+    $('devpanel-error').textContent='Profile created — it can now be selected from the picker.';
+    $('dev-newname').value='';
+    $('dev-newcode').value='';
+    wss({type:'list_profiles'}); // refresh both dropdowns with the new name
+  } else {
+    $('devpanel-error').style.color='';
+    $('devpanel-error').textContent=m.error||'Failed to create profile';
+  }
+}
+
+// Delete Profile — a genuine second tap (confirm row), not just a bigger
+// button, same reasoning as the chonbo declare-confirm popup elsewhere in
+// this file: this is destructive (wipes the profile AND its stats) and
+// can't be undone, so an accidental single tap must not be enough.
+function armDeleteProfile(){
+  $('dev-delete-btn').style.display='none';
+  $('dev-delete-confirm-row').style.display='block';
+}
+
+function cancelDeleteProfile(){
+  $('dev-delete-btn').style.display='';
+  $('dev-delete-confirm-row').style.display='none';
+}
+
+function confirmDeleteProfile(){
+  const name=$('dev-delete-select').value;
+  if(!name){ $('devdelete-error').textContent='No profile selected.'; return; }
+  wss({type:'delete_profile',devSecret:verifiedDevSecret,name});
+}
+
+function onDeleteProfileResult(m){
+  cancelDeleteProfile();
+  if(m.ok){
+    $('devdelete-error').style.color='#8fffb0';
+    $('devdelete-error').textContent='Profile deleted.';
+    wss({type:'list_profiles'}); // refresh both dropdowns
+  } else {
+    $('devdelete-error').style.color='';
+    $('devdelete-error').textContent=m.error||'Failed to delete profile';
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -668,10 +1352,13 @@ function stopGameMusic(){
   if(t1){ t1.pause(); t1.currentTime=0; }
 }
 
-// Voice theme system
+// Voice theme system — themes other than Default are gated by unlockedThemes
+// (see the 'stats' handler in onMsg), which mirrors server/achievements.js's
+// ACHIEVEMENTS list. `hint` is shown for a theme the player hasn't unlocked
+// yet; keep it in sync with that achievement's `label`.
 const voiceThemes=[
   {id:'Default', label:'Default'},
-  {id:'Natsu', label:'Natsu'},
+  {id:'Natsu', label:'Natsu', hint:'Win your first game to unlock'},
 ];
 let currentVoiceTheme='Default';
 
@@ -679,8 +1366,14 @@ const fxFiles=['Pon','Chii','Kan','Riichi','Double_riichi','Ron','Tsumo','Kita']
 const fxExts={Pon:'mp3',Chii:'mp3',Kan:'mp3',Riichi:'mp3',Double_riichi:'mp3',Ron:'mp3',Tsumo:'mp3',Kita:'mp3'};
 
 function applyVoiceTheme(themeId){
+  if(themeId!=='Default'&&!unlockedThemes.includes(themeId)) return;
   currentVoiceTheme=themeId;
-  document.querySelectorAll('.theme-btn').forEach(b=>{
+  // Scoped to #voice-theme-list (not a bare '.theme-btn') — the Title
+  // picker's buttons (see renderTitles below) reuse the same .theme-btn
+  // class for its visual style, and a bare query here would repaint those
+  // too (they have no dataset.theme, so it'd always match the "inactive"
+  // branch and stomp whatever applyPlayerTitle had just set).
+  document.querySelectorAll('#voice-theme-list .theme-btn').forEach(b=>{
     b.style.background=b.dataset.theme===themeId?'rgba(201,168,76,.25)':'rgba(42,58,42,.3)';
     b.style.borderColor=b.dataset.theme===themeId?'var(--gold)':'rgba(201,168,76,.2)';
   });
@@ -691,18 +1384,198 @@ function renderVoiceThemes(){
   const list=$('voice-theme-list'); if(!list) return;
   list.innerHTML='';
   voiceThemes.forEach(t=>{
+    const locked=t.id!=='Default'&&!unlockedThemes.includes(t.id);
     const btn=document.createElement('button');
-    btn.className='theme-btn';
+    // Dimmed via .locked (opacity, see style.css) rather than a 🔒 prefix
+    // — same "gray it out, no lock icon" language the Achievements panel
+    // uses, just applied here too now.
+    btn.className=locked?'theme-btn locked':'theme-btn';
     btn.dataset.theme=t.id;
     btn.textContent=t.label;
-    btn.style.cssText=`padding:7px 12px;border-radius:4px;font-size:11px;cursor:pointer;
-      letter-spacing:1px;transition:all .2s;text-align:left;width:100%;
-      background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);
-      color:var(--cream);font-family:'Cinzel Decorative',serif;`;
-    btn.onclick=()=>applyVoiceTheme(t.id);
+    if(locked){ btn.disabled=true; btn.title=t.hint||'Locked'; }
+    else btn.onclick=()=>applyVoiceTheme(t.id);
     list.appendChild(btn);
   });
   applyVoiceTheme(currentVoiceTheme);
+}
+
+// Title system — same shape as voice themes above (pick one from a list,
+// gated by unlockedTitles the same way voice themes are gated by
+// unlockedThemes — see the 'stats' handler in onMsg), earned via the
+// achievements in server/achievements.js (`unlocksTitle`). `hint` mirrors
+// that achievement's `label`, same convention voiceThemes' hints follow.
+// server/profiles.js's TITLES is the final gate on what a title can
+// actually be set to; this array is just what the picker offers.
+const titles=[
+  {id:'Beginner', label:'Beginner'},
+  {id:'Regular', label:'Regular', hint:'Play 10 games to unlock'},
+  {id:'Veteran', label:'Veteran', hint:'Play 100 games to unlock'},
+  {id:'Century Club', label:'Century Club', hint:'Win 100 games to unlock'},
+  {id:'Ace', label:'Ace', hint:'Win 50%+ of at least 20 games to unlock'},
+  {id:'Yakuman Hunter', label:'Yakuman Hunter', hint:'Achieve a yakuman to unlock'},
+  {id:'Flush Master', label:'Flush Master', hint:'Achieve Chinitsu or Honitsu to unlock'},
+  {id:'Riichi Machine', label:'Riichi Machine', hint:'Declare riichi 50 times to unlock'},
+  {id:'Renaissance Player', label:'Renaissance Player', hint:'Achieve 10 different yaku to unlock'},
+  {id:'Big Hand', label:'Big Hand', hint:'Win a hand worth 8+ han to unlock'},
+  {id:'High Roller', label:'High Roller', hint:'Reach a final score of 50,000+ to unlock'},
+  {id:'Safe Player', label:'Safe Player', hint:'Keep a deal-in rate under 10% over 20+ hands to unlock'},
+  {id:'Sanma Specialist', label:'Sanma Specialist', hint:'Win your first sanma game to unlock'},
+  {id:'Tsumo Specialist', label:'Tsumo Specialist', hint:'Win 30 hands by tsumo to unlock'},
+  {id:'Ron Specialist', label:'Ron Specialist', hint:'Win 30 hands by ron to unlock'},
+  {id:'Hand Collector', label:'Hand Collector', hint:'Win 100 hands to unlock'},
+  {id:'Podium Regular', label:'Podium Regular', hint:'Finish 1st, 2nd, or 3rd 20 times to unlock'},
+  {id:'Lightning Reflexes', label:'Lightning Reflexes', hint:'Achieve Ippatsu to unlock'},
+  {id:'Quick Draw', label:'Quick Draw', hint:'Achieve Double Riichi to unlock'},
+  {id:'All Triplets', label:'All Triplets', hint:'Achieve Toitoi to unlock'},
+  {id:'Three Colors', label:'Three Colors', hint:'Achieve Sanshoku Doujun or Doukou to unlock'},
+  {id:'Pure Runner', label:'Pure Runner', hint:'Achieve Ittsu to unlock'},
+  {id:'Dora Rich', label:'Dora Rich', hint:'Win 30 hands with dora to unlock'},
+];
+let currentPlayerTitle='Beginner';
+let unlockedTitles=['Beginner'];
+
+function applyPlayerTitle(titleId){
+  if(titleId!=='Beginner'&&!unlockedTitles.includes(titleId)) return;
+  currentPlayerTitle=titleId;
+  // Scoped to #title-list — same cross-contamination reasoning as
+  // applyVoiceTheme's #voice-theme-list scoping above.
+  document.querySelectorAll('#title-list .theme-btn').forEach(b=>{
+    b.style.background=b.dataset.title===titleId?'rgba(201,168,76,.25)':'rgba(42,58,42,.3)';
+    b.style.borderColor=b.dataset.title===titleId?'var(--gold)':'rgba(201,168,76,.2)';
+  });
+  try{ localStorage.setItem('mj-player-title',titleId); }catch(e){}
+  // Persists onto the profile itself (server-side, see profiles.setTitle,
+  // re-checked there against this profile's own unlockedTitles) — a no-op
+  // server-side if no profile's unlocked yet (e.g. this fires at page load
+  // too, restoring the cached selection), same reasoning as
+  // applyPlayerIcon's set_profile_icon send.
+  wss({type:'set_profile_title',title:titleId});
+  refreshProfileDisplay();
+}
+
+// Only ever lists titles this profile actually owns — not-yet-earned ones
+// aren't shown at all (unlike Voice Theme's locked-with-🔒 treatment, or
+// the Achievements panel's dimmed-but-visible rows). Where to go see what
+// ELSE is earnable is the Achievements panel now, so this list can just
+// stay a clean "pick one of what you have."
+function renderTitles(){
+  const list=$('title-list'); if(!list) return;
+  list.innerHTML='';
+  titles.filter(t=>t.id==='Beginner'||unlockedTitles.includes(t.id)).forEach(t=>{
+    const btn=document.createElement('button');
+    btn.className='theme-btn';
+    btn.dataset.title=t.id;
+    btn.textContent=t.label;
+    btn.onclick=()=>applyPlayerTitle(t.id);
+    list.appendChild(btn);
+  });
+  applyPlayerTitle(currentPlayerTitle);
+}
+
+// Player icon system — same shape as voice themes (pick one, persisted to
+// localStorage, sent on join), but each option is a small hand-coded SVG
+// mark instead of an audio folder: the app has no image-upload capability,
+// so these are drawn directly rather than being uploaded/illustrated art.
+// None are unlock-gated (unlike voice themes) — free personalization.
+const playerIcons=[
+  {id:'default', label:'Janshin', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="27" font-size="18" text-anchor="middle" fill="var(--gold)" font-family="\'Noto Serif JP\',serif">心</text></svg>'},
+  {id:'man', label:'Character', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="27" font-size="18" text-anchor="middle" fill="#e04040" font-family="\'Noto Serif JP\',serif">萬</text></svg>'},
+  {id:'pin', label:'Circle', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><circle cx="20" cy="20" r="3.5" fill="#3aa0d0"/><circle cx="13" cy="13" r="3" fill="#3aa0d0"/><circle cx="27" cy="13" r="3" fill="#3aa0d0"/><circle cx="13" cy="27" r="3" fill="#3aa0d0"/><circle cx="27" cy="27" r="3" fill="#3aa0d0"/></svg>'},
+  {id:'sou', label:'Bamboo', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><rect x="17" y="8" width="6" height="24" rx="2" fill="#4caf60"/><line x1="17" y1="14" x2="23" y2="14" stroke="#0a160c" stroke-width="1.5"/><line x1="17" y1="20" x2="23" y2="20" stroke="#0a160c" stroke-width="1.5"/><line x1="17" y1="26" x2="23" y2="26" stroke="#0a160c" stroke-width="1.5"/></svg>'},
+  {id:'chun', label:'Red Dragon', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="27" font-size="18" text-anchor="middle" fill="#e04040" font-family="\'Noto Serif JP\',serif">中</text></svg>'},
+  {id:'hatsu', label:'Green Dragon', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="27" font-size="18" text-anchor="middle" fill="#4caf60" font-family="\'Noto Serif JP\',serif">發</text></svg>'},
+];
+let currentPlayerIcon='default';
+
+// Guest's own fixed icon — deliberately NOT in playerIcons above: Guest has
+// no profile to persist a choice onto, so it isn't offered in the Player
+// Icon picker at all (see the isGuest branch in refreshProfileDisplay,
+// which uses this directly instead of going through iconSvg/
+// currentPlayerIcon). Same visual language as the other icons (gold-framed
+// square, centered glyph) just with a plain "G" instead of a mahjong mark.
+const guestIconSvg='<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="27" font-size="18" text-anchor="middle" fill="var(--gold)" font-family="\'Cinzel Decorative\',serif">G</text></svg>';
+
+// Looks up any icon's SVG by id (falls back to Default for an unknown/
+// missing id) — used for the player's own icon grid, the picker's profile
+// cards, and the user-icon-btn mirror, so all three ever only need this.
+function iconSvg(iconId){
+  return (playerIcons.find(i=>i.id===iconId)||playerIcons[0]).svg;
+}
+
+function applyPlayerIcon(iconId){
+  currentPlayerIcon=iconId;
+  document.querySelectorAll('.icon-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.icon===iconId);
+  });
+  try{ localStorage.setItem('mj-player-icon',iconId); }catch(e){}
+  // Persists onto the profile itself (server-side, see profiles.setIcon)
+  // so the picker's cards show it correctly even before anyone unlocks
+  // this profile again — a no-op server-side if no profile's unlocked yet
+  // (e.g. this fires at page load too, restoring the cached selection).
+  wss({type:'set_profile_icon',icon:iconId});
+  refreshProfileDisplay();
+}
+
+// Mirrors the chosen icon/name/title onto the lobby's user-icon-btn (next
+// to the settings icon), the profile nameplate (icon+name+title, #iname's
+// actual value), and the User Profile hub's own header (#up-icon/#up-name/
+// #up-title, same pairing — see .up-nameplate in index.html) — every place
+// that always needs to agree with currentPlayerIcon/currentPlayerTitle/
+// #iname.value, so anywhere any of those changes just calls this instead
+// of touching each display separately. user-icon-btn stays hidden until a
+// profile's unlocked (see onProfileUnlocked) regardless of icon content;
+// the nameplates are always visible (Guest by default), so they're updated
+// unconditionally.
+//
+// Guest is special-cased here rather than through currentPlayerIcon/
+// currentPlayerTitle: Guest always shows its own fixed icon (guestIconSvg)
+// and no title at all, regardless of whatever a previously-unlocked real
+// profile on this connection had picked — those two variables are left
+// untouched when switching to Guest (see onGuestSelected) specifically so
+// this check is the only thing that needs to get it right, rather than
+// relying on every guest-switch path remembering to reset them.
+function refreshProfileDisplay(){
+  const isGuest=$('iname').value==='Guest';
+  const iconHtml=isGuest?guestIconSvg:iconSvg(currentPlayerIcon);
+  const titleText=isGuest?'':currentPlayerTitle;
+  const btn=$('user-icon-btn'); if(btn) btn.innerHTML=iconHtml;
+  const pnpIcon=$('pnp-icon'); if(pnpIcon) pnpIcon.innerHTML=iconHtml;
+  const pnpName=$('pnp-name'); if(pnpName) pnpName.textContent=$('iname').value||'Guest';
+  const pnpTitle=$('pnp-title'); if(pnpTitle) pnpTitle.textContent=titleText;
+  const upIcon=$('up-icon'); if(upIcon) upIcon.innerHTML=iconHtml;
+  const upName=$('up-name'); if(upName) upName.textContent=$('iname').value||'Guest';
+  const upTitle=$('up-title'); if(upTitle) upTitle.textContent=titleText;
+}
+
+// User Profile hub nameplate's tier (see .up-nameplate/.tier-* in
+// style.css) — Bronze (default, no class) under 10 combined wins, Silver
+// at 10, Gold at 50, Platinum at 100. Driven by the 'stats' handler in
+// onMsg (combined yonma+sanma gamesWon) whenever a real profile's stats
+// load. Unlike icon/title, this class lives on the DOM element itself
+// rather than a JS variable refreshProfileDisplay re-reads every time, so
+// switching to Guest (see onGuestSelected) has to call this explicitly
+// with 0 — otherwise a previous real profile's tier would keep showing.
+function updateNameplateTier(wins){
+  const el=document.querySelector('.up-nameplate'); if(!el) return;
+  el.classList.remove('tier-silver','tier-gold','tier-platinum');
+  if(wins>=100) el.classList.add('tier-platinum');
+  else if(wins>=50) el.classList.add('tier-gold');
+  else if(wins>=10) el.classList.add('tier-silver');
+}
+
+function renderPlayerIcons(){
+  const list=$('player-icon-list'); if(!list) return;
+  list.innerHTML='';
+  playerIcons.forEach(ic=>{
+    const btn=document.createElement('button');
+    btn.className='icon-btn';
+    btn.dataset.icon=ic.id;
+    btn.title=ic.label;
+    btn.innerHTML=ic.svg;
+    btn.onclick=()=>applyPlayerIcon(ic.id);
+    list.appendChild(btn);
+  });
+  applyPlayerIcon(currentPlayerIcon);
 }
 
 let fxEnabled=true;
@@ -773,23 +1646,13 @@ function setFxVolume(val){
 
 function toggleFx(){
   fxEnabled=!fxEnabled;
-  const btn=$('bfx');
-  if(fxEnabled){
-    if(btn){ btn.textContent='ON'; btn.style.background='rgba(42,158,103,.3)'; btn.style.borderColor='var(--jl)'; }
-  } else {
-    if(btn){ btn.textContent='OFF'; btn.style.background='rgba(80,0,0,.3)'; btn.style.borderColor='#c82020'; }
-  }
+  const btn=$('bfx'); if(btn) btn.classList.toggle('off',!fxEnabled);
   try{ localStorage.setItem('mj-fx',fxEnabled?'1':'0'); }catch(e){}
 }
 
 function toggleDiscardSfx(){
   discardSfxEnabled=!discardSfxEnabled;
-  const btn=$('bdiscard-sfx');
-  if(discardSfxEnabled){
-    if(btn){ btn.textContent='ON'; btn.style.background='rgba(42,158,103,.3)'; btn.style.borderColor='var(--jl)'; }
-  } else {
-    if(btn){ btn.textContent='OFF'; btn.style.background='rgba(80,0,0,.3)'; btn.style.borderColor='#c82020'; }
-  }
+  const btn=$('bdiscard-sfx'); if(btn) btn.classList.toggle('off',!discardSfxEnabled);
   try{ localStorage.setItem('mj-discard-sfx',discardSfxEnabled?'1':'0'); }catch(e){}
 }
 
@@ -824,11 +1687,11 @@ function toggleMusic(){
   musicEnabled=!musicEnabled;
   const btn=$('bmute');
   if(musicEnabled){
-    if(btn){ btn.textContent='ON'; btn.style.background='rgba(42,158,103,.3)'; btn.style.borderColor='var(--jl)'; }
+    if(btn) btn.classList.remove('off');
     if(inGame) playGameMusic(); else playLobbyMusic();
   } else {
     stopLobbyMusic(); stopGameMusic();
-    if(btn){ btn.textContent='OFF'; btn.style.background='rgba(80,0,0,.3)'; btn.style.borderColor='#c82020'; }
+    if(btn) btn.classList.add('off');
   }
   try{ localStorage.setItem('mj-music',musicEnabled?'1':'0'); }catch(e){}
 }
@@ -893,15 +1756,18 @@ function toggleRule(name){
 // re-flipping them.
 function applyRuleButton(name){
   const btn=$('btn-rule-'+name); if(!btn) return;
-  const on=rules[name];
-  btn.textContent=on?'ON':'OFF';
-  btn.style.background=on?'rgba(42,158,103,.3)':'rgba(80,0,0,.3)';
-  btn.style.borderColor=on?'var(--jl)':'#c82020';
+  btn.classList.toggle('off',!rules[name]);
 }
 
 function findMatch(){
+  // No profile needed — defaults to Guest play (see index.html's #iname
+  // default value and the server's 'join' handler, which assigns a Guest
+  // identity itself whenever this connection hasn't unlocked one). The
+  // name/icon sent here are only ever a starting hint for that default
+  // case; once a profile IS unlocked the server uses its own record for
+  // both regardless of what's sent (see unlockedName/getIcon in index.js).
   playLobbyMusic();
-  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,variant,rules,voiceTheme:currentVoiceTheme});
+  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,variant,rules,voiceTheme:currentVoiceTheme,icon:currentPlayerIcon});
 }
 
 function showWaiting(){
@@ -916,6 +1782,15 @@ function showWaiting(){
 // renderDiffPopup()/the click-outside listener below.
 let lastSeats=null, openDiffPopupSeat=null;
 
+// Tracks each seat's ready flag across calls (index = seat), purely so the
+// one-shot .rdy-flash pulse (see style.css) only plays on the render where
+// a seat actually FLIPS to ready — updateSlots re-runs on every
+// room_update (which fires for lots of unrelated reasons: another seat's
+// difficulty change, a bot getting swapped in, etc.), and without this
+// check the flash would replay on every one of those instead of just the
+// moment someone hits Ready.
+let prevReady=[];
+
 function updateSlots(seats){
   lastSeats=seats;
   $('wmsg').textContent=`${seats.filter(Boolean).length}/${seats.length} players`;
@@ -928,10 +1803,16 @@ function updateSlots(seats){
     if(p){
       sl.classList.add('filled');
       if(p.isBot) sl.classList.add('bot');
-      if(p.ready) sl.classList.add('rdy');
-      const iconHtml=p.isBot?'':`<span class="si">${p.name[0].toUpperCase()}</span>`;
-      const rdyTxt=p.isBot?'<span class="sr" style="color:#4eff9a">✓ BOT</span>':(p.ready?'<span class="sr" style="color:#4eff9a">✓ Ready</span>':'<span class="sr" style="color:rgba(245,237,216,.4)">Not ready</span>');
-      sl.innerHTML=`${iconHtml}<span class="sn">${p.name.slice(0,8)}</span>${rdyTxt}`;
+      if(p.ready){
+        if(!prevReady[i]) sl.classList.add('rdy-flash');
+        sl.classList.add('rdy');
+      }
+      prevReady[i]=!!p.ready;
+      // Real players show their actual profile icon (same iconSvg lookup
+      // as everywhere else); bots stay iconless here (no profile to draw
+      // one from) — the difficulty label below is what identifies them.
+      const iconHtml=p.isBot?'':`<span class="s-icon">${iconSvg(p.icon)}</span>`;
+      sl.innerHTML=`${iconHtml}<span class="sn">${p.name.slice(0,8)}</span>`;
       if(p.isBot){
         const diff=p.difficulty||'normal';
         sl.classList.add('clickable-bot');
@@ -943,6 +1824,7 @@ function updateSlots(seats){
         if(openDiffPopupSeat===i) renderDiffPopup(sl,i,diff);
       }
     } else {
+      prevReady[i]=false;
       sl.innerHTML='<span class="si">🀄</span>';
     }
   });
@@ -1016,10 +1898,18 @@ function confirmLeaveGame(){
 function _leaveGame(){
   inGame=false;
   pendingGameOver=null;
+  // Just the 'leave' message — NOT a socket close/reconnect (this used to
+  // close+reopen the WebSocket here). unlockedName lives only in memory
+  // for one WebSocket's lifetime (see server/index.js), so closing the
+  // connection silently logged the player out server-side: the client's
+  // #iname kept showing their real name, but the next 'join' had no
+  // unlockedName to use and fell back to a fresh Guest identity — the
+  // waiting room and eventual game would show Guest despite the client UI
+  // still saying otherwise. 'leave' alone already does everything needed
+  // server-side (removeHuman swaps a bot into the seat, myRoom is cleared
+  // — see index.js), so there's nothing the reconnect was actually buying.
   wss({type:'leave'});
-  if(ws){ws.onclose=null;ws.close();}
   resetLobby();
-  setTimeout(connect,200);
   stopGameMusic();
   playLobbyMusic();
 }
@@ -1046,6 +1936,12 @@ function startGame(m){
   for(let i=0;i<numSeats;i++){
     const abs=(mySeat+i)%numSeats,id=P[i],p=seats[abs];
     $('pn'+id).textContent=i===0?($('iname').value.trim()||'Player'):(p?.name||'—');
+    // Title under the name — self always shows currentPlayerTitle (kept
+    // live by applyPlayerTitle, so this never goes stale even if changed
+    // moments before starting); opponents show whatever the server sent
+    // for their seat (see title in room.js's _seatInfo — blank for
+    // guests/bots, which have no profile to hold one).
+    const pt=$('pt'+id); if(pt) pt.textContent=i===0?currentPlayerTitle:(p?.title||'');
     if(i>0){const bt=$('bt'+id);if(bt)bt.textContent=p?.isBot?'CPU':'';}
     $('rs'+id).style.display='none';
   }
@@ -2273,8 +3169,7 @@ try{
   }
   if(savedMusic==='0'){
     musicEnabled=false;
-    const b=$('bmute');
-    if(b){ b.textContent='OFF'; b.style.background='rgba(80,0,0,.3)'; b.style.borderColor='#c82020'; }
+    const b=$('bmute'); if(b) b.classList.add('off');
   }
   const savedFx=localStorage.getItem('mj-fx');
   const savedFxVol=localStorage.getItem('mj-fx-vol');
@@ -2287,8 +3182,7 @@ try{
   }
   if(savedFx==='0'){
     fxEnabled=false;
-    const b=$('bfx');
-    if(b){ b.textContent='OFF'; b.style.background='rgba(80,0,0,.3)'; b.style.borderColor='#c82020'; }
+    const b=$('bfx'); if(b) b.classList.add('off');
   }
   const savedDiscardSfx=localStorage.getItem('mj-discard-sfx');
   const savedDiscardVol=localStorage.getItem('mj-discard-vol');
@@ -2300,13 +3194,18 @@ try{
   }
   if(savedDiscardSfx==='0'){
     discardSfxEnabled=false;
-    const b=$('bdiscard-sfx');
-    if(b){ b.textContent='OFF'; b.style.background='rgba(80,0,0,.3)'; b.style.borderColor='#c82020'; }
+    const b=$('bdiscard-sfx'); if(b) b.classList.add('off');
   }
   const savedTheme=localStorage.getItem('mj-voice-theme');
   if(savedTheme) currentVoiceTheme=savedTheme;
+  const savedIcon=localStorage.getItem('mj-player-icon');
+  if(savedIcon) currentPlayerIcon=savedIcon;
+  const savedTitle=localStorage.getItem('mj-player-title');
+  if(savedTitle) currentPlayerTitle=savedTitle;
 }catch(e){}
 renderVoiceThemes();
+renderPlayerIcons();
+renderTitles();
 
 // Restore last-picked match settings (game mode, player count, rule
 // toggles) — same "remember what you last used" treatment as the audio/
@@ -2355,12 +3254,15 @@ function backToMenu(){
   show('s-start');
 }
 $('bstart').onclick=enterLobby;
+$('about-version').onclick=handleVersionTap;
 $('bfind').onclick=findMatch;
 $('bready').onclick=pressReady;
 $('bcancel').onclick=()=>{wss({type:'leave'});resetLobby();};
 $('bleave').onclick=goLobby;
 $('bsettings').onclick=toggleSettings;
 $('iname').onkeydown=e=>{if(e.key==='Enter')findMatch();};
+$('dev-secret').onkeydown=e=>{if(e.key==='Enter')submitDevKey();};
+$('profile-code').onkeydown=e=>{if(e.key==='Enter')unlockProfile();};
 $('chat-send').onclick=sendChat;
 $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};
 $('chat-hist-btn').onclick=toggleChat;

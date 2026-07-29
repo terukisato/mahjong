@@ -1113,12 +1113,23 @@ class Room {
     this.phase='done';
     this._broadcastAll({type:'game_over',reason,scores:g.scores,
       playerNames:this.seats.map(p=>p?.name||'—'),...extra});
-    recordGameResult({
+    const unlocked=recordGameResult({
       playerNames:this.seats.map(p=>p?.name||null),
       isBot:this.seats.map(p=>!p||p.isBot),
+      // Guests hold no data — see index.js's 'join' handler for why.
+      isGuest:this.seats.map(p=>!!p?.isGuest),
       finalScores:g.scores,
       placements:this._computePlacements(g.scores),
       handStats:g.stats,
+    });
+    // Each seat only ever hears about ITS OWN newly-earned achievements
+    // (see recordGameResult's return shape) — sent directly to that
+    // seat's own connection, not broadcast, so nobody sees an opponent's
+    // unlock notification.
+    unlocked.forEach((list,seat)=>{
+      if(!list||!list.length) return;
+      const p=this.seats[seat];
+      if(p&&!p.isBot&&p.ws?.readyState===1) p.ws.send(JSON.stringify({type:'achievements_unlocked',achievements:list}));
     });
   }
 
@@ -1521,6 +1532,7 @@ class Room {
         discards:g.discards,melds:g.melds,scores:g.scores,turn:g.turn,
         round:g.round,roundWind:g.roundWind,displayWind:Math.ceil(g.round/this.numPlayers),displayRound:((g.round-1)%this.numPlayers)+1,dealer:g.dealer,honba:g.honba,
         seatVoiceThemes:this.seats.map(p=>p?.voiceTheme||'Default'),
+        seatIcons:this.seats.map(p=>p?.icon||'default'),
         riichiSticks:g.riichiSticks,
         dora:g.dora,wallCount:g.wall.length,waits:w,riichi:g.riichi,
         doubleRiichi:g.doubleRiichi,
@@ -1532,7 +1544,7 @@ class Room {
     }
   }
 
-  _seatInfo(){ return this.seats.map(p=>p?{name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default',difficulty:p.difficulty||null}:null); }
+  _seatInfo(){ return this.seats.map(p=>p?{name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default',icon:p.icon||'default',title:p.title||null,difficulty:p.difficulty||null}:null); }
 
   _broadcastRoomUpdate(){
     const readyIds=Array.from(this.ready);
