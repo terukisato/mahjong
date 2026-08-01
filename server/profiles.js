@@ -29,7 +29,7 @@ const TITLES = [
   'Big Hand', 'High Roller', 'Safe Player', 'Sanma Specialist',
   'Tsumo Specialist', 'Ron Specialist', 'Hand Collector', 'Podium Regular',
   'Lightning Reflexes', 'Quick Draw', 'All Triplets', 'Three Colors',
-  'Pure Runner', 'Dora Rich',
+  'Pure Runner', 'Dora Rich', 'The Diamond',
 ];
 
 function _load() {

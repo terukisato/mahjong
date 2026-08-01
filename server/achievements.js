@@ -93,6 +93,11 @@ const ACHIEVEMENTS = [
   },
   { id: 'pure_runner', label: 'Achieve Ittsu', unlocksTitle: 'Pure Runner', target: 1, progress: s => Math.min(yakuCount(s, 'Ittsu'), 1), check: s => yakuCount(s, 'Ittsu') > 0 },
   { id: 'dora_rich', label: 'Win 30 hands with dora', unlocksTitle: 'Dora Rich', target: 30, progress: s => yakuCount(s, 'Dora'), check: s => yakuCount(s, 'Dora') >= 30 },
+  // Top of the win-count ladder — pairs with the nameplate's Diamond tier
+  // (200+ combined wins, see .tier-diamond in style.css/updateNameplateTier
+  // in script.js), same threshold, so earning this title lines up with the
+  // nameplate visibly changing too.
+  { id: 'the_diamond', label: 'Win 200 games', unlocksTitle: 'The Diamond', target: 200, progress: gamesWon, check: s => gamesWon(s) >= 200 },
 ];
 
 // Mutates `s` in place: grants any newly-qualifying achievement/theme/

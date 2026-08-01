@@ -981,6 +981,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .up-nameplate.tier-platinum{border-color:rgba(200,232,240,.65);
   background:linear-gradient(145deg,#eaf6fa,#a9c9d2 40%,#54727a 55%,#a9c9d2 70%,#eaf6fa);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 2px rgba(0,20,30,.6),0 3px 8px rgba(0,0,0,.5);}
+/* Diamond — 200+ wins, the top tier. Brighter/more saturated blue-white
+   than Platinum (pure white highlights vs Platinum's softer gray-teal),
+   plus a SECOND glossy streak (::after, mirrored direction from the base
+   ::before one every tier shares) so it visibly "sparkles" rather than
+   just being Platinum-but-bluer. */
+.up-nameplate.tier-diamond{border-color:rgba(190,235,255,.85);
+  background:linear-gradient(145deg,#ffffff,#bfe8fb 25%,#7ec8e8 45%,#4a90c2 55%,#7ec8e8 70%,#bfe8fb 85%,#ffffff);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -1px 2px rgba(0,20,40,.55),0 0 12px rgba(140,210,240,.35),0 3px 8px rgba(0,0,0,.5);}
+.up-nameplate.tier-diamond::after{content:'';position:absolute;top:0;right:-25%;width:18%;height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent);
+  transform:skewX(-25deg);}
 .up-nameplate::before{content:'';position:absolute;top:0;left:-30%;width:35%;height:100%;
   background:linear-gradient(100deg,transparent,rgba(255,255,255,.22),transparent);
   transform:skewX(-25deg);}

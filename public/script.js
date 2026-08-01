@@ -1430,6 +1430,7 @@ const titles=[
   {id:'Three Colors', label:'Three Colors', hint:'Achieve Sanshoku Doujun or Doukou to unlock'},
   {id:'Pure Runner', label:'Pure Runner', hint:'Achieve Ittsu to unlock'},
   {id:'Dora Rich', label:'Dora Rich', hint:'Win 30 hands with dora to unlock'},
+  {id:'The Diamond', label:'The Diamond', hint:'Win 200 games to unlock'},
 ];
 let currentPlayerTitle='Beginner';
 let unlockedTitles=['Beginner'];
@@ -1549,16 +1550,18 @@ function refreshProfileDisplay(){
 
 // User Profile hub nameplate's tier (see .up-nameplate/.tier-* in
 // style.css) — Bronze (default, no class) under 10 combined wins, Silver
-// at 10, Gold at 50, Platinum at 100. Driven by the 'stats' handler in
-// onMsg (combined yonma+sanma gamesWon) whenever a real profile's stats
-// load. Unlike icon/title, this class lives on the DOM element itself
-// rather than a JS variable refreshProfileDisplay re-reads every time, so
-// switching to Guest (see onGuestSelected) has to call this explicitly
-// with 0 — otherwise a previous real profile's tier would keep showing.
+// at 10, Gold at 50, Platinum at 100, Diamond at 200. Driven by the
+// 'stats' handler in onMsg (combined yonma+sanma gamesWon) whenever a real
+// profile's stats load. Unlike icon/title, this class lives on the DOM
+// element itself rather than a JS variable refreshProfileDisplay re-reads
+// every time, so switching to Guest (see onGuestSelected) has to call this
+// explicitly with 0 — otherwise a previous real profile's tier would keep
+// showing.
 function updateNameplateTier(wins){
   const el=document.querySelector('.up-nameplate'); if(!el) return;
-  el.classList.remove('tier-silver','tier-gold','tier-platinum');
-  if(wins>=100) el.classList.add('tier-platinum');
+  el.classList.remove('tier-silver','tier-gold','tier-platinum','tier-diamond');
+  if(wins>=200) el.classList.add('tier-diamond');
+  else if(wins>=100) el.classList.add('tier-platinum');
   else if(wins>=50) el.classList.add('tier-gold');
   else if(wins>=10) el.classList.add('tier-silver');
 }
