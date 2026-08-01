@@ -5,7 +5,7 @@ const WebSocket=require('ws');
 const path=require('path');
 const {Room}=require('./room');
 const {getStats,getLeaderboard,deleteStats,renameStats}=require('./stats');
-const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle}=require('./profiles');
+const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,createRememberToken,verifyRememberToken,forgetRememberToken}=require('./profiles');
 
 const app=express();
 const server=http.createServer(app);
@@ -201,10 +201,31 @@ wss.on('connection',(ws)=>{
       const name=String(msg.name||'').slice(0,20);
       if(verifyProfile(name,msg.code)){
         unlockedName=name;
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name)}));
+        // "Stay logged in" — only issues a token when the client opts in
+        // (see #profile-remember's toggle in script.js); the client then
+        // stores name+token in localStorage and trades it in via
+        // 'unlock_profile_token' on future visits instead of asking for
+        // the code again.
+        const token=msg.remember?createRememberToken(name):undefined;
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),token}));
         syncSeatedIdentity();
       } else {
         ws.send(JSON.stringify({type:'profile_unlocked',ok:false,error:'Incorrect code'}));
+      }
+    }
+
+    // Silent auto-login from a stored "stay logged in" token (see above) —
+    // sent automatically on connect (see script.js's ws.onopen) rather
+    // than from a user action, so failures just fall back to the normal
+    // picker instead of surfacing an error like a real code attempt would.
+    if(msg.type==='unlock_profile_token'){
+      const name=String(msg.name||'').slice(0,20);
+      if(verifyRememberToken(name,msg.token)){
+        unlockedName=name;
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),silent:true}));
+        syncSeatedIdentity();
+      } else {
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:false,silent:true}));
       }
     }
 
@@ -216,6 +237,14 @@ wss.on('connection',(ws)=>{
       unlockedName=null;
       ws.send(JSON.stringify({type:'guest_selected'}));
       syncSeatedIdentity();
+    }
+
+    // Explicit "forget this device" — sent when the player switches away
+    // from a "stay logged in" profile (see selectGuest/selectProfileCard in
+    // script.js clearing their stored token) so a token left in this
+    // browser's localStorage can't silently auto-login again later.
+    if(msg.type==='forget_profile'){
+      forgetRememberToken(String(msg.name||'').slice(0,20));
     }
 
     // Persists an icon change from the User Profile panel onto the profile
@@ -264,6 +293,10 @@ wss.on('connection',(ws)=>{
       if(!verifyProfile(unlockedName,msg.currentCode)){
         ws.send(JSON.stringify({type:'change_code_result',ok:false,error:'Incorrect code'}));
       } else {
+        // Rotating the code invalidates any "stay logged in" token too —
+        // otherwise a token issued under the old code would keep working
+        // (e.g. on a device the owner no longer trusts) after the change.
+        forgetRememberToken(unlockedName);
         ws.send(JSON.stringify({type:'change_code_result',...setCode(unlockedName,msg.newCode)}));
       }
     }

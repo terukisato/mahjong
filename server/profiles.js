@@ -122,6 +122,44 @@ function verifyProfile(name, code) {
   return crypto.timingSafeEqual(candidate, actual);
 }
 
+// "Stay logged in" — a long-lived bearer token issued at unlock time when
+// the player opts in (see 'unlock_profile's `remember` flag in index.js),
+// stored client-side in localStorage instead of the actual code so the
+// code itself never has to be persisted in the browser. Same
+// salt+scryptSync+timingSafeEqual treatment as the code itself. Just one
+// token per profile — issuing a new one (another device, or unlocking with
+// "stay logged in" again) invalidates whatever was issued before, the same
+// single-session tradeoff a typical "remember me" cookie makes.
+function createRememberToken(name) {
+  const all = _load();
+  if (!all[name]) return null;
+  const token = crypto.randomBytes(32).toString('hex');
+  const salt = crypto.randomBytes(16).toString('hex');
+  all[name].remember = { salt, tokenHash: _hashCode(token, salt) };
+  _save(all);
+  return token;
+}
+
+// Same shape as verifyProfile, against the remember token instead of the code.
+function verifyRememberToken(name, token) {
+  const all = _load();
+  const p = all[name];
+  if (!p || !p.remember || !token) return false;
+  const candidate = Buffer.from(_hashCode(token, p.remember.salt), 'hex');
+  const actual = Buffer.from(p.remember.tokenHash, 'hex');
+  if (candidate.length !== actual.length) return false;
+  return crypto.timingSafeEqual(candidate, actual);
+}
+
+// Called on logout / "forget this device" so a stale localStorage token
+// left on a shared computer can't keep unlocking the profile afterward.
+function forgetRememberToken(name) {
+  const all = _load();
+  if (!all[name]) return;
+  delete all[name].remember;
+  _save(all);
+}
+
 // Developer-only, same as createProfile — index.js verifies DEV_SECRET
 // before calling this, not any profile's own code (a deleted profile's
 // code is exactly the thing that would no longer work to authorize this).
@@ -165,4 +203,4 @@ function setCode(name, code) {
   return { ok: true };
 }
 
-module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, renameProfile, setCode, setTitle, getTitle, TITLES };
+module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, renameProfile, setCode, setTitle, getTitle, TITLES, createRememberToken, verifyRememberToken, forgetRememberToken };

@@ -510,7 +510,18 @@ function connect(){
   }
   const url=(location.protocol==='https:'?'wss':'ws')+'://'+location.host;
   try{ ws=new WebSocket(url); } catch(e){ setTimeout(connect,3000); return; }
-  ws.onopen=()=>{};
+  // Silent "stay logged in" auto-unlock — fires once per (re)connect, using
+  // whatever token onProfileUnlocked stashed the last time this profile was
+  // unlocked with the toggle on (see toggleProfileRemember/unlockProfile).
+  // The `silent:true` echoed back in the response is what tells
+  // onProfileUnlocked not to treat a failure here as a wrong-code error.
+  ws.onopen=()=>{
+    try{
+      const name=localStorage.getItem('mj-remember-name');
+      const token=localStorage.getItem('mj-remember-token');
+      if(name&&token) wss({type:'unlock_profile_token',name,token});
+    }catch(e){}
+  };
   ws.onmessage=e=>{try{onMsg(JSON.parse(e.data));}catch(ex){console.error(ex);}};
   ws.onclose=()=>{setTimeout(connect,2000);};
   ws.onerror=()=>{try{ws.close();}catch{}};
@@ -1021,6 +1032,8 @@ function toggleProfilePicker(){
   $('profile-error').textContent='';
   $('profile-code').value='';
   $('profile-code-section').style.display='none';
+  rememberProfile=false;
+  $('profile-remember').classList.add('off');
   $('profile-card-grid').innerHTML='<p>Loading…</p>';
   wss({type:'list_profiles'});
   modal.classList.add('visible');
@@ -1083,17 +1096,46 @@ function selectProfileCard(name){
   $('profile-code').focus();
 }
 
+// "Stay logged in" toggle inside the profile picker's code prompt — same
+// sp-toggle click pattern as toggleRule, but deliberately doesn't persist
+// across picker opens (toggleProfilePicker resets it off every time, same
+// "ask again" spirit as the code field next to it). See unlockProfile/
+// onProfileUnlocked for what actually happens when it's on.
+let rememberProfile=false;
+function toggleProfileRemember(){
+  rememberProfile=!rememberProfile;
+  $('profile-remember').classList.toggle('off',!rememberProfile);
+}
+
 function unlockProfile(){
   const name=selectedProfileName;
   const code=$('profile-code').value;
   if(!name){ $('profile-error').textContent='No profile selected.'; return; }
-  wss({type:'unlock_profile',name,code});
+  wss({type:'unlock_profile',name,code,remember:rememberProfile});
+}
+
+// Clears this device's "stay logged in" state, both the token stored here
+// (so ws.onopen's silent auto-login in connect() stops firing) and its
+// server-side record (see 'forget_profile' in index.js) — otherwise a
+// stale local token would just keep failing the silent unlock forever
+// instead of actually being gone.
+function forgetRememberedProfile(){
+  let storedName=null;
+  try{ storedName=localStorage.getItem('mj-remember-name'); }catch(e){}
+  if(storedName) wss({type:'forget_profile',name:storedName});
+  try{ localStorage.removeItem('mj-remember-name'); localStorage.removeItem('mj-remember-token'); }catch(e){}
 }
 
 // Called from onMsg on 'profile_unlocked' — on success, confirms #iname
 // (readonly, so it can't be hand-edited back to an unverified name) and
 // unblocks Find Match; on failure, shows the error inline in the picker
 // rather than closing it, so the player can just retry the code.
+// `m.silent` marks a response to connect()'s automatic 'unlock_profile_token'
+// attempt on open (see ws.onopen below) rather than a user-driven code
+// submission — so a failure here (stale/revoked token) is handled quietly
+// instead of surfacing "Incorrect code" for something the player never typed,
+// and a success here must NOT call toggleProfilePicker (the picker was never
+// opened for it).
 function onProfileUnlocked(m){
   if(m.ok){
     $('iname').value=m.name;
@@ -1108,9 +1150,23 @@ function onProfileUnlocked(m){
     currentPlayerTitle=m.title||'Beginner';
     try{ localStorage.setItem('mj-player-title',currentPlayerTitle); }catch(e){}
     refreshProfileDisplay();
-    toggleProfilePicker();
+    if(m.token){
+      // "Stay logged in" was checked — store the token in place of the
+      // code so future visits can auto-unlock via ws.onopen without asking.
+      try{ localStorage.setItem('mj-remember-name',m.name); localStorage.setItem('mj-remember-token',m.token); }catch(e){}
+    } else if(!m.silent){
+      // A real code unlock without "stay logged in" checked — if this
+      // device had a token from a previous session, drop it; leaving it
+      // would auto-login again next visit despite the box being unchecked.
+      forgetRememberedProfile();
+    }
+    if(!m.silent) toggleProfilePicker();
     // Refresh stats/theme-lock state for the now-confirmed profile.
     wss({type:'get_stats'});
+  } else if(m.silent){
+    // Stored token no longer works (revoked, code changed since) — clear
+    // it so this doesn't retry forever, and just fall back to the picker.
+    try{ localStorage.removeItem('mj-remember-name'); localStorage.removeItem('mj-remember-token'); }catch(e){}
   } else {
     $('profile-error').textContent=m.error||'Incorrect code';
   }
@@ -1122,6 +1178,10 @@ function onProfileUnlocked(m){
 // index.js), so switching to Guest after already unlocking a real
 // profile actually takes effect on the next join, not just cosmetically.
 function selectGuest(){
+  // Explicit switch to Guest is a logout — drop any "stay logged in" token
+  // this device was holding so it doesn't silently re-unlock the profile
+  // on the next visit.
+  forgetRememberedProfile();
   wss({type:'select_guest'});
 }
 
