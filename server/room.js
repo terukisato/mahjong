@@ -1114,7 +1114,7 @@ class Room {
     this._broadcastAll({type:'game_over',reason,scores:g.scores,
       playerNames:this.seats.map(p=>p?.name||'—'),...extra});
     const unlocked=recordGameResult({
-      playerNames:this.seats.map(p=>p?.name||null),
+      playerIds:this.seats.map(p=>p?.profileId||null),
       isBot:this.seats.map(p=>!p||p.isBot),
       // Guests hold no data — see index.js's 'join' handler for why.
       isGuest:this.seats.map(p=>!!p?.isGuest),

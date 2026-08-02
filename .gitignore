@@ -16,3 +16,10 @@ desktop.ini
 
 # Scratch files used while iterating on tile art
 public/tile-preview.html
+
+# Live player data (profiles.json, player-stats.json) — mutated by the
+# running server on every game/rename/etc. Was committed once by mistake;
+# a later `git pull`/checkout on a deployment overwrote the live files with
+# that stale commit and silently erased everything written since. Never
+# track these — back them up out-of-band if needed, don't rely on git.
+server/data/*.json

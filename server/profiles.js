@@ -32,6 +32,14 @@ const TITLES = [
   'Pure Runner', 'Dora Rich', 'The Diamond',
 ];
 
+// Keyed by a stable, never-reused `id` (crypto.randomUUID(), assigned once
+// at createProfile and never touched again) rather than by name — name is
+// just a mutable field on the record. This is what makes renameProfile
+// below a plain in-place field edit instead of a delete-old-key/insert-
+// new-key move: nothing else that references a profile (most importantly
+// stats.js's player-stats.json, keyed by this same id — see
+// stats.migrateToIds) has to be touched, or even know a rename happened,
+// when a player changes their display name.
 function _load() {
   try {
     return JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8'));
@@ -45,10 +53,46 @@ function _save(all) {
   fs.writeFileSync(PROFILES_FILE, JSON.stringify(all, null, 2));
 }
 
+// Finds a record by its `name` field (case-sensitive, same as the old
+// name-keyed lookups this replaces) — O(n) over "a handful of profiles",
+// same performance tradeoff already accepted elsewhere in this file.
+function _findByName(all, name) {
+  const id = Object.keys(all).find(k => all[k].name === name);
+  return id ? [id, all[id]] : [null, null];
+}
+
 // scrypt with a random per-profile salt — Node's built-in crypto, no extra
 // dependency (bcrypt et al.) needed for a handful of profiles.
 function _hashCode(code, salt) {
   return crypto.scryptSync(String(code), salt, 64).toString('hex');
+}
+
+// One-time upgrade from the old name-keyed file (no `id` field at all) to
+// the id-keyed shape above. Safe to call on every boot — a no-op once every
+// record already has an id. Returns {oldName: newId} for just the records
+// that were actually migrated, so index.js can hand that map to
+// stats.migrateToIds and move each profile's stats record (still sitting
+// under its old name in player-stats.json) over to the new id in the same
+// pass, instead of it silently becoming orphaned.
+function migrateLegacyIds() {
+  const all = _load();
+  const nameToId = {};
+  let changed = false;
+  for (const key of Object.keys(all)) {
+    if (!all[key].id) {
+      const id = crypto.randomUUID();
+      all[key].id = id;
+      all[key].name = all[key].name || key;
+      nameToId[key] = id;
+      changed = true;
+    }
+  }
+  if (changed) {
+    const rekeyed = {};
+    for (const key of Object.keys(all)) rekeyed[all[key].id] = all[key];
+    _save(rekeyed);
+  }
+  return nameToId;
 }
 
 // name + icon only — never the salt/codeHash — safe to send to anyone,
@@ -56,8 +100,28 @@ function _hashCode(code, salt) {
 // icon+name cards in index.html, populated before unlock).
 function listProfiles() {
   const all = _load();
-  return Object.keys(all).sort((a, b) => a.localeCompare(b))
-    .map(name => ({ name, icon: all[name].icon || 'default' }));
+  return Object.values(all)
+    .map(p => ({ name: p.name, icon: p.icon || 'default' }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// The stable id behind a name, e.g. so index.js can attach it to a
+// just-unlocked connection (see 'unlock_profile'/'unlock_profile_token')
+// and hand it to stats.js instead of the (mutable) name. Null if no such
+// profile.
+function getId(name) {
+  const [id] = _findByName(_load(), name);
+  return id;
+}
+
+// Reverse of getId, for joining stats.js's id-keyed leaderboard entries
+// back to a display name (see 'get_leaderboard' in index.js). Falls back
+// to '(unknown)' rather than crashing if the id's profile was since
+// deleted without its stats record following (shouldn't normally happen —
+// deleteProfile/deleteStats are always called together — but a leaderboard
+// row is not the place to fail loudly over it).
+function getNameById(id) {
+  return _load()[id]?.name || '(unknown)';
 }
 
 // Developer-only — index.js must verify the dev secret before calling
@@ -67,9 +131,10 @@ function createProfile(name, code) {
   if (!name) return { ok: false, error: 'Name required' };
   if (!code || String(code).length < 4) return { ok: false, error: 'Code must be at least 4 characters' };
   const all = _load();
-  if (all[name]) return { ok: false, error: 'A profile with that name already exists' };
+  if (_findByName(all, name)[0]) return { ok: false, error: 'A profile with that name already exists' };
   const salt = crypto.randomBytes(16).toString('hex');
-  all[name] = { salt, codeHash: _hashCode(code, salt), icon: 'default', title: 'Beginner' };
+  const id = crypto.randomUUID();
+  all[id] = { id, name, salt, codeHash: _hashCode(code, salt), icon: 'default', title: 'Beginner' };
   _save(all);
   return { ok: true };
 }
@@ -81,40 +146,39 @@ function createProfile(name, code) {
 // show for this name on any device, before anyone even enters a code.
 function setIcon(name, icon) {
   const all = _load();
-  if (!all[name]) return;
-  all[name].icon = String(icon || 'default').slice(0, 20);
+  const [, p] = _findByName(all, name);
+  if (!p) return;
+  p.icon = String(icon || 'default').slice(0, 20);
   _save(all);
 }
 
 function getIcon(name) {
-  const all = _load();
-  return all[name]?.icon || 'default';
+  return _findByName(_load(), name)[1]?.icon || 'default';
 }
 
 // Same pattern as setIcon/getIcon above — persisted on the profile itself,
 // not just the browser, so it's what shows up on any device. Only checks
 // the title is a recognized one at all (TITLES) — NOT that this specific
 // profile has earned it; index.js's 'set_profile_title' handler does that
-// check (against stats.getStats(name).unlockedTitles) before ever calling
+// check (against stats.getStats(id).unlockedTitles) before ever calling
 // this, since per-profile unlock state lives in stats.js, not here.
 function setTitle(name, title) {
   const all = _load();
-  if (!all[name] || !TITLES.includes(title)) return;
-  all[name].title = title;
+  const [, p] = _findByName(all, name);
+  if (!p || !TITLES.includes(title)) return;
+  p.title = title;
   _save(all);
 }
 
 function getTitle(name) {
-  const all = _load();
-  return all[name]?.title || 'Beginner';
+  return _findByName(_load(), name)[1]?.title || 'Beginner';
 }
 
 // Both hashes are fixed-length (128 hex chars, scrypt's 64-byte default
 // output) so length always matches for a real profile — timingSafeEqual is
 // still used rather than ===, so a wrong-length guess can't be timed either.
 function verifyProfile(name, code) {
-  const all = _load();
-  const p = all[name];
+  const p = _findByName(_load(), name)[1];
   if (!p) return false;
   const candidate = Buffer.from(_hashCode(code, p.salt), 'hex');
   const actual = Buffer.from(p.codeHash, 'hex');
@@ -132,18 +196,18 @@ function verifyProfile(name, code) {
 // single-session tradeoff a typical "remember me" cookie makes.
 function createRememberToken(name) {
   const all = _load();
-  if (!all[name]) return null;
+  const [, p] = _findByName(all, name);
+  if (!p) return null;
   const token = crypto.randomBytes(32).toString('hex');
   const salt = crypto.randomBytes(16).toString('hex');
-  all[name].remember = { salt, tokenHash: _hashCode(token, salt) };
+  p.remember = { salt, tokenHash: _hashCode(token, salt) };
   _save(all);
   return token;
 }
 
 // Same shape as verifyProfile, against the remember token instead of the code.
 function verifyRememberToken(name, token) {
-  const all = _load();
-  const p = all[name];
+  const p = _findByName(_load(), name)[1];
   if (!p || !p.remember || !token) return false;
   const candidate = Buffer.from(_hashCode(token, p.remember.salt), 'hex');
   const actual = Buffer.from(p.remember.tokenHash, 'hex');
@@ -155,36 +219,42 @@ function verifyRememberToken(name, token) {
 // left on a shared computer can't keep unlocking the profile afterward.
 function forgetRememberToken(name) {
   const all = _load();
-  if (!all[name]) return;
-  delete all[name].remember;
+  const [, p] = _findByName(all, name);
+  if (!p) return;
+  delete p.remember;
   _save(all);
 }
 
 // Developer-only, same as createProfile — index.js verifies DEV_SECRET
 // before calling this, not any profile's own code (a deleted profile's
 // code is exactly the thing that would no longer work to authorize this).
+// Returns the deleted profile's id too, so index.js can pass it to
+// stats.deleteStats — the stats record lives under that id, not the name.
 function deleteProfile(name) {
   const all = _load();
-  if (!all[name]) return { ok: false, error: 'No such profile' };
-  delete all[name];
+  const [id] = _findByName(all, name);
+  if (!id) return { ok: false, error: 'No such profile' };
+  delete all[id];
   _save(all);
-  return { ok: true };
+  return { ok: true, id };
 }
 
 // Owner-only — index.js verifies the profile's OWN current code before
 // calling this (see 'change_username'), unlike createProfile/deleteProfile's
-// DEV_SECRET gate above. Keeps the same salt/codeHash/icon, just moves them
-// under the new key. The stats record lives in its own file and is migrated
-// separately (see stats.renameStats).
+// DEV_SECRET gate above. Just flips the `name` field on the record kept
+// under the same id — unlike the old name-keyed scheme, this never has to
+// move anything in player-stats.json (see stats.js, keyed by this same id),
+// so a rename can no longer race a game finishing and lose/orphan a stats
+// write.
 function renameProfile(oldName, newName) {
   newName = String(newName || '').trim().slice(0, 20);
   if (!newName) return { ok: false, error: 'Name required' };
   const all = _load();
-  if (!all[oldName]) return { ok: false, error: 'No such profile' };
+  const [, p] = _findByName(all, oldName);
+  if (!p) return { ok: false, error: 'No such profile' };
   if (newName === oldName) return { ok: true, name: newName };
-  if (all[newName]) return { ok: false, error: 'A profile with that name already exists' };
-  all[newName] = all[oldName];
-  delete all[oldName];
+  if (_findByName(all, newName)[0]) return { ok: false, error: 'A profile with that name already exists' };
+  p.name = newName;
   _save(all);
   return { ok: true, name: newName };
 }
@@ -195,12 +265,13 @@ function renameProfile(oldName, newName) {
 function setCode(name, code) {
   if (!code || String(code).length < 4) return { ok: false, error: 'Code must be at least 4 characters' };
   const all = _load();
-  if (!all[name]) return { ok: false, error: 'No such profile' };
+  const [, p] = _findByName(all, name);
+  if (!p) return { ok: false, error: 'No such profile' };
   const salt = crypto.randomBytes(16).toString('hex');
-  all[name].salt = salt;
-  all[name].codeHash = _hashCode(code, salt);
+  p.salt = salt;
+  p.codeHash = _hashCode(code, salt);
   _save(all);
   return { ok: true };
 }
 
-module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, renameProfile, setCode, setTitle, getTitle, TITLES, createRememberToken, verifyRememberToken, forgetRememberToken };
+module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, renameProfile, setCode, setTitle, getTitle, TITLES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById, migrateLegacyIds };

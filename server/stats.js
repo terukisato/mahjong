@@ -3,17 +3,18 @@ const fs = require('fs');
 const path = require('path');
 const { ACHIEVEMENTS, applyUnlocks, getProgressList } = require('./achievements');
 
-// Plain JSON-file persistence, keyed by free-typed player name (there's no
-// account system anywhere in this app, so names are trivially spoofable/
-// collidable across players — an accepted limitation, not a bug). Re-read
-// from disk on every call rather than cached in memory — writes only
-// happen once per finished game, so the extra read is free, and caching
-// across the whole process lifetime actively loses data: if the server
-// process is ever restarted (nodemon reload, crash, or a second instance
-// briefly overlapping the old one) while a game is in progress, the new
-// process's cache reflects an older snapshot, and its next save would
-// overwrite the file with that stale snapshot, silently erasing whatever
-// another process wrote in the meantime.
+// Plain JSON-file persistence, keyed by the profile's stable id (see
+// profiles.js — never the display name, so renaming a profile never has to
+// touch this file at all; a stray guest name is never a valid key here
+// either, since recordGameResult below only ever gets called with a real
+// profile's id). Re-read from disk on every call rather than cached in
+// memory — writes only happen once per finished game, so the extra read is
+// free, and caching across the whole process lifetime actively loses data:
+// if the server process is ever restarted (nodemon reload, crash, or a
+// second instance briefly overlapping the old one) while a game is in
+// progress, the new process's cache reflects an older snapshot, and its
+// next save would overwrite the file with that stale snapshot, silently
+// erasing whatever another process wrote in the meantime.
 const DATA_DIR = path.join(__dirname, 'data');
 const STATS_FILE = path.join(DATA_DIR, 'player-stats.json');
 
@@ -28,6 +29,24 @@ function _load() {
 function _save(all) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(STATS_FILE, JSON.stringify(all, null, 2));
+}
+
+// Companion to profiles.migrateLegacyIds() — this file used to be keyed by
+// name too, moved in lockstep with a rename via the old renameStats(). Given
+// the {oldName: newId} map profiles.js produced while upgrading itself,
+// move any record still sitting under `oldName` here over to `newId`, once.
+// A name with no matching entry here (never played a game) is just skipped.
+function migrateToIds(nameToId) {
+  const all = _load();
+  let changed = false;
+  for (const [name, id] of Object.entries(nameToId)) {
+    if (all[name] && !all[id]) {
+      all[id] = all[name];
+      delete all[name];
+      changed = true;
+    }
+  }
+  if (changed) _save(all);
 }
 
 // Sanma and yonma are scored on different scales (different starting
@@ -101,9 +120,9 @@ function _cloneVariant(v) {
   return { ...v, placements: [...v.placements], yaku: { ...v.yaku } };
 }
 
-function getStats(name) {
+function getStats(id) {
   const all = _load();
-  const s = _normalize(all[name] || _emptyStats());
+  const s = _normalize(all[id] || _emptyStats());
   return {
     yonma: _cloneVariant(s.yonma),
     sanma: _cloneVariant(s.sanma),
@@ -118,28 +137,28 @@ function getStats(name) {
   };
 }
 
-// playerNames/isBot/isGuest/finalScores/placements/handStats are all
+// playerIds/isBot/isGuest/finalScores/placements/handStats are all
 // seat-indexed arrays of the same length (3 or 4, depending on game mode)
 // — that length doubles as which variant bucket this game's stats belong
 // in, no separate variant argument needed. Bots, empty seats, and guests
-// are all skipped — only a real unlocked profile accumulates persistent
-// stats. isGuest defaults to an all-false array so callers that predate
-// guests (none left, but just in case) don't need to pass it.
+// are all skipped — only a real unlocked profile (a non-null id) accumulates
+// persistent stats. isGuest defaults to an all-false array so callers that
+// predate guests (none left, but just in case) don't need to pass it.
 //
 // Returns a seat-indexed array (null for any seat that unlocked nothing
 // this game) of newly-earned achievement info — see room.js's
 // _finishGame, which sends each seat's own entry to that player as an
 // 'achievements_unlocked' message so the notification only ever shows the
 // achievements THEY just earned, not their opponents'.
-function recordGameResult({ playerNames, isBot, isGuest = [], finalScores, placements, handStats }) {
-  const variant = playerNames.length === 3 ? 'sanma' : 'yonma';
+function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placements, handStats }) {
+  const variant = playerIds.length === 3 ? 'sanma' : 'yonma';
   const all = _load();
-  const newlyUnlocked = new Array(playerNames.length).fill(null);
-  for (let seat = 0; seat < playerNames.length; seat++) {
+  const newlyUnlocked = new Array(playerIds.length).fill(null);
+  for (let seat = 0; seat < playerIds.length; seat++) {
     if (isBot[seat] || isGuest[seat]) continue;
-    const name = playerNames[seat];
-    if (!name) continue;
-    const rec = _normalize(all[name] || _emptyStats());
+    const id = playerIds[seat];
+    if (!id) continue;
+    const rec = _normalize(all[id] || _emptyStats());
     const s = rec[variant];
     s.gamesPlayed++;
     const place = placements[seat];
@@ -166,7 +185,7 @@ function recordGameResult({ playerNames, isBot, isGuest = [], finalScores, place
         return { id, label: a.label, unlocksTitle: a.unlocksTitle || null, unlocksTheme: a.unlocksTheme || null };
       });
     }
-    all[name] = rec;
+    all[id] = rec;
   }
   _save(all);
   return newlyUnlocked;
@@ -175,14 +194,18 @@ function recordGameResult({ playerNames, isBot, isGuest = [], finalScores, place
 // No query engine needed at this scale — just load everything and sort in
 // JS. sortBy must be a numeric field on a variant stats record (gamesWon,
 // gamesPlayed, bestScore, etc.); unknown fields sort everyone as equal (0).
+// Returns `id`, not a display name — this file has no notion of names at
+// all anymore (see the top-of-file comment); index.js's 'get_leaderboard'
+// handler joins each entry against profiles.getNameById before it ever
+// reaches the client.
 function getLeaderboard(sortBy = 'gamesWon', variant = 'yonma') {
   const all = _load();
   const key = variant === 'sanma' ? 'sanma' : 'yonma';
   return Object.entries(all)
-    .map(([name, raw]) => {
+    .map(([id, raw]) => {
       const s = _normalize(raw)[key];
       return {
-        name,
+        id,
         gamesPlayed: s.gamesPlayed,
         gamesWon: s.gamesWon,
         totalFinalScore: s.totalFinalScore,
@@ -194,28 +217,16 @@ function getLeaderboard(sortBy = 'gamesWon', variant = 'yonma') {
 }
 
 // Called alongside profiles.deleteProfile (see index.js's delete_profile) —
-// removes the stats/achievements record too, so a deleted name doesn't
+// removes the stats/achievements record too, so a deleted profile doesn't
 // linger on the leaderboard, and a later profile recreated under the same
-// name starts fresh instead of inheriting the old one's unlocked themes.
-function deleteStats(name) {
+// name starts fresh instead of inheriting the old one's unlocked themes
+// (a fresh create_profile always gets a brand-new id, never the old one).
+function deleteStats(id) {
   const all = _load();
-  if (all[name]) {
-    delete all[name];
+  if (all[id]) {
+    delete all[id];
     _save(all);
   }
 }
 
-// Called alongside profiles.renameProfile (see index.js's 'change_username')
-// so a renamed profile keeps its accumulated stats attached to it instead of
-// starting over under the new name. No-op if the old name never played a
-// game (nothing in this file to move).
-function renameStats(oldName, newName) {
-  const all = _load();
-  if (all[oldName] && oldName !== newName) {
-    all[newName] = all[oldName];
-    delete all[oldName];
-    _save(all);
-  }
-}
-
-module.exports = { getStats, recordGameResult, getLeaderboard, deleteStats, renameStats };
+module.exports = { getStats, recordGameResult, getLeaderboard, deleteStats, migrateToIds };

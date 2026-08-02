@@ -4,8 +4,14 @@ const http=require('http');
 const WebSocket=require('ws');
 const path=require('path');
 const {Room}=require('./room');
-const {getStats,getLeaderboard,deleteStats,renameStats}=require('./stats');
-const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,createRememberToken,verifyRememberToken,forgetRememberToken}=require('./profiles');
+const {getStats,getLeaderboard,deleteStats,migrateToIds}=require('./stats');
+const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,migrateLegacyIds}=require('./profiles');
+
+// One-time upgrade of both data files from the old name-keyed shape to the
+// new stable-id-keyed shape (see profiles.js's migrateLegacyIds and
+// stats.js's migrateToIds) — a no-op on every boot after the first. Must
+// run before anything else touches either file.
+migrateToIds(migrateLegacyIds());
 
 const app=express();
 const server=http.createServer(app);
@@ -74,7 +80,13 @@ wss.on('connection',(ws)=>{
   // client can't just claim someone else's profile name without its code.
   // Lives only in memory for this WebSocket's lifetime ("unlocked for the
   // session" per the design — closing/reloading the tab drops it).
+  // unlockedId is the same profile's stable id (see profiles.js) — this is
+  // what actually gets attached to a seat (player.profileId, below) and
+  // passed into stats.js, since player-stats.json is keyed by id, not by
+  // the (renameable) name. unlockedName stays around purely for display/
+  // login purposes (player.name, the 'profile_unlocked'/'stats' responses).
   let unlockedName=null;
+  let unlockedId=null;
 
   // Keeps an already-seated player's identity (name/icon/isGuest) in sync
   // when unlockedName changes WHILE still sitting in a waiting-phase room —
@@ -96,10 +108,12 @@ wss.on('connection',(ws)=>{
     if(unlockedName){
       player.name=unlockedName;
       player.icon=getIcon(unlockedName);
+      player.profileId=unlockedId;
       player.isGuest=false;
     } else {
       player.name='Guest'+Math.floor(1000+Math.random()*9000);
       player.icon='default';
+      player.profileId=null;
       player.isGuest=true;
     }
     myRoom.fillBots(); // no seats actually empty — just used for its broadcast
@@ -132,11 +146,13 @@ wss.on('connection',(ws)=>{
         // seat's in-game nameplate (see _seatInfo in room.js).
         player.icon=getIcon(unlockedName);
         player.title=getTitle(unlockedName);
+        player.profileId=unlockedId;
         player.isGuest=false;
       } else {
         player.name='Guest'+Math.floor(1000+Math.random()*9000);
         player.icon='default';
         player.title=null;
+        player.profileId=null;
         player.isGuest=true;
       }
       // Leave any room this connection was already in first — lets the
@@ -183,12 +199,16 @@ wss.on('connection',(ws)=>{
       // Uses this connection's own unlocked profile, never msg.name — same
       // reasoning as 'join' above, otherwise anyone could read any unlocked
       // profile's stats just by naming it.
-      if(unlockedName) ws.send(JSON.stringify({type:'stats',name:unlockedName,stats:getStats(unlockedName)}));
+      if(unlockedId) ws.send(JSON.stringify({type:'stats',name:unlockedName,stats:getStats(unlockedId)}));
     }
 
     if(msg.type==='get_leaderboard'){
       const variant=msg.variant==='sanma'?'sanma':'yonma';
-      ws.send(JSON.stringify({type:'leaderboard',variant,entries:getLeaderboard('gamesWon',variant)}));
+      // getLeaderboard returns {id,...} rows (stats.js has no notion of
+      // names) — attach each row's current display name here, the one
+      // place id and name actually need to meet for this message.
+      const entries=getLeaderboard('gamesWon',variant).map(e=>({...e,name:getNameById(e.id)}));
+      ws.send(JSON.stringify({type:'leaderboard',variant,entries}));
     }
 
     if(msg.type==='list_profiles'){
@@ -201,6 +221,7 @@ wss.on('connection',(ws)=>{
       const name=String(msg.name||'').slice(0,20);
       if(verifyProfile(name,msg.code)){
         unlockedName=name;
+        unlockedId=getId(name);
         // "Stay logged in" — only issues a token when the client opts in
         // (see #profile-remember's toggle in script.js); the client then
         // stores name+token in localStorage and trades it in via
@@ -222,6 +243,7 @@ wss.on('connection',(ws)=>{
       const name=String(msg.name||'').slice(0,20);
       if(verifyRememberToken(name,msg.token)){
         unlockedName=name;
+        unlockedId=getId(name);
         ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),silent:true}));
         syncSeatedIdentity();
       } else {
@@ -235,6 +257,7 @@ wss.on('connection',(ws)=>{
     // Guest-assignment branch above as if nothing had ever been unlocked.
     if(msg.type==='select_guest'){
       unlockedName=null;
+      unlockedId=null;
       ws.send(JSON.stringify({type:'guest_selected'}));
       syncSeatedIdentity();
     }
@@ -261,8 +284,8 @@ wss.on('connection',(ws)=>{
     // before calling setTitle, which only knows the overall set of
     // recognized titles (TITLES), not who's actually earned which one. A
     // client could otherwise claim any recognized title without earning it.
-    if(msg.type==='set_profile_title'&&unlockedName){
-      if(getStats(unlockedName).unlockedTitles.includes(msg.title)){
+    if(msg.type==='set_profile_title'&&unlockedId){
+      if(getStats(unlockedId).unlockedTitles.includes(msg.title)){
         setTitle(unlockedName,msg.title);
       }
     }
@@ -271,18 +294,17 @@ wss.on('connection',(ws)=>{
     // Requires the profile's OWN current code, not just an already-unlocked
     // session — unlike set_profile_icon above, this changes login identity,
     // so a stale/hijacked tab shouldn't be able to silently repoint it
-    // without knowing the code. On success, carries the stats record over
-    // to the new name (see stats.renameStats) and updates unlockedName so
-    // this connection keeps playing as the new name without re-unlocking.
+    // without knowing the code. renameProfile just flips the `name` field
+    // on the record kept under unlockedId (see profiles.js) — the stats
+    // record in player-stats.json is keyed by that same id and is never
+    // touched, so unlike the old name-keyed scheme there's nothing here
+    // that can race a game finishing and lose a stats write.
     if(msg.type==='change_username'&&unlockedName){
       if(!verifyProfile(unlockedName,msg.currentCode)){
         ws.send(JSON.stringify({type:'change_username_result',ok:false,error:'Incorrect code'}));
       } else {
         const result=renameProfile(unlockedName,msg.newName);
-        if(result.ok){
-          renameStats(unlockedName,result.name);
-          unlockedName=result.name;
-        }
+        if(result.ok) unlockedName=result.name;
         ws.send(JSON.stringify({type:'change_username_result',...result}));
       }
     }
@@ -324,15 +346,18 @@ wss.on('connection',(ws)=>{
     }
 
     // Developer-only, same gate as create_profile. Also clears the deleted
-    // name's stats/achievements (see stats.deleteStats) so a later profile
-    // recreated under that name starts clean rather than inheriting them.
+    // profile's stats/achievements (see stats.deleteStats, keyed by the id
+    // deleteProfile hands back) so a later profile recreated under the same
+    // name starts clean rather than inheriting them — it gets a brand-new
+    // id, so it could never see the old stats record even if this were
+    // skipped, but leaving it behind would just be an orphaned row.
     if(msg.type==='delete_profile'){
       if(msg.devSecret!==DEV_SECRET){
         ws.send(JSON.stringify({type:'delete_profile_result',ok:false,error:'Invalid developer key'}));
       } else {
         const result=deleteProfile(msg.name);
-        if(result.ok) deleteStats(msg.name);
-        ws.send(JSON.stringify({type:'delete_profile_result',...result}));
+        if(result.ok) deleteStats(result.id);
+        ws.send(JSON.stringify({type:'delete_profile_result',ok:result.ok,error:result.error}));
       }
     }
 
