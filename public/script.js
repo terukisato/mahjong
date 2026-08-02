@@ -535,7 +535,11 @@ function wss(d){if(ws&&ws.readyState===1)ws.send(JSON.stringify(d));}
 // only meaningful — and only processed — once actually seated at a table.
 function onMsg(m){
   if(m.type==='hello') return;
-  if(m.type==='joined'){mySeat=m.seat;showWaiting();return;}
+  // `instant` marks a quick_match reply — the server starts that game in
+  // the same tick (see server/index.js), so 'game_start' is right behind
+  // this message; skip the waiting-room screen entirely rather than flash
+  // "Looking for players..." for a single frame before it's replaced.
+  if(m.type==='joined'){mySeat=m.seat;if(!m.instant)showWaiting();return;}
   if(m.type==='room_update'){updateSlots(m.seats);return;}
   if(m.type==='game_start'){startGame(m);return;}
   if(m.type==='round_start'){onRoundStart(m);return;}
@@ -1823,15 +1827,18 @@ function applyRuleButton(name){
   btn.classList.toggle('off',!rules[name]);
 }
 
+// Quick Match — straight into a game against bots (see 'quick_match' in
+// server/index.js, which creates, fills, and starts the room in one shot,
+// no waiting room, not listed anywhere). No profile needed — defaults to
+// Guest play (see index.html's #iname default value and the server's
+// assignIdentity, which assigns a Guest identity itself whenever this
+// connection hasn't unlocked one). The name/icon sent here are only ever a
+// starting hint for that default case; once a profile IS unlocked the
+// server uses its own record for both regardless of what's sent (see
+// unlockedName/getIcon in index.js).
 function findMatch(){
-  // No profile needed — defaults to Guest play (see index.html's #iname
-  // default value and the server's 'join' handler, which assigns a Guest
-  // identity itself whenever this connection hasn't unlocked one). The
-  // name/icon sent here are only ever a starting hint for that default
-  // case; once a profile IS unlocked the server uses its own record for
-  // both regardless of what's sent (see unlockedName/getIcon in index.js).
   playLobbyMusic();
-  wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,variant,rules,voiceTheme:currentVoiceTheme,icon:currentPlayerIcon});
+  wss({type:'quick_match',name:($('iname').value.trim()||'Player'),gameMode,variant,rules,voiceTheme:currentVoiceTheme,icon:currentPlayerIcon});
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1897,7 +1904,7 @@ function renderRoomList(m){
 
 function showWaiting(){
   $('wa').style.display='block';
-  $('bfind').style.display='none';
+  $('lobby-actions').style.display='none';
   $('lobby-inputs').style.display='none';
   $('cdiv').textContent='Press Ready when you are set to start';
 }
@@ -1985,7 +1992,7 @@ function pressReady(){
 function resetLobby(){
   mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;discarding=false;
   $('wa').style.display='none';
-  $('bfind').style.display='block';
+  $('lobby-actions').style.display='flex';
   $('lobby-inputs').style.display='block';
   $('cdiv').textContent='';
   $('bready').classList.remove('pressed');

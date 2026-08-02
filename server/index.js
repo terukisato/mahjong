@@ -48,41 +48,18 @@ const heartbeatTimer=setInterval(()=>{
 },HEARTBEAT_INTERVAL_MS);
 wss.on('close',()=>clearInterval(heartbeatTimer));
 
-// Matchmaking: every Room still in its 'waiting' phase with at least one
-// real human seated lives here, keyed by Room.id — the pool 'list_rooms'/
-// 'join_room' browse and join into by hand, and what quick-match ('join'
-// below) picks from automatically. A room leaves this map the moment it
-// starts (see the 'ready'/'start_now' handlers below) or its last human
-// leaves (see leaveCurrentRoom) — a bot-only room isn't worth listing or
-// matching new players into.
+// Every Room still in its 'waiting' phase with at least one real human
+// seated lives here, keyed by Room.id — the pool 'list_rooms'/'join_room'
+// browse and join into by hand (see the Room List panel). A room leaves
+// this map the moment it starts (see the 'ready'/'start_now' handlers
+// below) or its last human leaves (see leaveCurrentRoom) — a bot-only room
+// isn't worth listing or joining into. 'quick_match' below never touches
+// this map at all — it's a standalone instant game against bots, not
+// something meant to be found or joined by anyone else.
 const openRooms=new Map();
 
-// Only the toggle values matter for "is this the same rules" — sanma is
-// derived from numPlayers (already checked separately by every caller
-// below) and always consistent with it, so it'd be redundant here.
-function ruleKey(rules){
-  return JSON.stringify([rules.akaDora,rules.kuitanAri,rules.doubleRon,rules.nagashiMangan,rules.chonbo]);
-}
-
-// Quick-match ('Find Match') — scans every open room for one with matching
-// mode/player-count/rules instead of trusting a single global "the" waiting
-// room like before. Two players who pick different rules no longer collide
-// into whichever one joined first and silently inherit those rules instead
-// of their own — each rule combination gets its own pool, same as if
-// they'd each created a room by hand. No match -> spins up a fresh one.
-function findOrCreateRoom(mode,rules,numPlayers){
-  const wantKey=ruleKey(rules);
-  for(const room of openRooms.values()){
-    if(room.phase==='waiting'&&room.gameMode===mode&&room.numPlayers===(numPlayers===3?3:4)&&ruleKey(room.rules)===wantKey){
-      return room;
-    }
-  }
-  return createFreshRoom(mode,rules,numPlayers);
-}
-
-// Used by both quick-match's no-match fallback and 'create_room' (which
-// always wants a brand-new room, never an existing one) — registers the
-// room in openRooms so it's immediately browsable/joinable.
+// Used by 'create_room' — registers the room in openRooms so it's
+// immediately browsable/joinable via the Room List.
 function createFreshRoom(mode,rules,numPlayers){
   const room=new Room(mode,'normal',rules,numPlayers);
   openRooms.set(room.id,room);
@@ -99,8 +76,9 @@ wss.on('connection',(ws)=>{
   let myRoom=null;
   const myId=`h-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
   const player={id:myId,ws,name:'Player',seat:-1,isBot:false};
-  // Set only by a successful 'unlock_profile' on THIS connection — 'join'/
-  // 'get_stats' trust this, never the name in the incoming message, so a
+  // Set only by a successful 'unlock_profile' on THIS connection —
+  // 'quick_match'/'create_room'/'join_room'/'get_stats' trust this, never
+  // the name in the incoming message, so a
   // client can't just claim someone else's profile name without its code.
   // Lives only in memory for this WebSocket's lifetime ("unlocked for the
   // session" per the design — closing/reloading the tab drops it).
@@ -114,15 +92,17 @@ wss.on('connection',(ws)=>{
 
   // Keeps an already-seated player's identity (name/icon/isGuest) in sync
   // when unlockedName changes WHILE still sitting in a waiting-phase room —
-  // e.g. joined as Guest, then unlocked a real profile without re-sending
-  // 'join'. Without this, the waiting room (room_update's seats, rendered
-  // as the matchmaking slots) keeps showing whatever identity was captured
-  // at the original 'join' time forever, even after the profile picker/
-  // client-side #iname has already moved on to the real name — and worse,
-  // the match would still record this seat as a guest (see room.js's
-  // recordGameResult, which skips isGuest seats) even though a real
-  // profile got unlocked before the game actually started. Mirrors the
-  // exact identity-assignment branch 'join' uses below. No-op once the
+  // e.g. joined a Room List room as Guest, then unlocked a real profile
+  // without re-joining. Without this, the waiting room (room_update's
+  // seats, rendered as the matchmaking slots) keeps showing whatever
+  // identity was captured at the original join time forever, even after
+  // the profile picker/client-side #iname has already moved on to the real
+  // name — and worse, the match would still record this seat as a guest
+  // (see room.js's recordGameResult, which skips isGuest seats) even though
+  // a real profile got unlocked before the game actually started. Only
+  // matters for 'create_room'/'join_room' — 'quick_match' starts the game
+  // in the same tick, so there's no window for identity to change under it.
+  // Mirrors assignIdentity below. No-op once the
   // room has left 'waiting' (game in progress) — identity shouldn't shift
   // mid-game — or if this connection was never actually seated (seat -1)
   // or has since been replaced (removeHuman swaps in a bot).
@@ -143,11 +123,11 @@ wss.on('connection',(ws)=>{
     myRoom.fillBots(); // no seats actually empty — just used for its broadcast
   }
 
-  // Shared by 'join'/'create_room'/'join_room' — all three are "seat this
-  // connection somewhere new", just picking that room differently, so they
-  // all need the exact same identity-assignment step first. See 'join'
-  // below (or syncSeatedIdentity above) for why unlockedName always wins
-  // over anything the client claims.
+  // Shared by 'quick_match'/'create_room'/'join_room' — all three are "seat
+  // this connection somewhere new", just picking that room differently, so
+  // they all need the exact same identity-assignment step first. See
+  // 'quick_match' below (or syncSeatedIdentity above) for why unlockedName
+  // always wins over anything the client claims.
   function assignIdentity(){
     if(unlockedName){
       player.name=unlockedName;
@@ -164,7 +144,7 @@ wss.on('connection',(ws)=>{
     }
   }
 
-  // Shared by 'join'/'create_room'/'join_room' (leaving whatever room this
+  // Shared by 'quick_match'/'create_room'/'join_room' (leaving whatever room this
   // connection was already in before joining a new one) and 'leave'/close
   // below. Beyond removeHuman's own bookkeeping, this also drops the room
   // from openRooms once its last human is gone (still 'waiting', 0 humans
@@ -181,7 +161,7 @@ wss.on('connection',(ws)=>{
   // Shared by 'ready' (auto-start once every human is ready) and
   // 'start_now' (explicit) below — either can flip phase away from
   // 'waiting', at which point the room should stop showing up in
-  // 'list_rooms' or being matched into by quick-match.
+  // 'list_rooms' or being joined into via 'join_room'.
   function closeIfStarted(room){
     if(room&&room.phase!=='waiting') openRooms.delete(room.id);
   }
@@ -197,9 +177,19 @@ wss.on('connection',(ws)=>{
   ws.on('message',(raw)=>{
     let msg; try{msg=JSON.parse(raw);}catch{return;}
     try{
-    if(msg.type==='join'){
+    // "Quick Match" — straight into a game against bots, no waiting room,
+    // never listed/joinable by anyone else (see openRooms's comment above).
+    // Unlike 'create_room'/'join_room' below this never sits in 'waiting'
+    // long enough to matter: addHuman/fillBots/start all run synchronously
+    // within this one message handler, so there's no window for another
+    // connection's message to interleave and see this room half-built.
+    // `instant:true` on the 'joined' reply tells the client to skip the
+    // waiting-room screen entirely (see onMsg in script.js) — game_start
+    // follows within the same tick anyway, so showing "Looking for
+    // players..." first would just be a one-frame flash.
+    if(msg.type==='quick_match'){
       // No unlocked profile on this connection? Play as a Guest instead of
-      // rejecting the join — guests hold no data at all: recordGameResult
+      // rejecting the request — guests hold no data at all: recordGameResult
       // (see room.js's _finishGame) skips any seat with isGuest set, so
       // nothing about a guest's play is ever written to player-stats.json,
       // and there's no profile record for their icon/name to live in
@@ -208,8 +198,8 @@ wss.on('connection',(ws)=>{
       // (See assignIdentity above — shared with create_room/join_room.)
       assignIdentity();
       // Leave any room this connection was already in first — lets the
-      // client re-send 'join' to switch game mode or retry without needing
-      // a fresh WebSocket connection.
+      // client re-send 'quick_match' to switch game mode or retry without
+      // needing a fresh WebSocket connection.
       leaveCurrentRoom();
       player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
       const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
@@ -222,22 +212,17 @@ wss.on('connection',(ws)=>{
         nagashiMangan: msg.rules?.nagashiMangan!==false,
         chonbo: msg.rules?.chonbo===true,
       };
-      myRoom=findOrCreateRoom(mode,rules,numPlayers);
-      // Race fallback: the room findOrCreateRoom picked could have filled
-      // up (or moved past 'waiting') between its check and here if
-      // multiple joins land close together — just spin up a fresh one.
-      if(!myRoom.addHuman(player)){
-        myRoom=createFreshRoom(mode,rules,numPlayers);
-        myRoom.addHuman(player);
-      }
-      ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id}));
+      myRoom=new Room(mode,'normal',rules,numPlayers);
+      myRoom.addHuman(player);
+      myRoom.fillBots();
+      myRoom.start();
+      ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,instant:true}));
     }
 
-    // Explicit "Create Room" — always a brand-new room (never reuses an
-    // existing one, unlike quick-match's findOrCreateRoom above), so the
-    // creator's exact rule picks are guaranteed, not just "whichever
-    // matching room happened to exist first". Shows up in 'list_rooms' for
-    // others to join by hand via 'join_room' below — no code to share.
+    // Explicit "Create Room" — always a brand-new room, registered in
+    // openRooms (unlike 'quick_match' above, which never is). Shows up in
+    // 'list_rooms' for others to join by hand via 'join_room' below — no
+    // code to share, rules apply automatically to whoever joins it.
     if(msg.type==='create_room'){
       assignIdentity();
       leaveCurrentRoom();
@@ -258,8 +243,8 @@ wss.on('connection',(ws)=>{
 
     // Join a specific open room by id, picked from 'list_rooms' — the
     // room's own rules apply automatically (the whole point: no need to
-    // match toggles by hand or communicate a code). Fails quietly with an
-    // error rather than falling back to quick-match — the player asked for
+    // match toggles by hand or communicate a code). Fails with an error
+    // rather than falling back to anything else — the player asked for
     // THIS room specifically.
     if(msg.type==='join_room'){
       const room=openRooms.get(Number(msg.roomId));
@@ -314,7 +299,7 @@ wss.on('connection',(ws)=>{
 
     if(msg.type==='get_stats'){
       // Uses this connection's own unlocked profile, never msg.name — same
-      // reasoning as 'join' above, otherwise anyone could read any unlocked
+      // reasoning as assignIdentity above, otherwise anyone could read any unlocked
       // profile's stats just by naming it.
       if(unlockedId) ws.send(JSON.stringify({type:'stats',name:unlockedName,stats:getStats(unlockedId)}));
     }
@@ -370,7 +355,7 @@ wss.on('connection',(ws)=>{
 
     // Explicit "play as Guest" pick from the profile picker — no code
     // needed, just clears any profile this connection had unlocked (if
-    // none, this is a no-op). The next 'join' then falls into the same
+    // none, this is a no-op). The next quick_match/create_room/join_room then falls into the same
     // Guest-assignment branch above as if nothing had ever been unlocked.
     if(msg.type==='select_guest'){
       unlockedName=null;

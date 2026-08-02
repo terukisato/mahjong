@@ -472,7 +472,6 @@
     <h2>Enter the Hall</h2>
     <a href="#" class="about-link rules-link-lobby" onclick="toggleRulesModal();return false;">⚙ Match Settings</a>
     <a href="#" class="about-link rules-link-lobby" onclick="toggleRankings();return false;">Rankings</a>
-    <a href="#" class="about-link rules-link-lobby" onclick="toggleRoomList();return false;">Room List</a>
     <div id="lobby-inputs">
     <!-- Defaults to Guest — playable immediately with no profile chosen.
          Guest play holds no data at all (see recordGameResult's isGuest
@@ -495,7 +494,15 @@
     </button>
     <div class="match-summary" id="match-summary"></div>
     </div>
-    <button class="bp" id="bfind">⚔ Find Match</button>
+    <!-- Two distinct entry points, not one ambiguous "Find Match": Quick
+         Match goes straight into a game against bots, no waiting room (see
+         findMatch/'quick_match' in server/index.js); Room List is for
+         deliberately finding/hosting a game with a specific person (see
+         toggleRoomList/createRoom/joinRoom in script.js). -->
+    <div class="lobby-actions" id="lobby-actions">
+      <button class="bp" id="bfind">Quick Match</button>
+      <button class="bp" onclick="toggleRoomList()">Room List</button>
+    </div>
     <div class="wa" id="wa">
       <div class="wm" id="wmsg">Looking for players...</div>
       <div class="slots" id="slots">

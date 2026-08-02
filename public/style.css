@@ -120,6 +120,13 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .room-card-join:disabled{opacity:.4;cursor:default;}
 .bp{width:100%;padding:calc(var(--ui-vmin) * 1.806);background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);border-radius:10px;color:var(--cream);
   font-size:calc(var(--ui-vmin) * 1.806);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;}
+/* Lobby's two front-screen actions (Quick Match / Room List, see
+   index.html) — side by side instead of one ambiguous button. Smaller
+   font + letter-spacing than a lone .bp so "⚔ Quick Match"/"🏠 Room List"
+   both fit comfortably at half width down to a narrow phone screen. */
+.lobby-actions{display:flex;gap:calc(var(--ui-vmin, 7.2px) * 1.111);}
+.lobby-actions .bp{width:auto;flex:1;min-width:0;
+  font-size:calc(var(--ui-vmin) * 1.389);letter-spacing:calc(var(--ui-vmin) * .208);}
 .bp:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(26,107,69,.55);border-color:var(--gold);}
 .bp:disabled{opacity:.4;cursor:default;transform:none;}
 .bs{width:100%;padding:calc(var(--ui-vmin) * 1.389);background:transparent;border:1px solid rgba(201,168,76,.3);border-radius:10px;color:rgba(245,237,216,.65);
