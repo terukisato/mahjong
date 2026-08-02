@@ -48,21 +48,45 @@ const heartbeatTimer=setInterval(()=>{
 },HEARTBEAT_INTERVAL_MS);
 wss.on('close',()=>clearInterval(heartbeatTimer));
 
-// Matchmaking: a single shared "waiting room" per (game mode, player count)
-// pair at a time. Whoever joins first claims it; once it starts (or if its
-// mode/player-count doesn't match), the next joiner gets a brand-new Room
-// instead. There's no support for multiple concurrent waiting rooms of the
-// same mode, private rooms, or joining a specific room by ID —
-// first-come-first-served into whatever's currently open is the entire
-// matchmaking model. Sanma (numPlayers=3) and yonma (numPlayers=4) rooms
-// are always separate — a sanma joiner must never land in a yonma waiting
-// room or vice versa.
-let waitingRoom=null;
+// Matchmaking: every Room still in its 'waiting' phase with at least one
+// real human seated lives here, keyed by Room.id — the pool 'list_rooms'/
+// 'join_room' browse and join into by hand, and what quick-match ('join'
+// below) picks from automatically. A room leaves this map the moment it
+// starts (see the 'ready'/'start_now' handlers below) or its last human
+// leaves (see leaveCurrentRoom) — a bot-only room isn't worth listing or
+// matching new players into.
+const openRooms=new Map();
 
-function getWaitingRoom(mode,rules,numPlayers){
-  if(waitingRoom&&waitingRoom.phase==='waiting'&&waitingRoom.gameMode===mode&&waitingRoom.numPlayers===numPlayers) return waitingRoom;
-  waitingRoom=new Room(mode,'normal',rules,numPlayers);
-  return waitingRoom;
+// Only the toggle values matter for "is this the same rules" — sanma is
+// derived from numPlayers (already checked separately by every caller
+// below) and always consistent with it, so it'd be redundant here.
+function ruleKey(rules){
+  return JSON.stringify([rules.akaDora,rules.kuitanAri,rules.doubleRon,rules.nagashiMangan,rules.chonbo]);
+}
+
+// Quick-match ('Find Match') — scans every open room for one with matching
+// mode/player-count/rules instead of trusting a single global "the" waiting
+// room like before. Two players who pick different rules no longer collide
+// into whichever one joined first and silently inherit those rules instead
+// of their own — each rule combination gets its own pool, same as if
+// they'd each created a room by hand. No match -> spins up a fresh one.
+function findOrCreateRoom(mode,rules,numPlayers){
+  const wantKey=ruleKey(rules);
+  for(const room of openRooms.values()){
+    if(room.phase==='waiting'&&room.gameMode===mode&&room.numPlayers===(numPlayers===3?3:4)&&ruleKey(room.rules)===wantKey){
+      return room;
+    }
+  }
+  return createFreshRoom(mode,rules,numPlayers);
+}
+
+// Used by both quick-match's no-match fallback and 'create_room' (which
+// always wants a brand-new room, never an existing one) — registers the
+// room in openRooms so it's immediately browsable/joinable.
+function createFreshRoom(mode,rules,numPlayers){
+  const room=new Room(mode,'normal',rules,numPlayers);
+  openRooms.set(room.id,room);
+  return room;
 }
 
 // One WebSocket connection = one prospective player. `player` is a plain
@@ -119,6 +143,49 @@ wss.on('connection',(ws)=>{
     myRoom.fillBots(); // no seats actually empty — just used for its broadcast
   }
 
+  // Shared by 'join'/'create_room'/'join_room' — all three are "seat this
+  // connection somewhere new", just picking that room differently, so they
+  // all need the exact same identity-assignment step first. See 'join'
+  // below (or syncSeatedIdentity above) for why unlockedName always wins
+  // over anything the client claims.
+  function assignIdentity(){
+    if(unlockedName){
+      player.name=unlockedName;
+      player.icon=getIcon(unlockedName);
+      player.title=getTitle(unlockedName);
+      player.profileId=unlockedId;
+      player.isGuest=false;
+    } else {
+      player.name='Guest'+Math.floor(1000+Math.random()*9000);
+      player.icon='default';
+      player.title=null;
+      player.profileId=null;
+      player.isGuest=true;
+    }
+  }
+
+  // Shared by 'join'/'create_room'/'join_room' (leaving whatever room this
+  // connection was already in before joining a new one) and 'leave'/close
+  // below. Beyond removeHuman's own bookkeeping, this also drops the room
+  // from openRooms once its last human is gone (still 'waiting', 0 humans
+  // left) — a room nobody real is in isn't worth listing or matching new
+  // players into, even though removeHuman itself keeps it bot-filled and
+  // technically playable.
+  function leaveCurrentRoom(){
+    if(!myRoom) return;
+    myRoom.removeHuman(myId);
+    if(myRoom.phase==='waiting'&&myRoom.humanCount()===0) openRooms.delete(myRoom.id);
+    myRoom=null;
+  }
+
+  // Shared by 'ready' (auto-start once every human is ready) and
+  // 'start_now' (explicit) below — either can flip phase away from
+  // 'waiting', at which point the room should stop showing up in
+  // 'list_rooms' or being matched into by quick-match.
+  function closeIfStarted(room){
+    if(room&&room.phase!=='waiting') openRooms.delete(room.id);
+  }
+
   ws.send(JSON.stringify({type:'hello'}));
 
   // Message dispatch — each `if` is independent (not else-if), so a
@@ -138,34 +205,16 @@ wss.on('connection',(ws)=>{
       // and there's no profile record for their icon/name to live in
       // either. A random per-connection suffix just keeps simultaneous
       // guests visually distinct at the table, not for identity purposes.
-      if(unlockedName){
-        player.name=unlockedName;
-        // The profile's own stored icon/title, not whatever msg.icon
-        // claims — same reasoning as unlockedName overriding msg.name
-        // below it. title shows under this player's name on every other
-        // seat's in-game nameplate (see _seatInfo in room.js).
-        player.icon=getIcon(unlockedName);
-        player.title=getTitle(unlockedName);
-        player.profileId=unlockedId;
-        player.isGuest=false;
-      } else {
-        player.name='Guest'+Math.floor(1000+Math.random()*9000);
-        player.icon='default';
-        player.title=null;
-        player.profileId=null;
-        player.isGuest=true;
-      }
+      // (See assignIdentity above — shared with create_room/join_room.)
+      assignIdentity();
       // Leave any room this connection was already in first — lets the
       // client re-send 'join' to switch game mode or retry without needing
       // a fresh WebSocket connection.
-      if(myRoom){myRoom.removeHuman(myId);myRoom=null;}
+      leaveCurrentRoom();
       player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
       const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
       const numPlayers=msg.variant==='sanma'?3:4;
-      // Rule variants — picked once in the lobby, like gameMode. Not part
-      // of the shared-waiting-room reuse check below (same as gameMode's
-      // sibling settings, voiceTheme/difficulty): the first joiner's picks
-      // apply to a shared public room, a deliberate simplicity tradeoff.
+      // Rule variants — picked once in the lobby, like gameMode.
       const rules={
         akaDora: msg.rules?.akaDora!==false,
         kuitanAri: msg.rules?.kuitanAri!==false,
@@ -173,22 +222,90 @@ wss.on('connection',(ws)=>{
         nagashiMangan: msg.rules?.nagashiMangan!==false,
         chonbo: msg.rules?.chonbo===true,
       };
-      myRoom=getWaitingRoom(mode,rules,numPlayers);
-      // Race fallback: the shared waitingRoom could have filled up (or
-      // moved past 'waiting') between getWaitingRoom's check and here if
+      myRoom=findOrCreateRoom(mode,rules,numPlayers);
+      // Race fallback: the room findOrCreateRoom picked could have filled
+      // up (or moved past 'waiting') between its check and here if
       // multiple joins land close together — just spin up a fresh one.
       if(!myRoom.addHuman(player)){
-        waitingRoom=new Room(mode,'normal',rules,numPlayers);myRoom=waitingRoom;myRoom.addHuman(player);
+        myRoom=createFreshRoom(mode,rules,numPlayers);
+        myRoom.addHuman(player);
       }
-      ws.send(JSON.stringify({type:'joined',seat:player.seat}));
+      ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id}));
     }
 
-    if(msg.type==='ready'&&myRoom) myRoom.setReady(myId);
+    // Explicit "Create Room" — always a brand-new room (never reuses an
+    // existing one, unlike quick-match's findOrCreateRoom above), so the
+    // creator's exact rule picks are guaranteed, not just "whichever
+    // matching room happened to exist first". Shows up in 'list_rooms' for
+    // others to join by hand via 'join_room' below — no code to share.
+    if(msg.type==='create_room'){
+      assignIdentity();
+      leaveCurrentRoom();
+      player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
+      const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
+      const numPlayers=msg.variant==='sanma'?3:4;
+      const rules={
+        akaDora: msg.rules?.akaDora!==false,
+        kuitanAri: msg.rules?.kuitanAri!==false,
+        doubleRon: msg.rules?.doubleRon!==false,
+        nagashiMangan: msg.rules?.nagashiMangan!==false,
+        chonbo: msg.rules?.chonbo===true,
+      };
+      myRoom=createFreshRoom(mode,rules,numPlayers);
+      myRoom.addHuman(player);
+      ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id}));
+    }
+
+    // Join a specific open room by id, picked from 'list_rooms' — the
+    // room's own rules apply automatically (the whole point: no need to
+    // match toggles by hand or communicate a code). Fails quietly with an
+    // error rather than falling back to quick-match — the player asked for
+    // THIS room specifically.
+    if(msg.type==='join_room'){
+      const room=openRooms.get(Number(msg.roomId));
+      if(!room||room.phase!=='waiting'){
+        ws.send(JSON.stringify({type:'join_room_result',ok:false,error:'That room is no longer available.'}));
+      } else {
+        assignIdentity();
+        leaveCurrentRoom();
+        player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
+        myRoom=room;
+        if(!myRoom.addHuman(player)){
+          myRoom=null;
+          ws.send(JSON.stringify({type:'join_room_result',ok:false,error:'That room is full.'}));
+        } else {
+          ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id}));
+        }
+      }
+    }
+
+    // Snapshot of every open room, for the Room List panel — icon/name per
+    // seat (bots included) is enough to render each room's card without a
+    // second round-trip; never includes anything auth-related, same
+    // "safe before any code is entered" spirit as 'list_profiles' below.
+    if(msg.type==='list_rooms'){
+      const rooms=[...openRooms.values()]
+        .filter(r=>r.phase==='waiting')
+        .map(r=>({
+          id: r.id,
+          gameMode: r.gameMode,
+          numPlayers: r.numPlayers,
+          rules: r.rules,
+          seats: r.seats.map(p=>p?{name:p.name,icon:p.icon||'default',isBot:!!p.isBot}:null),
+        }));
+      ws.send(JSON.stringify({type:'room_list',rooms}));
+    }
+
+    if(msg.type==='ready'&&myRoom){
+      myRoom.setReady(myId);
+      closeIfStarted(myRoom);
+    }
 
     if(msg.type==='set_bot_difficulty'&&myRoom) myRoom.setBotDifficulty(myId,Number(msg.seat),msg.difficulty);
 
     if(msg.type==='start_now'&&myRoom&&myRoom.phase==='waiting'){
       myRoom.fillBots();myRoom.start();
+      closeIfStarted(myRoom);
     }
 
     if(msg.type==='action'&&myRoom) myRoom.action(myId,msg.action);
@@ -362,13 +479,13 @@ wss.on('connection',(ws)=>{
     }
 
     if(msg.type==='leave'){
-      if(myRoom){myRoom.removeHuman(myId);myRoom=null;}
+      leaveCurrentRoom();
     }
     }catch(e){ console.error('[server message error]',e.message,'\n',e.stack); }
   });
 
   ws.on('close',()=>{
-    if(myRoom){myRoom.removeHuman(myId);myRoom=null;}
+    leaveCurrentRoom();
   });
 });
 

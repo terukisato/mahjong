@@ -15,7 +15,10 @@ const { ACHIEVEMENTS, applyUnlocks, getProgressList } = require('./achievements'
 // progress, the new process's cache reflects an older snapshot, and its
 // next save would overwrite the file with that stale snapshot, silently
 // erasing whatever another process wrote in the meantime.
-const DATA_DIR = path.join(__dirname, 'data');
+// Same DATA_DIR env var as profiles.js — must resolve to the same directory
+// as that file's, since both files need to sit together on whatever
+// persistent volume a deployment mounts (see profiles.js's comment for why).
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const STATS_FILE = path.join(DATA_DIR, 'player-stats.json');
 
 function _load() {
@@ -229,4 +232,34 @@ function deleteStats(id) {
   }
 }
 
-module.exports = { getStats, recordGameResult, getLeaderboard, deleteStats, migrateToIds };
+// One-time maintenance helper (see scripts/backfill-achievements.js) —
+// re-checks every existing profile's stored stats against the current
+// achievement list and grants anything already satisfied by the numbers
+// but never actually applied. This can happen because applyUnlocks only
+// ever runs at the moment a game finishes (see recordGameResult above) —
+// never independently re-evaluated otherwise — so a record whose numbers
+// already qualify (e.g. imported/seeded data, or a game played before an
+// achievement existed in the code) just sits there unrecognized until
+// another game triggers a fresh check. Safe to run any number of times —
+// applyUnlocks itself skips anything already granted. Returns
+// {id: newlyGrantedAchievementIds[]} for just the records that changed.
+function recheckAchievements() {
+  const all = _load();
+  const granted = {};
+  let changed = false;
+  for (const id of Object.keys(all)) {
+    const rec = _normalize(all[id]);
+    const before = new Set(Object.keys(rec.achievements));
+    applyUnlocks(rec);
+    const newIds = Object.keys(rec.achievements).filter(a => !before.has(a));
+    if (newIds.length) {
+      granted[id] = newIds;
+      all[id] = rec;
+      changed = true;
+    }
+  }
+  if (changed) _save(all);
+  return granted;
+}
+
+module.exports = { getStats, recordGameResult, getLeaderboard, deleteStats, migrateToIds, recheckAchievements };

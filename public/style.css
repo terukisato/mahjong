@@ -94,6 +94,30 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* Error text for the profile-picker/dev-panel forms — small, unobtrusive
    until something actually goes wrong. */
 .profile-error{color:#ff8080;font-size:calc(var(--ui-vmin, 7.2px) * 1.667);min-height:calc(var(--ui-vmin, 7.2px) * 2.222);margin:calc(var(--ui-vmin, 7.2px) * .833) 0;}
+/* "Stay logged in" — a plain small checkbox+label sitting right under the
+   code field (see #profile-code-section in index.html), not the bigger
+   sp-toggle switch used for settings elsewhere — this is a minor one-off
+   option on a login form, not something that deserves its own row's worth
+   of visual weight. */
+.profile-remember-row{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .694);
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:var(--cream);opacity:.8;
+  margin:calc(var(--ui-vmin, 7.2px) * -.556) 0 calc(var(--ui-vmin, 7.2px) * 1.111);cursor:pointer;}
+.profile-remember-row input{width:calc(var(--ui-vmin, 7.2px) * 1.944);height:calc(var(--ui-vmin, 7.2px) * 1.944);
+  accent-color:var(--gold);cursor:pointer;flex-shrink:0;}
+/* Room List (see #roomlist-modal/renderRoomList) — one card per open room,
+   same rgba(42,58,42,...)+gold-border language as .icon-btn/.theme-btn
+   elsewhere in this modal family, just a row instead of a grid cell since
+   each entry needs a title line, a sub line, AND a Join button. */
+.room-card{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-vmin, 7.2px) * 1.111);
+  background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;
+  padding:calc(var(--ui-vmin, 7.2px) * 1.25) calc(var(--ui-vmin, 7.2px) * 1.389);
+  margin-bottom:calc(var(--ui-vmin, 7.2px) * .833);}
+.room-card-title{font-size:calc(var(--ui-vmin, 7.2px) * 1.528);color:var(--cream);}
+.room-card-sub{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:var(--gold);opacity:.85;margin-top:calc(var(--ui-vmin, 7.2px) * .278);}
+.room-card-join{flex-shrink:0;padding:calc(var(--ui-vmin, 7.2px) * .833) calc(var(--ui-vmin, 7.2px) * 1.667);
+  background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);border-radius:8px;
+  color:var(--cream);font-size:calc(var(--ui-vmin, 7.2px) * 1.389);cursor:pointer;font-family:'Noto Sans JP',sans-serif;}
+.room-card-join:disabled{opacity:.4;cursor:default;}
 .bp{width:100%;padding:calc(var(--ui-vmin) * 1.806);background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);border-radius:10px;color:var(--cream);
   font-size:calc(var(--ui-vmin) * 1.806);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;}
 .bp:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(26,107,69,.55);border-color:var(--gold);}

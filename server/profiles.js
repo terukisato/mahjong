@@ -10,7 +10,13 @@ const crypto = require('crypto');
 // concurrency at this scale, no DB needed for a handful of profiles) — see
 // stats.js's own comment for why it re-reads on every call instead of
 // caching in memory.
-const DATA_DIR = path.join(__dirname, 'data');
+// DATA_DIR env var lets a deployment point this at a mounted persistent
+// volume (e.g. a Railway Volume) instead of the app's own directory, which
+// on most hosts is ephemeral — rebuilt fresh on every deploy/restart, wiping
+// anything written here. Falls back to ./data for local dev, where the repo
+// checkout itself is already the persistent thing. Set this to wherever the
+// volume is actually mounted rather than guessing the app's container path.
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
 
 // Titles a profile can display next to its name (see 'set_profile_title'
@@ -32,14 +38,17 @@ const TITLES = [
   'Pure Runner', 'Dora Rich', 'The Diamond',
 ];
 
-// Keyed by a stable, never-reused `id` (crypto.randomUUID(), assigned once
-// at createProfile and never touched again) rather than by name — name is
-// just a mutable field on the record. This is what makes renameProfile
-// below a plain in-place field edit instead of a delete-old-key/insert-
-// new-key move: nothing else that references a profile (most importantly
-// stats.js's player-stats.json, keyed by this same id — see
-// stats.migrateToIds) has to be touched, or even know a rename happened,
-// when a player changes their display name.
+// Keyed by a stable, never-reused `id` — a random 16-digit number (as a
+// string; larger than Number.MAX_SAFE_INTEGER, so it's never handled as an
+// actual number anywhere) assigned once at createProfile and never touched
+// again — rather than by name, which is just a mutable field on the
+// record. This is what makes renameProfile below a plain in-place field
+// edit instead of a delete-old-key/insert-new-key move: nothing else that
+// references a profile (most importantly stats.js's player-stats.json,
+// keyed by this same id — see stats.migrateToIds) has to be touched, or
+// even know a rename happened, when a player changes their display name.
+const ID_RE = /^\d{16}$/;
+
 function _load() {
   try {
     return JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8'));
@@ -67,23 +76,43 @@ function _hashCode(code, salt) {
   return crypto.scryptSync(String(code), salt, 64).toString('hex');
 }
 
-// One-time upgrade from the old name-keyed file (no `id` field at all) to
-// the id-keyed shape above. Safe to call on every boot — a no-op once every
-// record already has an id. Returns {oldName: newId} for just the records
-// that were actually migrated, so index.js can hand that map to
-// stats.migrateToIds and move each profile's stats record (still sitting
-// under its old name in player-stats.json) over to the new id in the same
-// pass, instead of it silently becoming orphaned.
+// A random 16-digit id as a string (first digit never 0, so it always
+// prints as a genuine 16-digit number) — not a secret like the remember
+// token above, just an identifier, so crypto.randomInt (uniform, but not
+// aiming for unguessability) is enough. `taken` is whatever ids are already
+// in use, checked so two profiles can never collide.
+function _generateId(taken) {
+  let id;
+  do {
+    id = String(crypto.randomInt(1, 10));
+    for (let i = 0; i < 15; i++) id += String(crypto.randomInt(0, 10));
+  } while (taken.has(id));
+  return id;
+}
+
+// One-time upgrade to the id-keyed shape above — covers both a legacy
+// name-keyed file (no `id` field at all) AND a file already id-keyed with
+// the older crypto.randomUUID() ids this format replaces. Safe to call on
+// every boot — a no-op once every record already has a 16-digit id.
+// Returns {oldKey: newId} for just the records that were actually
+// migrated (oldKey is the old name for a never-migrated record, or the old
+// UUID for one only migrated to the previous id format) — so index.js can
+// hand that map to stats.migrateToIds and move each profile's stats record
+// (still sitting under its old key in player-stats.json) over to the new
+// id in the same pass, instead of it silently becoming orphaned.
 function migrateLegacyIds() {
   const all = _load();
-  const nameToId = {};
+  const remap = {};
   let changed = false;
+  const usedIds = new Set(Object.values(all).map(p => p.id).filter(id => ID_RE.test(id)));
   for (const key of Object.keys(all)) {
-    if (!all[key].id) {
-      const id = crypto.randomUUID();
-      all[key].id = id;
-      all[key].name = all[key].name || key;
-      nameToId[key] = id;
+    const rec = all[key];
+    if (!ID_RE.test(rec.id)) {
+      const id = _generateId(usedIds);
+      usedIds.add(id);
+      rec.id = id;
+      rec.name = rec.name || key;
+      remap[key] = id;
       changed = true;
     }
   }
@@ -92,7 +121,7 @@ function migrateLegacyIds() {
     for (const key of Object.keys(all)) rekeyed[all[key].id] = all[key];
     _save(rekeyed);
   }
-  return nameToId;
+  return remap;
 }
 
 // name + icon only — never the salt/codeHash — safe to send to anyone,
@@ -133,7 +162,7 @@ function createProfile(name, code) {
   const all = _load();
   if (_findByName(all, name)[0]) return { ok: false, error: 'A profile with that name already exists' };
   const salt = crypto.randomBytes(16).toString('hex');
-  const id = crypto.randomUUID();
+  const id = _generateId(new Set(Object.keys(all)));
   all[id] = { id, name, salt, codeHash: _hashCode(code, salt), icon: 'default', title: 'Beginner' };
   _save(all);
   return { ok: true };

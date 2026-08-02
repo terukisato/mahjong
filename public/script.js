@@ -564,6 +564,8 @@ function onMsg(m){
     return;
   }
   if(m.type==='leaderboard'){renderLeaderboard(m);return;}
+  if(m.type==='room_list'){renderRoomList(m);return;}
+  if(m.type==='join_room_result'){if(!m.ok) toast(m.error||'Could not join that room.');return;}
   if(m.type==='achievements_unlocked'){showAchievementUnlock(m.achievements);return;}
   if(m.type==='profiles'){renderProfileList(m);return;}
   if(m.type==='profile_unlocked'){onProfileUnlocked(m);return;}
@@ -1033,7 +1035,7 @@ function toggleProfilePicker(){
   $('profile-code').value='';
   $('profile-code-section').style.display='none';
   rememberProfile=false;
-  $('profile-remember').classList.add('off');
+  $('profile-remember').checked=false;
   $('profile-card-grid').innerHTML='<p>Loading…</p>';
   wss({type:'list_profiles'});
   modal.classList.add('visible');
@@ -1096,15 +1098,14 @@ function selectProfileCard(name){
   $('profile-code').focus();
 }
 
-// "Stay logged in" toggle inside the profile picker's code prompt — same
-// sp-toggle click pattern as toggleRule, but deliberately doesn't persist
-// across picker opens (toggleProfilePicker resets it off every time, same
-// "ask again" spirit as the code field next to it). See unlockProfile/
-// onProfileUnlocked for what actually happens when it's on.
+// "Stay logged in" checkbox inside the profile picker's code prompt —
+// deliberately doesn't persist across picker opens (toggleProfilePicker
+// resets it unchecked every time, same "ask again" spirit as the code
+// field next to it). See unlockProfile/onProfileUnlocked for what actually
+// happens when it's checked.
 let rememberProfile=false;
 function toggleProfileRemember(){
-  rememberProfile=!rememberProfile;
-  $('profile-remember').classList.toggle('off',!rememberProfile);
+  rememberProfile=$('profile-remember').checked;
 }
 
 function unlockProfile(){
@@ -1831,6 +1832,67 @@ function findMatch(){
   // both regardless of what's sent (see unlockedName/getIcon in index.js).
   playLobbyMusic();
   wss({type:'join',name:($('iname').value.trim()||'Player'),gameMode,variant,rules,voiceTheme:currentVoiceTheme,icon:currentPlayerIcon});
+}
+
+// ════════════════════════════════════════════════════════════
+// ROOM LIST — the alternative to Find Match's blind quick-match, for
+// playing with a specific person: createRoom() spins up a room using
+// whatever's currently picked in Match Settings (same gameMode/variant/
+// rules variables findMatch reads); it then shows up for everyone via
+// 'list_rooms', and joinRoom() joins that exact room, inheriting its rules
+// automatically — nobody has to communicate a code or match toggles by
+// hand. See 'create_room'/'join_room'/'list_rooms' in server/index.js.
+// ════════════════════════════════════════════════════════════
+function toggleRoomList(){
+  const modal=$('roomlist-modal');
+  const backdrop=$('roomlist-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('roomlist-body').textContent='Loading…';
+  wss({type:'list_rooms'});
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+function createRoom(){
+  playLobbyMusic();
+  wss({type:'create_room',gameMode,variant,rules,voiceTheme:currentVoiceTheme,icon:currentPlayerIcon});
+  toggleRoomList();
+}
+
+function joinRoom(id){
+  playLobbyMusic();
+  wss({type:'join_room',roomId:id,voiceTheme:currentVoiceTheme,icon:currentPlayerIcon});
+  toggleRoomList();
+}
+
+// One card per open room — host is just the first non-bot seat (whoever
+// created it or was first to join), same "who's actually real" filter
+// updateSlots uses elsewhere. Rule toggles are summarized as a short
+// "ON" list rather than every single row, since most games use the
+// defaults and a wall of ON/OFF pairs per card would be noise.
+function renderRoomList(m){
+  const body=$('roomlist-body'); if(!body) return;
+  const rooms=m.rooms||[];
+  if(!rooms.length){ body.innerHTML='<p>No open rooms — create one above!</p>'; return; }
+  const RULE_LABELS={akaDora:'Aka Dora',kuitanAri:'Kuitan',doubleRon:'Double Ron',nagashiMangan:'Nagashi Mangan',chonbo:'Chonbo'};
+  body.innerHTML='';
+  rooms.forEach(r=>{
+    const modeLabel=r.gameMode==='hanchan'?'半荘戦 HANCHAN':'東風戦 TONPUU';
+    const variantLabel=r.numPlayers===3?'三人麻雀 SANMA':'四人麻雀 YONMA';
+    const humanCount=r.seats.filter(s=>s&&!s.isBot).length;
+    const host=r.seats.find(s=>s&&!s.isBot);
+    const onRules=Object.keys(RULE_LABELS).filter(k=>r.rules[k]).map(k=>RULE_LABELS[k]);
+    const full=humanCount>=r.seats.length;
+    const div=document.createElement('div');
+    div.className='room-card';
+    div.innerHTML=`<div>
+        <div class="room-card-title">${modeLabel} · ${variantLabel}</div>
+        <div class="room-card-sub">Host: ${host?escHtml(host.name):'—'} · ${humanCount}/${r.seats.length} players${onRules.length?' · '+onRules.join(', '):''}</div>
+      </div>
+      <button class="room-card-join"${full?' disabled':''} onclick="joinRoom(${r.id})">${full?'Full':'Join'}</button>`;
+    body.appendChild(div);
+  });
 }
 
 function showWaiting(){

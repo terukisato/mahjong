@@ -153,6 +153,22 @@
   </div>
 </div>
 
+<!-- Room List — an alternative to "Find Match" for playing with a
+     specific person: create a room with your own rule picks (see
+     createRoom in script.js, uses whatever's set in Match Settings) and it
+     shows up here for anyone else to join directly, inheriting its rules
+     automatically — no code to share, no need to match toggles by hand
+     (see toggleRoomList/renderRoomList/joinRoom). -->
+<div id="roomlist-backdrop" class="about-backdrop" onclick="toggleRoomList()"></div>
+<div id="roomlist-modal" class="about-modal">
+  <button class="about-close" onclick="toggleRoomList()">✕</button>
+  <div class="about-title">Room List</div>
+  <div class="about-body">
+    <button class="bp" onclick="createRoom()">+ Create Room (current Match Settings)</button>
+    <div id="roomlist-body">Loading…</div>
+  </div>
+</div>
+
 <!-- User Profile — only reachable once a profile is unlocked (see
      user-icon-btn beside the settings icon). This is a hub, same pattern as
      Developer Settings below: each heading is a link that closes this and
@@ -314,7 +330,7 @@
       <div class="ig"><label id="profile-code-label" for="profile-code">Code</label>
         <input type="password" id="profile-code" maxlength="20" placeholder="Enter code">
       </div>
-      <div class="sp-row"><span class="sp-label">Stay logged in</span><button class="sp-toggle off" id="profile-remember" onclick="toggleProfileRemember()" title="Stay logged in on this device"></button></div>
+      <label class="profile-remember-row"><input type="checkbox" id="profile-remember" onchange="toggleProfileRemember()"> Remember me</label>
       <div id="profile-error" class="profile-error"></div>
       <button class="bp" onclick="unlockProfile()">Unlock</button>
     </div>
@@ -456,6 +472,7 @@
     <h2>Enter the Hall</h2>
     <a href="#" class="about-link rules-link-lobby" onclick="toggleRulesModal();return false;">⚙ Match Settings</a>
     <a href="#" class="about-link rules-link-lobby" onclick="toggleRankings();return false;">Rankings</a>
+    <a href="#" class="about-link rules-link-lobby" onclick="toggleRoomList();return false;">Room List</a>
     <div id="lobby-inputs">
     <!-- Defaults to Guest — playable immediately with no profile chosen.
          Guest play holds no data at all (see recordGameResult's isGuest
