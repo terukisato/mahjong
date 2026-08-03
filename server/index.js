@@ -483,3 +483,23 @@ wss.on('connection',(ws)=>{
 
 const PORT=process.env.PORT||3000;
 server.listen(PORT,()=>console.log(`🀄 Mahjong on http://localhost:${PORT}`));
+
+// Railway (and most container platforms) do a rolling deploy: start the new
+// instance, and once it's healthy, send SIGTERM to the old one to shut it
+// down — completely normal, not a failure. Without a handler, Node just
+// dies on that signal with no clean exit, which Railway logs as a crash for
+// the OLD (being-replaced) deployment — the "deploy crashed" email on every
+// otherwise-successful deploy. Closing everything explicitly and exiting 0
+// tells the platform this was an intentional, graceful shutdown instead.
+function shutdown(){
+  console.log('Shutting down gracefully…');
+  wss.clients.forEach(client=>client.terminate());
+  server.close(()=>process.exit(0));
+  // Force-exit if something (a lingering keep-alive, a stuck close callback)
+  // stops server.close() from ever firing — better a hard exit than hanging
+  // past the platform's own shutdown grace period. unref() so this timer
+  // itself never keeps the process alive if shutdown finishes first.
+  setTimeout(()=>process.exit(0),5000).unref();
+}
+process.on('SIGTERM',shutdown);
+process.on('SIGINT',shutdown);
