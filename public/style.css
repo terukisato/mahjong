@@ -782,13 +782,21 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    visible underneath (see show() in script.js) so the final board state
    reads as a dimmed backdrop instead of a blank black screen. Matches the
    existing modal-backdrop darkness (.about-backdrop) for consistency. */
-#s-end{background:rgba(0,0,0,.6);z-index:250;flex-direction:column;}
+/* --ui-vmin: same clamped-scale-unit approach as #s-start/#s-lobby (see
+   their own comments) — without this, everything below that references
+   var(--ui-vmin) (the reused .ready-btn/.bp buttons in .reb, plus every
+   calc(var(--ui-vmin)*N) rule added below) had no ancestor defining it and
+   silently fell back to invalid/zero sizing. The panel used flat px/vw
+   values before, which don't share the 6-10px clamp everything else here
+   plateaus at — this brings it in line with the rest of the app instead of
+   scaling independently (or not at all) on very small/large screens. */
+#s-end{--ui-vmin:clamp(6px,1vmin,10px);background:rgba(0,0,0,.6);z-index:250;flex-direction:column;}
 .rec{background:linear-gradient(155deg,rgba(18,52,30,.98),rgba(6,16,9,.99));border:2px solid var(--gold);border-radius:16px;
-  padding:clamp(20px,4vw,36px) clamp(16px,5vw,52px);text-align:center;
-  box-shadow:0 0 100px rgba(201,168,76,.35);width:min(560px,96vw);position:relative;}
+  padding:calc(var(--ui-vmin, 7.2px) * 4.722) calc(var(--ui-vmin, 7.2px) * 6.389);text-align:center;
+  box-shadow:0 0 100px rgba(201,168,76,.35);width:min(calc(var(--ui-vmin, 7.2px) * 77.78), 96vw);position:relative;}
 .rec::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);}
-.ret{font-family:'Cinzel Decorative',serif;font-size:clamp(20px,5vw,30px);color:var(--gl);filter:drop-shadow(0 0 14px rgba(201,168,76,.6));margin-bottom:5px;}
-.rehn{font-size:clamp(11px,2.5vw,14px);color:var(--jl);letter-spacing:2px;margin-bottom:12px;}
+.ret{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 3.125);color:var(--gl);filter:drop-shadow(0 0 14px rgba(201,168,76,.6));margin-bottom:5px;}
+.rehn{font-size:calc(var(--ui-vmin, 7.2px) * 1.5625);color:var(--jl);letter-spacing:2px;margin-bottom:12px;}
 .re-hand{color:rgba(245,237,216,.6);font-size:0.9em;}
 /* Chonbo's offender name reuses .re-winner's markup (see onEnd in
    script.js) but must NOT read as a win — .rehn's own green (--jl)
@@ -796,38 +804,38 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    an actual winner. */
 .re-offender{color:#e07070;}
 .re-dora-row{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
-.re-dora-lbl{font-size:10px;color:var(--gold);letter-spacing:1px;}
+.re-dora-lbl{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:var(--gold);letter-spacing:1px;}
 .re-ura-lbl{color:#f88;margin-left:6px;}
 .re-tile-row{display:flex;gap:3px;justify-content:center;flex-wrap:wrap;align-items:flex-end;}
 .re-meld-sep{width:8px;flex-shrink:0;}
 .re-kan-back{width:var(--tmd-w,28px);height:var(--tmd-h,38px);background:rgba(30,60,40,.8);border:1px solid rgba(201,168,76,.3);border-radius:3px;}
-.re-td-delta{text-align:right;width:60px;}
-.re-delta{font-size:11px;font-weight:700;letter-spacing:.5px;}
+.re-td-delta{text-align:right;width:calc(var(--ui-vmin, 7.2px) * 7.5);}
+.re-delta{font-size:calc(var(--ui-vmin, 7.2px) * 1.375);font-weight:700;letter-spacing:.5px;}
 .re-badge-pos{color:#7ec87e;}.re-badge-neg{color:#e07070;}
 .re-delta-pos{color:#7ec87e;}.re-delta-neg{color:#e07070;}
 .re-delta-nil{color:rgba(245,237,216,.25);font-weight:400;}
 @keyframes re-badge-float{0%{opacity:0;transform:translateY(0)}15%{opacity:1;transform:translateY(-4px)}70%{opacity:1;transform:translateY(-12px)}100%{opacity:0;transform:translateY(-20px)}}
-.re-limit{display:inline-block;margin-left:8px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;vertical-align:middle;}
+.re-limit{display:inline-block;margin-left:8px;padding:calc(var(--ui-vmin, 7.2px) * .25) calc(var(--ui-vmin, 7.2px) * 1.25);border-radius:20px;font-size:calc(var(--ui-vmin, 7.2px) * 1.375);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;vertical-align:middle;}
 .lbl-mangan  {background:rgba(80,160,80,.18);border:1px solid rgba(100,200,100,.4);color:#90e090;}
 .lbl-haneman {background:rgba(80,140,200,.18);border:1px solid rgba(100,180,255,.4);color:#90c8ff;}
 .lbl-baiman  {background:rgba(160,80,200,.18);border:1px solid rgba(200,120,255,.4);color:#d090ff;}
 .lbl-sanbaiman{background:rgba(200,100,60,.18);border:1px solid rgba(255,160,80,.4);color:#ffb070;}
 .lbl-yakuman {background:rgba(201,168,76,.18);border:1px solid rgba(201,168,76,.6);color:var(--gold);box-shadow:0 0 10px rgba(201,168,76,.3);}
-.lbl-double-yakuman{background:rgba(201,168,76,.28);border:1px solid rgba(201,168,76,.9);color:var(--gold);box-shadow:0 0 16px rgba(201,168,76,.55),0 0 32px rgba(201,168,76,.2);font-size:12px;letter-spacing:2px;}
+.lbl-double-yakuman{background:rgba(201,168,76,.28);border:1px solid rgba(201,168,76,.9);color:var(--gold);box-shadow:0 0 16px rgba(201,168,76,.55),0 0 32px rgba(201,168,76,.2);font-size:calc(var(--ui-vmin, 7.2px) * 1.5);letter-spacing:2px;}
 .yl{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-bottom:12px;}
-.yc{background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:3px 10px;font-size:10px;color:var(--cream);}
-.yh{color:var(--gl);font-weight:700;margin-left:4px;}.yj{color:rgba(245,237,216,.4);font-size:8px;margin-left:3px;}
-.st{width:100%;border-collapse:collapse;margin:10px 0;}.st td{padding:6px 12px;font-size:12px;border-bottom:1px solid rgba(201,168,76,.1);text-align:left;}
-.st td:last-child{text-align:right;font-weight:700;color:var(--gl);}.st tr.w td{color:var(--gl);font-size:13px;}
-.st tr.l td{color:#e07070;font-size:13px;}
+.yc{background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:calc(var(--ui-vmin, 7.2px) * .375) calc(var(--ui-vmin, 7.2px) * 1.25);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:var(--cream);}
+.yh{color:var(--gl);font-weight:700;margin-left:4px;}.yj{color:rgba(245,237,216,.4);font-size:calc(var(--ui-vmin, 7.2px) * 1);margin-left:3px;}
+.st{width:100%;border-collapse:collapse;margin:10px 0;}.st td{padding:calc(var(--ui-vmin, 7.2px) * .75) calc(var(--ui-vmin, 7.2px) * 1.5);font-size:calc(var(--ui-vmin, 7.2px) * 1.5);border-bottom:1px solid rgba(201,168,76,.1);text-align:left;}
+.st td:last-child{text-align:right;font-weight:700;color:var(--gl);}.st tr.w td{color:var(--gl);font-size:calc(var(--ui-vmin, 7.2px) * 1.625);}
+.st tr.l td{color:#e07070;font-size:calc(var(--ui-vmin, 7.2px) * 1.625);}
 .wt{display:flex;flex-direction:column;align-items:center;gap:4px;margin:10px 0;}
 .re-tenpai{display:flex;flex-direction:column;gap:8px;margin:10px 0;}
 .re-tenpai-row{display:flex;flex-direction:column;align-items:center;gap:4px;}
-.re-tenpai-name{font-size:11px;color:var(--gold);letter-spacing:1px;}
+.re-tenpai-name{font-size:calc(var(--ui-vmin, 7.2px) * 1.375);color:var(--gold);letter-spacing:1px;}
 /* Riichi-stick/honba pot carrying into next round — hidden (no text, no
    margin/border) when the round ended the game or nothing's on the table,
    set in onEnd() (script.js). */
-.re-carryover{font-size:11px;color:var(--gold);letter-spacing:.5px;
+.re-carryover{font-size:calc(var(--ui-vmin, 7.2px) * 1.375);color:var(--gold);letter-spacing:.5px;
   padding-top:8px;margin-top:4px;border-top:1px solid rgba(201,168,76,.15);}
 .re-carryover:empty{display:none;padding:0;margin:0;border:none;}
 /* ── Settings panel ── */
@@ -1328,8 +1336,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .stick-count{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin) * 1.4);color:var(--gold);font-weight:700;}
 
 /* ── Round end screen ── */
-.reb-btn{max-width:200px;}
-.ready-status{margin-top:8px;font-size:11px;color:rgba(245,237,216,.5);letter-spacing:1px;text-align:center;}
+.reb-btn{max-width:calc(var(--ui-vmin, 7.2px) * 27.78);}
+.ready-status{margin-top:8px;font-size:calc(var(--ui-vmin, 7.2px) * 1.375);color:rgba(245,237,216,.5);letter-spacing:1px;text-align:center;}
 
 /* ── Mode button sub-label ── */
 .mode-sub{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);opacity:.9;}

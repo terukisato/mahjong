@@ -3048,7 +3048,7 @@ function callBanner(type,name,label){
   nm.appendChild(who);nm.appendChild(document.createTextNode(' called'));
   content.appendChild(lb);content.appendChild(nm);
   b.appendChild(content);
-  layer.appendChild(b);setTimeout(()=>b.remove(),2400);
+  layer.appendChild(b);setTimeout(()=>b.remove(),1800);
 }
 
 // Round-start title card (wind + round + honba) — see .rs-plate / @keyframes
