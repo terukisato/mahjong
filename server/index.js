@@ -214,9 +214,16 @@ wss.on('connection',(ws)=>{
       };
       myRoom=new Room(mode,'normal',rules,numPlayers);
       myRoom.addHuman(player);
+      // 'joined' must reach the client BEFORE start()'s game_start broadcast
+      // below — the client only learns its own seat number from 'joined'
+      // (see mySeat in script.js), and startGame()'s seat-rotation math
+      // (`(mySeat+i)%numSeats`) needs that to already be set. addHuman above
+      // already assigned player.seat, so nothing here depends on
+      // fillBots()/start() having run yet — sending this first just fixes
+      // the ordering, doesn't need to wait on anything else.
+      ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,instant:true}));
       myRoom.fillBots();
       myRoom.start();
-      ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,instant:true}));
     }
 
     // Explicit "Create Room" — always a brand-new room, registered in

@@ -1837,6 +1837,21 @@ function applyRuleButton(name){
 // server uses its own record for both regardless of what's sent (see
 // unlockedName/getIcon in index.js).
 function findMatch(){
+  // Guards against a double-fire (impatient double-click/tap, or a slow
+  // connection making the button feel unresponsive so the player clicks
+  // again before the first request lands) — since quick_match starts the
+  // game immediately server-side, a second request while the first is
+  // still in flight makes the server evict this connection from the FIRST
+  // room it just created (see leaveCurrentRoom in server/index.js) and
+  // spin up a second one instead. The first room doesn't just vanish
+  // though — every seat is now a bot, so it plays itself out as an
+  // orphaned bot-vs-bot game, and the client briefly renders its
+  // game_start before the real (second) one arrives and overwrites it,
+  // which reads as a confusing extra "player" flashing into a seat. Once
+  // disabled, resetLobby() (returning to the lobby after a game) is what
+  // re-enables it — see below.
+  if($('bfind').disabled) return;
+  $('bfind').disabled=true;
   playLobbyMusic();
   wss({type:'quick_match',name:($('iname').value.trim()||'Player'),gameMode,variant,rules,voiceTheme:currentVoiceTheme,icon:currentPlayerIcon});
 }
@@ -1993,6 +2008,7 @@ function resetLobby(){
   mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;discarding=false;
   $('wa').style.display='none';
   $('lobby-actions').style.display='flex';
+  $('bfind').disabled=false;
   $('lobby-inputs').style.display='block';
   $('cdiv').textContent='';
   $('bready').classList.remove('pressed');
@@ -2068,12 +2084,19 @@ function startGame(m){
   for(let i=0;i<numSeats;i++){
     const abs=(mySeat+i)%numSeats,id=P[i],p=seats[abs];
     $('pn'+id).textContent=i===0?($('iname').value.trim()||'Player'):(p?.name||'—');
-    // Title under the name — self always shows currentPlayerTitle (kept
-    // live by applyPlayerTitle, so this never goes stale even if changed
-    // moments before starting); opponents show whatever the server sent
-    // for their seat (see title in room.js's _seatInfo — blank for
-    // guests/bots, which have no profile to hold one).
-    const pt=$('pt'+id); if(pt) pt.textContent=i===0?currentPlayerTitle:(p?.title||'');
+    // Title under the name — self shows currentPlayerTitle (kept live by
+    // applyPlayerTitle, so this never goes stale even if changed moments
+    // before starting) UNLESS playing as Guest, who has no profile to hold
+    // a title at all — same isGuest check refreshProfileDisplay uses for
+    // the lobby nameplate, otherwise a stale title left over in
+    // localStorage from a previous real profile would show under "Guest"
+    // in-game even though the server never sent one for this seat (see
+    // assignIdentity in server/index.js, which sets title:null for guests).
+    // Opponents show whatever the server sent for their seat (see title in
+    // room.js's _seatInfo — blank for guests/bots, which have no profile
+    // to hold one).
+    const isSelfGuest=$('iname').value==='Guest';
+    const pt=$('pt'+id); if(pt) pt.textContent=i===0?(isSelfGuest?'':currentPlayerTitle):(p?.title||'');
     if(i>0){const bt=$('bt'+id);if(bt)bt.textContent=p?.isBot?'CPU':'';}
     $('rs'+id).style.display='none';
   }
