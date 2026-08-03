@@ -274,9 +274,12 @@ class Room {
   // deliberate simplicity tradeoff in the bot AI, not a rules bug. Kita is
   // checked after tsumo (never forgo an available win to bank a bonus
   // tile first) but before riichi — it's strictly beneficial (free future
-  // han, no downside) whenever available and un-riichi'd, and ends in a
-  // fresh replacement draw that re-enters _botTurn via the BOT_DELAY
-  // callback _kita schedules, so this function runs again on the new tile.
+  // han, no downside) whenever available, REGARDLESS of riichi (see _kita's
+  // own comment for why banking a 4z can't affect a locked wait), and ends
+  // in a fresh replacement draw that re-enters _botTurn via the BOT_DELAY
+  // callback _kita schedules, so this function runs again on the new tile —
+  // including a riichi'd bot's own forced-discard branch below, once that
+  // replacement draw isn't itself another kita candidate.
   _botTurn(seat){
     const g=this.game;
     if(!g||g.turn!==seat||this.phase!=='playing') return;
@@ -296,7 +299,7 @@ class Room {
         {kuitanAri:this.rules.kuitanAri});
       if(han>0){this._tsumo(seat);return;}
     }
-    if(this.rules.sanma&&!g.riichi[seat]){
+    if(this.rules.sanma){
       const kitaTile=hand.find(t=>key(t)==='4z');
       if(kitaTile){this._kita(seat,kitaTile.id);return;}
     }
@@ -823,9 +826,18 @@ class Room {
   // is a flat +1 han bonus on this seat's eventual winning hand (applied in
   // _tsumo/_multiRon/_ron alongside dora), never a yaku on its own.
   //
-  // Disallowed once in riichi — same simplicity tradeoff already made for
-  // kakan (see _kakan above): rather than re-deriving whether removing this
-  // exact tile could ever change a locked-in wait, just don't allow it.
+  // Still allowed once in riichi, unlike kakan (see _kakan above) — kakan's
+  // restriction exists because upgrading a pon to a kan can reveal a new
+  // dora indicator and change what's waited on, which is exactly what a
+  // riichi lock forbids. A 4z tile is never part of any wait/yaku structure
+  // in the first place (it can't complete a sequence or triplet-based wait
+  // the way a kakan candidate can), so banking one and drawing a
+  // replacement can't change the locked hand's wait at all — there's
+  // nothing here that actually needs re-deriving. The replacement draw
+  // itself still follows normal riichi tsumogiri rules (auto-discarded
+  // unless it's the winning tile) — see the auto-discard skip in
+  // script.js, which now checks canKita too so a post-riichi kita draw
+  // isn't auto-discarded before the player gets to bank it.
   //
   // The replacement draw is popped from the TAIL of the live wall, not the
   // dead wall's 4 rinshan slots — those are reserved for kan and capped at
@@ -838,7 +850,7 @@ class Room {
   // carries no Rinshan Kaihou eligibility.
   _kita(seat,tileId){
     const g=this.game;
-    if(!this.rules.sanma||g.riichi[seat]) return;
+    if(!this.rules.sanma) return;
     if(g.wall.length===0) return; // nothing left to draw as a replacement
     const hand=g.hands[seat];
     const tile=hand.find(t=>t.id===tileId&&key(t)==='4z');
@@ -1484,7 +1496,7 @@ class Room {
         }
       }
       let canKita=[];
-      if(this.rules.sanma&&g.turn===seat&&!g.riichi[seat]&&hand.length===fullHandSize&&g.wall.length>0){
+      if(this.rules.sanma&&g.turn===seat&&hand.length===fullHandSize&&g.wall.length>0){
         canKita=hand.filter(t=>key(t)==='4z').map(t=>t.id);
       }
       let canKakan=[];

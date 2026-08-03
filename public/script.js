@@ -1382,7 +1382,7 @@ function onDeleteProfileResult(m){
 // MUSIC
 // ════════════════════════════════════════════════════════════
 let musicEnabled=true;
-let musicVolume=0.35;
+let musicVolume=0.30;
 
 function allTracks(){
   return [$('lobby-music'),$('game-music-1')].filter(Boolean);
@@ -1652,9 +1652,9 @@ function renderPlayerIcons(){
 }
 
 let fxEnabled=true;
-let fxVolume=1.6; // default 40% display = 1.6 gain (x4 mapping)
+let fxVolume=1.4; // default 35% display = 1.4 gain (x4 mapping)
 let discardSfxEnabled=true;
-let discardSfxVolume=0.6;
+let discardSfxVolume=0.7; // default 35% display = 0.7 gain (x2 mapping)
 let discardGainNode=null;
 
 // Web Audio API context for FX gain boost (allows volume >100%)
@@ -2304,7 +2304,11 @@ function renderState(m, prev){
     // below and a manual discard becomes the only way to pass.
     if(m.riichi?.[mySeat]){ el.classList.add('sel'); selId=drawTile.id; }
     hc.appendChild(el);
-    // Auto-discard after riichi — unless tsumo/ankan/kyuushu is available.
+    // Auto-discard after riichi — unless tsumo/ankan/kyuushu/kita is
+    // available. canKita is included since it's still legal mid-riichi
+    // (see _kita's comment in room.js) — without this check, drawing a
+    // North tile while in riichi would get auto-discarded before the
+    // player ever saw the KITA button, silently forfeiting a free han.
     // Also skipped whenever canAttemptTsumo is set (chonbo only): with
     // chonbo on, the server never confirms whether this draw is actually a
     // win (canTsumo alone can't be used to gate this — see the tsumo/ron
@@ -2314,7 +2318,7 @@ function renderState(m, prev){
     // player which draw won — exactly the hint chonbo is meant to remove.
     // Skipping it unconditionally under chonbo means the player must
     // always manually choose Declare vs. Discard, so timing reveals nothing.
-    if(m.riichi?.[mySeat] && !m.canTsumo && !m.canAttemptTsumo && !(m.canAnkan?.length) && !m.canKyuushu){
+    if(m.riichi?.[mySeat] && !m.canTsumo && !m.canAttemptTsumo && !(m.canAnkan?.length) && !m.canKyuushu && !(m.canKita?.length)){
       setTimeout(()=>{
         if(lastState===m) wss({type:'action',action:{type:'discard',tileId:drawTile.id}});
       }, 600);
@@ -2614,6 +2618,7 @@ function renderMeld(container, meld, viewerSeat){
 function drawActions(m){
   const bar=$('actbar'); bar.innerHTML='';
   const stalePicker=$('chi-picker'); if(stalePicker) stalePicker.remove();
+  const staleAnkan=$('ankan-picker'); if(staleAnkan) staleAnkan.remove();
   const staleDeclare=$('declare-picker'); if(staleDeclare) staleDeclare.remove();
   const staleRiichi=$('riichi-picker'); if(staleRiichi) staleRiichi.remove();
   if(!m) return;
@@ -2634,13 +2639,16 @@ function drawActions(m){
     else if(m.canAttemptTsumo)
       ab(bar,'⚠ Declare…','bchonbo',()=>showDeclareConfirm('tsumo'));
 
-    // LEFT: ANKAN — one button per candidate tile, each showing the tile's
-    // face so multiple candidates (rare, but possible) aren't just two
-    // identically-labeled buttons.
+    // LEFT: ANKAN — a single candidate skips straight to a one-tap button
+    // (showing the tile's face, same as before); more than one candidate
+    // (rare, but possible) opens the same tile-picker overlay CHI/RIICHI
+    // use below instead of piling up several identically-labeled buttons.
     const canAnkan=m.canAnkan||[];
-    canAnkan.forEach(tileKey=>{
-      abTile(bar,keyToTile(tileKey),'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey}}));
-    });
+    if(canAnkan.length===1){
+      abTile(bar,keyToTile(canAnkan[0]),'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey:canAnkan[0]}}));
+    } else if(canAnkan.length>1){
+      ab(bar,'ANKAN','bkan',()=>showAnkanPicker(canAnkan));
+    }
 
     // LEFT: KAKAN
     const canKakan=m.canKakan||[];
@@ -2782,6 +2790,34 @@ function showRiichiPicker(tileIds,myHand,drawTile){
       picker.remove();
     };
     optBtn.appendChild(mkElMd(t));
+    picker.appendChild(optBtn);
+  });
+  const cancelBtn=document.createElement('button');
+  cancelBtn.className='ba bpas chi-picker-cancel';
+  cancelBtn.textContent='✕';
+  cancelBtn.onclick=()=>picker.remove();
+  picker.appendChild(cancelBtn);
+  document.body.appendChild(picker);
+}
+
+// Shows a small overlay letting the player pick which tile rank to ankan
+// when more than one is available at once (rare, but possible) — same
+// overlay pattern as showChiPicker/showRiichiPicker, one option per
+// candidate rank, each shown as the tile's actual face via keyToTile.
+function showAnkanPicker(tileKeys){
+  let picker=$('ankan-picker');
+  if(picker) picker.remove();
+  picker=document.createElement('div');
+  picker.id='ankan-picker';
+  picker.className='chi-picker';
+  tileKeys.forEach(tileKey=>{
+    const optBtn=document.createElement('button');
+    optBtn.className='chi-picker-opt';
+    optBtn.onclick=()=>{
+      wss({type:'action',action:{type:'ankan',tileKey}});
+      picker.remove();
+    };
+    optBtn.appendChild(mkElMd(keyToTile(tileKey)));
     picker.appendChild(optBtn);
   });
   const cancelBtn=document.createElement('button');
