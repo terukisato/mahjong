@@ -570,6 +570,19 @@ function onMsg(m){
   if(m.type==='leaderboard'){renderLeaderboard(m);return;}
   if(m.type==='room_list'){renderRoomList(m);return;}
   if(m.type==='join_room_result'){if(!m.ok) toast(m.error||'Could not join that room.');return;}
+  // Generic server-side rejection (currently just quick_match/create_room
+  // refusing a profile that's already seated in another room — see
+  // isProfileSeatedElsewhere in server/index.js; join_room reuses
+  // 'join_room_result' above instead since it already has an error toast).
+  if(m.type==='error'){
+    toast(m.error||'Something went wrong.');
+    // findMatch() disables #bfind before sending 'quick_match' and normally
+    // only resetLobby() (after a real game starts) re-enables it — a
+    // rejected quick_match never reaches that point, so without this the
+    // button would stay stuck disabled.
+    if(m.context==='quick_match'){ const b=$('bfind'); if(b) b.disabled=false; }
+    return;
+  }
   if(m.type==='achievements_unlocked'){showAchievementUnlock(m.achievements);return;}
   if(m.type==='profiles'){renderProfileList(m);return;}
   if(m.type==='profile_unlocked'){onProfileUnlocked(m);return;}

@@ -66,6 +66,22 @@ function createFreshRoom(mode,rules,numPlayers){
   return room;
 }
 
+// Tracks which profile (by profiles.js's stable id) is currently seated in
+// which room, across EVERY room — including 'quick_match' ones, which
+// (unlike create_room's) never touch openRooms at all. Without this, the
+// same profile unlocked on a second device/tab could join the exact same
+// room a first connection is already seated in (or any other room while
+// still seated somewhere), letting one person control multiple seats at
+// once and double-recording that profile's stats/achievements for a
+// single game. Guests are deliberately never tracked here — profileId is
+// null for all of them, so they'd otherwise all collide with each other.
+// Populated right after a profiled player is actually seated (quick_match/
+// create_room/join_room below) and cleared in leaveCurrentRoom — the one
+// choke point every "this connection is done with myRoom" path (a new
+// join, the 'leave' message, and the WebSocket 'close' handler) already
+// runs through, so nothing extra needs to hook disconnects separately.
+const seatedProfiles=new Map(); // profileId -> {roomId, playerId}
+
 // One WebSocket connection = one prospective player. `player` is a plain
 // object handed to Room (see room.js) — it stays the same object across
 // join/leave/reconnect-to-a-new-room within this connection's lifetime, so
@@ -150,12 +166,27 @@ wss.on('connection',(ws)=>{
   // from openRooms once its last human is gone (still 'waiting', 0 humans
   // left) — a room nobody real is in isn't worth listing or matching new
   // players into, even though removeHuman itself keeps it bot-filled and
-  // technically playable.
+  // technically playable. Also releases this connection's seatedProfiles
+  // entry, if any — checked against playerId (not just profileId) so a
+  // stale call can never accidentally clear a DIFFERENT connection's more
+  // recent entry for the same profile.
   function leaveCurrentRoom(){
     if(!myRoom) return;
+    if(player.profileId&&seatedProfiles.get(player.profileId)?.playerId===myId) seatedProfiles.delete(player.profileId);
     myRoom.removeHuman(myId);
     if(myRoom.phase==='waiting'&&myRoom.humanCount()===0) openRooms.delete(myRoom.id);
     myRoom=null;
+  }
+
+  // Called after assignIdentity()+leaveCurrentRoom() but before actually
+  // seating this connection anywhere new — true means some OTHER
+  // connection already holds this same profile's seat, so the
+  // quick_match/create_room/join_room handler below should bail out
+  // instead of seating a second copy of the same profile. Always false for
+  // guests (player.profileId is null) — see seatedProfiles' own comment
+  // for why guests aren't tracked here at all.
+  function isProfileSeatedElsewhere(){
+    return !!(player.profileId&&seatedProfiles.has(player.profileId));
   }
 
   // Shared by 'ready' (auto-start once every human is ready) and
@@ -201,6 +232,13 @@ wss.on('connection',(ws)=>{
       // client re-send 'quick_match' to switch game mode or retry without
       // needing a fresh WebSocket connection.
       leaveCurrentRoom();
+      // Same profile already seated in some OTHER room (another device/tab
+      // that unlocked it) — refuse rather than letting one profile occupy
+      // two seats at once. See seatedProfiles' comment above.
+      if(isProfileSeatedElsewhere()){
+        ws.send(JSON.stringify({type:'error',context:'quick_match',error:'This profile is already in a game on another device.'}));
+        return;
+      }
       player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
       const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
       const numPlayers=msg.variant==='sanma'?3:4;
@@ -214,6 +252,7 @@ wss.on('connection',(ws)=>{
       };
       myRoom=new Room(mode,'normal',rules,numPlayers);
       myRoom.addHuman(player);
+      if(player.profileId) seatedProfiles.set(player.profileId,{roomId:myRoom.id,playerId:myId});
       // 'joined' must reach the client BEFORE start()'s game_start broadcast
       // below — the client only learns its own seat number from 'joined'
       // (see mySeat in script.js), and startGame()'s seat-rotation math
@@ -233,6 +272,12 @@ wss.on('connection',(ws)=>{
     if(msg.type==='create_room'){
       assignIdentity();
       leaveCurrentRoom();
+      // Same profile already seated in some OTHER room — see
+      // isProfileSeatedElsewhere's comment (quick_match above).
+      if(isProfileSeatedElsewhere()){
+        ws.send(JSON.stringify({type:'error',context:'create_room',error:'This profile is already in a game on another device.'}));
+        return;
+      }
       player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
       const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
       const numPlayers=msg.variant==='sanma'?3:4;
@@ -245,6 +290,7 @@ wss.on('connection',(ws)=>{
       };
       myRoom=createFreshRoom(mode,rules,numPlayers);
       myRoom.addHuman(player);
+      if(player.profileId) seatedProfiles.set(player.profileId,{roomId:myRoom.id,playerId:myId});
       ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,gameMode:myRoom.gameMode,numPlayers:myRoom.numPlayers,rules:myRoom.rules}));
     }
 
@@ -260,12 +306,19 @@ wss.on('connection',(ws)=>{
       } else {
         assignIdentity();
         leaveCurrentRoom();
+        // Same profile already seated in some OTHER room — see
+        // isProfileSeatedElsewhere's comment (quick_match above).
+        if(isProfileSeatedElsewhere()){
+          ws.send(JSON.stringify({type:'join_room_result',ok:false,error:'This profile is already in a game on another device.'}));
+          return;
+        }
         player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
         myRoom=room;
         if(!myRoom.addHuman(player)){
           myRoom=null;
           ws.send(JSON.stringify({type:'join_room_result',ok:false,error:'That room is full.'}));
         } else {
+          if(player.profileId) seatedProfiles.set(player.profileId,{roomId:myRoom.id,playerId:myId});
           ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,gameMode:myRoom.gameMode,numPlayers:myRoom.numPlayers,rules:myRoom.rules}));
         }
       }
