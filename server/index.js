@@ -245,7 +245,7 @@ wss.on('connection',(ws)=>{
       };
       myRoom=createFreshRoom(mode,rules,numPlayers);
       myRoom.addHuman(player);
-      ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id}));
+      ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,gameMode:myRoom.gameMode,numPlayers:myRoom.numPlayers,rules:myRoom.rules}));
     }
 
     // Join a specific open room by id, picked from 'list_rooms' — the
@@ -266,7 +266,7 @@ wss.on('connection',(ws)=>{
           myRoom=null;
           ws.send(JSON.stringify({type:'join_room_result',ok:false,error:'That room is full.'}));
         } else {
-          ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id}));
+          ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,gameMode:myRoom.gameMode,numPlayers:myRoom.numPlayers,rules:myRoom.rules}));
         }
       }
     }

@@ -64,7 +64,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 }
 .logo-s{font-family:'Cinzel Decorative',serif;font-size:2vmin;color:var(--jl);letter-spacing:1.1vmin;margin-top:2px;}
 .card{background:linear-gradient(155deg,rgba(20,55,35,.95),rgba(8,20,12,.98));border:1px solid rgba(201,168,76,.35);border-radius:16px;
-  padding:calc(var(--ui-vmin) * 4.722) calc(var(--ui-vmin) * 6.389);
+  padding:calc(var(--ui-vmin) * 2.5) calc(var(--ui-vmin) * 6.389);
   /* Was a flat min(440px,96vw) — the box stayed capped at 440px while its
      own font-size/padding kept scaling up to --ui-vmin's 10px ceiling, so
      on a 4K screen the (now larger) text read as cramped into a box that
@@ -74,7 +74,30 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   width:min(calc(var(--ui-vmin) * 61.11), 96vw);
   box-shadow:0 0 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(201,168,76,.25);position:relative;overflow:hidden;}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);}
-.card h2{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin) * 1.528);letter-spacing:calc(var(--ui-vmin) * .694);color:var(--gold);margin-bottom:18px;text-align:center;}
+.card h2{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin) * 1.528);letter-spacing:calc(var(--ui-vmin) * .694);color:var(--gold);text-align:center;}
+/* Back button, header, and Rankings/Match Settings all on one row/
+   baseline — align-items:center is what actually lines up the back
+   button's/icon buttons' vertical centres with the header text's,
+   regardless of their differing box heights (a fixed height on the icon
+   buttons alone, matched against the header's line-height, wouldn't by
+   itself guarantee the same centre — flex centring here does).
+   Negative side margins pull just THIS row out past .card's own
+   (deliberately generous, for the rest of the card's content — inputs,
+   buttons, mode pickers) padding so the corner icons can sit at their own
+   tighter inset instead of being stuck at that same wide padding — shrinking
+   .card's padding itself to fit the icons cramped every other element in
+   the card along with them. The row's own small padding below re-adds
+   just enough inset to keep the icons off the literal card edge. */
+.card-header-row{display:flex;align-items:center;justify-content:space-between;
+  margin:0 calc(var(--ui-vmin, 7.2px) * -5) 18px;
+  padding:0 calc(var(--ui-vmin, 7.2px) * 1.389);}
+.card-header-row h2{flex:1;min-width:0;margin:0;}
+/* Other active rules, directly below the header row (#lobby-header covers
+   mode/player-count) — same element/copy whether it's reflecting live
+   Match Settings picks (updateMatchSummary) or a joined room's frozen
+   ones (renderWaitingRules), so it stays put across that handoff instead
+   of two separate readouts in two different spots. */
+.lobby-rules-summary{font-size:calc(var(--ui-vmin) * 1.5);color:rgba(245,237,216,.5);text-align:center;margin:-10px 0 16px;letter-spacing:calc(var(--ui-vmin) * .069);}
 /* var(--ui-vmin, 7.2px) — same fallback convention as .mode-btn/.about
    .settings-icon-btn: --ui-vmin is only ever defined on #s-lobby/#s-start,
    so .ig used inside a .about-modal (Profile Picker, Developer Settings)
@@ -122,11 +145,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   font-size:calc(var(--ui-vmin) * 1.806);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;}
 /* Lobby's two front-screen actions (Quick Match / Room List, see
    index.html) — side by side instead of one ambiguous button. Smaller
-   font + letter-spacing than a lone .bp so "⚔ Quick Match"/"🏠 Room List"
+   font + letter-spacing than a lone .bp so "⚔ Quick Match"/"Room List"
    both fit comfortably at half width down to a narrow phone screen. */
 .lobby-actions{display:flex;gap:calc(var(--ui-vmin, 7.2px) * 1.111);}
 .lobby-actions .bp{width:auto;flex:1;min-width:0;
-  font-size:calc(var(--ui-vmin) * 1.389);letter-spacing:calc(var(--ui-vmin) * .208);}
+  font-size:calc(var(--ui-vmin) * 1.6);letter-spacing:calc(var(--ui-vmin) * .278);}
 .bp:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(26,107,69,.55);border-color:var(--gold);}
 .bp:disabled{opacity:.4;cursor:default;transform:none;}
 .bs{width:100%;padding:calc(var(--ui-vmin) * 1.389);background:transparent;border:1px solid rgba(201,168,76,.3);border-radius:10px;color:rgba(245,237,216,.65);
@@ -883,16 +906,21 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    so this needs no localization and reads at a glance without reading
    words. Buttons are now empty elements (see index.html) — the knob is the
    entire visual, nothing else to lay out. */
-.sp-toggle{position:relative;width:calc(var(--ui-vmin, 7.2px) * 5.5);height:calc(var(--ui-vmin, 7.2px) * 2.8);
+/* Recolored to reuse the same "selected/unselected" language as
+   .mode-btn.active/.mode-btn (jade tint + jade border when on, dim
+   near-black + faint gold border when off) instead of a stoplight red/
+   green pair — matches the rest of the Janshin theme and reads as a
+   quieter on/off cue than the old saturated colors. */
+.sp-toggle{position:relative;width:calc(var(--ui-vmin, 7.2px) * 4.2);height:calc(var(--ui-vmin, 7.2px) * 2.15);
   padding:0;border-radius:999px;cursor:pointer;flex-shrink:0;
-  background:rgba(42,158,103,.3);border:1px solid var(--jl);
+  background:rgba(26,107,69,.4);border:1px solid var(--jl);
   transition:background .2s,border-color .2s;}
-.sp-toggle::after{content:'';position:absolute;top:calc(var(--ui-vmin, 7.2px) * .3);
-  left:calc(var(--ui-vmin, 7.2px) * 3.0);width:calc(var(--ui-vmin, 7.2px) * 2.2);height:calc(var(--ui-vmin, 7.2px) * 2.2);
-  border-radius:50%;background:var(--cream);box-shadow:0 1px 3px rgba(0,0,0,.4);
-  transition:left .2s;}
-.sp-toggle.off{background:rgba(80,0,0,.3);border-color:#c82020;}
-.sp-toggle.off::after{left:calc(var(--ui-vmin, 7.2px) * .3);}
+.sp-toggle::after{content:'';position:absolute;top:calc(var(--ui-vmin, 7.2px) * .225);
+  left:calc(var(--ui-vmin, 7.2px) * 2.3);width:calc(var(--ui-vmin, 7.2px) * 1.7);height:calc(var(--ui-vmin, 7.2px) * 1.7);
+  border-radius:50%;background:rgba(245,237,216,.85);box-shadow:0 1px 3px rgba(0,0,0,.35);
+  transition:left .2s,background .2s;}
+.sp-toggle.off{background:rgba(0,0,0,.3);border-color:rgba(201,168,76,.25);}
+.sp-toggle.off::after{left:calc(var(--ui-vmin, 7.2px) * .225);background:rgba(245,237,216,.55);}
 .sp-vol{display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .833);}
 .sp-vol-row{display:flex;justify-content:space-between;align-items:center;}
 .sp-vol-label{font-size:calc(var(--ui-vmin, 7.2px) * 1.528);color:var(--gold);}
@@ -951,11 +979,20 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   letter-spacing:calc(var(--ui-vmin) * .14);
   text-decoration:underline;margin-top:6px;cursor:pointer;transition:color .2s;}
 .about-link:hover{color:var(--gold);}
-/* Moved out from right above #bfind (where it visually crowded the Find
-   Match button) to sit under the "Enter the Hall" heading instead —
-   .card's own children aren't centered by default (unlike #s-start's
-   flex column), so this needs its own centering. */
-.rules-link-lobby{display:block;text-align:center;margin:-10px 0 16px;}
+/* Rankings/Match Settings — icon-only buttons, a flex item within
+   .card-header-row (see index.html) alongside the back button and header,
+   rather than absolutely anchored to .card's own corner — that's what
+   actually keeps them on the header's baseline instead of just sharing a
+   "top" offset with .back-icon-btn (a text glyph box and an svg box don't
+   naturally come out to the same height at the same font-size). Sits flush
+   against .card's own (now-reduced) padding edge rather than clawing past
+   it with a negative margin — see .card's padding comment. Rankings sits
+   first in DOM order so it renders left of Match Settings. */
+.card-icon-btns{flex-shrink:0;display:flex;gap:calc(var(--ui-vmin, 7.2px) * 1.111);}
+.card-icon-btn{background:none;border:none;padding:0;color:#888;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:color .2s;}
+.card-icon-btn:hover{color:var(--gold);}
+.card-icon-btn svg{width:calc(var(--ui-vmin, 7.2px) * 1.667);height:calc(var(--ui-vmin, 7.2px) * 1.667);display:block;}
 /* Readout of the current Match Settings (game mode + player count) on the
    lobby card itself — those pickers now live inside the settings modal
    (see #rules-modal), so without this there'd be no way to tell what
@@ -1054,9 +1091,6 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    --gl on hover rather than adding a ring/shadow around the text. */
 .up-title-btn{cursor:pointer;transition:color .2s;}
 .up-title-btn:hover{color:var(--gl);}
-.match-summary{text-align:center;font-size:calc(var(--ui-vmin) * 1.389);
-  letter-spacing:calc(var(--ui-vmin) * .417);color:var(--gold);opacity:.9;
-  margin:-4px 0 16px;text-transform:uppercase;}
 .about-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;}
 /* Same clamped scale-unit approach as #s-lobby/#s-start/.topbar (see their
    own --ui-vmin comments) — defining it here means every descendant below
@@ -1162,13 +1196,16 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    ceiling on a huge one. */
 .user-icon-btn{display:flex;align-items:center;justify-content:center;padding:0;}
 .user-icon-btn svg{width:calc(var(--ui-vmin, 7.2px) * 6.111);height:calc(var(--ui-vmin, 7.2px) * 6.111);display:block;}
-/* Anchored to .card (position:relative) — the "Enter the Hall" panel's own
-   top-left corner, not the window's. Only shown on #s-lobby (there's
-   nowhere "back" from #s-start itself). Smaller offset than the
-   window-corner buttons since it now sits inside the card's own padding
-   instead of the screen's edge. */
-.back-icon-btn{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.389);left:calc(var(--ui-vmin, 7.2px) * 1.389);background:none;border:none;
-  color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.778);cursor:pointer;z-index:10;}
+/* A flex item within .card-header-row (see index.html), alongside the
+   header and Rankings/Match Settings, rather than absolutely anchored to
+   .card's own top-left corner — .card-header-row's align-items:center is
+   what lines up the ← glyph's vertical centre with the header text/icon
+   svgs, not a shared "top" offset. Sits flush against .card's own
+   (now-reduced) padding edge rather than clawing past it with a negative
+   margin — see .card's padding comment. Only shown on #s-lobby (there's
+   nowhere "back" from #s-start itself). */
+.back-icon-btn{flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  background:none;border:none;color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.778);cursor:pointer;}
 
 /* ── Topbar inline elements ── */
 .tb-right .settings-icon-btn{position:static;z-index:auto;}

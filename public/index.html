@@ -91,7 +91,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.3</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.4</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -133,6 +133,13 @@
       <div class="sp-row"><span class="sp-label">Nagashi Mangan</span><button class="sp-toggle" id="btn-rule-nagashiMangan" onclick="toggleRule('nagashiMangan')" title="Nagashi Mangan on/off"></button></div>
       <div class="sp-row"><span class="sp-label">Chonbo (False Declaration Penalty)</span><button class="sp-toggle off" id="btn-rule-chonbo" onclick="toggleRule('chonbo')" title="Chonbo on/off"></button></div>
     </div>
+    <!-- Only shown when this modal was opened via Room List's "+ Create
+         Room" (see openCreateRoomRules/confirmCreateRoom in script.js) —
+         picking rules here IS the room's rules, unlike every other place
+         this modal opens from (Quick Match/lobby gear icon), where toggles
+         just update the picks for whatever's queued/created NEXT and there
+         is no explicit "confirm" step. -->
+    <button class="bp" id="rules-modal-create-btn" style="display:none;margin-top:14px;" onclick="confirmCreateRoom()">+ Create Room</button>
   </div>
 </div>
 
@@ -155,8 +162,10 @@
 
 <!-- Room List — an alternative to "Find Match" for playing with a
      specific person: create a room with your own rule picks (see
-     createRoom in script.js, uses whatever's set in Match Settings) and it
-     shows up here for anyone else to join directly, inheriting its rules
+     openCreateRoomRules/confirmCreateRoom in script.js, which route through
+     the Match Settings modal so those picks are made right before the room
+     is created, not just whatever was left over from earlier) and it shows
+     up here for anyone else to join directly, inheriting its rules
      automatically — no code to share, no need to match toggles by hand
      (see toggleRoomList/renderRoomList/joinRoom). -->
 <div id="roomlist-backdrop" class="about-backdrop" onclick="toggleRoomList()"></div>
@@ -164,7 +173,7 @@
   <button class="about-close" onclick="toggleRoomList()">✕</button>
   <div class="about-title">Room List</div>
   <div class="about-body">
-    <button class="bp" onclick="createRoom()">+ Create Room (current Match Settings)</button>
+    <button class="bp" onclick="openCreateRoomRules()">+ Create Room</button>
     <div id="roomlist-body">Loading…</div>
   </div>
 </div>
@@ -466,12 +475,37 @@
   <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Mahjong Online</div></div>
   <div class="card">
-    <!-- Back-to-menu now anchored to this panel's own top-left corner,
-         not the window's — see .back-icon-btn's position:absolute. -->
-    <button class="back-icon-btn" onclick="backToMenu()" title="Back to Menu">←</button>
-    <h2>Enter the Hall</h2>
-    <a href="#" class="about-link rules-link-lobby" onclick="toggleRulesModal();return false;">⚙ Match Settings</a>
-    <a href="#" class="about-link rules-link-lobby" onclick="toggleRankings();return false;">Rankings</a>
+    <!-- Back button, header, and Rankings/Match Settings all share one
+         flex row now (rather than the header sitting in normal flow below
+         two absolutely-positioned icon groups) so all four sit on the
+         same visual baseline — see .card-header-row. -->
+    <div class="card-header-row">
+      <!-- Back-to-menu, this panel's own top-left corner. -->
+      <button class="back-icon-btn" onclick="backToMenu()" title="Back to Menu">←</button>
+      <!-- Live readout of what you're about to play — mode/player-count
+           (e.g. "東風戦 TONPUU · 四人麻雀 YONMA"); other active rules go on
+           the line right below this whole row (.lobby-rules-summary).
+           Driven by the current Match Settings picks (updateMatchSummary)
+           until a room exists, then swapped for that room's actual,
+           no-longer-editable settings (renderWaitingRules) — see
+           showWaiting/resetLobby in script.js. Static text here is just a
+           pre-JS fallback matching the built-in defaults. -->
+      <h2 id="lobby-header">東風戦 TONPUU · 四人麻雀 YONMA</h2>
+      <!-- Icon-only versions of what used to be "⚙ Match Settings"/
+           "Rankings" text links, this panel's own top-right corner.
+           Rankings comes first in DOM order so it renders to the LEFT of
+           Match Settings (closest to the corner). Both are hidden once in
+           the waiting room — see showWaiting/resetLobby. -->
+      <div class="card-icon-btns">
+        <button class="card-icon-btn" id="rankings-icon-btn" onclick="toggleRankings()" title="Rankings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="6" height="9"></rect><rect x="9" y="7" width="6" height="14"></rect><rect x="15" y="15" width="6" height="6"></rect></svg>
+        </button>
+        <button class="card-icon-btn" id="match-settings-link" onclick="toggleRulesModal()" title="Match Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+      </div>
+    </div>
+    <div class="lobby-rules-summary" id="lobby-rules-summary"></div>
     <div id="lobby-inputs">
     <!-- Defaults to Guest — playable immediately with no profile chosen.
          Guest play holds no data at all (see recordGameResult's isGuest
@@ -492,7 +526,6 @@
       </span>
       <span class="pnp-change">Change</span>
     </button>
-    <div class="match-summary" id="match-summary"></div>
     </div>
     <!-- Two distinct entry points, not one ambiguous "Find Match": Quick
          Match goes straight into a game against bots, no waiting room (see

@@ -539,7 +539,7 @@ function onMsg(m){
   // the same tick (see server/index.js), so 'game_start' is right behind
   // this message; skip the waiting-room screen entirely rather than flash
   // "Looking for players..." for a single frame before it's replaced.
-  if(m.type==='joined'){mySeat=m.seat;if(!m.instant)showWaiting();return;}
+  if(m.type==='joined'){mySeat=m.seat;currentRoomRules=m.rules||null;currentRoomMode=m.gameMode||null;currentRoomNumPlayers=m.numPlayers||null;if(!m.instant)showWaiting();return;}
   if(m.type==='room_update'){updateSlots(m.seats);return;}
   if(m.type==='game_start'){startGame(m);return;}
   if(m.type==='round_start'){onRoundStart(m);return;}
@@ -631,6 +631,11 @@ function toggleRulesModal(){
   const open=modal.classList.contains('visible');
   modal.classList.toggle('visible',!open);
   backdrop.classList.toggle('visible',!open);
+  // Opening normally (gear icon/Quick Match) hides the "+ Create Room"
+  // confirm button — only openCreateRoomRules (below) re-shows it, since
+  // that's the one path where picking rules here actually creates a room
+  // rather than just updating what's queued for next time.
+  if(!open) $('rules-modal-create-btn').style.display='none';
 }
 
 // Hub for everything specific to the unlocked profile (player icon, voice
@@ -1788,14 +1793,25 @@ function setVariant(v){
   updateMatchSummary();
 }
 
-// One-line readout of the current Match Settings, shown on the lobby card
-// itself since Game Mode/Players moved into the settings modal — without
-// this there'd be no way to tell what you're about to queue for.
+// Live readout of the current Match Settings picks — mode/player-count in
+// the header, other active rules right below it (see .lobby-rules-summary
+// in index.html) — since Game Mode/Players/Rules all moved into the
+// settings modal, without this there'd be no way to tell what you're about
+// to queue for. Skipped once a room exists: renderWaitingRules (below)
+// owns both elements from that point on, showing the room's actual, frozen
+// settings instead of whatever's currently picked for the NEXT one.
 function updateMatchSummary(){
-  const el=$('match-summary'); if(!el) return;
-  const modeLabel=gameMode==='hanchan'?'半荘戦 HANCHAN':'東風戦 TONPUU';
-  const variantLabel=variant==='sanma'?'三人麻雀 SANMA':'四人麻雀 YONMA';
-  el.textContent=`${modeLabel} · ${variantLabel}`;
+  if(currentRoomMode!=null) return;
+  const header=$('lobby-header');
+  if(header){
+    const modeLabel=gameMode==='hanchan'?'半荘戦 HANCHAN':'東風戦 TONPUU';
+    const variantLabel=variant==='sanma'?'三人麻雀 SANMA':'四人麻雀 YONMA';
+    header.textContent=`${modeLabel} · ${variantLabel}`;
+  }
+  const el=$('lobby-rules-summary'); if(!el) return;
+  const RULE_LABELS={akaDora:'Aka Dora',kuitanAri:'Kuitan',doubleRon:'Double Ron',nagashiMangan:'Nagashi Mangan',chonbo:'Chonbo'};
+  const onRules=Object.keys(RULE_LABELS).filter(k=>rules[k]).map(k=>RULE_LABELS[k]);
+  el.textContent=onRules.length?onRules.join(', '):'No optional rules enabled';
 }
 
 // Waiting-room slot count follows the selected variant even before a
@@ -1813,10 +1829,37 @@ function updateSlotCount(){
 // net (Tsumo/Ron become declarable before the server's confirmed they're
 // valid), not something a casual match should suddenly get by default.
 let rules={akaDora:true,kuitanAri:true,doubleRon:true,nagashiMangan:true,chonbo:false};
+
+// The room actually being played in — set from the server's 'joined' reply
+// (server/index.js), NOT the `rules`/`gameMode`/`variant` globals above.
+// Those stay editable in Match Settings for picking your NEXT room; these
+// are frozen the moment a room exists and are what the waiting room
+// displays (see renderWaitingRules) — the two must never be conflated, or
+// tweaking Match Settings mid-wait would look like it changed a room whose
+// server-side rules (Room.rules in server/room.js) are actually immutable.
+let currentRoomRules=null,currentRoomMode=null,currentRoomNumPlayers=null;
+
+// Read-only readout of the room actually joined — takes over the same
+// header/subtitle updateMatchSummary uses (mode/player-count, then the
+// other active rules), since match settings can't be changed after a room
+// exists (see currentRoomRules above).
+function renderWaitingRules(){
+  const header=$('lobby-header');
+  if(header&&currentRoomMode!=null&&currentRoomNumPlayers!=null){
+    const modeLabel=currentRoomMode==='hanchan'?'半荘戦 HANCHAN':'東風戦 TONPUU';
+    const variantLabel=currentRoomNumPlayers===3?'三人麻雀 SANMA':'四人麻雀 YONMA';
+    header.textContent=`${modeLabel} · ${variantLabel}`;
+  }
+  const el=$('lobby-rules-summary'); if(!el||!currentRoomRules) return;
+  const RULE_LABELS={akaDora:'Aka Dora',kuitanAri:'Kuitan',doubleRon:'Double Ron',nagashiMangan:'Nagashi Mangan',chonbo:'Chonbo'};
+  const onRules=Object.keys(RULE_LABELS).filter(k=>currentRoomRules[k]).map(k=>RULE_LABELS[k]);
+  el.textContent=onRules.length?onRules.join(', '):'No optional rules enabled';
+}
 function toggleRule(name){
   rules[name]=!rules[name];
   applyRuleButton(name);
   try{ localStorage.setItem('mj-rules',JSON.stringify(rules)); }catch(e){}
+  updateMatchSummary();
 }
 
 // Syncs one rule's ON/OFF button to the current `rules` state — split out
@@ -1876,10 +1919,25 @@ function toggleRoomList(){
   backdrop.classList.add('visible');
 }
 
+// Routes Room List's "+ Create Room" through Match Settings instead of
+// firing create_room immediately with whatever was last picked — closes
+// Room List, opens the rules modal with its confirm button showing (see
+// toggleRulesModal), and leaves the actual request to confirmCreateRoom
+// once the player's happy with their picks.
+function openCreateRoomRules(){
+  toggleRoomList();
+  toggleRulesModal();
+  $('rules-modal-create-btn').style.display='block';
+}
+
+function confirmCreateRoom(){
+  toggleRulesModal();
+  createRoom();
+}
+
 function createRoom(){
   playLobbyMusic();
   wss({type:'create_room',gameMode,variant,rules,voiceTheme:currentVoiceTheme,icon:currentPlayerIcon});
-  toggleRoomList();
 }
 
 function joinRoom(id){
@@ -1921,6 +1979,9 @@ function showWaiting(){
   $('wa').style.display='block';
   $('lobby-actions').style.display='none';
   $('lobby-inputs').style.display='none';
+  $('match-settings-link').style.display='none';
+  $('rankings-icon-btn').style.display='none';
+  renderWaitingRules();
   $('cdiv').textContent='Press Ready when you are set to start';
 }
 
@@ -2006,10 +2067,14 @@ function pressReady(){
 
 function resetLobby(){
   mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;discarding=false;
+  currentRoomRules=null;currentRoomMode=null;currentRoomNumPlayers=null;
   $('wa').style.display='none';
   $('lobby-actions').style.display='flex';
   $('bfind').disabled=false;
   $('lobby-inputs').style.display='block';
+  $('match-settings-link').style.display='';
+  $('rankings-icon-btn').style.display='';
+  updateMatchSummary();
   $('cdiv').textContent='';
   $('bready').classList.remove('pressed');
   $('bready').disabled=false;
@@ -3365,7 +3430,7 @@ renderTitles();
 // Restore last-picked match settings (game mode, player count, rule
 // toggles) — same "remember what you last used" treatment as the audio/
 // voice-theme prefs above. setMode/setVariant already update their own
-// buttons + localStorage + the match-summary line, so just feed them
+// buttons + localStorage + the header summary, so just feed them
 // whatever was saved (or leave the built-in defaults if nothing was).
 try{
   const savedGameMode=localStorage.getItem('mj-game-mode');
