@@ -476,6 +476,14 @@ let P=['b','r','t','l'];
 // the previous game_state message, kept around so renderState can diff
 // against it (e.g. "did a new pon just happen" for sound effects).
 let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false, discarding=false, pendingGameOver=null;
+// Last 'round_end' message shown on the results screen — kept around
+// purely so a resize (see scheduleTileRedraw) can redraw its tile artwork
+// at the new size, the same reason lastState is kept for the live board.
+// Deliberately never reset back to null when that screen is left — the
+// resize handler only ever acts on it while #s-end is actually visible, so
+// a stale reference just sits here unused rather than needing to be
+// cleared from every path that can dismiss that screen.
+let lastEndState=null;
 // Theme ids unlocked for the currently-entered name, refreshed whenever a
 // 'stats' response arrives (see onMsg) — gates the locked/unlocked styling
 // in renderVoiceThemes. 'Default' is always available even before any
@@ -3252,6 +3260,57 @@ function limitLabel(han,fu){
 }
 
 
+// Hand tiles + dora (#rewt) and the tenpai reveal (#re-tenpai) on the
+// round-end panel — every tile here is an mkElMd() SVG, same "size baked
+// in at draw time" deal as the live board's tiles (see mkEl's own
+// comment), so this needs to be re-runnable on its own: onEnd (below)
+// calls it as part of a normal round_end, and scheduleTileRedraw calls it
+// again on resize (using the last round_end message, see lastEndState)
+// WITHOUT going through the rest of onEnd, which has one-time side effects
+// (win/tsumo sound, the score count-up animation) that must not replay
+// just because the window resized.
+function renderEndTiles(m){
+  const wt=$('rewt'); if(!wt) return;
+  wt.innerHTML='';
+  if((m.dora||[]).length||(m.uraDora||[]).length){
+    const dr=document.createElement('div');dr.className='re-dora-row';
+    if((m.dora||[]).length){
+      const lbl=document.createElement('span');lbl.className='re-dora-lbl';lbl.textContent='Dora';
+      dr.appendChild(lbl);
+      for(const t of m.dora) dr.appendChild(mkElMd(t));
+    }
+    if((m.uraDora||[]).length){
+      const lbl2=document.createElement('span');lbl2.className='re-dora-lbl re-ura-lbl';lbl2.textContent='Ura Dora';
+      dr.appendChild(lbl2);
+      for(const t of m.uraDora) dr.appendChild(mkElMd(t));
+    }
+    wt.appendChild(dr);
+  }
+  const tileRow=document.createElement('div');tileRow.className='re-tile-row';
+  for(const t of(m.hand||[])) if(t) tileRow.appendChild(mkElMd(t));
+  // Render melds right of closed hand, separated by a gap
+  for(const meld of(m.melds||[])) appendEndPanelMeld(tileRow,meld);
+  wt.appendChild(tileRow);
+  // Tenpai reveal (exhaustive draw only) — name + hand for each tenpai
+  // player; noten hands stay private (server sends null for those seats).
+  const tp=$('re-tenpai'); if(!tp) return;
+  tp.innerHTML='';
+  if(m.reason==='draw'&&Array.isArray(m.tenpaiHands)){
+    m.tenpaiHands.forEach((hand,seat)=>{
+      if(!hand) return;
+      const row=document.createElement('div');row.className='re-tenpai-row';
+      const nameEl=document.createElement('div');nameEl.className='re-tenpai-name';
+      nameEl.textContent=seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
+      row.appendChild(nameEl);
+      const tiles=document.createElement('div');tiles.className='re-tile-row';
+      for(const t of hand) tiles.appendChild(mkElMd(t));
+      for(const meld of(m.tenpaiMelds?.[seat]||[])) appendEndPanelMeld(tiles,meld);
+      row.appendChild(tiles);
+      tp.appendChild(row);
+    });
+  }
+}
+
 // Round-end panel (win/draw/abortive-draw/nagashi) — purely presentational,
 // just formats whatever room.js already computed and sent in the round_end
 // message (yakuList, han/fu, dora, scores, ...). No scoring logic lives
@@ -3260,6 +3319,7 @@ function limitLabel(han,fu){
 function onEnd(m){
   try{
   inGame=false;
+  lastEndState=m;
   const loader=$('game-loading'); if(loader) loader.style.display='none';
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
@@ -3293,46 +3353,11 @@ function onEnd(m){
     c.innerHTML=`${escHtml(y.name)}<span class="yh">${y.han}Han</span><span class="yj">${escHtml(y.jp||'')}</span>`;
     yl.appendChild(c);
   }
-  // Hand tiles + dora grouped together in rewt
-  const wt=$('rewt');wt.innerHTML='';
-  // Collect aka dora tiles from hand + melds
-  const allHandTiles=[...(m.hand||[]),...(m.melds||[]).flatMap(ml=>ml.tiles||[])];
-  if((m.dora||[]).length||(m.uraDora||[]).length){
-    const dr=document.createElement('div');dr.className='re-dora-row';
-    if((m.dora||[]).length){
-      const lbl=document.createElement('span');lbl.className='re-dora-lbl';lbl.textContent='Dora';
-      dr.appendChild(lbl);
-      for(const t of m.dora) dr.appendChild(mkElMd(t));
-    }
-    if((m.uraDora||[]).length){
-      const lbl2=document.createElement('span');lbl2.className='re-dora-lbl re-ura-lbl';lbl2.textContent='Ura Dora';
-      dr.appendChild(lbl2);
-      for(const t of m.uraDora) dr.appendChild(mkElMd(t));
-    }
-    wt.appendChild(dr);
-  }
-  const tileRow=document.createElement('div');tileRow.className='re-tile-row';
-  for(const t of(m.hand||[])) if(t) tileRow.appendChild(mkElMd(t));
-  // Render melds right of closed hand, separated by a gap
-  for(const meld of(m.melds||[])) appendEndPanelMeld(tileRow,meld);
-  wt.appendChild(tileRow);
-  // Tenpai reveal (exhaustive draw only) — name + hand for each tenpai
-  // player; noten hands stay private (server sends null for those seats).
-  const tp=$('re-tenpai');tp.innerHTML='';
-  if(m.reason==='draw'&&Array.isArray(m.tenpaiHands)){
-    m.tenpaiHands.forEach((hand,seat)=>{
-      if(!hand) return;
-      const row=document.createElement('div');row.className='re-tenpai-row';
-      const nameEl=document.createElement('div');nameEl.className='re-tenpai-name';
-      nameEl.textContent=seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
-      row.appendChild(nameEl);
-      const tiles=document.createElement('div');tiles.className='re-tile-row';
-      for(const t of hand) tiles.appendChild(mkElMd(t));
-      for(const meld of(m.tenpaiMelds?.[seat]||[])) appendEndPanelMeld(tiles,meld);
-      row.appendChild(tiles);
-      tp.appendChild(row);
-    });
-  }
+  // Hand/dora/tenpai tile artwork — split into its own function (below)
+  // since a resize needs to redraw just this part (see scheduleTileRedraw)
+  // without replaying onEnd's one-time side effects (win/tsumo sound, the
+  // score count-up animation further down).
+  renderEndTiles(m);
   // Score table with delta column
   const tbl=$('rest');tbl.innerHTML='';
   const sorted=[...(m.scores||[]).map((sc,seat)=>({sc,seat}))].sort((a,b)=>b.sc-a.sc);
@@ -3420,7 +3445,36 @@ function updateTileSizes(){
   root.style.setProperty('--tsm-w',smW+'px');
   root.style.setProperty('--tsm-h',smH+'px');
 }
-window.addEventListener('resize',updateTileSizes);
+// Every tile face (mkEl/tsvg — the number/suit glyph, not just its box) is
+// an inline SVG whose width/height/viewBox/text coordinates are baked in
+// as plain numbers at the moment it's drawn, from whatever --tlg/tmd/tsm
+// were at the time — unlike a CSS-sized box, it does NOT redraw itself
+// just because those custom properties change underneath it. So updating
+// the vars above alone (e.g. after a phone rotation mid-game) resizes any
+// CSS-only elements immediately but leaves every tile already on screen
+// rendered at its old pixel size until something else happens to trigger a
+// fresh renderState() — normally the next game_state message, which might
+// not arrive for a while if it's not this player's turn. Forcing that
+// redraw here closes the gap. Debounced (resize can fire many times in a
+// row during an animated rotation/drag-resize, and this rebuilds the whole
+// board each time) and passes lastState as BOTH arguments — renderState's
+// `prev` param only drives "what just changed" sound-effect/banner diffing
+// (see its own comment), so prev===m makes every one of those checks come
+// back "nothing changed" instead of spuriously replaying them.
+let tileRedrawDebounce=null;
+function scheduleTileRedraw(){
+  updateTileSizes();
+  clearTimeout(tileRedrawDebounce);
+  tileRedrawDebounce=setTimeout(()=>{
+    if(inGame&&lastState) renderState(lastState,lastState);
+    // Round-end screen has its own tiles (dora/hand/tenpai) with the same
+    // baked-in-size problem — redraw those too if it's what's showing,
+    // via renderEndTiles alone (NOT onEnd(m) again — see its comment for
+    // why replaying the whole thing would be wrong here).
+    if(lastEndState&&!$('s-end').classList.contains('hidden')) renderEndTiles(lastEndState);
+  },150);
+}
+window.addEventListener('resize',scheduleTileRedraw);
 updateTileSizes();
 setTimeout(updateTileSizes,100);
 
