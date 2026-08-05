@@ -1191,7 +1191,14 @@ class Room {
         const dealerScore=g.scores[g.dealer];
         const dealerIsFirst=g.scores.every(s=>s<=dealerScore);
         if(isLastKyoku&&dealerIsFirst){
-          // End game — dealer wins and is already first, no need to continue
+          // End game — dealer wins and is already first, no need to continue.
+          // This is agariyame, NOT a bust — `bust` was computed above from
+          // the CURRENT g.scores regardless of why we're ending, so it's
+          // only >=0 here in the rare case this exact winning hand also
+          // happened to send some other seat negative. Blindly finishing
+          // with 'tobi' unconditionally (as this used to) mislabelled every
+          // ordinary agariyame ending as "飛び - Bankruptcy" on the client
+          // (see m.reason==='tobi' in script.js) even though nobody busted.
           this._broadcastAll({type:'round_end',reason,winner,loser,hand,yakuList,han,fu,payment,
             scores:g.scores,handLabel:han?handLabel(han):'',
             playerNames:this.seats.map(p=>p?.name||'—'),
@@ -1202,7 +1209,8 @@ class Room {
             melds:melds||[],
             gameOver:true,
           });
-          this._finishGame('tobi',{bust});
+          if(bust>=0) this._finishGame('tobi',{bust});
+          else this._finishGame('end');
           return;
         }
         newHonba=g.honba+1;
@@ -1379,9 +1387,14 @@ class Room {
       }
       g.scores[winner]+=gain;
     }
+    // Tobi check (bankruptcy) — unlike every other _endRound/tenpai-payment
+    // path, this used to be missing entirely, so a player sent negative by
+    // a nagashi mangan payment (up to 4000 points to a dealer-as-winner)
+    // wouldn't end the game as a bust at all.
+    const bust=g.scores.findIndex(s=>s<0);
     const nagashiMaxRound=this._maxRound();
     const nagashiNewRound=nagashiSeats[g.dealer]?g.round:g.round+1;
-    const nagashiGameOver=nagashiNewRound>nagashiMaxRound;
+    const nagashiGameOver=bust>=0||nagashiNewRound>nagashiMaxRound;
     // Nagashi mangan is scored as a tsumo but is still fundamentally a draw
     // outcome — every seat's discards were exhausted, nobody called ron/
     // tsumo on a discard — so riichi sticks are never claimed here either.
@@ -1399,6 +1412,10 @@ class Room {
     }
     const newRoundWind=Math.ceil(newRound/this.numPlayers);
     const maxRound=this._maxRound();
+    if(bust>=0){
+      this._finishGame('tobi',{bust});
+      return;
+    }
     if(newRound>maxRound){
       this._finishGame('end');
       return;
