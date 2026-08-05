@@ -194,6 +194,13 @@
       <button class="rank-sort-tab" data-sort="yakumanCount" onclick="setLeaderboardSort('yakumanCount')" title="Yakuman Count">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7z"></path><path d="M5 20h14"></path></svg>
       </button>
+      <button class="rank-sort-tab" data-sort="dealIns" onclick="setLeaderboardSort('dealIns')" title="Deal-Ins">
+        <!-- A tile with an outward arrow — dealing in is discarding the
+             tile that feeds someone else's win, so a tile (matching Hands
+             Won's icon language) with an exit arrow reads as "given away"
+             rather than "won". -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 12h9"></path><path d="M15 8l4 4-4 4"></path></svg>
+      </button>
     </div>
     <!-- Which stat the tabs above currently have selected — icon-only tabs
          rely on a hover title for their label (see each button above),

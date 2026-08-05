@@ -288,6 +288,7 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
         handsWon: s.handsWon,
         yakumanCount,
         avgPlacement,
+        dealIns: s.dealIns,
       };
     });
   if (sortBy === 'avgPlacement') {

@@ -1022,6 +1022,7 @@ let currentLeaderboardSort='totalFinalScore';
 const RANK_SORT_LABELS={
   totalFinalScore:'Points', gamesWon:'Wins', avgPlacement:'Average Placement',
   bestScore:'Best Hand', bestHan:'Highest Han', handsWon:'Hands Won', yakumanCount:'Yakuman Count',
+  dealIns:'Deal-Ins',
 };
 function updateRankSortHeader(sortBy){
   const el=$('rank-sort-header'); if(el) el.textContent=RANK_SORT_LABELS[sortBy]||'';
@@ -1107,6 +1108,7 @@ function renderLeaderboard(m){
       case 'bestHan': primary=`${e.bestHan} han (best)`; break;
       case 'handsWon': primary=`${e.handsWon} hands won`; break;
       case 'yakumanCount': primary=`${e.yakumanCount} yakuman`; break;
+      case 'dealIns': primary=`${e.dealIns} deal-ins`; break;
       default: primary=`${e.totalFinalScore.toLocaleString()} pts`;
     }
     return `<div class="sp-row${mine?' sp-row-mine':''}">
