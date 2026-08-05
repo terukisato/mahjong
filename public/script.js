@@ -1006,9 +1006,9 @@ function renderStats(m){
 
 // Same open/fetch/render pattern as toggleUserProfile/renderStats above,
 // just against the room-wide leaderboard instead of one name's own stats.
-// Reset to 'yonma' on every open, same "don't remember stale sub-state"
+// Reset to 'sanma' on every open, same "don't remember stale sub-state"
 // spirit as the profile picker's code prompt — see toggleLeaderboardVariant.
-let currentLeaderboardVariant='yonma';
+let currentLeaderboardVariant='sanma';
 // Which stat the board is ranked by (see the rank-sort-tabs row in
 // index.html and setLeaderboardSort below) — separate from
 // currentLeaderboardVariant above, which picks the per-variant dataset to
@@ -1032,16 +1032,16 @@ function toggleRankings(){
   const backdrop=$('rankings-backdrop');
   const open=modal.classList.contains('visible');
   if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
-  currentLeaderboardVariant='yonma';
+  currentLeaderboardVariant='sanma';
   currentLeaderboardSort='totalFinalScore';
-  $('btn-rank-yonma').classList.add('active');
-  $('btn-rank-sanma').classList.remove('active');
+  $('btn-rank-sanma').classList.add('active');
+  $('btn-rank-yonma').classList.remove('active');
   document.querySelectorAll('#rank-sort-tabs .rank-sort-tab').forEach(btn=>{
     btn.classList.toggle('active',btn.dataset.sort==='totalFinalScore');
   });
   updateRankSortHeader('totalFinalScore');
   $('rankings-body').textContent='Loading…';
-  wss({type:'get_leaderboard',variant:'yonma',sortBy:'totalFinalScore'});
+  wss({type:'get_leaderboard',variant:'sanma',sortBy:'totalFinalScore'});
   modal.classList.add('visible');
   backdrop.classList.add('visible');
 }
