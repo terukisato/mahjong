@@ -85,6 +85,20 @@ function _emptyStats() {
   };
 }
 
+// Fills in any field _emptyVariantStats() defines that this particular
+// saved record doesn't have — e.g. a record saved back when
+// _emptyVariantStats() didn't have `yaku`/`placements`/`handsWon` yet.
+// Field-by-field rather than all-or-nothing so a record that already has
+// SOME of these (just not the newest one) keeps its real data for
+// everything else instead of getting reset to zero across the board.
+function _fillVariantDefaults(v) {
+  const empty = _emptyVariantStats();
+  for (const key of Object.keys(empty)) {
+    if (v[key] === undefined) v[key] = empty[key];
+  }
+  return v;
+}
+
 // Backfills unlockedThemes/unlockedTitles/achievements onto a record saved
 // before those fields existed, AND migrates a pre-variant-split record
 // (flat gamesPlayed/gamesWon/etc. at the top level, no .yonma/.sanma) into
@@ -113,6 +127,19 @@ function _normalize(s) {
     delete s.handsWon; delete s.tsumoWon; delete s.ronWon; delete s.riichiDeclared;
     delete s.dealIns; delete s.bestHan; delete s.bestScore; delete s.yaku;
   }
+  // Runs unconditionally, even when the branch above didn't (i.e. both
+  // .yonma/.sanma already existed) — a record saved between the
+  // variant-split landing and some LATER field (placements, yaku,
+  // handsWon, ...) being added to _emptyVariantStats() would otherwise
+  // keep missing that one field forever, since the migration branch above
+  // only ever fires once per record (guarded on .yonma/.sanma existing at
+  // all, not on having every current field). That gap is exactly what
+  // made getLeaderboard's avgPlacement/yakumanCount blow up on
+  // s.placements.reduce(...)/Object.entries(s.yaku) for older data —
+  // silently failing the WHOLE leaderboard (every row is derived in one
+  // pass — see getLeaderboard below), not just the one affected profile.
+  s.yonma = _fillVariantDefaults(s.yonma);
+  s.sanma = _fillVariantDefaults(s.sanma);
   if (!s.unlockedThemes) s.unlockedThemes = ['Default'];
   if (!s.unlockedTitles) s.unlockedTitles = ['Beginner'];
   if (!s.achievements) s.achievements = {};
@@ -239,7 +266,16 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
       const s = _normalize(raw)[key];
       const yakumanCount = Object.entries(s.yaku)
         .reduce((n, [name, count]) => n + (YAKUMAN_NAMES.has(name) ? count : 0), 0);
-      const avgPlacement = s.gamesPlayed > 0
+      // Every game increments exactly one placements[] slot, so a genuine
+      // record's four counts always sum to gamesPlayed exactly. A record
+      // that predates placement tracking gets [0,0,0,0] from
+      // _fillVariantDefaults (see _normalize) instead, which — left
+      // unchecked — computes as a flawless 0.00 average (better than
+      // always finishing 1st!) rather than "we don't actually know". This
+      // check tells the two apart: only trust the average when the counts
+      // add up to a real game history.
+      const hasRealPlacementData = s.placements.reduce((a, b) => a + b, 0) === s.gamesPlayed;
+      const avgPlacement = s.gamesPlayed > 0 && hasRealPlacementData
         ? s.placements.reduce((sum, count, i) => sum + count * (i + 1), 0) / s.gamesPlayed
         : null;
       return {
@@ -261,7 +297,7 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
     // MIN_GAMES_FOR_AVG_PLACEMENT comment above for why a low-sample
     // average shouldn't be shown as ranked at all, not even at the bottom).
     return rows
-      .filter(r => r.gamesPlayed >= MIN_GAMES_FOR_AVG_PLACEMENT)
+      .filter(r => r.gamesPlayed >= MIN_GAMES_FOR_AVG_PLACEMENT && r.avgPlacement != null)
       .sort((a, b) => a.avgPlacement - b.avgPlacement);
   }
   return rows.sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
