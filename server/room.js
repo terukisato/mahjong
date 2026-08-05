@@ -384,7 +384,23 @@ class Room {
       return;
     }
     if(!g||this.phase!=='playing') return;
-    if(act.type==='discard'&&g.turn===seat) this._discard(seat,act.tileId);
+    // Own-turn actions (discard/kyuushu/tsumo/riichi/ankan/kakan/kita) were
+    // gated on g.turn===seat alone — but a discard that offers someone else
+    // a ron/pon/kan/chi deliberately leaves g.turn pointing at the
+    // DISCARDER until that reaction window resolves (see _discard's
+    // g.pending branch below), specifically so a late-arriving human
+    // response can still be attributed to the right turn. That same
+    // "still my turn" state was, until now, also accepted for a SECOND
+    // own-turn action from this seat — a player could discard again (or
+    // riichi/tsumo/kan) while their first discard's reaction window was
+    // still open, silently discarding the pending reaction and stealing an
+    // extra tile from their own hand. !g.pending closes that: none of
+    // these are legal again until the current reaction window (if any) is
+    // actually resolved. Reactions THEMSELVES (ron/pon/kan/chi/pass below)
+    // are unaffected — those are exactly what's supposed to happen while
+    // g.pending is set, validated separately via _reactResponse.
+    const myTurnOpen=g.turn===seat&&!g.pending;
+    if(act.type==='discard'&&myTurnOpen) this._discard(seat,act.tileId);
     // 'kyuushu', not 'draw': kyuushu kyuuhai is an abortive draw (like
     // suukaikan) — honba+1, dealer/round unchanged, no scoring. Passing
     // 'draw' here routed it through _endRound's exhaustive-draw branch,
@@ -392,12 +408,12 @@ class Room {
     // turn 1 before anyone's discarded a non-terminal tile, every seat's
     // nagashi flag was still true and it was incorrectly paying out a
     // mangan instead of ending scorelessly.
-    else if(act.type==='kyuushu'&&g.turn===seat) this._endRound('kyuushu');
-    else if(act.type==='tsumo'&&g.turn===seat) this._tsumo(seat);
-    else if(act.type==='riichi'&&g.turn===seat) this._riichi(seat,act.tileId);
-    else if(act.type==='ankan'&&g.turn===seat) this._ankan(seat,act.tileKey);
-    else if(act.type==='kakan'&&g.turn===seat) this._kakan(seat,act.tileId);
-    else if(act.type==='kita'&&g.turn===seat) this._kita(seat,act.tileId);
+    else if(act.type==='kyuushu'&&myTurnOpen) this._endRound('kyuushu');
+    else if(act.type==='tsumo'&&myTurnOpen) this._tsumo(seat);
+    else if(act.type==='riichi'&&myTurnOpen) this._riichi(seat,act.tileId);
+    else if(act.type==='ankan'&&myTurnOpen) this._ankan(seat,act.tileKey);
+    else if(act.type==='kakan'&&myTurnOpen) this._kakan(seat,act.tileId);
+    else if(act.type==='kita'&&myTurnOpen) this._kita(seat,act.tileId);
     else if(act.type==='ron') this._reactResponse(seat,{type:'ron'});
     else if(act.type==='pon') this._reactResponse(seat,{type:'pon'});
     else if(act.type==='kan') this._reactResponse(seat,{type:'kan'});
@@ -1494,7 +1510,21 @@ class Room {
       const fullHandSize=14-meldTileCount+numKans;
       let canRiichi=[];
       if(hand.length===fullHandSize&&isMenzen(g.melds[seat])&&!g.riichi[seat]&&g.scores[seat]>=1000){
-        canRiichi=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id),g.melds[seat],this.rules.sanma).length>0).map(t=>t.id);
+        const riichiCandidates=hand.filter(t=>waits(hand.filter(x=>x.id!==t.id),g.melds[seat],this.rules.sanma).length>0);
+        // Dedupe by (v,s,red) — discarding either of two identical 3m keeps
+        // the exact same wait either way, so listing both as separate
+        // picker options (see showRiichiPicker in script.js) was just
+        // showing the same tile twice for no real choice. `red` stays part
+        // of the key deliberately: a red 5 and a plain 5 share (v,s) but
+        // are NOT interchangeable (one's an extra han of aka dora), so
+        // those must stay distinct options, not collapse into one.
+        const seenKeys=new Set();
+        canRiichi=riichiCandidates.filter(t=>{
+          const k=key(t)+(t.red?'r':'');
+          if(seenKeys.has(k)) return false;
+          seenKeys.add(k);
+          return true;
+        }).map(t=>t.id);
       }
       let canAnkan=[];
       if(g.turn===seat&&hand.length===fullHandSize){

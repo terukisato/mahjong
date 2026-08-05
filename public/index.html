@@ -156,6 +156,22 @@
       <button class="mode-btn active" id="btn-rank-yonma" onclick="toggleLeaderboardVariant('yonma')">四人麻雀<br><span class="mode-sub">YONMA</span></button>
       <button class="mode-btn" id="btn-rank-sanma" onclick="toggleLeaderboardVariant('sanma')">三人麻雀<br><span class="mode-sub">SANMA</span></button>
     </div>
+    <!-- Which stat the board is ranked by (see setLeaderboardSort/
+         renderLeaderboard in script.js) — separate from the yonma/sanma
+         toggle above, which picks which per-variant dataset to rank
+         within. avgPlacement is the only one sorted ascending (lower =
+         better) and the only one with a minimum-games floor server-side
+         (see stats.js) — small samples elsewhere are still real totals,
+         just possibly modest ones, so nothing needs hiding for them. -->
+    <div class="rank-sort-tabs" id="rank-sort-tabs">
+      <button class="rank-sort-tab active" data-sort="totalFinalScore" onclick="setLeaderboardSort('totalFinalScore')">Points</button>
+      <button class="rank-sort-tab" data-sort="gamesWon" onclick="setLeaderboardSort('gamesWon')">Wins</button>
+      <button class="rank-sort-tab" data-sort="avgPlacement" onclick="setLeaderboardSort('avgPlacement')">Avg Place</button>
+      <button class="rank-sort-tab" data-sort="bestScore" onclick="setLeaderboardSort('bestScore')">Best Hand</button>
+      <button class="rank-sort-tab" data-sort="bestHan" onclick="setLeaderboardSort('bestHan')">Highest Han</button>
+      <button class="rank-sort-tab" data-sort="handsWon" onclick="setLeaderboardSort('handsWon')">Hands Won</button>
+      <button class="rank-sort-tab" data-sort="yakumanCount" onclick="setLeaderboardSort('yakumanCount')">Yakuman</button>
+    </div>
     <div id="rankings-body">Loading…</div>
   </div>
 </div>

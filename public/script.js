@@ -591,7 +591,25 @@ function onMsg(m){
     if(m.context==='quick_match'){ const b=$('bfind'); if(b) b.disabled=false; }
     return;
   }
-  if(m.type==='achievements_unlocked'){showAchievementUnlock(m.achievements);return;}
+  if(m.type==='achievements_unlocked'){
+    // Merge any newly-unlocked title/voice theme into the client's own
+    // gating arrays immediately — without this, unlockedTitles/
+    // unlockedThemes stayed stale until something else happened to
+    // request fresh 'stats' (opening the gear-icon Settings panel or My
+    // Stats), so a new unlock wouldn't show up in User Profile > Title or
+    // > Voice Theme (which just render whatever's already in these arrays,
+    // see toggleTitleModal/toggleVoiceThemeModal) until a full page
+    // refresh forced a fresh fetch. Re-rendering both here is harmless
+    // even when neither picker is currently open.
+    for(const a of (m.achievements||[])){
+      if(a.unlocksTitle && !unlockedTitles.includes(a.unlocksTitle)) unlockedTitles.push(a.unlocksTitle);
+      if(a.unlocksTheme && !unlockedThemes.includes(a.unlocksTheme)) unlockedThemes.push(a.unlocksTheme);
+    }
+    renderTitles();
+    renderVoiceThemes();
+    showAchievementUnlock(m.achievements);
+    return;
+  }
   if(m.type==='profiles'){renderProfileList(m);return;}
   if(m.type==='profile_unlocked'){onProfileUnlocked(m);return;}
   if(m.type==='guest_selected'){onGuestSelected();return;}
@@ -991,16 +1009,26 @@ function renderStats(m){
 // Reset to 'yonma' on every open, same "don't remember stale sub-state"
 // spirit as the profile picker's code prompt — see toggleLeaderboardVariant.
 let currentLeaderboardVariant='yonma';
+// Which stat the board is ranked by (see the rank-sort-tabs row in
+// index.html and setLeaderboardSort below) — separate from
+// currentLeaderboardVariant above, which picks the per-variant dataset to
+// rank WITHIN. Reset to the default on every open, same "don't remember
+// stale sub-state" spirit as the variant reset already had.
+let currentLeaderboardSort='totalFinalScore';
 function toggleRankings(){
   const modal=$('rankings-modal');
   const backdrop=$('rankings-backdrop');
   const open=modal.classList.contains('visible');
   if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
   currentLeaderboardVariant='yonma';
+  currentLeaderboardSort='totalFinalScore';
   $('btn-rank-yonma').classList.add('active');
   $('btn-rank-sanma').classList.remove('active');
+  document.querySelectorAll('#rank-sort-tabs .rank-sort-tab').forEach(btn=>{
+    btn.classList.toggle('active',btn.dataset.sort==='totalFinalScore');
+  });
   $('rankings-body').textContent='Loading…';
-  wss({type:'get_leaderboard',variant:'yonma'});
+  wss({type:'get_leaderboard',variant:'yonma',sortBy:'totalFinalScore'});
   modal.classList.add('visible');
   backdrop.classList.add('visible');
 }
@@ -1008,34 +1036,71 @@ function toggleRankings(){
 // Sanma/yonma leaderboards are scored on different scales (see
 // server/stats.js) so this re-fetches rather than filtering client-side —
 // there's no combined dataset to filter from, each variant is its own
-// query server-side.
+// query server-side. Sort selection (currentLeaderboardSort) carries over
+// across a variant switch — no reason picking e.g. "Yakuman" should reset
+// just because you also swapped from yonma to sanma.
 function toggleLeaderboardVariant(variant){
   if(variant===currentLeaderboardVariant) return;
   currentLeaderboardVariant=variant;
   $('btn-rank-yonma').classList.toggle('active',variant==='yonma');
   $('btn-rank-sanma').classList.toggle('active',variant==='sanma');
   $('rankings-body').textContent='Loading…';
-  wss({type:'get_leaderboard',variant});
+  wss({type:'get_leaderboard',variant,sortBy:currentLeaderboardSort});
+}
+
+// Switches which stat the board is ranked by (see rank-sort-tabs in
+// index.html) — mirrors toggleLeaderboardVariant above, just for the other
+// axis (stat instead of player-count).
+function setLeaderboardSort(sortBy){
+  if(sortBy===currentLeaderboardSort) return;
+  currentLeaderboardSort=sortBy;
+  document.querySelectorAll('#rank-sort-tabs .rank-sort-tab').forEach(btn=>{
+    btn.classList.toggle('active',btn.dataset.sort===sortBy);
+  });
+  $('rankings-body').textContent='Loading…';
+  wss({type:'get_leaderboard',variant:currentLeaderboardVariant,sortBy});
 }
 
 function renderLeaderboard(m){
   // Guards against a stale response landing after the user already
   // switched tabs again (two get_leaderboard requests in flight, an older
   // one resolving after a newer one) — server echoes back which variant
-  // this response is for (see the get_leaderboard handler in index.js).
+  // AND which sort this response is for (see the get_leaderboard handler
+  // in index.js), so either one having since moved on discards it.
   if(m.variant&&m.variant!==currentLeaderboardVariant) return;
+  if(m.sortBy&&m.sortBy!==currentLeaderboardSort) return;
   const body=$('rankings-body');
   const entries=m.entries||[];
   if(!entries.length){
-    body.innerHTML=`<p>No games recorded yet. Play a full match to appear on the board.</p>`;
+    // avgPlacement rows are filtered server-side below a minimum games
+    // count (see stats.js) — an empty list there almost always means that
+    // threshold, not literally zero games played, so says so specifically
+    // rather than the generic "no games recorded" message.
+    body.innerHTML=currentLeaderboardSort==='avgPlacement'
+      ?`<p>Nobody's played enough games yet (5+ needed) for an average placement ranking.</p>`
+      :`<p>No games recorded yet. Play a full match to appear on the board.</p>`;
     return;
   }
   const myName=$('iname').value.trim()||'Player';
   const rows=entries.map((e,i)=>{
     const mine=e.name===myName;
+    // W/G record stays as secondary context on every tab except the one
+    // it'd just be repeating (Wins itself) — the PRIMARY figure (what this
+    // tab is actually ranked by) always leads.
+    const record=`${e.gamesWon}W / ${e.gamesPlayed}G`;
+    let primary;
+    switch(currentLeaderboardSort){
+      case 'gamesWon': primary=record; break;
+      case 'avgPlacement': primary=`${e.avgPlacement.toFixed(2)} avg place · ${record}`; break;
+      case 'bestScore': primary=`${e.bestScore.toLocaleString()} pts (best hand) · ${record}`; break;
+      case 'bestHan': primary=`${e.bestHan} han (best) · ${record}`; break;
+      case 'handsWon': primary=`${e.handsWon} hands won · ${record}`; break;
+      case 'yakumanCount': primary=`${e.yakumanCount} yakuman · ${record}`; break;
+      default: primary=`${e.totalFinalScore.toLocaleString()} pts · ${record}`;
+    }
     return `<div class="sp-row${mine?' sp-row-mine':''}">
       <span class="sp-label">#${i+1} ${escHtml(e.name)}</span>
-      <span>${e.gamesWon}W / ${e.gamesPlayed}G · ${e.bestScore.toLocaleString()} pts</span>
+      <span>${primary}</span>
     </div>`;
   }).join('');
   body.innerHTML=rows;
@@ -2341,7 +2406,12 @@ function renderState(m, prev){
     // always manually choose Declare vs. Discard, so timing reveals nothing.
     if(m.riichi?.[mySeat] && !m.canTsumo && !m.canAttemptTsumo && !(m.canAnkan?.length) && !m.canKyuushu && !(m.canKita?.length)){
       setTimeout(()=>{
-        if(lastState===m) wss({type:'action',action:{type:'discard',tileId:drawTile.id}});
+        // Same one-shot `discarding` latch clickTile/the DISCARD button use
+        // (see clickTile's comment) — without it, a manual tap landing in
+        // this same 600ms window wasn't blocked at all (this timer never
+        // set the flag), so it could fire its own extra 'discard' for
+        // whatever tile happened to be selected at that moment.
+        if(lastState===m && !discarding){ wss({type:'action',action:{type:'discard',tileId:drawTile.id}}); discarding=true; }
       }, 600);
     }
   }

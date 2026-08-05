@@ -366,11 +366,18 @@ wss.on('connection',(ws)=>{
 
     if(msg.type==='get_leaderboard'){
       const variant=msg.variant==='sanma'?'sanma':'yonma';
+      // Whitelisted against stats.js's getLeaderboard, which otherwise just
+      // does (b[sortBy]||0)-(a[sortBy]||0) on whatever field name it's
+      // given — an unchecked client-supplied sortBy could sort by any
+      // field on the row object (or silently no-op on a typo) instead of
+      // one of the ones the Rankings UI actually offers tabs for.
+      const validSorts=['totalFinalScore','gamesWon','avgPlacement','bestScore','bestHan','handsWon','yakumanCount'];
+      const sortBy=validSorts.includes(msg.sortBy)?msg.sortBy:'totalFinalScore';
       // getLeaderboard returns {id,...} rows (stats.js has no notion of
       // names) — attach each row's current display name here, the one
       // place id and name actually need to meet for this message.
-      const entries=getLeaderboard('gamesWon',variant).map(e=>({...e,name:getNameById(e.id)}));
-      ws.send(JSON.stringify({type:'leaderboard',variant,entries}));
+      const entries=getLeaderboard(sortBy,variant).map(e=>({...e,name:getNameById(e.id)}));
+      ws.send(JSON.stringify({type:'leaderboard',variant,sortBy,entries}));
     }
 
     if(msg.type==='list_profiles'){

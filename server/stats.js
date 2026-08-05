@@ -194,19 +194,54 @@ function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placeme
   return newlyUnlocked;
 }
 
-// No query engine needed at this scale — just load everything and sort in
-// JS. sortBy must be a numeric field on a variant stats record (gamesWon,
-// gamesPlayed, bestScore, etc.); unknown fields sort everyone as equal (0).
+// Every yaku name a completed hand can be scored under that's yakuman-tier
+// (han 13 or 26 — see mahjong.js's ym() calls, the only place these exact
+// names originate) — used below to derive a per-profile yakuman count out
+// of the existing per-yaku tally (s.yaku), without needing a dedicated
+// counter of its own. Single (13 han) and double (26 han) yakuman are
+// combined into one count rather than split into two leaderboards — a
+// double yakuman is still a yakuman, and the split would mostly just be
+// two very short, mostly-empty lists given how rare either is.
+const YAKUMAN_NAMES = new Set([
+  'Tenhou', 'Chiihou', // dealer/non-dealer blessing-of-heaven/earth
+  'Kokushi Musou', 'Kokushi Juusanmen', // thirteen orphans (+13-sided wait)
+  'Ryuuiisou', 'Tsuuiisou', 'Chinroutou', // all green / all honors / all terminals
+  'Chuuren Poutou', 'Junsei Chuuren', // nine gates (+pure/9-sided wait)
+  'Suu Kantsu', // four kans
+  'Suu Ankou', 'Suu Ankou Tanki', // four concealed triplets (+tanki wait)
+  'Daisangen', // big three dragons
+  'Shousuushii', 'Daisuushii', // small/big four winds
+]);
+
+// Below this many games played, an average-placement ranking is more noise
+// than signal — a single lucky 1st-place finish reads as a flawless 1.00
+// average, indistinguishable from (and ranked above) a veteran with
+// hundreds of consistently-strong-but-not-perfect games. Every OTHER sort
+// field here is a cumulative count/sum, not a rate, so this guard is only
+// applied for 'avgPlacement' — more games can only help a total, but an
+// average needs enough of them to mean anything.
+const MIN_GAMES_FOR_AVG_PLACEMENT = 5;
+
+// No query engine needed at this scale — just load everything, derive
+// whatever the requested sort needs, and sort in JS. sortBy must be one of
+// the fields on the mapped row below; an unrecognized one sorts everyone as
+// equal (falls through the final `(b[sortBy]||0)-(a[sortBy]||0)` — see
+// index.js's whitelist, which is what actually keeps this to known values).
 // Returns `id`, not a display name — this file has no notion of names at
 // all anymore (see the top-of-file comment); index.js's 'get_leaderboard'
 // handler joins each entry against profiles.getNameById before it ever
 // reaches the client.
-function getLeaderboard(sortBy = 'gamesWon', variant = 'yonma') {
+function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
   const all = _load();
   const key = variant === 'sanma' ? 'sanma' : 'yonma';
-  return Object.entries(all)
+  let rows = Object.entries(all)
     .map(([id, raw]) => {
       const s = _normalize(raw)[key];
+      const yakumanCount = Object.entries(s.yaku)
+        .reduce((n, [name, count]) => n + (YAKUMAN_NAMES.has(name) ? count : 0), 0);
+      const avgPlacement = s.gamesPlayed > 0
+        ? s.placements.reduce((sum, count, i) => sum + count * (i + 1), 0) / s.gamesPlayed
+        : null;
       return {
         id,
         gamesPlayed: s.gamesPlayed,
@@ -214,9 +249,22 @@ function getLeaderboard(sortBy = 'gamesWon', variant = 'yonma') {
         totalFinalScore: s.totalFinalScore,
         bestScore: s.bestScore,
         bestHan: s.bestHan,
+        handsWon: s.handsWon,
+        yakumanCount,
+        avgPlacement,
       };
-    })
-    .sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
+    });
+  if (sortBy === 'avgPlacement') {
+    // Lower is better here (1st place = 1) — the only sort field that
+    // sorts ascending instead of descending, and the only one that filters
+    // rows out entirely rather than just ranking them last (see the
+    // MIN_GAMES_FOR_AVG_PLACEMENT comment above for why a low-sample
+    // average shouldn't be shown as ranked at all, not even at the bottom).
+    return rows
+      .filter(r => r.gamesPlayed >= MIN_GAMES_FOR_AVG_PLACEMENT)
+      .sort((a, b) => a.avgPlacement - b.avgPlacement);
+  }
+  return rows.sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
 }
 
 // Called alongside profiles.deleteProfile (see index.js's delete_profile) —
