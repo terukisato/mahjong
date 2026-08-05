@@ -1097,19 +1097,17 @@ function renderLeaderboard(m){
   const myName=$('iname').value.trim()||'Player';
   const rows=entries.map((e,i)=>{
     const mine=e.name===myName;
-    // W/G record stays as secondary context on every tab except the one
-    // it'd just be repeating (Wins itself) — the PRIMARY figure (what this
-    // tab is actually ranked by) always leads.
-    const record=`${e.gamesWon}W / ${e.gamesPlayed}G`;
+    // Just the one figure this tab is actually ranked by — no more W/G
+    // record tagging along as secondary context on every row.
     let primary;
     switch(currentLeaderboardSort){
-      case 'gamesWon': primary=record; break;
-      case 'avgPlacement': primary=`${e.avgPlacement.toFixed(2)} avg place · ${record}`; break;
-      case 'bestScore': primary=`${e.bestScore.toLocaleString()} pts (best hand) · ${record}`; break;
-      case 'bestHan': primary=`${e.bestHan} han (best) · ${record}`; break;
-      case 'handsWon': primary=`${e.handsWon} hands won · ${record}`; break;
-      case 'yakumanCount': primary=`${e.yakumanCount} yakuman · ${record}`; break;
-      default: primary=`${e.totalFinalScore.toLocaleString()} pts · ${record}`;
+      case 'gamesWon': primary=`${e.gamesWon} wins`; break;
+      case 'avgPlacement': primary=`${e.avgPlacement.toFixed(2)} avg place`; break;
+      case 'bestScore': primary=`${e.bestScore.toLocaleString()} pts (best hand)`; break;
+      case 'bestHan': primary=`${e.bestHan} han (best)`; break;
+      case 'handsWon': primary=`${e.handsWon} hands won`; break;
+      case 'yakumanCount': primary=`${e.yakumanCount} yakuman`; break;
+      default: primary=`${e.totalFinalScore.toLocaleString()} pts`;
     }
     return `<div class="sp-row${mine?' sp-row-mine':''}">
       <span class="sp-label">#${i+1} ${escHtml(e.name)}</span>
