@@ -91,7 +91,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.9</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.10</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -160,9 +160,10 @@
          renderLeaderboard in script.js) — separate from the yonma/sanma
          toggle above, which picks which per-variant dataset to rank
          within. avgPlacement is the only one sorted ascending (lower =
-         better) and the only one with a minimum-games floor server-side
-         (see stats.js) — small samples elsewhere are still real totals,
-         just possibly modest ones, so nothing needs hiding for them. -->
+         better). avgPlacement and dealInRate both have a minimum-sample
+         floor server-side (see stats.js) since they're rates, not totals —
+         small samples elsewhere are still real totals, just possibly
+         modest ones, so nothing needs hiding for them. -->
     <div class="rank-sort-tabs" id="rank-sort-tabs">
       <button class="rank-sort-tab active" data-sort="totalFinalScore" onclick="setLeaderboardSort('totalFinalScore')" title="Points">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6"></path><path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"></path></svg>
@@ -194,7 +195,7 @@
       <button class="rank-sort-tab" data-sort="yakumanCount" onclick="setLeaderboardSort('yakumanCount')" title="Yakuman Count">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7z"></path><path d="M5 20h14"></path></svg>
       </button>
-      <button class="rank-sort-tab" data-sort="dealIns" onclick="setLeaderboardSort('dealIns')" title="Deal-Ins">
+      <button class="rank-sort-tab" data-sort="dealInRate" onclick="setLeaderboardSort('dealInRate')" title="Deal-In Rate">
         <!-- A tile with an outward arrow — dealing in is discarding the
              tile that feeds someone else's win, so a tile (matching Hands
              Won's icon language) with an exit arrow reads as "given away"

@@ -1022,7 +1022,7 @@ let currentLeaderboardSort='totalFinalScore';
 const RANK_SORT_LABELS={
   totalFinalScore:'Points', gamesWon:'Wins', avgPlacement:'Average Placement',
   bestScore:'Best Hand', bestHan:'Highest Han', handsWon:'Hands Won', yakumanCount:'Yakuman Count',
-  dealIns:'Deal-Ins',
+  dealInRate:'Deal-In Rate',
 };
 function updateRankSortHeader(sortBy){
   const el=$('rank-sort-header'); if(el) el.textContent=RANK_SORT_LABELS[sortBy]||'';
@@ -1086,13 +1086,18 @@ function renderLeaderboard(m){
   const body=$('rankings-body');
   const entries=m.entries||[];
   if(!entries.length){
-    // avgPlacement rows are filtered server-side below a minimum games
-    // count (see stats.js) — an empty list there almost always means that
-    // threshold, not literally zero games played, so says so specifically
-    // rather than the generic "no games recorded" message.
-    body.innerHTML=currentLeaderboardSort==='avgPlacement'
-      ?`<p>Nobody's played enough games yet (5+ needed) for an average placement ranking.</p>`
-      :`<p>No games recorded yet. Play a full match to appear on the board.</p>`;
+    // avgPlacement and dealInRate rows are filtered server-side below a
+    // minimum games/hands count (see stats.js) — an empty list there
+    // almost always means that threshold, not literally zero games
+    // played, so says so specifically rather than the generic "no games
+    // recorded" message.
+    if(currentLeaderboardSort==='avgPlacement'){
+      body.innerHTML=`<p>Nobody's played enough games yet (5+ needed) for an average placement ranking.</p>`;
+    }else if(currentLeaderboardSort==='dealInRate'){
+      body.innerHTML=`<p>Nobody's played enough hands yet (5+ needed) for a deal-in rate ranking.</p>`;
+    }else{
+      body.innerHTML=`<p>No games recorded yet. Play a full match to appear on the board.</p>`;
+    }
     return;
   }
   const myName=$('iname').value.trim()||'Player';
@@ -1108,7 +1113,7 @@ function renderLeaderboard(m){
       case 'bestHan': primary=`${e.bestHan} han (best)`; break;
       case 'handsWon': primary=`${e.handsWon} hands won`; break;
       case 'yakumanCount': primary=`${e.yakumanCount} yakuman`; break;
-      case 'dealIns': primary=`${e.dealIns} deal-ins`; break;
+      case 'dealInRate': primary=`${e.dealInRate.toFixed(1)}% deal-in`; break;
       default: primary=`${e.totalFinalScore.toLocaleString()} pts`;
     }
     return `<div class="sp-row${mine?' sp-row-mine':''}">
