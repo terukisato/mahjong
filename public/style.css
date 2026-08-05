@@ -875,19 +875,26 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* Highlights the current player's own row in the Rankings list. */
 .sp-row-mine .sp-label{color:var(--gold);font-weight:700;}
 /* Rankings' sort-stat picker (Points/Wins/Avg Place/etc. — see
-   setLeaderboardSort in script.js) — a wrapping row of small pills rather
-   than .mode-btn's larger side-by-side pair, since up to 7 of these need
-   to fit in the same modal width. Same "selected/unselected" colour
-   language as .mode-btn.active/.sp-toggle elsewhere (jade tint when
-   active, dim near-black otherwise) for consistency, just at a smaller,
-   denser scale suited to this many options. */
-.rank-sort-tabs{display:flex;flex-wrap:wrap;gap:calc(var(--ui-vmin, 7.2px) * .556);margin-bottom:calc(var(--ui-vmin, 7.2px) * 1.667);}
-.rank-sort-tab{padding:calc(var(--ui-vmin, 7.2px) * .556) calc(var(--ui-vmin, 7.2px) * 1.111);
-  background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:999px;
-  color:rgba(245,237,216,.7);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);
-  font-family:'Noto Sans JP',sans-serif;cursor:pointer;transition:all .2s;white-space:nowrap;}
-.rank-sort-tab:hover{border-color:rgba(201,168,76,.5);color:var(--cream);}
-.rank-sort-tab.active{background:rgba(26,107,69,.4);border-color:var(--jl);color:var(--cream);}
+   setLeaderboardSort in script.js) — a real tab strip (shared bottom
+   border, active tab picked out by an underline) rather than a row of
+   pill buttons, icon-only (title attr carries the label as a hover
+   tooltip, same as the corner nav icons like .card-icon-btn) so all 7 fit
+   in one row without wrapping even at the modal's narrowest width. */
+.rank-sort-tabs{display:flex;border-bottom:1px solid rgba(201,168,76,.2);margin-bottom:calc(var(--ui-vmin, 7.2px) * .556);}
+.rank-sort-tab{flex:1;display:flex;align-items:center;justify-content:center;
+  padding:calc(var(--ui-vmin, 7.2px) * 1.111) 0;margin-bottom:-1px;
+  background:none;border:none;border-bottom:2px solid transparent;
+  color:rgba(245,237,216,.45);cursor:pointer;transition:all .2s;}
+.rank-sort-tab svg{width:calc(var(--ui-vmin, 7.2px) * 2.222);height:calc(var(--ui-vmin, 7.2px) * 2.222);display:block;}
+.rank-sort-tab:hover{color:var(--gl);}
+.rank-sort-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+/* Persistent label for whichever tab above is active (see
+   updateRankSortHeader in script.js) — icon-only tabs otherwise have no
+   always-visible indicator of what's actually selected, especially on
+   touch devices where the tabs' own hover title never fires at all. */
+.rank-sort-header{text-align:center;font-family:'Cinzel Decorative',serif;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.528);letter-spacing:calc(var(--ui-vmin, 7.2px) * .208);
+  color:var(--gold);margin-bottom:calc(var(--ui-vmin, 7.2px) * 1.389);}
 .sp-label{font-size:calc(var(--ui-vmin, 7.2px) * 1.667);color:var(--cream);}
 /* Placements mini bar-chart (see renderPlacementBar in script.js) —
    replaces the old "1st 1 · 2nd 0 · 3rd 0 · 4th 0" text line, which was

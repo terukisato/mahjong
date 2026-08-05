@@ -1015,6 +1015,17 @@ let currentLeaderboardVariant='yonma';
 // rank WITHIN. Reset to the default on every open, same "don't remember
 // stale sub-state" spirit as the variant reset already had.
 let currentLeaderboardSort='totalFinalScore';
+// Same labels as each rank-sort-tab's `title` (index.html) — duplicated
+// here rather than read off the DOM since #rank-sort-header needs to show
+// the CURRENT one at all times, not just on hover, and touch devices never
+// fire hover at all (see #rank-sort-header's own comment in index.html).
+const RANK_SORT_LABELS={
+  totalFinalScore:'Points', gamesWon:'Wins', avgPlacement:'Average Placement',
+  bestScore:'Best Hand', bestHan:'Highest Han', handsWon:'Hands Won', yakumanCount:'Yakuman Count',
+};
+function updateRankSortHeader(sortBy){
+  const el=$('rank-sort-header'); if(el) el.textContent=RANK_SORT_LABELS[sortBy]||'';
+}
 function toggleRankings(){
   const modal=$('rankings-modal');
   const backdrop=$('rankings-backdrop');
@@ -1027,6 +1038,7 @@ function toggleRankings(){
   document.querySelectorAll('#rank-sort-tabs .rank-sort-tab').forEach(btn=>{
     btn.classList.toggle('active',btn.dataset.sort==='totalFinalScore');
   });
+  updateRankSortHeader('totalFinalScore');
   $('rankings-body').textContent='Loading…';
   wss({type:'get_leaderboard',variant:'yonma',sortBy:'totalFinalScore'});
   modal.classList.add('visible');
@@ -1057,6 +1069,7 @@ function setLeaderboardSort(sortBy){
   document.querySelectorAll('#rank-sort-tabs .rank-sort-tab').forEach(btn=>{
     btn.classList.toggle('active',btn.dataset.sort===sortBy);
   });
+  updateRankSortHeader(sortBy);
   $('rankings-body').textContent='Loading…';
   wss({type:'get_leaderboard',variant:currentLeaderboardVariant,sortBy});
 }
