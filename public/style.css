@@ -624,6 +624,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .chat-history::-webkit-scrollbar-thumb{background:rgba(201,168,76,.3);border-radius:2px;}
 .chat-entry{display:flex;flex-direction:column;gap:1px;}
 .chat-entry-who{font-size:calc(var(--ui-vmin) * 1.25);letter-spacing:1px;font-weight:700;}
+/* Text bubble + its reaction pills share one row so the pills read as
+   attached to the end of THIS message, not a separate block for the
+   whole entry — wraps onto its own line only if it doesn't fit. */
+.chat-entry-msg-row{display:flex;align-items:center;flex-wrap:wrap;gap:5px;}
 .chat-entry-text{font-size:calc(var(--ui-vmin) * 1.667);color:var(--cream);background:rgba(255,255,255,.05);
   border-radius:6px;padding:calc(var(--ui-vmin) * .556) calc(var(--ui-vmin) * 1.111);line-height:1.4;word-break:break-word;}
 .chat-entry-time{font-size:calc(var(--ui-vmin) * 1.111);color:rgba(245,237,216,.3);margin-top:1px;}
@@ -632,14 +636,18 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    get some indication something's about to happen before the picker
    actually appears. */
 .chat-entry.pressing .chat-entry-text{background:rgba(201,168,76,.18);}
-/* Per-message reaction pills — one per distinct emoji used on that
-   message, with a count. .mine marks a pill that includes MY OWN
-   reaction, so re-long-pressing a message with the picker open can show
-   which one (if any) I already picked (see openReactionPicker). */
-.chat-entry-reactions{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}
+/* Per-message reaction pills — one per DISTINCT emoji used on that
+   message (two people picking the same emoji still collapse to one pill,
+   per request — see renderMessageReactions). .mine marks a pill that
+   includes MY OWN reaction, so re-long-pressing the MESSAGE (opening the
+   picker again) can show which one I already picked (see
+   openReactionPicker) — long-pressing the PILL itself instead shows who's
+   behind it (see attachPillLongPress/showReactionNames), hence the
+   cursor:pointer/select:none affordance here. */
+.chat-entry-reactions{display:flex;flex-wrap:wrap;gap:4px;}
 .chat-entry-reactions:empty{display:none;}
-.reaction-pill{display:inline-flex;align-items:center;gap:3px;
-  font-size:calc(var(--ui-vmin) * 1.25);line-height:1.6;
+.reaction-pill{display:inline-flex;align-items:center;
+  font-size:calc(var(--ui-vmin) * 1.5);line-height:1.4;cursor:pointer;user-select:none;
   background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);
   border-radius:10px;padding:0 calc(var(--ui-vmin) * .694);}
 .reaction-pill.mine{background:rgba(201,168,76,.3);border-color:var(--gl);}
@@ -651,6 +659,13 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .msg-react-picker{position:fixed;z-index:400;display:flex;gap:6px;
   padding:calc(var(--ui-vmin) * .833) calc(var(--ui-vmin) * 1.111);
   background:rgba(5,14,8,.97);border:1px solid rgba(201,168,76,.3);border-radius:12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.7);animation:slideUpChat .15s ease;}
+/* Names-behind-a-pill popup (see showReactionNames in script.js) — same
+   shell as .msg-react-picker again, just a text label instead of buttons. */
+.reaction-names-popup{position:fixed;z-index:400;
+  padding:calc(var(--ui-vmin) * .556) calc(var(--ui-vmin) * .972);
+  font-size:calc(var(--ui-vmin) * 1.389);color:var(--cream);white-space:nowrap;
+  background:rgba(5,14,8,.97);border:1px solid rgba(201,168,76,.3);border-radius:10px;
   box-shadow:0 8px 24px rgba(0,0,0,.7);animation:slideUpChat .15s ease;}
 .msg-react-picker button{font-size:1.3rem;line-height:1;background:none;border:2px solid transparent;
   border-radius:50%;width:34px;height:34px;padding:0;cursor:pointer;
@@ -693,6 +708,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .emoji-pop{position:fixed;left:0;top:0;font-size:clamp(28px,5vmin,48px);
   text-shadow:0 0 10px rgba(0,0,0,.6);
   animation:emojiPop 4s ease forwards;}
+/* Static per-seat rotation (see EMOJI_POP_ROTATION in script.js) — a
+   separate inline element from .emoji-pop itself, since that one's own
+   transform is already driven by the pop/float/fade keyframe below;
+   display:inline-block so the rotate() actually takes effect. */
+.emoji-pop-inner{display:inline-block;}
 @keyframes emojiPop{
   0%{opacity:0;transform:translate(-50%,-50%) scale(.4);}
   12%{opacity:1;transform:translate(-50%,-50%) scale(1.2);}

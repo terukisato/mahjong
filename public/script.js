@@ -3198,25 +3198,53 @@ function toggleEmojiPicker(force){
   if(emojiPickerOpen) toggleColorPicker(false);
 }
 
+// Per-screen-position nudge, away from the table edge that seat's tiles
+// sit against and toward the open felt at the centre — 'b' (me, pinned to
+// the bottom edge) moves UP, 't' (pinned to the top edge, but still
+// upright on screen since .pa-t's rotate(180deg) is on the box's own
+// content, not on getBoundingClientRect()'s screen-space result) moves
+// DOWN, and 'l'/'r' (pinned to the side edges) move sideways instead —
+// same reasoning, just along the other axis. This is what keeps the emoji
+// clear of whichever direction that seat's own tiles extend in, rather
+// than just always nudging "up" regardless of seat.
+const EMOJI_POP_NUDGE=54;
+const EMOJI_POP_OFFSET={b:{dx:0,dy:-EMOJI_POP_NUDGE},t:{dx:0,dy:EMOJI_POP_NUDGE},l:{dx:EMOJI_POP_NUDGE,dy:0},r:{dx:-EMOJI_POP_NUDGE,dy:0}};
+// Matches each position's own .pa-b/t/l/r rotation (see style.css) — the
+// popped emoji rotates along with it, so it reads as belonging to that
+// seat's own orientation instead of always sitting upright regardless of
+// whose reaction it is.
+const EMOJI_POP_ROTATION={b:0,t:180,l:90,r:90};
+
 // Renders the emoji over `seat`'s (absolute seat index) own play area on
 // EVERY client, including the sender's — server just relays, see
 // emojiReact in room.js. pid() (defined further down) maps an absolute
 // seat to this client's own screen position ('b'/'t'/'l'/'r'), same
 // rotation-aware helper onRiichi/etc already use.
 function showEmojiPopup(seat,emoji){
-  const anchor=$('pa-'+pid(seat));
+  const posId=pid(seat);
+  const anchor=$('pa-'+posId);
   const layer=$('emoji-layer');
   if(!anchor||!layer) return;
   // Replaces any still-animating popup for the same seat rather than
   // stacking — a rapid re-react should restart the pop, not pile up.
   layer.querySelectorAll(`.emoji-pop[data-seat="${seat}"]`).forEach(el=>el.remove());
   const rect=anchor.getBoundingClientRect();
+  const offset=EMOJI_POP_OFFSET[posId]||{dx:0,dy:0};
   const el=document.createElement('div');
   el.className='emoji-pop';
   el.dataset.seat=seat;
-  el.textContent=emoji;
-  el.style.left=(rect.left+rect.width/2)+'px';
-  el.style.top=(rect.top+rect.height/2)+'px';
+  el.style.left=(rect.left+rect.width/2+offset.dx)+'px';
+  el.style.top=(rect.top+rect.height/2+offset.dy)+'px';
+  // Rotation lives on an inner span rather than .emoji-pop itself, since
+  // the outer element's own transform is already driven by the emojiPop
+  // keyframe animation (translate+scale) — stacking a static rotation
+  // into that same property would need the rotation baked into every
+  // keyframe step instead of set once here.
+  const inner=document.createElement('span');
+  inner.className='emoji-pop-inner';
+  inner.style.transform=`rotate(${EMOJI_POP_ROTATION[posId]||0}deg)`;
+  inner.textContent=emoji;
+  el.appendChild(inner);
   layer.appendChild(el);
   setTimeout(()=>el.remove(),4000);
 }
@@ -3272,11 +3300,16 @@ function showChatMsg(name,text,color,id){
   // this function) simply can't carry a reaction — attachLongPress below
   // bails out for those instead of guessing an id.
   if(id!=null) entry.dataset.msgId=id;
+  // Reaction pills sit in the same flex row as the text bubble (rather
+  // than their own line below it) so they visually read as attached to
+  // the end of THIS message, not a separate block for the whole entry.
   entry.innerHTML=
     `<span class="chat-entry-who" style="color:${msgColor}">${escHtml(name)}</span>`+
-    `<span class="chat-entry-text">${escHtml(text)}</span>`+
-    `<span class="chat-entry-time">${time}</span>`+
-    `<div class="chat-entry-reactions" id="reactions-${id}"></div>`;
+    `<span class="chat-entry-msg-row">`+
+      `<span class="chat-entry-text">${escHtml(text)}</span>`+
+      `<span class="chat-entry-reactions" id="reactions-${id}"></span>`+
+    `</span>`+
+    `<span class="chat-entry-time">${time}</span>`;
   history.appendChild(entry);
   history.scrollTop=history.scrollHeight;
   if(id!=null) attachLongPress(entry,id);
@@ -3333,7 +3366,7 @@ function attachLongPress(el,msgId){
 // mode, just re-opening the same picker.
 function openReactionPicker(entry,msgId){
   $('msg-react-picker')?.remove();
-  const mine=mySeat>=0?msgReactions[msgId]?.[mySeat]:undefined;
+  const mine=mySeat>=0?msgReactions[msgId]?.[mySeat]?.emoji:undefined;
   const picker=document.createElement('div');
   picker.className='msg-react-picker';
   picker.id='msg-react-picker';
@@ -3373,30 +3406,89 @@ function openReactionPicker(entry,msgId){
 // Applies an incoming msg_react broadcast (from ANY player, including
 // echoes of this client's own — server relays to everyone, see
 // reactToMessage in room.js) and re-renders that message's pill row.
+// Stores {emoji, name} per seat (not just the emoji) so a pill long-press
+// can list WHO reacted, not just how many.
 function onMsgReact(m){
   const bucket=msgReactions[m.msgId]=msgReactions[m.msgId]||{};
-  if(m.emoji) bucket[m.seat]=m.emoji; else delete bucket[m.seat];
+  if(m.emoji) bucket[m.seat]={emoji:m.emoji,name:m.name}; else delete bucket[m.seat];
   renderMessageReactions(m.msgId);
 }
 
-// Groups the raw {seat: emoji} bucket into one pill per distinct emoji
-// with a count, marking .mine on any pill that includes my own seat's
+// Groups the raw {seat: {emoji,name}} bucket into one pill per DISTINCT
+// emoji — two people reacting with the same emoji still show just one
+// pill (per request), not a count. Long-pressing a pill lists who's
+// behind it (see attachPillLongPress/showReactionNames) instead of a
+// number doing that job. .mine marks a pill that includes my own seat's
 // reaction (openReactionPicker reads mySeat's entry directly, not this
 // rendering, for its own "which one is currently selected" state).
 function renderMessageReactions(msgId){
   const row=$('reactions-'+msgId);
   if(!row) return;
   const bucket=msgReactions[msgId]||{};
-  const counts={};
-  for(const [seat,emoji] of Object.entries(bucket)){
-    counts[emoji]=counts[emoji]||{n:0,mine:false};
-    counts[emoji].n++;
-    if(Number(seat)===mySeat) counts[emoji].mine=true;
+  const byEmoji={};
+  for(const [seat,r] of Object.entries(bucket)){
+    byEmoji[r.emoji]=byEmoji[r.emoji]||{names:[],mine:false};
+    byEmoji[r.emoji].names.push(r.name);
+    if(Number(seat)===mySeat) byEmoji[r.emoji].mine=true;
   }
-  row.innerHTML=Object.entries(counts).map(([emoji,{n,mine}])=>
-    `<span class="reaction-pill${mine?' mine':''}">${emoji} ${n}</span>`
-  ).join('');
+  row.innerHTML='';
+  for(const [emoji,{names,mine}] of Object.entries(byEmoji)){
+    const pill=document.createElement('span');
+    pill.className='reaction-pill'+(mine?' mine':'');
+    pill.textContent=emoji;
+    row.appendChild(pill);
+    attachPillLongPress(pill,names);
+  }
 }
+
+// Long-press on a reaction pill (distinct from long-pressing the message
+// itself, which opens the react-with picker) shows who's behind it.
+// stopPropagation on start/cancel keeps this from ALSO bubbling up into
+// the message-level long-press handler on the parent .chat-entry — without
+// it, pressing a pill would fire both handlers at once.
+function attachPillLongPress(pill,names){
+  let timer=null;
+  const start=e=>{
+    e.stopPropagation();
+    timer=setTimeout(()=>{timer=null;showReactionNames(pill,names);},LONG_PRESS_MS);
+  };
+  const cancel=e=>{
+    if(e) e.stopPropagation();
+    if(timer){clearTimeout(timer);timer=null;}
+  };
+  pill.addEventListener('mousedown',start);
+  pill.addEventListener('mouseup',cancel);
+  pill.addEventListener('mouseleave',cancel);
+  pill.addEventListener('touchstart',start,{passive:true});
+  pill.addEventListener('touchend',cancel);
+  pill.addEventListener('touchmove',cancel);
+}
+
+// Small popup listing everyone who reacted with this particular emoji —
+// e.g. "Alice, Bob" when more than one person picked the same reaction.
+function showReactionNames(pill,names){
+  $('reaction-names-popup')?.remove();
+  const popup=document.createElement('div');
+  popup.className='reaction-names-popup';
+  popup.id='reaction-names-popup';
+  popup.textContent=names.join(', ');
+  // Same trailing-click guard as openReactionPicker — see its comment.
+  popup.dataset.openedAt=Date.now();
+  document.body.appendChild(popup);
+  const rect=pill.getBoundingClientRect();
+  const pw=popup.offsetWidth;
+  let left=rect.left+rect.width/2-pw/2;
+  left=Math.max(6,Math.min(left,window.innerWidth-pw-6));
+  popup.style.left=left+'px';
+  const above=rect.top-popup.offsetHeight-8;
+  popup.style.top=(above>4?above:rect.bottom+8)+'px';
+}
+document.addEventListener('click',e=>{
+  const popup=$('reaction-names-popup');
+  if(!popup||e.target.closest('#reaction-names-popup')) return;
+  if(Date.now()-Number(popup.dataset.openedAt||0)<300) return;
+  popup.remove();
+});
 
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
