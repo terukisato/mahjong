@@ -331,6 +331,12 @@ const YAKUMAN_NAMES = new Set([
 // average needs enough of them to mean anything.
 const MIN_GAMES_FOR_AVG_PLACEMENT = 5;
 
+// Same noise-vs-signal reasoning as MIN_GAMES_FOR_AVG_PLACEMENT above, but
+// keyed on hands (dealIns' own denominator) rather than games — a single
+// hand played and dealt into reads as a flawless-looking (well, worst-
+// looking) 100% rate, not a real trend.
+const MIN_HANDS_FOR_DEAL_IN_RATE = 5;
+
 // No query engine needed at this scale — just load everything, derive
 // whatever the requested sort needs, and sort in JS. sortBy must be one of
 // the fields on the mapped row below; an unrecognized one sorts everyone as
@@ -360,6 +366,13 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
       const avgPlacement = s.gamesPlayed > 0 && hasRealPlacementData
         ? s.placements.reduce((sum, count, i) => sum + count * (i + 1), 0) / s.gamesPlayed
         : null;
+      // Rate, not raw count — a raw dealIns count just tracks how much
+      // you've played, same problem totalFinalScore already covers. The
+      // denominator is "hands where you either won or dealt in" (matches
+      // the My Stats panel's own dealInRate calc), not gamesPlayed —
+      // hands, not games, are the unit a deal-in actually happens in.
+      const dealInHands = s.handsWon + s.dealIns;
+      const dealInRate = dealInHands > 0 ? (s.dealIns / dealInHands) * 100 : null;
       return {
         id,
         gamesPlayed: s.gamesPlayed,
@@ -370,6 +383,8 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
         handsWon: s.handsWon,
         yakumanCount,
         avgPlacement,
+        dealInHands,
+        dealInRate,
       };
     });
   if (sortBy === 'avgPlacement') {
@@ -381,6 +396,13 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
     return rows
       .filter(r => r.gamesPlayed >= MIN_GAMES_FOR_AVG_PLACEMENT && r.avgPlacement != null)
       .sort((a, b) => a.avgPlacement - b.avgPlacement);
+  }
+  if (sortBy === 'dealInRate') {
+    // Highest first (worst deal-in discipline on top), per request — gated
+    // the same way avgPlacement is above, see MIN_HANDS_FOR_DEAL_IN_RATE.
+    return rows
+      .filter(r => r.dealInHands >= MIN_HANDS_FOR_DEAL_IN_RATE && r.dealInRate != null)
+      .sort((a, b) => b.dealInRate - a.dealInRate);
   }
   return rows.sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
 }
