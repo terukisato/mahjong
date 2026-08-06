@@ -295,9 +295,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:0;overflow:hidden;
   border-radius:1px;}
-/* Score strip rows — double line separator using border + box-shadow */
+/* Score strip rows — double line separator using border + box-shadow.
+   `solid`, not `ridge` — ridge fakes a bevel by splitting the border into
+   algorithmically lightened/darkened halves, which is barely visible at
+   a sub-2px width on a phone (reads as a flat line, the intended look)
+   but becomes an obviously two-toned, visibly LIGHTER band once this
+   vmin-scaled width grows past a few px on a large/4K screen. Same color
+   and width, just without the fake-3D split, so it reads as the same
+   flat rgb(72,72,72) at every screen size instead of correct-looking on
+   mobile and washed-out on desktop. */
 .ctr-score{width:100%;height:20%;text-align:center;
-  border: ridge 0.4vmin rgb(72, 72, 72);background:#1a1a1a;}
+  border: solid 0.4vmin rgb(72, 72, 72);background:#1a1a1a;}
 .ctr-mid{display:flex;align-items:center;justify-content:center;
   width:calc(min(26vmin,26%) - 2 * min(5vmin,38px));
   height:calc(min(26vmin,26%) - 2 * min(5vmin,38px));
@@ -719,7 +727,16 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    floor there) so the glyph keeps growing on genuinely large/4K
    viewports instead of capping out at a size that reads as tiny relative
    to how big the rest of the table renders there. */
-.emoji-pop-motion{display:inline-block;font-size:clamp(28px,6vmin,100px);
+/* line-height:1 (not the default `normal`, ~1.15-1.2x font-size) — without
+   it, this box is taller than the glyph itself by a platform/font-
+   dependent margin, and .emoji-pop-rotate's translate(-50%,-50%) centres
+   on THIS box, not the visible ink inside it. Different platforms' native
+   emoji fonts (Segoe UI Emoji on Windows/desktop vs. Apple/Noto Color
+   Emoji on phones) pad that extra space differently, so the same
+   centering math could still look visibly off-centre on one platform and
+   fine on another — this removes that variable rather than trying to
+   compensate for a specific font's metrics. */
+.emoji-pop-motion{display:inline-block;line-height:1;font-size:clamp(28px,6vmin,100px);
   text-shadow:0 0 10px rgba(0,0,0,.6);
   animation:emojiPop 4s ease forwards;}
 /* Distances in vmin (viewport-relative), not px or %-of-self — a fixed px
