@@ -705,20 +705,32 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    exactly, so JS's setTimeout(...,4000) removal lands right as it
    finishes fading rather than cutting it off mid-animation. */
 .emoji-layer{position:fixed;inset:0;z-index:301;pointer-events:none;overflow:hidden;}
-.emoji-pop{position:fixed;left:0;top:0;font-size:clamp(28px,5vmin,48px);
+/* Plain anchor point — left/top set inline (JS) to the seat's on-screen
+   centre, no transform of its own. See showEmojiPopup's own comment in
+   script.js for what each of the three nested elements below is for. */
+.emoji-pop{position:fixed;left:0;top:0;}
+/* STATIC centre+rotate (set once, inline, by JS — not animated). Rotating
+   HERE rather than on .emoji-pop-motion means the motion keyframe's own
+   translateY below runs inside this already-rotated frame, so "float up"
+   comes out as the correct on-screen direction for whichever seat this
+   is, not always screen-up regardless of seat. */
+.emoji-pop-rotate{display:inline-block;}
+.emoji-pop-motion{display:inline-block;font-size:clamp(28px,5vmin,48px);
   text-shadow:0 0 10px rgba(0,0,0,.6);
   animation:emojiPop 4s ease forwards;}
-/* Static per-seat rotation (see EMOJI_POP_ROTATION in script.js) — a
-   separate inline element from .emoji-pop itself, since that one's own
-   transform is already driven by the pop/float/fade keyframe below;
-   display:inline-block so the rotate() actually takes effect. */
-.emoji-pop-inner{display:inline-block;}
+/* Distances in vmin (viewport-relative), not px or %-of-self — a fixed px
+   float distance cleared the tile row fine on a phone-sized viewport but
+   nowhere near enough on a 4K screen, where the same vmin-based table
+   layout renders far larger in actual pixels. Floats away almost
+   immediately (by 18%, ~0.7s in) rather than lingering at the anchor
+   centre for most of the 4s lifetime, so it's not still sitting on top of
+   the tiles for the bulk of the animation. */
 @keyframes emojiPop{
-  0%{opacity:0;transform:translate(-50%,-50%) scale(.4);}
-  12%{opacity:1;transform:translate(-50%,-50%) scale(1.2);}
-  22%{transform:translate(-50%,-50%) scale(1);}
-  78%{opacity:1;transform:translate(-50%,-85%) scale(1);}
-  100%{opacity:0;transform:translate(-50%,-115%) scale(.9);}
+  0%{opacity:0;transform:scale(.4);}
+  10%{opacity:1;transform:scale(1.15);}
+  18%{opacity:1;transform:translateY(-7vmin) scale(1);}
+  85%{opacity:1;transform:translateY(-8vmin) scale(1);}
+  100%{opacity:0;transform:translateY(-9.5vmin) scale(.9);}
 }
 
 /* ── Toast notifications ── */

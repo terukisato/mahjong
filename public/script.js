@@ -3198,28 +3198,52 @@ function toggleEmojiPicker(force){
   if(emojiPickerOpen) toggleColorPicker(false);
 }
 
-// Per-screen-position nudge, away from the table edge that seat's tiles
-// sit against and toward the open felt at the centre — 'b' (me, pinned to
-// the bottom edge) moves UP, 't' (pinned to the top edge, but still
-// upright on screen since .pa-t's rotate(180deg) is on the box's own
-// content, not on getBoundingClientRect()'s screen-space result) moves
-// DOWN, and 'l'/'r' (pinned to the side edges) move sideways instead —
-// same reasoning, just along the other axis. This is what keeps the emoji
-// clear of whichever direction that seat's own tiles extend in, rather
-// than just always nudging "up" regardless of seat.
-const EMOJI_POP_NUDGE=54;
-const EMOJI_POP_OFFSET={b:{dx:0,dy:-EMOJI_POP_NUDGE},t:{dx:0,dy:EMOJI_POP_NUDGE},l:{dx:EMOJI_POP_NUDGE,dy:0},r:{dx:-EMOJI_POP_NUDGE,dy:0}};
 // Matches each position's own .pa-b/t/l/r rotation (see style.css) — the
-// popped emoji rotates along with it, so it reads as belonging to that
-// seat's own orientation instead of always sitting upright regardless of
-// whose reaction it is.
-const EMOJI_POP_ROTATION={b:0,t:180,l:90,r:90};
+// popped emoji (AND, critically, the direction it floats away in — see
+// the nested-element structure in showEmojiPopup below) rotates along
+// with it, so both the glyph and its motion read as belonging to that
+// seat's own orientation instead of always being upright/floating
+// screen-up regardless of whose reaction it is. 'l' and 'r' are NOT
+// mirror images of each other despite both seats sitting at 90° to the
+// bottom seat — .pa-l/.pa-r's own rotate(90deg) in style.css is identical
+// for both, but that's the CONTAINER box only; the tile row layout inside
+// each is separately mirrored via flex-direction, not by a second
+// opposite-signed rotation. The emoji glyph has no such second mirroring
+// step, so it needs the sign flipped explicitly here for 'r' — verified
+// empirically in both sanma and yonma (mixing this up is exactly what
+// made the right seat's emoji render upside-down before).
+const EMOJI_POP_ROTATION={b:0,t:180,l:90,r:-90};
 
 // Renders the emoji over `seat`'s (absolute seat index) own play area on
 // EVERY client, including the sender's — server just relays, see
 // emojiReact in room.js. pid() (defined further down) maps an absolute
 // seat to this client's own screen position ('b'/'t'/'l'/'r'), same
 // rotation-aware helper onRiichi/etc already use.
+//
+// Three nested elements, each owning exactly one job:
+//   .emoji-pop        — positioned via inline left/top (JS) at the seat's
+//                        anchor centre, in plain screen coordinates.
+//   .emoji-pop-rotate — STATIC translate(-50%,-50%)+rotate(seat's angle).
+//                        Centres the glyph on that anchor point and
+//                        establishes "up" in THIS seat's own rotated
+//                        frame — everything below inherits it.
+//   .emoji-pop-motion — the actual 4s keyframe animation (pop in, float
+//                        AWAY, fade out). Its translateY happens inside
+//                        the already-rotated frame above, so "float up"
+//                        automatically comes out as the correct on-screen
+//                        direction for whichever seat this is (screen-up
+//                        for the bottom/me, screen-down for the seat
+//                        across, sideways for the left/right seats) —
+//                        rather than every popup floating screen-up
+//                        regardless of whose reaction it is, which was
+//                        the previous bug. Distances are in vmin, not px
+//                        or %-of-self, so the float clears the tile row
+//                        by a consistent MARGIN of the table regardless of
+//                        viewport resolution — a fixed px offset (the
+//                        previous approach) was fine on a phone-sized
+//                        viewport but nowhere near enough of a gap on a
+//                        4K screen, where the whole table renders far
+//                        larger in actual pixels for the same vmin layout.
 function showEmojiPopup(seat,emoji){
   const posId=pid(seat);
   const anchor=$('pa-'+posId);
@@ -3229,22 +3253,19 @@ function showEmojiPopup(seat,emoji){
   // stacking — a rapid re-react should restart the pop, not pile up.
   layer.querySelectorAll(`.emoji-pop[data-seat="${seat}"]`).forEach(el=>el.remove());
   const rect=anchor.getBoundingClientRect();
-  const offset=EMOJI_POP_OFFSET[posId]||{dx:0,dy:0};
   const el=document.createElement('div');
   el.className='emoji-pop';
   el.dataset.seat=seat;
-  el.style.left=(rect.left+rect.width/2+offset.dx)+'px';
-  el.style.top=(rect.top+rect.height/2+offset.dy)+'px';
-  // Rotation lives on an inner span rather than .emoji-pop itself, since
-  // the outer element's own transform is already driven by the emojiPop
-  // keyframe animation (translate+scale) — stacking a static rotation
-  // into that same property would need the rotation baked into every
-  // keyframe step instead of set once here.
-  const inner=document.createElement('span');
-  inner.className='emoji-pop-inner';
-  inner.style.transform=`rotate(${EMOJI_POP_ROTATION[posId]||0}deg)`;
-  inner.textContent=emoji;
-  el.appendChild(inner);
+  el.style.left=(rect.left+rect.width/2)+'px';
+  el.style.top=(rect.top+rect.height/2)+'px';
+  const rotate=document.createElement('div');
+  rotate.className='emoji-pop-rotate';
+  rotate.style.transform=`translate(-50%,-50%) rotate(${EMOJI_POP_ROTATION[posId]||0}deg)`;
+  const motion=document.createElement('div');
+  motion.className='emoji-pop-motion';
+  motion.textContent=emoji;
+  rotate.appendChild(motion);
+  el.appendChild(rotate);
   layer.appendChild(el);
   setTimeout(()=>el.remove(),4000);
 }
