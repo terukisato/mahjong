@@ -989,11 +989,12 @@ function renderStatsBlock(s,variant){
     <div class="place-bars"><div class="sp-label">Placements</div>${placementBars}</div>
     <div class="sp-row"><span class="sp-label">Avg Final Score</span><span>${avgScore.toLocaleString()}</span></div>
     <div class="sp-row"><span class="sp-label">Hands Played</span><span>${s.handsPlayed}</span></div>
-    <div class="sp-row"><span class="sp-label">Hora Rate</span><span>${s.handsWon} (${horaRate}%) — Tsumo ${s.tsumoWon} (${tsumoRate}%) / Ron ${s.ronWon}</span></div>
-    <div class="sp-row"><span class="sp-label">Huro Rate</span><span>${s.huro} (${huroRate}%)</span></div>
-    <div class="sp-row"><span class="sp-label">Riichi Declared</span><span>${s.riichiDeclared} (${riichiRate}%)</span></div>
-    <div class="sp-row"><span class="sp-label">Deal-Ins</span><span>${s.dealIns} (${dealInRate}%)</span></div>
-    <div class="sp-row"><span class="sp-label">Bankruptcy Rate</span><span>${s.busts} (${bustRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Hora Rate</span><span>${s.handsWon}/${s.handsPlayed} (${horaRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Tsumo Rate</span><span>${s.tsumoWon}/${s.handsPlayed} (${tsumoRate}%) — Ron ${s.ronWon}</span></div>
+    <div class="sp-row"><span class="sp-label">Huro Rate</span><span>${s.huro}/${s.handsPlayed} (${huroRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Riichi Rate</span><span>${s.riichiDeclared}/${s.handsPlayed} (${riichiRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Deal-In Rate</span><span>${s.dealIns}/${s.handsWon+s.dealIns} (${dealInRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Bankruptcy Rate</span><span>${s.busts}/${s.gamesPlayed} (${bustRate}%)</span></div>
     <div class="sp-row"><span class="sp-label">Best Hand</span><span>${s.bestHan} Han · ${s.bestScore.toLocaleString()} pts</span></div>
   `;
   rows+=`<div class="about-section">
@@ -1067,8 +1068,6 @@ let currentLeaderboardSort='totalFinalScore';
 const RANK_SORT_LABELS={
   totalFinalScore:'Points', gamesWon:'Wins', avgPlacement:'Average Placement',
   bestScore:'Best Hand', bestHan:'Highest Han', handsWon:'Hands Won', yakumanCount:'Yakuman Count',
-  dealInRate:'Deal-In Rate', horaRate:'Hora Rate', tsumoRate:'Tsumo Rate', huroRate:'Huro Rate',
-  riichiRate:'Riichi Rate', bustRate:'Bankruptcy Rate',
 };
 function updateRankSortHeader(sortBy){
   const el=$('rank-sort-header'); if(el) el.textContent=RANK_SORT_LABELS[sortBy]||'';
@@ -1132,18 +1131,12 @@ function renderLeaderboard(m){
   const body=$('rankings-body');
   const entries=m.entries||[];
   if(!entries.length){
-    // avgPlacement and dealInRate rows are filtered server-side below a
-    // minimum games/hands count (see stats.js) — an empty list there
-    // almost always means that threshold, not literally zero games
-    // played, so says so specifically rather than the generic "no games
-    // recorded" message.
-    const handRateSorts=['dealInRate','horaRate','tsumoRate','huroRate','riichiRate'];
+    // avgPlacement rows are filtered server-side below a minimum games
+    // count (see stats.js) — an empty list there almost always means that
+    // threshold, not literally zero games played, so says so specifically
+    // rather than the generic "no games recorded" message.
     if(currentLeaderboardSort==='avgPlacement'){
       body.innerHTML=`<p>Nobody's played enough games yet (5+ needed) for an average placement ranking.</p>`;
-    }else if(currentLeaderboardSort==='bustRate'){
-      body.innerHTML=`<p>Nobody's played enough games yet (5+ needed) for a bankruptcy rate ranking.</p>`;
-    }else if(handRateSorts.includes(currentLeaderboardSort)){
-      body.innerHTML=`<p>Nobody's played enough hands yet (5+ needed) for a ${escHtml(RANK_SORT_LABELS[currentLeaderboardSort])} ranking.</p>`;
     }else{
       body.innerHTML=`<p>No games recorded yet. Play a full match to appear on the board.</p>`;
     }
@@ -1162,12 +1155,6 @@ function renderLeaderboard(m){
       case 'bestHan': primary=`${e.bestHan} han (best)`; break;
       case 'handsWon': primary=`${e.handsWon} hands won`; break;
       case 'yakumanCount': primary=`${e.yakumanCount} yakuman`; break;
-      case 'dealInRate': primary=`${e.dealInRate.toFixed(1)}% deal-in`; break;
-      case 'horaRate': primary=`${e.horaRate.toFixed(1)}% hora`; break;
-      case 'tsumoRate': primary=`${e.tsumoRate.toFixed(1)}% tsumo`; break;
-      case 'huroRate': primary=`${e.huroRate.toFixed(1)}% huro`; break;
-      case 'riichiRate': primary=`${e.riichiRate.toFixed(1)}% riichi`; break;
-      case 'bustRate': primary=`${e.bustRate.toFixed(1)}% bankrupt`; break;
       default: primary=`${e.totalFinalScore.toLocaleString()} pts`;
     }
     return `<div class="sp-row${mine?' sp-row-mine':''}">

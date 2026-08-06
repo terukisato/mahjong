@@ -376,7 +376,7 @@ wss.on('connection',(ws)=>{
       // given — an unchecked client-supplied sortBy could sort by any
       // field on the row object (or silently no-op on a typo) instead of
       // one of the ones the Rankings UI actually offers tabs for.
-      const validSorts=['totalFinalScore','gamesWon','avgPlacement','bestScore','bestHan','handsWon','yakumanCount','dealInRate','bustRate','horaRate','tsumoRate','huroRate','riichiRate'];
+      const validSorts=['totalFinalScore','gamesWon','avgPlacement','bestScore','bestHan','handsWon','yakumanCount'];
       const sortBy=validSorts.includes(msg.sortBy)?msg.sortBy:'totalFinalScore';
       // getLeaderboard returns {id,...} rows (stats.js has no notion of
       // names) — attach each row's current display name here, the one

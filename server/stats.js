@@ -331,23 +331,6 @@ const YAKUMAN_NAMES = new Set([
 // average needs enough of them to mean anything.
 const MIN_GAMES_FOR_AVG_PLACEMENT = 5;
 
-// Same noise-vs-signal reasoning as MIN_GAMES_FOR_AVG_PLACEMENT above, but
-// keyed on hands (dealIns' own denominator) rather than games — a single
-// hand played and dealt into reads as a flawless-looking (well, worst-
-// looking) 100% rate, not a real trend.
-const MIN_HANDS_FOR_DEAL_IN_RATE = 5;
-
-// Same reasoning again, for the newer hand-rate stats below — all four are
-// keyed on handsPlayed (a real per-hand denominator, unlike dealInRate's
-// handsWon+dealIns proxy above — see room.js's g.handsPlayed for why that
-// wasn't available yet when dealInRate shipped).
-const MIN_HANDS_FOR_RATE = 5;
-
-// Bust ("tobi") rate is keyed on games, not hands — you either go bankrupt
-// once (or not at all) per game, not per hand — so it reuses the games-based
-// threshold rather than the hands-based one above.
-const MIN_GAMES_FOR_BUST_RATE = 5;
-
 // No query engine needed at this scale — just load everything, derive
 // whatever the requested sort needs, and sort in JS. sortBy must be one of
 // the fields on the mapped row below; an unrecognized one sorts everyone as
@@ -377,24 +360,6 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
       const avgPlacement = s.gamesPlayed > 0 && hasRealPlacementData
         ? s.placements.reduce((sum, count, i) => sum + count * (i + 1), 0) / s.gamesPlayed
         : null;
-      // Rate, not raw count — a raw dealIns count just tracks how much
-      // you've played, same problem totalFinalScore already covers. The
-      // denominator is "hands where you either won or dealt in" (matches
-      // the My Stats panel's own dealInRate calc), not gamesPlayed —
-      // hands, not games, are the unit a deal-in actually happens in.
-      const dealInHands = s.handsWon + s.dealIns;
-      const dealInRate = dealInHands > 0 ? (s.dealIns / dealInHands) * 100 : null;
-      // Hora% (win rate per hand — 和了, distinct from gamesWon's per-GAME
-      // 1st-place count), Tsumo% (self-draw wins per hand played, per the
-      // decision to key it off handsPlayed rather than handsWon), Huro%
-      // (how often this player's hand went open), and Riichi% (how often
-      // they declared) are all "X per hand played" — same denominator,
-      // same min-sample gating (see MIN_HANDS_FOR_RATE below).
-      const horaRate = s.handsPlayed > 0 ? (s.handsWon / s.handsPlayed) * 100 : null;
-      const tsumoRate = s.handsPlayed > 0 ? (s.tsumoWon / s.handsPlayed) * 100 : null;
-      const huroRate = s.handsPlayed > 0 ? (s.huro / s.handsPlayed) * 100 : null;
-      const riichiRate = s.handsPlayed > 0 ? (s.riichiDeclared / s.handsPlayed) * 100 : null;
-      const bustRate = s.gamesPlayed > 0 ? (s.busts / s.gamesPlayed) * 100 : null;
       return {
         id,
         gamesPlayed: s.gamesPlayed,
@@ -405,14 +370,6 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
         handsWon: s.handsWon,
         yakumanCount,
         avgPlacement,
-        dealInHands,
-        dealInRate,
-        handsPlayed: s.handsPlayed,
-        horaRate,
-        tsumoRate,
-        huroRate,
-        riichiRate,
-        bustRate,
       };
     });
   if (sortBy === 'avgPlacement') {
@@ -424,25 +381,6 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
     return rows
       .filter(r => r.gamesPlayed >= MIN_GAMES_FOR_AVG_PLACEMENT && r.avgPlacement != null)
       .sort((a, b) => a.avgPlacement - b.avgPlacement);
-  }
-  if (sortBy === 'dealInRate') {
-    // Highest first (worst deal-in discipline on top), gated the same way
-    // avgPlacement is above — see MIN_HANDS_FOR_DEAL_IN_RATE.
-    return rows
-      .filter(r => r.dealInHands >= MIN_HANDS_FOR_DEAL_IN_RATE && r.dealInRate != null)
-      .sort((a, b) => b.dealInRate - a.dealInRate);
-  }
-  if (sortBy === 'horaRate' || sortBy === 'tsumoRate' || sortBy === 'huroRate' || sortBy === 'riichiRate') {
-    // All four are handsPlayed-denominated rates — same gate, same
-    // highest-first sort (see MIN_HANDS_FOR_RATE).
-    return rows
-      .filter(r => r.handsPlayed >= MIN_HANDS_FOR_RATE && r[sortBy] != null)
-      .sort((a, b) => b[sortBy] - a[sortBy]);
-  }
-  if (sortBy === 'bustRate') {
-    return rows
-      .filter(r => r.gamesPlayed >= MIN_GAMES_FOR_BUST_RATE && r.bustRate != null)
-      .sort((a, b) => b.bustRate - a.bustRate);
   }
   return rows.sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
 }
