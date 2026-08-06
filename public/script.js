@@ -3214,6 +3214,27 @@ function toggleEmojiPicker(force){
 // made the right seat's emoji render upside-down before).
 const EMOJI_POP_ROTATION={b:0,t:180,l:90,r:-90};
 
+// Which edge of `pa-<posId>` (== that seat's own tile row, see index.html
+// — the nameplate is a separate sibling, not inside it) is the "away from
+// the table edge, toward the felt centre" side, and which screen axis is
+// perpendicular to that (the one the felt's own centre — not the tile
+// row's off-centre position — should be used for). Mirrors
+// EMOJI_POP_ROTATION's reasoning: this is what makes "just above the
+// tiles" and "centred on the felt" both come out correct per seat instead
+// of only for the bottom/me.
+const EMOJI_POP_EDGE={
+  b:{axis:'top',edge:'top',sign:-1,cross:'left'},
+  t:{axis:'top',edge:'bottom',sign:1,cross:'left'},
+  l:{axis:'left',edge:'right',sign:1,cross:'top'},
+  r:{axis:'left',edge:'left',sign:-1,cross:'top'},
+};
+// Small gap off the tile row's own edge for the SPAWN point — the 4s
+// float (see @keyframes emojiPop) then continues further in the same
+// direction from there. In vmin, not px, for the same "scales with actual
+// screen size" reasoning as the float distance itself (see the comment
+// on showEmojiPopup below).
+const EMOJI_POP_SPAWN_GAP=3;
+
 // Renders the emoji over `seat`'s (absolute seat index) own play area on
 // EVERY client, including the sender's — server just relays, see
 // emojiReact in room.js. pid() (defined further down) maps an absolute
@@ -3221,10 +3242,14 @@ const EMOJI_POP_ROTATION={b:0,t:180,l:90,r:-90};
 // rotation-aware helper onRiichi/etc already use.
 //
 // Three nested elements, each owning exactly one job:
-//   .emoji-pop        — positioned via inline left/top (JS) at the seat's
-//                        anchor centre, in plain screen coordinates.
+//   .emoji-pop        — positioned via inline left/top (JS): just off the
+//                        tile row's own edge along the seat's local "up"
+//                        axis (so it starts CLEAR of the tiles instead of
+//                        centred on top of them), and centred on the felt
+//                        itself (not the tile row, which sits off-centre
+//                        within it) along the other axis.
 //   .emoji-pop-rotate — STATIC translate(-50%,-50%)+rotate(seat's angle).
-//                        Centres the glyph on that anchor point and
+//                        Centres the glyph on that spawn point and
 //                        establishes "up" in THIS seat's own rotated
 //                        frame — everything below inherits it.
 //   .emoji-pop-motion — the actual 4s keyframe animation (pop in, float
@@ -3237,27 +3262,38 @@ const EMOJI_POP_ROTATION={b:0,t:180,l:90,r:-90};
 //                        rather than every popup floating screen-up
 //                        regardless of whose reaction it is, which was
 //                        the previous bug. Distances are in vmin, not px
-//                        or %-of-self, so the float clears the tile row
-//                        by a consistent MARGIN of the table regardless of
-//                        viewport resolution — a fixed px offset (the
-//                        previous approach) was fine on a phone-sized
-//                        viewport but nowhere near enough of a gap on a
-//                        4K screen, where the whole table renders far
-//                        larger in actual pixels for the same vmin layout.
+//                        or %-of-self, so both the spawn gap and the float
+//                        clear the tile row by a consistent margin of the
+//                        table regardless of viewport resolution — a
+//                        fixed px offset (the previous approach) was fine
+//                        on a phone-sized viewport but nowhere near enough
+//                        of a gap on a 4K screen, where the whole table
+//                        renders far larger in actual pixels for the same
+//                        vmin layout.
 function showEmojiPopup(seat,emoji){
   const posId=pid(seat);
   const anchor=$('pa-'+posId);
+  const felt=document.querySelector('.felt');
   const layer=$('emoji-layer');
-  if(!anchor||!layer) return;
+  if(!anchor||!felt||!layer) return;
   // Replaces any still-animating popup for the same seat rather than
   // stacking — a rapid re-react should restart the pop, not pile up.
   layer.querySelectorAll(`.emoji-pop[data-seat="${seat}"]`).forEach(el=>el.remove());
   const rect=anchor.getBoundingClientRect();
+  const feltRect=felt.getBoundingClientRect();
+  const vmin=Math.min(window.innerWidth,window.innerHeight)/100;
+  const gapPx=EMOJI_POP_SPAWN_GAP*vmin;
+  const e=EMOJI_POP_EDGE[posId]||EMOJI_POP_EDGE.b;
   const el=document.createElement('div');
   el.className='emoji-pop';
   el.dataset.seat=seat;
-  el.style.left=(rect.left+rect.width/2)+'px';
-  el.style.top=(rect.top+rect.height/2)+'px';
+  if(e.axis==='top'){
+    el.style.top=(rect[e.edge]+e.sign*gapPx)+'px';
+    el.style.left=(feltRect.left+feltRect.width/2)+'px';
+  }else{
+    el.style.left=(rect[e.edge]+e.sign*gapPx)+'px';
+    el.style.top=(feltRect.top+feltRect.height/2)+'px';
+  }
   const rotate=document.createElement('div');
   rotate.className='emoji-pop-rotate';
   rotate.style.transform=`translate(-50%,-50%) rotate(${EMOJI_POP_ROTATION[posId]||0}deg)`;

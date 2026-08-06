@@ -715,7 +715,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    comes out as the correct on-screen direction for whichever seat this
    is, not always screen-up regardless of seat. */
 .emoji-pop-rotate{display:inline-block;}
-.emoji-pop-motion{display:inline-block;font-size:clamp(28px,5vmin,48px);
+/* Max raised well past mobile's actual reach (28-48px, still clamp's
+   floor there) so the glyph keeps growing on genuinely large/4K
+   viewports instead of capping out at a size that reads as tiny relative
+   to how big the rest of the table renders there. */
+.emoji-pop-motion{display:inline-block;font-size:clamp(28px,6vmin,100px);
   text-shadow:0 0 10px rgba(0,0,0,.6);
   animation:emojiPop 4s ease forwards;}
 /* Distances in vmin (viewport-relative), not px or %-of-self — a fixed px
