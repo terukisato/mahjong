@@ -565,6 +565,21 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   cursor:pointer;padding:0;transition:transform .15s,border-color .15s;}
 .chat-color-swatch:hover{transform:scale(1.12);}
 .chat-color-swatch.selected{border-color:var(--gl);}
+/* Seat-emoji reaction swatch + popup — same shape/size as the colour
+   swatch button right next to it, just showing an emoji face instead of a
+   flat colour. .chat-emoji-picker reuses .chat-color-picker's grid/popup
+   styling wholesale (see the two classes stacked on the div in
+   index.html) rather than redefining the popup shell from scratch. */
+.chat-emoji-btn{width:calc(var(--ui-vmin) * 3.611);height:calc(var(--ui-vmin) * 3.611);
+  border-radius:50%;border:2px solid rgba(201,168,76,.4);background:rgba(0,0,0,.35);
+  cursor:pointer;flex-shrink:0;padding:0;font-size:calc(var(--ui-vmin) * 2);line-height:1;
+  transition:border-color .2s,transform .15s;}
+.chat-emoji-btn:hover{border-color:var(--gl);transform:scale(1.08);}
+.chat-emoji-btn.open{border-color:var(--gl);}
+.chat-emoji-picker .emoji-swatch{width:32px;height:32px;border-radius:50%;border:2px solid transparent;
+  background:none;font-size:1.4rem;line-height:1;cursor:pointer;padding:0;
+  transition:transform .15s,border-color .15s,background .15s;}
+.chat-emoji-picker .emoji-swatch:hover{transform:scale(1.15);background:rgba(201,168,76,.15);}
 .chat-send{padding:0 calc(var(--ui-vmin) * 1.389);height:calc(var(--ui-vmin) * 3.611);background:rgba(26,107,69,.8);
   border:1px solid var(--jl);border-radius:7px;color:var(--cream);
   font-size:calc(var(--ui-vmin) * 1.528);cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
@@ -612,6 +627,36 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .chat-entry-text{font-size:calc(var(--ui-vmin) * 1.667);color:var(--cream);background:rgba(255,255,255,.05);
   border-radius:6px;padding:calc(var(--ui-vmin) * .556) calc(var(--ui-vmin) * 1.111);line-height:1.4;word-break:break-word;}
 .chat-entry-time{font-size:calc(var(--ui-vmin) * 1.111);color:rgba(245,237,216,.3);margin-top:1px;}
+/* Long-press feedback (see attachLongPress in script.js) — a brief
+   highlight while the hold timer is counting down, so touch/mouse users
+   get some indication something's about to happen before the picker
+   actually appears. */
+.chat-entry.pressing .chat-entry-text{background:rgba(201,168,76,.18);}
+/* Per-message reaction pills — one per distinct emoji used on that
+   message, with a count. .mine marks a pill that includes MY OWN
+   reaction, so re-long-pressing a message with the picker open can show
+   which one (if any) I already picked (see openReactionPicker). */
+.chat-entry-reactions{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}
+.chat-entry-reactions:empty{display:none;}
+.reaction-pill{display:inline-flex;align-items:center;gap:3px;
+  font-size:calc(var(--ui-vmin) * 1.25);line-height:1.6;
+  background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);
+  border-radius:10px;padding:0 calc(var(--ui-vmin) * .694);}
+.reaction-pill.mine{background:rgba(201,168,76,.3);border-color:var(--gl);}
+/* Long-press reaction picker — same dark/gold popup shell as
+   .chat-color-picker/.chat-panel, positioned dynamically (JS, via the
+   pressed message's own getBoundingClientRect) rather than pinned to a
+   fixed corner like those two, since it needs to appear next to whichever
+   message was pressed. */
+.msg-react-picker{position:fixed;z-index:400;display:flex;gap:6px;
+  padding:calc(var(--ui-vmin) * .833) calc(var(--ui-vmin) * 1.111);
+  background:rgba(5,14,8,.97);border:1px solid rgba(201,168,76,.3);border-radius:12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.7);animation:slideUpChat .15s ease;}
+.msg-react-picker button{font-size:1.3rem;line-height:1;background:none;border:2px solid transparent;
+  border-radius:50%;width:34px;height:34px;padding:0;cursor:pointer;
+  transition:transform .15s,border-color .15s,background .15s;}
+.msg-react-picker button:hover{transform:scale(1.15);background:rgba(201,168,76,.15);}
+.msg-react-picker button.selected{border-color:var(--gl);}
 
 /* Floating chat messages — niconico-style danmaku: each message spawns at
    a random height and slides right-to-left across the full screen at a
@@ -635,6 +680,25 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 @keyframes chatSlide{
   0%{transform:translateX(0);}
   100%{transform:translateX(calc(-100vw - 100%));}
+}
+
+/* Seat-emoji popups (see showEmojiPopup in script.js) — a separate
+   unrotated fixed layer, positioned per-popup via inline left/top (JS
+   computes each from the target seat's on-screen rect, since .pa-t/.pa-l/
+   .pa-r are themselves CSS-rotated — see the layer's own comment in
+   index.html). 4s total lifetime matches the emojiPop animation length
+   exactly, so JS's setTimeout(...,4000) removal lands right as it
+   finishes fading rather than cutting it off mid-animation. */
+.emoji-layer{position:fixed;inset:0;z-index:301;pointer-events:none;overflow:hidden;}
+.emoji-pop{position:fixed;left:0;top:0;font-size:clamp(28px,5vmin,48px);
+  text-shadow:0 0 10px rgba(0,0,0,.6);
+  animation:emojiPop 4s ease forwards;}
+@keyframes emojiPop{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.4);}
+  12%{opacity:1;transform:translate(-50%,-50%) scale(1.2);}
+  22%{transform:translate(-50%,-50%) scale(1);}
+  78%{opacity:1;transform:translate(-50%,-85%) scale(1);}
+  100%{opacity:0;transform:translate(-50%,-115%) scale(.9);}
 }
 
 /* ── Toast notifications ── */

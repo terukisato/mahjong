@@ -52,13 +52,14 @@ function migrateToIds(nameToId) {
   if (changed) _save(all);
 }
 
-// Sanma and yonma are scored on different scales (different starting
-// points, different seat counts), so a single flat record mixing both
-// together never produced meaningful Avg/Best Score comparisons — stats
-// are kept in separate per-variant buckets instead. unlockedThemes/
-// achievements stay top-level (not per-variant): they're account-wide
-// unlocks, not tied to one game mode.
-function _emptyVariantStats() {
+// The full set of accumulable per-match-kind fields — shared shape for both
+// the top-level (aggregate, both match kinds combined — what getLeaderboard
+// reads) and each variant's byMatchKind.quick/.room sub-buckets (what the
+// My Stats panel's quick/room tabs read — see renderStatsBlock in
+// script.js). handsPlayed/huro/busts are the newer additions alongside
+// dealIns' rate-stat siblings (hora%/tsumo%/huro%/riichi%/bust% — see
+// getLeaderboard below).
+function _emptyMatchKindStats() {
   return {
     gamesPlayed: 0,
     gamesWon: 0,       // 1st-place finishes
@@ -69,9 +70,32 @@ function _emptyVariantStats() {
     ronWon: 0,
     riichiDeclared: 0,
     dealIns: 0,
+    handsPlayed: 0, // hands dealt, win/draw/abortive-draw all count — see room.js's g.handsPlayed
+    huro: 0,        // hands where this player's own hand went open (pon/chi/open kan) at some point
+    busts: 0,       // games ended by this player going bankrupt ("tobi")
     bestHan: 0,
     bestScore: 0,
     yaku: {},
+  };
+}
+
+// Sanma and yonma are scored on different scales (different starting
+// points, different seat counts), so a single flat record mixing both
+// together never produced meaningful Avg/Best Score comparisons — stats
+// are kept in separate per-variant buckets instead. unlockedThemes/
+// achievements stay top-level (not per-variant): they're account-wide
+// unlocks, not tied to one game mode.
+//
+// Each variant also carries byMatchKind.quick/.room — the same shape again,
+// split by whether the game was a quick_match (vs. bots) or a create_room/
+// join_room match (see Room.matchKind in room.js). This split is ONLY
+// surfaced in the My Stats panel (see the quick/room tabs in
+// renderStatsBlock, script.js) — the Rankings leaderboard (getLeaderboard
+// below) intentionally stays combined, reading the top-level aggregate.
+function _emptyVariantStats() {
+  return {
+    ..._emptyMatchKindStats(),
+    byMatchKind: { quick: _emptyMatchKindStats(), room: _emptyMatchKindStats() },
   };
 }
 
@@ -85,6 +109,19 @@ function _emptyStats() {
   };
 }
 
+// Fills in any field _emptyMatchKindStats() defines that this particular
+// saved sub-record doesn't have yet (a byMatchKind.quick/.room bucket saved
+// before a newer field like `busts` existed) — same field-by-field
+// reasoning as _fillVariantDefaults below.
+function _fillMatchKindDefaults(mk) {
+  const empty = _emptyMatchKindStats();
+  mk = mk || {};
+  for (const key of Object.keys(empty)) {
+    if (mk[key] === undefined) mk[key] = empty[key];
+  }
+  return mk;
+}
+
 // Fills in any field _emptyVariantStats() defines that this particular
 // saved record doesn't have — e.g. a record saved back when
 // _emptyVariantStats() didn't have `yaku`/`placements`/`handsWon` yet.
@@ -92,9 +129,31 @@ function _emptyStats() {
 // SOME of these (just not the newest one) keeps its real data for
 // everything else instead of getting reset to zero across the board.
 function _fillVariantDefaults(v) {
-  const empty = _emptyVariantStats();
+  const empty = _emptyMatchKindStats();
   for (const key of Object.keys(empty)) {
     if (v[key] === undefined) v[key] = empty[key];
+  }
+  if (!v.byMatchKind) {
+    // Predates the quick/room split entirely — there's no way to know
+    // which of this profile's past games were quick_match vs. custom
+    // rooms, so the whole existing aggregate is attributed to 'quick'
+    // wholesale (the far more common mode — a room match needs a second
+    // human to actually join) rather than discarded or guess-split.
+    // 'room' starts fresh at zero.
+    v.byMatchKind = {
+      quick: {
+        gamesPlayed: v.gamesPlayed, gamesWon: v.gamesWon,
+        placements: [...v.placements], totalFinalScore: v.totalFinalScore,
+        handsWon: v.handsWon, tsumoWon: v.tsumoWon, ronWon: v.ronWon,
+        riichiDeclared: v.riichiDeclared, dealIns: v.dealIns,
+        handsPlayed: v.handsPlayed, huro: v.huro, busts: v.busts,
+        bestHan: v.bestHan, bestScore: v.bestScore, yaku: { ...v.yaku },
+      },
+      room: _emptyMatchKindStats(),
+    };
+  } else {
+    v.byMatchKind.quick = _fillMatchKindDefaults(v.byMatchKind.quick);
+    v.byMatchKind.room = _fillMatchKindDefaults(v.byMatchKind.room);
   }
   return v;
 }
@@ -146,8 +205,20 @@ function _normalize(s) {
   return s;
 }
 
+function _cloneMatchKindStats(mk) {
+  return { ...mk, placements: [...mk.placements], yaku: { ...mk.yaku } };
+}
+
 function _cloneVariant(v) {
-  return { ...v, placements: [...v.placements], yaku: { ...v.yaku } };
+  return {
+    ...v,
+    placements: [...v.placements],
+    yaku: { ...v.yaku },
+    byMatchKind: {
+      quick: _cloneMatchKindStats(v.byMatchKind.quick),
+      room: _cloneMatchKindStats(v.byMatchKind.room),
+    },
+  };
 }
 
 function getStats(id) {
@@ -180,8 +251,9 @@ function getStats(id) {
 // _finishGame, which sends each seat's own entry to that player as an
 // 'achievements_unlocked' message so the notification only ever shows the
 // achievements THEY just earned, not their opponents'.
-function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placements, handStats }) {
+function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placements, handStats, handsPlayed = 0, bustedSeat = -1, matchKind = 'room' }) {
   const variant = playerIds.length === 3 ? 'sanma' : 'yonma';
+  const kind = matchKind === 'quick' ? 'quick' : 'room';
   const all = _load();
   const newlyUnlocked = new Array(playerIds.length).fill(null);
   for (let seat = 0; seat < playerIds.length; seat++) {
@@ -190,20 +262,30 @@ function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placeme
     if (!id) continue;
     const rec = _normalize(all[id] || _emptyStats());
     const s = rec[variant];
-    s.gamesPlayed++;
     const place = placements[seat];
-    if (place >= 1 && place <= 4) s.placements[place - 1]++;
-    if (place === 1) s.gamesWon++;
-    s.totalFinalScore += finalScores[seat];
     const hs = handStats[seat] || {};
-    s.handsWon += hs.wins || 0;
-    s.tsumoWon += hs.tsumo || 0;
-    s.ronWon += hs.ron || 0;
-    s.riichiDeclared += hs.riichi || 0;
-    s.dealIns += hs.dealIn || 0;
-    s.bestHan = Math.max(s.bestHan, hs.bestHan || 0);
-    s.bestScore = Math.max(s.bestScore, hs.bestScore || 0);
-    for (const [k, v] of Object.entries(hs.yaku || {})) s.yaku[k] = (s.yaku[k] || 0) + v;
+    // Every counter below is accumulated twice — once into the top-level
+    // aggregate (both match kinds combined, what getLeaderboard reads) and
+    // once into this game's matching byMatchKind sub-bucket (what the My
+    // Stats panel's quick/room tabs read) — see the two buckets' shared
+    // shape in _emptyMatchKindStats.
+    for (const bucket of [s, s.byMatchKind[kind]]) {
+      bucket.gamesPlayed++;
+      if (place >= 1 && place <= 4) bucket.placements[place - 1]++;
+      if (place === 1) bucket.gamesWon++;
+      bucket.totalFinalScore += finalScores[seat];
+      bucket.handsWon += hs.wins || 0;
+      bucket.tsumoWon += hs.tsumo || 0;
+      bucket.ronWon += hs.ron || 0;
+      bucket.riichiDeclared += hs.riichi || 0;
+      bucket.dealIns += hs.dealIn || 0;
+      bucket.handsPlayed += handsPlayed;
+      bucket.huro += hs.huro || 0;
+      if (seat === bustedSeat) bucket.busts++;
+      bucket.bestHan = Math.max(bucket.bestHan, hs.bestHan || 0);
+      bucket.bestScore = Math.max(bucket.bestScore, hs.bestScore || 0);
+      for (const [k, v] of Object.entries(hs.yaku || {})) bucket.yaku[k] = (bucket.yaku[k] || 0) + v;
+    }
     // Achievement checks see the whole record (both variants) — a "first
     // win" achievement, for instance, should trigger from either mode.
     const before = new Set(Object.keys(rec.achievements));
@@ -255,6 +337,17 @@ const MIN_GAMES_FOR_AVG_PLACEMENT = 5;
 // looking) 100% rate, not a real trend.
 const MIN_HANDS_FOR_DEAL_IN_RATE = 5;
 
+// Same reasoning again, for the newer hand-rate stats below — all four are
+// keyed on handsPlayed (a real per-hand denominator, unlike dealInRate's
+// handsWon+dealIns proxy above — see room.js's g.handsPlayed for why that
+// wasn't available yet when dealInRate shipped).
+const MIN_HANDS_FOR_RATE = 5;
+
+// Bust ("tobi") rate is keyed on games, not hands — you either go bankrupt
+// once (or not at all) per game, not per hand — so it reuses the games-based
+// threshold rather than the hands-based one above.
+const MIN_GAMES_FOR_BUST_RATE = 5;
+
 // No query engine needed at this scale — just load everything, derive
 // whatever the requested sort needs, and sort in JS. sortBy must be one of
 // the fields on the mapped row below; an unrecognized one sorts everyone as
@@ -291,6 +384,17 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
       // hands, not games, are the unit a deal-in actually happens in.
       const dealInHands = s.handsWon + s.dealIns;
       const dealInRate = dealInHands > 0 ? (s.dealIns / dealInHands) * 100 : null;
+      // Hora% (win rate per hand — 和了, distinct from gamesWon's per-GAME
+      // 1st-place count), Tsumo% (self-draw wins per hand played, per the
+      // decision to key it off handsPlayed rather than handsWon), Huro%
+      // (how often this player's hand went open), and Riichi% (how often
+      // they declared) are all "X per hand played" — same denominator,
+      // same min-sample gating (see MIN_HANDS_FOR_RATE below).
+      const horaRate = s.handsPlayed > 0 ? (s.handsWon / s.handsPlayed) * 100 : null;
+      const tsumoRate = s.handsPlayed > 0 ? (s.tsumoWon / s.handsPlayed) * 100 : null;
+      const huroRate = s.handsPlayed > 0 ? (s.huro / s.handsPlayed) * 100 : null;
+      const riichiRate = s.handsPlayed > 0 ? (s.riichiDeclared / s.handsPlayed) * 100 : null;
+      const bustRate = s.gamesPlayed > 0 ? (s.busts / s.gamesPlayed) * 100 : null;
       return {
         id,
         gamesPlayed: s.gamesPlayed,
@@ -303,6 +407,12 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
         avgPlacement,
         dealInHands,
         dealInRate,
+        handsPlayed: s.handsPlayed,
+        horaRate,
+        tsumoRate,
+        huroRate,
+        riichiRate,
+        bustRate,
       };
     });
   if (sortBy === 'avgPlacement') {
@@ -321,6 +431,18 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
     return rows
       .filter(r => r.dealInHands >= MIN_HANDS_FOR_DEAL_IN_RATE && r.dealInRate != null)
       .sort((a, b) => b.dealInRate - a.dealInRate);
+  }
+  if (sortBy === 'horaRate' || sortBy === 'tsumoRate' || sortBy === 'huroRate' || sortBy === 'riichiRate') {
+    // All four are handsPlayed-denominated rates — same gate, same
+    // highest-first sort (see MIN_HANDS_FOR_RATE).
+    return rows
+      .filter(r => r.handsPlayed >= MIN_HANDS_FOR_RATE && r[sortBy] != null)
+      .sort((a, b) => b[sortBy] - a[sortBy]);
+  }
+  if (sortBy === 'bustRate') {
+    return rows
+      .filter(r => r.gamesPlayed >= MIN_GAMES_FOR_BUST_RATE && r.bustRate != null)
+      .sort((a, b) => b.bustRate - a.bustRate);
   }
   return rows.sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
 }

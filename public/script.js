@@ -637,7 +637,9 @@ function onMsg(m){
   else if(m.type==='pon'){callBanner('pon',m.name||'Player','ポン');}
   else if(m.type==='chi'){callBanner('chi',m.name||'Player','チー');}
   else if(m.type==='kita'){callBanner('kita',m.name||'Player','北');}
-  else if(m.type==='chat'){showChatMsg(m.name,m.text,m.color);}
+  else if(m.type==='chat'){showChatMsg(m.name,m.text,m.color,m.id);}
+  else if(m.type==='emoji_react'){showEmojiPopup(m.seat,m.emoji);}
+  else if(m.type==='msg_react'){onMsgReact(m);}
 }
 
 
@@ -742,6 +744,9 @@ function toggleUserStatsModal(){
   const backdrop=$('userstats-backdrop');
   const open=modal.classList.contains('visible');
   if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  currentStatsMatchKind='quick';
+  $('btn-stats-quick').classList.add('active');
+  $('btn-stats-room').classList.remove('active');
   $('stats-body').textContent='Loading…';
   wss({type:'get_stats'});
   modal.classList.add('visible');
@@ -958,6 +963,16 @@ function renderStatsBlock(s,variant){
   const winRate=((s.gamesWon/s.gamesPlayed)*100).toFixed(1);
   const avgScore=Math.round(s.totalFinalScore/s.gamesPlayed);
   const dealInRate=s.handsWon+s.dealIns>0?((s.dealIns/(s.handsWon+s.dealIns))*100).toFixed(1):'0.0';
+  // Hora/Tsumo/Huro/Riichi rate are all "X per hand played" (handsPlayed is
+  // the denominator throughout — see stats.js's getLeaderboard, which uses
+  // the exact same formulas server-side for the Rankings versions of these).
+  // Bankruptcy is "X per GAME" instead — you bust at most once per game,
+  // not per hand.
+  const horaRate=s.handsPlayed>0?((s.handsWon/s.handsPlayed)*100).toFixed(1):'0.0';
+  const tsumoRate=s.handsPlayed>0?((s.tsumoWon/s.handsPlayed)*100).toFixed(1):'0.0';
+  const huroRate=s.handsPlayed>0?((s.huro/s.handsPlayed)*100).toFixed(1):'0.0';
+  const riichiRate=s.handsPlayed>0?((s.riichiDeclared/s.handsPlayed)*100).toFixed(1):'0.0';
+  const bustRate=s.gamesPlayed>0?((s.busts/s.gamesPlayed)*100).toFixed(1):'0.0';
   // Achieved yaku, most-common first, followed by every yaku NOT yet
   // achieved (count 0, dimmed, alphabetical) — see ALL_YAKU_NAMES above.
   const achievedNames=new Set(Object.keys(s.yaku));
@@ -973,9 +988,12 @@ function renderStatsBlock(s,variant){
     <div class="sp-row"><span class="sp-label">1st-Place Finishes</span><span>${s.gamesWon} (${winRate}%)</span></div>
     <div class="place-bars"><div class="sp-label">Placements</div>${placementBars}</div>
     <div class="sp-row"><span class="sp-label">Avg Final Score</span><span>${avgScore.toLocaleString()}</span></div>
-    <div class="sp-row"><span class="sp-label">Hands Won</span><span>${s.handsWon} (Tsumo ${s.tsumoWon} / Ron ${s.ronWon})</span></div>
-    <div class="sp-row"><span class="sp-label">Riichi Declared</span><span>${s.riichiDeclared}</span></div>
+    <div class="sp-row"><span class="sp-label">Hands Played</span><span>${s.handsPlayed}</span></div>
+    <div class="sp-row"><span class="sp-label">Hora Rate</span><span>${s.handsWon} (${horaRate}%) — Tsumo ${s.tsumoWon} (${tsumoRate}%) / Ron ${s.ronWon}</span></div>
+    <div class="sp-row"><span class="sp-label">Huro Rate</span><span>${s.huro} (${huroRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Riichi Declared</span><span>${s.riichiDeclared} (${riichiRate}%)</span></div>
     <div class="sp-row"><span class="sp-label">Deal-Ins</span><span>${s.dealIns} (${dealInRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Bankruptcy Rate</span><span>${s.busts} (${bustRate}%)</span></div>
     <div class="sp-row"><span class="sp-label">Best Hand</span><span>${s.bestHan} Han · ${s.bestScore.toLocaleString()} pts</span></div>
   `;
   rows+=`<div class="about-section">
@@ -987,21 +1005,48 @@ function renderStatsBlock(s,variant){
   return rows;
 }
 
+// Quick Match (vs. bots, via Find Match) and Room Match (create/join a
+// room) keep fully separate stat totals (see Room.matchKind in room.js,
+// byMatchKind in stats.js) — this picks which one renderStats below reads.
+// Reset to 'quick' on every My Stats open, same "don't remember stale
+// sub-state" spirit as the Rankings variant/sort reset.
+let currentStatsMatchKind='quick';
+// Cached so switching the quick/room tab can just re-render instead of
+// round-tripping get_stats again — both buckets are already present on
+// every 'stats' response (see getStats in stats.js), just under different
+// byMatchKind keys.
+let lastStatsMsg=null;
+
 function renderStats(m){
+  lastStatsMsg=m;
   const body=$('stats-body');
   const s=m.stats;
-  if(!s||((s.yonma?.gamesPlayed||0)===0&&(s.sanma?.gamesPlayed||0)===0)){
-    body.innerHTML=`<p>No games recorded yet for <strong>${escHtml(m.name)}</strong>. Play a full match to start building stats.</p>`;
+  const yk=s?.yonma?.byMatchKind?.[currentStatsMatchKind];
+  const sk=s?.sanma?.byMatchKind?.[currentStatsMatchKind];
+  if(!s||((yk?.gamesPlayed||0)===0&&(sk?.gamesPlayed||0)===0)){
+    const modeLabel=currentStatsMatchKind==='quick'?'Quick Match':'Room Match';
+    body.innerHTML=`<p>No ${modeLabel} games recorded yet for <strong>${escHtml(m.name)}</strong>. Play a full match to start building stats.</p>`;
     return;
   }
   body.innerHTML=`
     <div class="about-section-title">四人麻雀 YONMA</div>
-    ${renderStatsBlock(s.yonma,'yonma')}
+    ${renderStatsBlock(yk,'yonma')}
     <div class="about-section" style="margin-top:18px;">
       <div class="about-section-title">三人麻雀 SANMA</div>
-      ${renderStatsBlock(s.sanma,'sanma')}
+      ${renderStatsBlock(sk,'sanma')}
     </div>
   `;
+}
+
+// Switches which match-kind bucket the My Stats panel shows — mirrors
+// setLeaderboardSort's tab-toggle pattern, just re-rendering from the
+// already-fetched lastStatsMsg instead of a fresh round trip (see above).
+function setStatsMatchKind(kind){
+  if(kind===currentStatsMatchKind) return;
+  currentStatsMatchKind=kind;
+  $('btn-stats-quick').classList.toggle('active',kind==='quick');
+  $('btn-stats-room').classList.toggle('active',kind==='room');
+  if(lastStatsMsg) renderStats(lastStatsMsg);
 }
 
 // Same open/fetch/render pattern as toggleUserProfile/renderStats above,
@@ -1022,7 +1067,8 @@ let currentLeaderboardSort='totalFinalScore';
 const RANK_SORT_LABELS={
   totalFinalScore:'Points', gamesWon:'Wins', avgPlacement:'Average Placement',
   bestScore:'Best Hand', bestHan:'Highest Han', handsWon:'Hands Won', yakumanCount:'Yakuman Count',
-  dealInRate:'Deal-In Rate',
+  dealInRate:'Deal-In Rate', horaRate:'Hora Rate', tsumoRate:'Tsumo Rate', huroRate:'Huro Rate',
+  riichiRate:'Riichi Rate', bustRate:'Bankruptcy Rate',
 };
 function updateRankSortHeader(sortBy){
   const el=$('rank-sort-header'); if(el) el.textContent=RANK_SORT_LABELS[sortBy]||'';
@@ -1091,10 +1137,13 @@ function renderLeaderboard(m){
     // almost always means that threshold, not literally zero games
     // played, so says so specifically rather than the generic "no games
     // recorded" message.
+    const handRateSorts=['dealInRate','horaRate','tsumoRate','huroRate','riichiRate'];
     if(currentLeaderboardSort==='avgPlacement'){
       body.innerHTML=`<p>Nobody's played enough games yet (5+ needed) for an average placement ranking.</p>`;
-    }else if(currentLeaderboardSort==='dealInRate'){
-      body.innerHTML=`<p>Nobody's played enough hands yet (5+ needed) for a deal-in rate ranking.</p>`;
+    }else if(currentLeaderboardSort==='bustRate'){
+      body.innerHTML=`<p>Nobody's played enough games yet (5+ needed) for a bankruptcy rate ranking.</p>`;
+    }else if(handRateSorts.includes(currentLeaderboardSort)){
+      body.innerHTML=`<p>Nobody's played enough hands yet (5+ needed) for a ${escHtml(RANK_SORT_LABELS[currentLeaderboardSort])} ranking.</p>`;
     }else{
       body.innerHTML=`<p>No games recorded yet. Play a full match to appear on the board.</p>`;
     }
@@ -1114,6 +1163,11 @@ function renderLeaderboard(m){
       case 'handsWon': primary=`${e.handsWon} hands won`; break;
       case 'yakumanCount': primary=`${e.yakumanCount} yakuman`; break;
       case 'dealInRate': primary=`${e.dealInRate.toFixed(1)}% deal-in`; break;
+      case 'horaRate': primary=`${e.horaRate.toFixed(1)}% hora`; break;
+      case 'tsumoRate': primary=`${e.tsumoRate.toFixed(1)}% tsumo`; break;
+      case 'huroRate': primary=`${e.huroRate.toFixed(1)}% huro`; break;
+      case 'riichiRate': primary=`${e.riichiRate.toFixed(1)}% riichi`; break;
+      case 'bustRate': primary=`${e.bustRate.toFixed(1)}% bankrupt`; break;
       default: primary=`${e.totalFinalScore.toLocaleString()} pts`;
     }
     return `<div class="sp-row${mine?' sp-row-mine':''}">
@@ -2989,6 +3043,16 @@ document.addEventListener('click',e=>{
   const picker=$('declare-picker');
   if(picker&&!e.target.closest('#declare-picker')&&!e.target.closest('.bchonbo')) picker.remove();
 });
+// Same click-outside-to-dismiss for the long-press message-reaction
+// picker — it has no toggle button of its own to re-click (unlike the
+// colour/emoji swatch pickers), so this is its only way to close without
+// picking one.
+document.addEventListener('click',e=>{
+  const picker=$('msg-react-picker');
+  if(!picker||e.target.closest('#msg-react-picker')) return;
+  if(Date.now()-Number(picker.dataset.openedAt||0)<300) return; // see openReactionPicker's comment
+  picker.remove();
+});
 
 function ab(c,l,cls,fn){const b=document.createElement('button');b.className='ba '+cls;b.textContent=l;b.onclick=fn;c.appendChild(b);}
 function hint(c,t){const h=document.createElement('span');h.className='hint';h.textContent=t;c.appendChild(h);}
@@ -3099,6 +3163,70 @@ function toggleColorPicker(force){
   picker.classList.toggle('open',colorPickerOpen);
   btn.classList.toggle('open',colorPickerOpen);
   btn.setAttribute('aria-expanded',String(colorPickerOpen));
+  // Mutual exclusion with the emoji picker right next to it — both are
+  // small popups anchored to the same corner, so leaving both open at once
+  // would just overlap.
+  if(colorPickerOpen) toggleEmojiPicker(false);
+}
+
+// SEAT-EMOJI REACTIONS (pops up over your own play area, see
+// showEmojiPopup below) — distinct from MSG_REACTIONS further down, which
+// react to a specific chat message instead. Must match SEAT_EMOJI in
+// room.js.
+const SEAT_EMOJI=['😂','😢','😠','😱','👍','🔥','🏆','❤️'];
+let emojiPickerOpen=false;
+
+function initEmojiPicker(){
+  const picker=$('chat-emoji-picker'), btn=$('chat-emoji-btn');
+  if(!picker||!btn) return;
+  picker.innerHTML='';
+  SEAT_EMOJI.forEach(e=>{
+    const sw=document.createElement('button');
+    sw.className='emoji-swatch';
+    sw.type='button';
+    sw.textContent=e;
+    sw.setAttribute('aria-label','React with '+e);
+    sw.onclick=()=>sendEmojiReact(e);
+    picker.appendChild(sw);
+  });
+}
+
+function sendEmojiReact(emoji){
+  wss({type:'emoji_react',emoji});
+  toggleEmojiPicker(false);
+}
+
+function toggleEmojiPicker(force){
+  emojiPickerOpen=force!==undefined?force:!emojiPickerOpen;
+  const picker=$('chat-emoji-picker'), btn=$('chat-emoji-btn');
+  if(!picker||!btn) return;
+  picker.classList.toggle('open',emojiPickerOpen);
+  btn.classList.toggle('open',emojiPickerOpen);
+  btn.setAttribute('aria-expanded',String(emojiPickerOpen));
+  if(emojiPickerOpen) toggleColorPicker(false);
+}
+
+// Renders the emoji over `seat`'s (absolute seat index) own play area on
+// EVERY client, including the sender's — server just relays, see
+// emojiReact in room.js. pid() (defined further down) maps an absolute
+// seat to this client's own screen position ('b'/'t'/'l'/'r'), same
+// rotation-aware helper onRiichi/etc already use.
+function showEmojiPopup(seat,emoji){
+  const anchor=$('pa-'+pid(seat));
+  const layer=$('emoji-layer');
+  if(!anchor||!layer) return;
+  // Replaces any still-animating popup for the same seat rather than
+  // stacking — a rapid re-react should restart the pop, not pile up.
+  layer.querySelectorAll(`.emoji-pop[data-seat="${seat}"]`).forEach(el=>el.remove());
+  const rect=anchor.getBoundingClientRect();
+  const el=document.createElement('div');
+  el.className='emoji-pop';
+  el.dataset.seat=seat;
+  el.textContent=emoji;
+  el.style.left=(rect.left+rect.width/2)+'px';
+  el.style.top=(rect.top+rect.height/2)+'px';
+  layer.appendChild(el);
+  setTimeout(()=>el.remove(),4000);
 }
 
 function toggleChat(){
@@ -3123,7 +3251,7 @@ function sendChat(){
   inp.value='';
 }
 
-function showChatMsg(name,text,color){
+function showChatMsg(name,text,color,id){
   // Server validates color against its own copy of the palette and falls
   // back to white — see room.js chat().
   const msgColor=color||'#fff';
@@ -3144,12 +3272,22 @@ function showChatMsg(name,text,color){
   const time=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
   const entry=document.createElement('div');
   entry.className='chat-entry';
+  // `id` is the server's per-room monotonic chatSeq (see chat() in
+  // room.js) — the stable handle msg_react broadcasts reference, so a
+  // reaction lands on the right message on every client. Reactions are
+  // purely relayed same as chat itself (no server-side history), so a
+  // message with no id (older client, or some future non-chat caller of
+  // this function) simply can't carry a reaction — attachLongPress below
+  // bails out for those instead of guessing an id.
+  if(id!=null) entry.dataset.msgId=id;
   entry.innerHTML=
     `<span class="chat-entry-who" style="color:${msgColor}">${escHtml(name)}</span>`+
     `<span class="chat-entry-text">${escHtml(text)}</span>`+
-    `<span class="chat-entry-time">${time}</span>`;
+    `<span class="chat-entry-time">${time}</span>`+
+    `<div class="chat-entry-reactions" id="reactions-${id}"></div>`;
   history.appendChild(entry);
   history.scrollTop=history.scrollHeight;
+  if(id!=null) attachLongPress(entry,id);
 
   // ── Unread badge ──
   if(!chatOpen){
@@ -3158,6 +3296,114 @@ function showChatMsg(name,text,color){
     badge.textContent=unreadCount;
     badge.classList.add('show');
   }
+}
+
+// MESSAGE REACTIONS — long-press a history entry to react (or edit/clear
+// your own existing reaction by long-pressing again). Distinct from
+// SEAT_EMOJI above; must match MSG_REACTIONS in room.js.
+const MSG_REACTIONS=['👍','❤️','😂','😮','😢'];
+// {[msgId]: {[seat]: emoji}} — built entirely from msg_react broadcasts as
+// they arrive (including echoes of this client's own reactions), never
+// fetched/replayed — consistent with chat itself having no server-side
+// history (see room.js's reactToMessage comment). Lost on reload, same as
+// the chat history it annotates.
+const msgReactions={};
+
+const LONG_PRESS_MS=500;
+function attachLongPress(el,msgId){
+  let timer=null;
+  const start=()=>{
+    cancel();
+    timer=setTimeout(()=>{
+      timer=null;
+      el.classList.remove('pressing');
+      openReactionPicker(el,msgId);
+    },LONG_PRESS_MS);
+    el.classList.add('pressing');
+  };
+  const cancel=()=>{
+    if(timer){clearTimeout(timer);timer=null;}
+    el.classList.remove('pressing');
+  };
+  el.addEventListener('mousedown',start);
+  el.addEventListener('mouseup',cancel);
+  el.addEventListener('mouseleave',cancel);
+  el.addEventListener('touchstart',start,{passive:true});
+  el.addEventListener('touchend',cancel);
+  el.addEventListener('touchmove',cancel);
+}
+
+// Opens the 5-emoji picker near `entry` (a long-pressed .chat-entry).
+// Re-long-pressing a message you've already reacted to opens the SAME
+// picker with your current pick highlighted — clicking it again clears
+// your reaction, clicking a different one swaps it. That's the whole
+// "editable by long-pressing again" behavior; there's no separate edit
+// mode, just re-opening the same picker.
+function openReactionPicker(entry,msgId){
+  $('msg-react-picker')?.remove();
+  const mine=mySeat>=0?msgReactions[msgId]?.[mySeat]:undefined;
+  const picker=document.createElement('div');
+  picker.className='msg-react-picker';
+  picker.id='msg-react-picker';
+  MSG_REACTIONS.forEach(e=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.textContent=e;
+    b.className=e===mine?'selected':'';
+    b.setAttribute('aria-label','React with '+e);
+    b.onclick=ev=>{
+      ev.stopPropagation();
+      wss({type:'msg_react',msgId,emoji:e===mine?null:e});
+      picker.remove();
+    };
+    picker.appendChild(b);
+  });
+  // Timestamp guard for the outside-click dismiss handler below — the
+  // mouseup/touchend that ends the long-press which OPENED this picker
+  // fires its own synthetic 'click' on document right afterward, at the
+  // pressed message's location (outside the picker, since the picker
+  // wasn't there when the press started). Without this guard that trailing
+  // click would immediately close the picker it just opened.
+  picker.dataset.openedAt=Date.now();
+  document.body.appendChild(picker);
+  const rect=entry.getBoundingClientRect();
+  const pw=picker.offsetWidth;
+  let left=rect.left+rect.width/2-pw/2;
+  left=Math.max(6,Math.min(left,window.innerWidth-pw-6));
+  picker.style.left=left+'px';
+  // Prefer just above the message; if that would run off the top of the
+  // viewport (e.g. the very first entry in a scrolled-to-top history),
+  // drop it below instead.
+  const above=rect.top-picker.offsetHeight-8;
+  picker.style.top=(above>4?above:rect.bottom+8)+'px';
+}
+
+// Applies an incoming msg_react broadcast (from ANY player, including
+// echoes of this client's own — server relays to everyone, see
+// reactToMessage in room.js) and re-renders that message's pill row.
+function onMsgReact(m){
+  const bucket=msgReactions[m.msgId]=msgReactions[m.msgId]||{};
+  if(m.emoji) bucket[m.seat]=m.emoji; else delete bucket[m.seat];
+  renderMessageReactions(m.msgId);
+}
+
+// Groups the raw {seat: emoji} bucket into one pill per distinct emoji
+// with a count, marking .mine on any pill that includes my own seat's
+// reaction (openReactionPicker reads mySeat's entry directly, not this
+// rendering, for its own "which one is currently selected" state).
+function renderMessageReactions(msgId){
+  const row=$('reactions-'+msgId);
+  if(!row) return;
+  const bucket=msgReactions[msgId]||{};
+  const counts={};
+  for(const [seat,emoji] of Object.entries(bucket)){
+    counts[emoji]=counts[emoji]||{n:0,mine:false};
+    counts[emoji].n++;
+    if(Number(seat)===mySeat) counts[emoji].mine=true;
+  }
+  row.innerHTML=Object.entries(counts).map(([emoji,{n,mine}])=>
+    `<span class="reaction-pill${mine?' mine':''}">${emoji} ${n}</span>`
+  ).join('');
 }
 
 function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -3679,5 +3925,7 @@ $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};
 $('chat-hist-btn').onclick=toggleChat;
 $('chat-close').onclick=toggleChat;
 if($('chat-color-btn')) $('chat-color-btn').onclick=()=>toggleColorPicker();
+if($('chat-emoji-btn')) $('chat-emoji-btn').onclick=()=>toggleEmojiPicker();
 initColorPicker();
+initEmojiPicker();
 connect();

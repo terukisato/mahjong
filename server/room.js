@@ -17,6 +17,11 @@ const ROUND_START_DELAY=3400;
 // Validated server-side rather than trusting the client's `color` field
 // verbatim, since it gets echoed straight into another player's page.
 const CHAT_COLORS=new Set(['#ffffff','#f0d080','#ff6b6b','#6bff8f','#6bb6ff','#ff8fd6','#6bfff0','#ffb366']);
+// Seat-popup reaction set — must match SEAT_EMOJI in public/script.js.
+// Same "validate against a server-side copy" reasoning as CHAT_COLORS above.
+const SEAT_EMOJI=new Set(['😂','😢','😠','😱','👍','🔥','🏆','❤️']);
+// Message-reaction set — must match MSG_REACTIONS in public/script.js.
+const MSG_REACTIONS=new Set(['👍','❤️','😂','😮','😢']);
 
 // ── Dead wall layout (14 tiles) ─────────────────────────────────────────────
 // [0-3]  = rinshan tiles (drawn on kan)
@@ -71,6 +76,18 @@ class Room {
     this.roundReady=new Set();
     this.pendingNextRound=null;
     this.game=null;
+    // 'quick'|'room' — which stats bucket this game's results accumulate
+    // into (see stats.js's per-variant quick/room split). Defaults to
+    // 'room' since that's what a bare `new Room(...)` means everywhere
+    // except quick_match, which stamps it to 'quick' right after
+    // construction (see index.js).
+    this.matchKind='room';
+    // Monotonic per-room id stamped on every chat message (see chat()
+    // below) — lets msg_react broadcasts (reactToMessage) unambiguously
+    // reference "this specific message" on every client without needing
+    // any actual chat history storage here (chat itself is never
+    // persisted, purely relayed — see chat()'s own comment).
+    this.chatSeq=0;
   }
 
   // Hands per wind round = number of dealers = numPlayers (3 for sanma, 4
@@ -163,7 +180,32 @@ class Room {
     const msg=text.trim().slice(0,60);
     if(!msg) return;
     const safeColor=CHAT_COLORS.has(color)?color:'#ffffff';
-    this._broadcastAll({type:'chat',seat:p.seat,name:p.name,text:msg,color:safeColor});
+    this._broadcastAll({type:'chat',seat:p.seat,name:p.name,text:msg,color:safeColor,id:++this.chatSeq});
+  }
+
+  // Seat-popup emoji reaction (distinct from reactToMessage below, which
+  // reacts to a specific chat message) — pops up over the sender's own
+  // play area on every client, see showEmojiPopup in script.js.
+  emojiReact(playerId, emoji){
+    const p=this.seats.find(p=>p&&!p.isBot&&p.id===playerId);
+    if(!p||!SEAT_EMOJI.has(emoji)) return;
+    this._broadcastAll({type:'emoji_react',seat:p.seat,emoji});
+  }
+
+  // Attaches (or clears, if emoji is null/undefined) this player's reaction
+  // to a specific chat message, identified by the `id` chat() stamped it
+  // with. Purely relayed, same as chat() itself — no server-side storage,
+  // so a client that joins/reconnects after a reaction was set won't see
+  // it (consistent with chat history itself not being replayed either).
+  // Re-sending the same emoji the player already reacted with is how the
+  // client implements "long-press again to edit/clear" — it just resends
+  // whatever the popup's current selection state resolves to.
+  reactToMessage(playerId, msgId, emoji){
+    const p=this.seats.find(p=>p&&!p.isBot&&p.id===playerId);
+    if(!p) return;
+    if(!Number.isInteger(msgId)) return;
+    const safeEmoji=MSG_REACTIONS.has(emoji)?emoji:null;
+    this._broadcastAll({type:'msg_react',msgId,seat:p.seat,name:p.name,emoji:safeEmoji});
   }
 
   // ── Game lifecycle ─────────────────────────────────────────────────────────
@@ -176,6 +218,17 @@ class Room {
   _initRound(){
     const g=this.game;
     const n=this.numPlayers;
+    // Tally the hand that just finished before its melds are wiped below —
+    // skipped on the very first call (game start), where g.melds doesn't
+    // exist yet because there's no previous hand to tally. isMenzen false
+    // means the hand had at least one non-ankan meld (pon/chi/open kan),
+    // i.e. it was called open ("huro'd") at some point this hand.
+    if(g.melds){
+      for(let seat=0;seat<n;seat++){
+        if(!isMenzen(g.melds[seat])) g.stats[seat].huro++;
+      }
+    }
+    g.handsPlayed++;
     const wall=shuffle(buildWall(this.rules.akaDora,this.rules.sanma));
     const hands=Array.from({length:n},()=>[]);
     for(let i=0;i<13*n;i++) hands[i%n].push(wall.shift());
@@ -224,8 +277,18 @@ class Room {
       riichiSticks:0,
       // Per-game (not per-round — persists across _initRound calls) hand
       // stats accumulator, fed into recordGameResult() at game end. See
-      // _finishGame/_recordHandWin.
-      stats:new Array(this.numPlayers).fill(0).map(()=>({riichi:0,wins:0,tsumo:0,ron:0,dealIn:0,bestHan:0,bestScore:0,yaku:{}})),
+      // _finishGame/_recordHandWin. `huro` (hand opened via pon/chi/open
+      // kan) is tallied in _initRound, not here, since it needs to inspect
+      // each seat's melds right before they're wiped for the next hand.
+      stats:new Array(this.numPlayers).fill(0).map(()=>({riichi:0,wins:0,tsumo:0,ron:0,dealIn:0,huro:0,bestHan:0,bestScore:0,yaku:{}})),
+      // Hands dealt this game so far — every _initRound() call is one more
+      // hand played (win, draw, or abortive draw all count; nothing about
+      // a hand's outcome excludes it). Used as the denominator for
+      // rate-based stats (hora%/tsumo%/huro%/riichi% — see stats.js) that
+      // need "how many hands did you actually play", not just "how many
+      // games". Unlike `round` (the wind-round counter), this does
+      // increment on dealer repeats too.
+      handsPlayed:0,
     };
     this._initRound();
     this._broadcastAll({type:'game_start',seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,chonbo:this.rules.chonbo});
@@ -1149,6 +1212,14 @@ class Room {
       finalScores:g.scores,
       placements:this._computePlacements(g.scores),
       handStats:g.stats,
+      // Same for every seat — hands dealt isn't a per-seat thing, everyone
+      // plays every hand. See stats.js's use as the rate denominator.
+      handsPlayed:g.handsPlayed,
+      // Only ever one seat, or none — a tobi ending busts exactly the one
+      // seat that went negative (see the `bust` lookups above _finishGame
+      // calls throughout this file).
+      bustedSeat:reason==='tobi'?extra.bust:-1,
+      matchKind:this.matchKind,
     });
     // Each seat only ever hears about ITS OWN newly-earned achievements
     // (see recordGameResult's return shape) — sent directly to that

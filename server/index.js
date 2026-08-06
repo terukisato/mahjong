@@ -251,6 +251,7 @@ wss.on('connection',(ws)=>{
         chonbo: msg.rules?.chonbo===true,
       };
       myRoom=new Room(mode,'normal',rules,numPlayers);
+      myRoom.matchKind='quick';
       myRoom.addHuman(player);
       if(player.profileId) seatedProfiles.set(player.profileId,{roomId:myRoom.id,playerId:myId});
       // 'joined' must reach the client BEFORE start()'s game_start broadcast
@@ -357,6 +358,10 @@ wss.on('connection',(ws)=>{
 
     if(msg.type==='chat'&&myRoom) myRoom.chat(myId,msg.text||'',msg.color);
 
+    if(msg.type==='emoji_react'&&myRoom) myRoom.emojiReact(myId,msg.emoji);
+
+    if(msg.type==='msg_react'&&myRoom) myRoom.reactToMessage(myId,msg.msgId,msg.emoji);
+
     if(msg.type==='get_stats'){
       // Uses this connection's own unlocked profile, never msg.name — same
       // reasoning as assignIdentity above, otherwise anyone could read any unlocked
@@ -371,7 +376,7 @@ wss.on('connection',(ws)=>{
       // given — an unchecked client-supplied sortBy could sort by any
       // field on the row object (or silently no-op on a typo) instead of
       // one of the ones the Rankings UI actually offers tabs for.
-      const validSorts=['totalFinalScore','gamesWon','avgPlacement','bestScore','bestHan','handsWon','yakumanCount','dealInRate'];
+      const validSorts=['totalFinalScore','gamesWon','avgPlacement','bestScore','bestHan','handsWon','yakumanCount','dealInRate','bustRate','horaRate','tsumoRate','huroRate','riichiRate'];
       const sortBy=validSorts.includes(msg.sortBy)?msg.sortBy:'totalFinalScore';
       // getLeaderboard returns {id,...} rows (stats.js has no notion of
       // names) — attach each row's current display name here, the one
