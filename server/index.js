@@ -17,6 +17,15 @@ const app=express();
 const server=http.createServer(app);
 const wss=new WebSocket.Server({server});
 
+// Whitelisted against stats.js's getLeaderboard, which otherwise just does
+// (b[sortBy]||0)-(a[sortBy]||0) on whatever field name it's given — an
+// unchecked client-supplied sortBy could sort by any field on the row
+// object (or silently no-op on a typo) instead of one of the ones the
+// Rankings UI actually offers tabs for. Shared by 'get_leaderboard' and
+// 'get_player_stats' below — the latter looks up one player's row out of
+// the exact same getLeaderboard() call, so it needs the same gate.
+const VALID_LEADERBOARD_SORTS=['totalFinalScore','gamesWon','avgPlacement','bestScore','bestHan','handsWon','yakumanCount','dealInRate'];
+
 // Gates 'create_profile'/'delete_profile' only — everything else
 // (unlocking/playing as an existing profile) only ever needs that
 // profile's own code, never this.
@@ -369,41 +378,45 @@ wss.on('connection',(ws)=>{
       if(unlockedId) ws.send(JSON.stringify({type:'stats',name:unlockedName,stats:getStats(unlockedId)}));
     }
 
-    // Unlike get_stats above, this one IS keyed by an arbitrary msg.name —
-    // deliberately, for the Rankings "click a name to see their card"
-    // feature. Not a new category of exposure: the leaderboard itself
-    // already broadcasts every player's aggregate stats (wins, avg
-    // placement, best hand, ...) to anyone who opens Rankings, and
-    // listProfiles() already sends every profile's name+icon before any
-    // unlock at all — this just extends "public by design" to the full
-    // getStats() shape. getStats(id) safely falls back to an all-zero
-    // empty record for an unknown/mistyped name (getId returns undefined,
-    // getStats treats that as "no record") rather than erroring, so a
-    // stale/renamed/deleted name just shows a blank card, not a crash.
-    // Sent as its own 'player_stats' type, NOT reusing 'stats' — the
-    // 'stats' handler in onMsg also refreshes the VIEWER's own unlockedThemes/
-    // unlockedTitles/achievements/nameplate tier from whatever it's given,
-    // so routing another player's data through it would corrupt the
-    // viewer's own Voice Theme/Title pickers with someone else's unlocks.
-    if(msg.type==='get_player_stats'){
-      const name=String(msg.name||'').trim();
-      if(name) ws.send(JSON.stringify({type:'player_stats',name,icon:getIcon(name),title:getTitle(name),stats:getStats(getId(name))}));
-    }
-
     if(msg.type==='get_leaderboard'){
       const variant=msg.variant==='sanma'?'sanma':'yonma';
-      // Whitelisted against stats.js's getLeaderboard, which otherwise just
-      // does (b[sortBy]||0)-(a[sortBy]||0) on whatever field name it's
-      // given — an unchecked client-supplied sortBy could sort by any
-      // field on the row object (or silently no-op on a typo) instead of
-      // one of the ones the Rankings UI actually offers tabs for.
-      const validSorts=['totalFinalScore','gamesWon','avgPlacement','bestScore','bestHan','handsWon','yakumanCount','dealInRate'];
-      const sortBy=validSorts.includes(msg.sortBy)?msg.sortBy:'totalFinalScore';
+      const sortBy=VALID_LEADERBOARD_SORTS.includes(msg.sortBy)?msg.sortBy:'totalFinalScore';
       // getLeaderboard returns {id,...} rows (stats.js has no notion of
       // names) — attach each row's current display name here, the one
       // place id and name actually need to meet for this message.
       const entries=getLeaderboard(sortBy,variant).map(e=>({...e,name:getNameById(e.id)}));
       ws.send(JSON.stringify({type:'leaderboard',variant,sortBy,entries}));
+    }
+
+    // Rankings "click a name to see their card" feature — keyed by an
+    // arbitrary msg.name, unlike get_stats above, deliberately: not a new
+    // category of exposure, just the same public leaderboard row (see
+    // get_leaderboard right above) for ONE player instead of everyone.
+    // Reuses getLeaderboard() itself (not getStats()) so this is always
+    // exactly the same number, filtered by the same minimum-sample gates,
+    // that the leaderboard itself would show — no separate/duplicated
+    // computation to drift out of sync with it. `entry` is null if this
+    // player doesn't currently qualify for a rank in this sort (e.g. below
+    // the minimum-hands gate for a rate stat, or no profile by this name
+    // at all) — the client shows a "not enough data" message rather than
+    // treating that as an error.
+    // Sent as its own 'player_stats' type, NOT reusing 'leaderboard' or
+    // 'stats' — 'stats' in particular also refreshes the VIEWER's own
+    // unlockedThemes/unlockedTitles/achievements/nameplate tier from
+    // whatever it's given, so routing another player's data through it
+    // would corrupt the viewer's own Voice Theme/Title pickers.
+    if(msg.type==='get_player_stats'){
+      const name=String(msg.name||'').trim();
+      if(!name) return;
+      const variant=msg.variant==='sanma'?'sanma':'yonma';
+      const sortBy=VALID_LEADERBOARD_SORTS.includes(msg.sortBy)?msg.sortBy:'totalFinalScore';
+      const id=getId(name);
+      const rows=getLeaderboard(sortBy,variant);
+      const idx=rows.findIndex(r=>r.id===id);
+      ws.send(JSON.stringify({
+        type:'player_stats',name,icon:getIcon(name),title:getTitle(name),
+        variant,sortBy,rank:idx>=0?idx+1:null,entry:idx>=0?rows[idx]:null,
+      }));
     }
 
     if(msg.type==='list_profiles'){

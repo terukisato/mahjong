@@ -1148,33 +1148,41 @@ function renderLeaderboard(m){
   const myName=$('iname').value.trim()||'Player';
   const rows=entries.map((e,i)=>{
     const mine=e.name===myName;
-    // Just the one figure this tab is actually ranked by — no more W/G
-    // record tagging along as secondary context on every row.
-    let primary;
-    switch(currentLeaderboardSort){
-      case 'gamesWon': primary=`${e.gamesWon} wins`; break;
-      case 'avgPlacement': primary=`${e.avgPlacement.toFixed(2)} avg place`; break;
-      case 'bestScore': primary=`${e.bestScore.toLocaleString()} pts (best hand)`; break;
-      case 'bestHan': primary=`${e.bestHan} han (best)`; break;
-      case 'handsWon': primary=`${e.handsWon} hands won`; break;
-      case 'yakumanCount': primary=`${e.yakumanCount} yakuman`; break;
-      case 'dealInRate': primary=`${e.dealInRate.toFixed(1)}% deal-in`; break;
-      default: primary=`${e.totalFinalScore.toLocaleString()} pts`;
-    }
     return `<div class="sp-row${mine?' sp-row-mine':''}" data-player-name="${escHtml(e.name)}">
       <span class="sp-label sp-label-clickable" onclick="openPlayerCard(this)">#${i+1} ${escHtml(e.name)}</span>
-      <span>${primary}</span>
+      <span>${formatRankingPrimary(e,currentLeaderboardSort)}</span>
     </div>`;
   }).join('');
   body.innerHTML=rows;
 }
 
+// The one figure a leaderboard row (or a player card — see
+// openPlayerCard/renderPlayerCard below) is actually ranked by, formatted
+// to match whichever sort tab is active — shared so both places always
+// read identically for the same sort. `e`/entry is a getLeaderboard() row
+// shape ({gamesWon, avgPlacement, bestScore, bestHan, handsWon,
+// yakumanCount, dealInRate, totalFinalScore, ...} — see server/stats.js).
+function formatRankingPrimary(e,sortBy){
+  switch(sortBy){
+    case 'gamesWon': return `${e.gamesWon} wins`;
+    case 'avgPlacement': return `${e.avgPlacement.toFixed(2)} avg place`;
+    case 'bestScore': return `${e.bestScore.toLocaleString()} pts (best hand)`;
+    case 'bestHan': return `${e.bestHan} han (best)`;
+    case 'handsWon': return `${e.handsWon} hands won`;
+    case 'yakumanCount': return `${e.yakumanCount} yakuman`;
+    case 'dealInRate': return `${e.dealInRate.toFixed(1)}% deal-in`;
+    default: return `${e.totalFinalScore.toLocaleString()} pts`;
+  }
+}
+
 // Clicking a name in Rankings opens a separate modal (#player-card-modal,
 // stacked on top of Rankings — see its own comment in index.html) showing
-// ONLY that one player's own nameplate+stats, not the leaderboard list
-// itself. Tracks the currently-requested name so a slow response can't
-// clobber a LATER click's result if the player clicks a second name (or
-// closes the modal) before the first response arrives — see renderPlayerCard.
+// ONLY that one player's nameplate + their ranking data for the CURRENTLY
+// active sort/variant — the same single figure their leaderboard row
+// already shows, not their whole stats history (see renderPlayerCard).
+// Tracks the currently-requested name so a slow response can't clobber a
+// LATER click's result if the player clicks a second name (or closes the
+// modal) before the first response arrives.
 let pendingPlayerCardName=null;
 function openPlayerCard(labelEl){
   const row=labelEl.closest('.sp-row');
@@ -1183,7 +1191,7 @@ function openPlayerCard(labelEl){
   $('player-card-body').innerHTML=`<p class="player-card-loading">Loading…</p>`;
   $('player-card-modal').classList.add('visible');
   $('player-card-backdrop').classList.add('visible');
-  wss({type:'get_player_stats',name});
+  wss({type:'get_player_stats',name,variant:currentLeaderboardVariant,sortBy:currentLeaderboardSort});
 }
 
 function closePlayerCard(){
@@ -1198,24 +1206,27 @@ function closePlayerCard(){
 // refreshes the viewer's own unlockedThemes/unlockedTitles/achievements/
 // nameplate tier from whatever it's given, which would corrupt all of
 // those with some OTHER player's unlocks if this reused it.
+// `m.entry` is null when this player doesn't currently qualify for a rank
+// in this sort (e.g. below the minimum-sample gate for a rate stat, or no
+// profile by this name at all) — shown as a plain "not enough data"
+// message rather than a blank/broken row.
 function renderPlayerCard(m){
   if(m.name!==pendingPlayerCardName) return; // stale — modal closed or a different name clicked since
-  const wins=(m.stats.yonma.gamesWon||0)+(m.stats.sanma.gamesWon||0);
-  const tierClass=wins>=200?'tier-diamond':wins>=100?'tier-platinum':wins>=50?'tier-gold':wins>=10?'tier-silver':'';
-  $('player-card-body').innerHTML=`
-    <div class="about-title up-nameplate player-card-nameplate ${tierClass}">
+  const nameplate=`
+    <div class="about-title up-nameplate player-card-nameplate">
       <span class="pnp-icon">${iconSvg(m.icon)}</span>
       <span class="pnp-info">
         <span class="pnp-name">${escHtml(m.name)}</span>
         <span class="pnp-title">${escHtml(m.title||'Beginner')}</span>
       </span>
-    </div>
-    <div class="about-section-title">四人麻雀 YONMA</div>
-    ${renderStatsBlock(m.stats.yonma,'rank-yonma')}
-    <div class="about-section" style="margin-top:18px;">
-      <div class="about-section-title">三人麻雀 SANMA</div>
-      ${renderStatsBlock(m.stats.sanma,'rank-sanma')}
-    </div>
+    </div>`;
+  if(!m.entry){
+    $('player-card-body').innerHTML=nameplate+`<p>Not ranked yet — not enough games/hands recorded for this ranking.</p>`;
+    return;
+  }
+  $('player-card-body').innerHTML=nameplate+`
+    <div class="sp-row"><span class="sp-label">Rank</span><span>#${m.rank}</span></div>
+    <div class="sp-row"><span class="sp-label">${escHtml(RANK_SORT_LABELS[m.sortBy]||'Points')}</span><span>${formatRankingPrimary(m.entry,m.sortBy)}</span></div>
   `;
 }
 
