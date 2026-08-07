@@ -961,7 +961,6 @@ function renderPlacementBar(rank,count,total){
 
 function renderStatsBlock(s,variant){
   if(!s||s.gamesPlayed===0) return `<p>No games recorded yet in this mode. Play a full match to start building stats.</p>`;
-  const winRate=((s.gamesWon/s.gamesPlayed)*100).toFixed(1);
   const avgScore=Math.round(s.totalFinalScore/s.gamesPlayed);
   const dealInRate=s.handsWon+s.dealIns>0?((s.dealIns/(s.handsWon+s.dealIns))*100).toFixed(1):'0.0';
   // Hora/Tsumo/Huro/Riichi rate are all "X per hand played" (handsPlayed is
@@ -986,7 +985,6 @@ function renderStatsBlock(s,variant){
   const placementBars=Array.from({length:numRanks},(_,i)=>renderPlacementBar(i+1,s.placements[i],s.gamesPlayed)).join('');
   let rows=`
     <div class="sp-row"><span class="sp-label">Games Played</span><span>${s.gamesPlayed}</span></div>
-    <div class="sp-row"><span class="sp-label">1st-Place Finishes</span><span>${s.gamesWon} (${winRate}%)</span></div>
     <div class="place-bars"><div class="sp-label">Placements</div>${placementBars}</div>
     <div class="sp-row"><span class="sp-label">Avg Final Score</span><span>${avgScore.toLocaleString()}</span></div>
     <div class="sp-row"><span class="sp-label">Hands Played</span><span>${s.handsPlayed}</span></div>
@@ -1164,52 +1162,47 @@ function renderLeaderboard(m){
       default: primary=`${e.totalFinalScore.toLocaleString()} pts`;
     }
     return `<div class="sp-row${mine?' sp-row-mine':''}" data-player-name="${escHtml(e.name)}">
-      <span class="sp-label sp-label-clickable" onclick="togglePlayerCard(this)">#${i+1} ${escHtml(e.name)}</span>
+      <span class="sp-label sp-label-clickable" onclick="openPlayerCard(this)">#${i+1} ${escHtml(e.name)}</span>
       <span>${primary}</span>
     </div>`;
   }).join('');
   body.innerHTML=rows;
 }
 
-// Clicking a name in Rankings expands (or, if already expanded, collapses)
-// that player's nameplate + stats directly below their row — only one open
-// at a time, matching a simple accordion rather than letting the list grow
-// unbounded. Re-fetches every time rather than caching: Rankings itself is
-// already a fresh get_leaderboard round trip on every open/sort-change, so
-// there's no expectation of this being any more "live" than that, just no
-// reason to add a cache for something this cheap and rarely re-clicked.
-function togglePlayerCard(labelEl){
+// Clicking a name in Rankings opens a separate modal (#player-card-modal,
+// stacked on top of Rankings — see its own comment in index.html) showing
+// ONLY that one player's own nameplate+stats, not the leaderboard list
+// itself. Tracks the currently-requested name so a slow response can't
+// clobber a LATER click's result if the player clicks a second name (or
+// closes the modal) before the first response arrives — see renderPlayerCard.
+let pendingPlayerCardName=null;
+function openPlayerCard(labelEl){
   const row=labelEl.closest('.sp-row');
   const name=row.dataset.playerName;
-  const existing=row.nextElementSibling;
-  if(existing&&existing.classList.contains('player-card')){
-    const wasThisRow=existing.dataset.playerName===name;
-    existing.remove();
-    if(wasThisRow) return; // re-clicking the same (already open) row just closes it
-  }
-  // Only one card open at a time — drop any other still-open card before
-  // opening this one (harmless no-op if none was open).
-  document.querySelectorAll('#rankings-body .player-card').forEach(el=>el.remove());
-  const card=document.createElement('div');
-  card.className='player-card';
-  card.dataset.playerName=name;
-  card.innerHTML=`<p class="player-card-loading">Loading…</p>`;
-  row.insertAdjacentElement('afterend',card);
+  pendingPlayerCardName=name;
+  $('player-card-body').innerHTML=`<p class="player-card-loading">Loading…</p>`;
+  $('player-card-modal').classList.add('visible');
+  $('player-card-backdrop').classList.add('visible');
   wss({type:'get_player_stats',name});
 }
 
-// Response handler for togglePlayerCard's request — see onMsg's
+function closePlayerCard(){
+  pendingPlayerCardName=null;
+  $('player-card-modal').classList.remove('visible');
+  $('player-card-backdrop').classList.remove('visible');
+}
+
+// Response handler for openPlayerCard's request — see onMsg's
 // 'player_stats' branch. Deliberately a separate message type from 'stats'
 // (the current user's OWN stats response), not reused: that handler also
 // refreshes the viewer's own unlockedThemes/unlockedTitles/achievements/
 // nameplate tier from whatever it's given, which would corrupt all of
 // those with some OTHER player's unlocks if this reused it.
 function renderPlayerCard(m){
-  const card=document.querySelector(`#rankings-body .player-card[data-player-name="${cssEscapeAttr(m.name)}"]`);
-  if(!card) return; // panel closed, or a different row opened, before this arrived
+  if(m.name!==pendingPlayerCardName) return; // stale — modal closed or a different name clicked since
   const wins=(m.stats.yonma.gamesWon||0)+(m.stats.sanma.gamesWon||0);
   const tierClass=wins>=200?'tier-diamond':wins>=100?'tier-platinum':wins>=50?'tier-gold':wins>=10?'tier-silver':'';
-  card.innerHTML=`
+  $('player-card-body').innerHTML=`
     <div class="about-title up-nameplate player-card-nameplate ${tierClass}">
       <span class="pnp-icon">${iconSvg(m.icon)}</span>
       <span class="pnp-info">
@@ -1225,13 +1218,6 @@ function renderPlayerCard(m){
     </div>
   `;
 }
-
-// CSS.escape isn't available in every target environment this codebase
-// otherwise supports without a polyfill — this only ever needs to be safe
-// inside a double-quoted attribute selector, not general CSS-identifier-safe,
-// so escaping just the characters that would break out of the quotes is
-// enough (mirrors escHtml's own narrow, purpose-built scope).
-function cssEscapeAttr(s){return s.replace(/["\\]/g,'\\$&');}
 
 // ════════════════════════════════════════════════════════════
 // PROFILES — replaces free-typed names: play requires selecting an

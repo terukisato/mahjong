@@ -216,6 +216,20 @@
   </div>
 </div>
 
+<!-- Player Card — opened by clicking a name in Rankings (see
+     openPlayerCard/renderPlayerCard in script.js). A separate modal
+     rather than an inline expand under the row, and deliberately shows
+     ONLY that one player's own nameplate+stats — not the Rankings list
+     itself — so it reads as "look up this player" rather than a second
+     copy of the leaderboard. Placed after #rankings-modal in the DOM so
+     it stacks on top of it (both share the same .about-modal z-index —
+     see style.css — later-in-DOM wins the tie). -->
+<div id="player-card-backdrop" class="about-backdrop" onclick="closePlayerCard()"></div>
+<div id="player-card-modal" class="about-modal">
+  <button class="about-close" onclick="closePlayerCard()">✕</button>
+  <div class="about-body" id="player-card-body">Loading…</div>
+</div>
+
 <!-- Room List — an alternative to "Find Match" for playing with a
      specific person: create a room with your own rule picks (see
      openCreateRoomRules/confirmCreateRoom in script.js, which route through
