@@ -996,6 +996,23 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .about-body .sp-row{padding:calc(var(--ui-vmin, 7.2px) * .556) 0;}
 /* Highlights the current player's own row in the Rankings list. */
 .sp-row-mine .sp-label{color:var(--gold);font-weight:700;}
+/* Rankings name → player card (see togglePlayerCard in script.js). */
+.sp-label-clickable{cursor:pointer;text-decoration:underline;text-decoration-color:rgba(201,168,76,.35);
+  text-underline-offset:2px;transition:color .15s;}
+.sp-label-clickable:hover{color:var(--gold);}
+/* Expands directly below the clicked row (a sibling .sp-row, inserted via
+   insertAdjacentElement) — same dark/gold "panel within a panel" look as
+   the settings sections around it, not a popup, since it's meant to read
+   as part of the list rather than an overlay on top of it. */
+.player-card{margin:calc(var(--ui-vmin, 7.2px) * .556) 0 calc(var(--ui-vmin, 7.2px) * 1.111);
+  padding:calc(var(--ui-vmin, 7.2px) * 1.111);border-radius:8px;
+  background:rgba(0,0,0,.25);border:1px solid rgba(201,168,76,.15);}
+.player-card-loading{text-align:center;color:rgba(245,237,216,.5);padding:calc(var(--ui-vmin, 7.2px) * 1.111) 0;}
+/* Reuses .up-nameplate's card look wholesale (same border/background/tier
+   shine as the User Profile hub's own nameplate) but sits inside
+   .player-card instead of .about-title's fixed modal-header spacing, so
+   just cancel the margin/positioning parts of that context here. */
+.player-card-nameplate{margin:0 0 calc(var(--ui-vmin, 7.2px) * 1.111) 0;}
 /* Rankings' sort-stat picker (Points/Wins/Avg Place/etc. — see
    setLeaderboardSort in script.js) — a real tab strip (shared bottom
    border, active tab picked out by an underline) rather than a row of

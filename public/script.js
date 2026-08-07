@@ -576,6 +576,7 @@ function onMsg(m){
     return;
   }
   if(m.type==='leaderboard'){renderLeaderboard(m);return;}
+  if(m.type==='player_stats'){renderPlayerCard(m);return;}
   if(m.type==='room_list'){renderRoomList(m);return;}
   if(m.type==='join_room_result'){if(!m.ok) toast(m.error||'Could not join that room.');return;}
   // Generic server-side rejection (currently just quick_match/create_room
@@ -1162,13 +1163,75 @@ function renderLeaderboard(m){
       case 'dealInRate': primary=`${e.dealInRate.toFixed(1)}% deal-in`; break;
       default: primary=`${e.totalFinalScore.toLocaleString()} pts`;
     }
-    return `<div class="sp-row${mine?' sp-row-mine':''}">
-      <span class="sp-label">#${i+1} ${escHtml(e.name)}</span>
+    return `<div class="sp-row${mine?' sp-row-mine':''}" data-player-name="${escHtml(e.name)}">
+      <span class="sp-label sp-label-clickable" onclick="togglePlayerCard(this)">#${i+1} ${escHtml(e.name)}</span>
       <span>${primary}</span>
     </div>`;
   }).join('');
   body.innerHTML=rows;
 }
+
+// Clicking a name in Rankings expands (or, if already expanded, collapses)
+// that player's nameplate + stats directly below their row — only one open
+// at a time, matching a simple accordion rather than letting the list grow
+// unbounded. Re-fetches every time rather than caching: Rankings itself is
+// already a fresh get_leaderboard round trip on every open/sort-change, so
+// there's no expectation of this being any more "live" than that, just no
+// reason to add a cache for something this cheap and rarely re-clicked.
+function togglePlayerCard(labelEl){
+  const row=labelEl.closest('.sp-row');
+  const name=row.dataset.playerName;
+  const existing=row.nextElementSibling;
+  if(existing&&existing.classList.contains('player-card')){
+    const wasThisRow=existing.dataset.playerName===name;
+    existing.remove();
+    if(wasThisRow) return; // re-clicking the same (already open) row just closes it
+  }
+  // Only one card open at a time — drop any other still-open card before
+  // opening this one (harmless no-op if none was open).
+  document.querySelectorAll('#rankings-body .player-card').forEach(el=>el.remove());
+  const card=document.createElement('div');
+  card.className='player-card';
+  card.dataset.playerName=name;
+  card.innerHTML=`<p class="player-card-loading">Loading…</p>`;
+  row.insertAdjacentElement('afterend',card);
+  wss({type:'get_player_stats',name});
+}
+
+// Response handler for togglePlayerCard's request — see onMsg's
+// 'player_stats' branch. Deliberately a separate message type from 'stats'
+// (the current user's OWN stats response), not reused: that handler also
+// refreshes the viewer's own unlockedThemes/unlockedTitles/achievements/
+// nameplate tier from whatever it's given, which would corrupt all of
+// those with some OTHER player's unlocks if this reused it.
+function renderPlayerCard(m){
+  const card=document.querySelector(`#rankings-body .player-card[data-player-name="${cssEscapeAttr(m.name)}"]`);
+  if(!card) return; // panel closed, or a different row opened, before this arrived
+  const wins=(m.stats.yonma.gamesWon||0)+(m.stats.sanma.gamesWon||0);
+  const tierClass=wins>=200?'tier-diamond':wins>=100?'tier-platinum':wins>=50?'tier-gold':wins>=10?'tier-silver':'';
+  card.innerHTML=`
+    <div class="about-title up-nameplate player-card-nameplate ${tierClass}">
+      <span class="pnp-icon">${iconSvg(m.icon)}</span>
+      <span class="pnp-info">
+        <span class="pnp-name">${escHtml(m.name)}</span>
+        <span class="pnp-title">${escHtml(m.title||'Beginner')}</span>
+      </span>
+    </div>
+    <div class="about-section-title">四人麻雀 YONMA</div>
+    ${renderStatsBlock(m.stats.yonma,'rank-yonma')}
+    <div class="about-section" style="margin-top:18px;">
+      <div class="about-section-title">三人麻雀 SANMA</div>
+      ${renderStatsBlock(m.stats.sanma,'rank-sanma')}
+    </div>
+  `;
+}
+
+// CSS.escape isn't available in every target environment this codebase
+// otherwise supports without a polyfill — this only ever needs to be safe
+// inside a double-quoted attribute selector, not general CSS-identifier-safe,
+// so escaping just the characters that would break out of the quotes is
+// enough (mirrors escHtml's own narrow, purpose-built scope).
+function cssEscapeAttr(s){return s.replace(/["\\]/g,'\\$&');}
 
 // ════════════════════════════════════════════════════════════
 // PROFILES — replaces free-typed names: play requires selecting an

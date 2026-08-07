@@ -369,6 +369,27 @@ wss.on('connection',(ws)=>{
       if(unlockedId) ws.send(JSON.stringify({type:'stats',name:unlockedName,stats:getStats(unlockedId)}));
     }
 
+    // Unlike get_stats above, this one IS keyed by an arbitrary msg.name —
+    // deliberately, for the Rankings "click a name to see their card"
+    // feature. Not a new category of exposure: the leaderboard itself
+    // already broadcasts every player's aggregate stats (wins, avg
+    // placement, best hand, ...) to anyone who opens Rankings, and
+    // listProfiles() already sends every profile's name+icon before any
+    // unlock at all — this just extends "public by design" to the full
+    // getStats() shape. getStats(id) safely falls back to an all-zero
+    // empty record for an unknown/mistyped name (getId returns undefined,
+    // getStats treats that as "no record") rather than erroring, so a
+    // stale/renamed/deleted name just shows a blank card, not a crash.
+    // Sent as its own 'player_stats' type, NOT reusing 'stats' — the
+    // 'stats' handler in onMsg also refreshes the VIEWER's own unlockedThemes/
+    // unlockedTitles/achievements/nameplate tier from whatever it's given,
+    // so routing another player's data through it would corrupt the
+    // viewer's own Voice Theme/Title pickers with someone else's unlocks.
+    if(msg.type==='get_player_stats'){
+      const name=String(msg.name||'').trim();
+      if(name) ws.send(JSON.stringify({type:'player_stats',name,icon:getIcon(name),title:getTitle(name),stats:getStats(getId(name))}));
+    }
+
     if(msg.type==='get_leaderboard'){
       const variant=msg.variant==='sanma'?'sanma':'yonma';
       // Whitelisted against stats.js's getLeaderboard, which otherwise just
