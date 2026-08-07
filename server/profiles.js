@@ -36,6 +36,16 @@ const TITLES = [
   'Tsumo Specialist', 'Ron Specialist', 'Hand Collector', 'Podium Regular',
   'Lightning Reflexes', 'Quick Draw', 'All Triplets', 'Three Colors',
   'Pure Runner', 'Dora Rich', 'The Diamond',
+  // Point milestones (see server/achievements.js's yonma/sanma_100k/105k)
+  'Hoarder', 'Overlord', 'Sanma Hoarder', 'Sanma Overlord',
+  // Sanma double-bankruptcy (double_knockout)
+  'Double Knockout',
+  // Per-yaku titles (see server/achievements.js's *_win achievements)
+  'Robbing Kan', 'Dead Wall Diver', 'Last Tile Standing', "River's End",
+  'Instant Riichi', 'Triple Threat', 'Triple Triplet', 'Rainbow Run',
+  'Terminal Case', 'Straight Shooter', 'Edge Player', 'Dragon Tamer',
+  'Kan Collector', 'Mono Color', 'Pure Edge', 'Double Twin', 'Clean Sweep',
+  'One Suit Wonder', 'Grand Master',
 ];
 
 // Keyed by a stable, never-reused `id` — a random 16-digit number (as a

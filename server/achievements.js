@@ -51,6 +51,15 @@ const YAKUMAN_NAMES = [
 ];
 const yakumanProgress = s => YAKUMAN_NAMES.some(n => yakuCount(s, n) > 0) ? 1 : 0;
 const flushProgress = s => (yakuCount(s, 'Chinitsu') > 0 || yakuCount(s, 'Honitsu') > 0) ? 1 : 0;
+// Largest GAME-ENDING score, not the largest single-hand payout (that's
+// bestScore/'High Roller' above) — see stats.js's bestFinalScore, which is
+// tracked from finalScores[seat] at game end, not from any one hand's win.
+const bestFinalScoreYonma = s => s.yonma.bestFinalScore;
+const bestFinalScoreSanma = s => s.sanma.bestFinalScore;
+// Sanma-only by design (see room.js's _endRound comment) — a tsumo is the
+// only win type that pays from every opponent simultaneously, so it's the
+// only way to bankrupt more than one at once from a single win.
+const doubleBustWins = s => s.sanma.doubleBustWins;
 
 const ACHIEVEMENTS = [
   { id: 'first_win', label: 'Win your first game', unlocksTheme: 'Natsu', target: 1, progress: s => Math.min(gamesWon(s), 1), check: s => gamesWon(s) >= 1 },
@@ -98,6 +107,45 @@ const ACHIEVEMENTS = [
   // in script.js), same threshold, so earning this title lines up with the
   // nameplate visibly changing too.
   { id: 'the_diamond', label: 'Win 200 games', unlocksTitle: 'The Diamond', target: 200, progress: gamesWon, check: s => gamesWon(s) >= 200 },
+
+  // ── Point milestones — a single GAME's final score, not a cumulative
+  // total (see bestFinalScoreYonma/Sanma above). Separate titles per
+  // variant since yonma's 100,000-point pool and sanma's 105,000-point
+  // pool make the same number a different feat in each (100k in yonma is
+  // near-total domination; 105k in sanma is the literal entire pool).
+  { id: 'yonma_100k', label: 'Reach a final score of 100,000+ in yonma', unlocksTitle: 'Hoarder', target: 100000, progress: bestFinalScoreYonma, check: s => bestFinalScoreYonma(s) >= 100000 },
+  { id: 'yonma_105k', label: 'Reach a final score of 105,000+ in yonma', unlocksTitle: 'Overlord', target: 105000, progress: bestFinalScoreYonma, check: s => bestFinalScoreYonma(s) >= 105000 },
+  { id: 'sanma_100k', label: 'Reach a final score of 100,000+ in sanma', unlocksTitle: 'Sanma Hoarder', target: 100000, progress: bestFinalScoreSanma, check: s => bestFinalScoreSanma(s) >= 100000 },
+  { id: 'sanma_105k', label: 'Reach a final score of 105,000+ in sanma', unlocksTitle: 'Sanma Overlord', target: 105000, progress: bestFinalScoreSanma, check: s => bestFinalScoreSanma(s) >= 105000 },
+
+  // ── Sanma double-bankruptcy — tsumo only, see doubleBustWins above.
+  { id: 'double_knockout', label: 'Win a tsumo that bankrupts both opponents (sanma)', unlocksTitle: 'Double Knockout', target: 1, progress: s => Math.min(doubleBustWins(s), 1), check: s => doubleBustWins(s) >= 1 },
+
+  // ── Per-yaku achievements — one title per specific yaku, independent of
+  // any existing achievement that might already cover the same yaku (e.g.
+  // 'quick_draw'/Double Riichi, 'pure_runner'/Ittsu, 'three_colors'/
+  // Sanshoku, 'flush_master'/Chinitsu+Honitsu, 'yakuman_hunter' above) —
+  // deliberately kept separate rather than reused, so this whole batch
+  // reads as one consistent "one title per yaku" set.
+  { id: 'chankan_win', label: 'Win with Chankan', unlocksTitle: 'Robbing Kan', target: 1, progress: s => Math.min(yakuCount(s, 'Chankan'), 1), check: s => yakuCount(s, 'Chankan') > 0 },
+  { id: 'rinshan_win', label: 'Win with Rinshan Kaihou', unlocksTitle: 'Dead Wall Diver', target: 1, progress: s => Math.min(yakuCount(s, 'Rinshan Kaihou'), 1), check: s => yakuCount(s, 'Rinshan Kaihou') > 0 },
+  { id: 'haitei_win', label: 'Win with Haitei', unlocksTitle: 'Last Tile Standing', target: 1, progress: s => Math.min(yakuCount(s, 'Haitei'), 1), check: s => yakuCount(s, 'Haitei') > 0 },
+  { id: 'houtei_win', label: 'Win with Houtei', unlocksTitle: "River's End", target: 1, progress: s => Math.min(yakuCount(s, 'Houtei'), 1), check: s => yakuCount(s, 'Houtei') > 0 },
+  { id: 'double_riichi_win', label: 'Win with Double Riichi', unlocksTitle: 'Instant Riichi', target: 1, progress: s => Math.min(yakuCount(s, 'Double Riichi'), 1), check: s => yakuCount(s, 'Double Riichi') > 0 },
+  { id: 'sanankou_win', label: 'Win with San Ankou', unlocksTitle: 'Triple Threat', target: 1, progress: s => Math.min(yakuCount(s, 'San Ankou'), 1), check: s => yakuCount(s, 'San Ankou') > 0 },
+  { id: 'sanshoku_doukou_win', label: 'Win with Sanshoku Doukou', unlocksTitle: 'Triple Triplet', target: 1, progress: s => Math.min(yakuCount(s, 'Sanshoku Doukou'), 1), check: s => yakuCount(s, 'Sanshoku Doukou') > 0 },
+  { id: 'sanshoku_doujun_win', label: 'Win with Sanshoku Doujun', unlocksTitle: 'Rainbow Run', target: 1, progress: s => Math.min(yakuCount(s, 'Sanshoku Doujun'), 1), check: s => yakuCount(s, 'Sanshoku Doujun') > 0 },
+  { id: 'honroutou_win', label: 'Win with Honroutou', unlocksTitle: 'Terminal Case', target: 1, progress: s => Math.min(yakuCount(s, 'Honroutou'), 1), check: s => yakuCount(s, 'Honroutou') > 0 },
+  { id: 'ittsu_win', label: 'Win with Ittsu', unlocksTitle: 'Straight Shooter', target: 1, progress: s => Math.min(yakuCount(s, 'Ittsu'), 1), check: s => yakuCount(s, 'Ittsu') > 0 },
+  { id: 'chanta_win', label: 'Win with Chanta', unlocksTitle: 'Edge Player', target: 1, progress: s => Math.min(yakuCount(s, 'Chanta'), 1), check: s => yakuCount(s, 'Chanta') > 0 },
+  { id: 'shousangen_win', label: 'Win with Shousangen', unlocksTitle: 'Dragon Tamer', target: 1, progress: s => Math.min(yakuCount(s, 'Shousangen'), 1), check: s => yakuCount(s, 'Shousangen') > 0 },
+  { id: 'sankantsu_win', label: 'Win with San Kantsu', unlocksTitle: 'Kan Collector', target: 1, progress: s => Math.min(yakuCount(s, 'San Kantsu'), 1), check: s => yakuCount(s, 'San Kantsu') > 0 },
+  { id: 'honitsu_win', label: 'Win with Honitsu', unlocksTitle: 'Mono Color', target: 1, progress: s => Math.min(yakuCount(s, 'Honitsu'), 1), check: s => yakuCount(s, 'Honitsu') > 0 },
+  { id: 'junchan_win', label: 'Win with Junchan', unlocksTitle: 'Pure Edge', target: 1, progress: s => Math.min(yakuCount(s, 'Junchan'), 1), check: s => yakuCount(s, 'Junchan') > 0 },
+  { id: 'ryanpeiko_win', label: 'Win with Ryanpeiko', unlocksTitle: 'Double Twin', target: 1, progress: s => Math.min(yakuCount(s, 'Ryanpeiko'), 1), check: s => yakuCount(s, 'Ryanpeiko') > 0 },
+  { id: 'nagashi_mangan_win', label: 'Win with Nagashi Mangan', unlocksTitle: 'Clean Sweep', target: 1, progress: s => Math.min(yakuCount(s, 'Nagashi Mangan'), 1), check: s => yakuCount(s, 'Nagashi Mangan') > 0 },
+  { id: 'chinitsu_win', label: 'Win with Chinitsu', unlocksTitle: 'One Suit Wonder', target: 1, progress: s => Math.min(yakuCount(s, 'Chinitsu'), 1), check: s => yakuCount(s, 'Chinitsu') > 0 },
+  { id: 'yakuman_master', label: 'Achieve any yakuman or double yakuman', unlocksTitle: 'Grand Master', target: 1, progress: yakumanProgress, check: s => yakumanProgress(s) >= 1 },
 ];
 
 // Mutates `s` in place: grants any newly-qualifying achievement/theme/

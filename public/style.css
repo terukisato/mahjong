@@ -712,7 +712,12 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    index.html). 4s total lifetime matches the emojiPop animation length
    exactly, so JS's setTimeout(...,4000) removal lands right as it
    finishes fading rather than cutting it off mid-animation. */
-.emoji-layer{position:fixed;inset:0;z-index:301;pointer-events:none;overflow:hidden;}
+/* z-index:150 — above every table/game element (nameplates/tiles/action
+   bar top out around 60) but below the call banner (.cb-layer:205, pon/
+   chii/kan/riichi), round-start card (.rs-layer:210), toast (.tc:200),
+   loading overlay (#game-loading:200), and the end-game panel (#s-end:
+   250) — a reaction shouldn't ever cover any of those. */
+.emoji-layer{position:fixed;inset:0;z-index:150;pointer-events:none;overflow:hidden;}
 /* Plain anchor point — left/top set inline (JS) to the seat's on-screen
    centre, no transform of its own. See showEmojiPopup's own comment in
    script.js for what each of the three nested elements below is for. */

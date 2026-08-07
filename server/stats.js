@@ -74,7 +74,9 @@ function _emptyMatchKindStats() {
     huro: 0,        // hands where this player's own hand went open (pon/chi/open kan) at some point
     busts: 0,       // games ended by this player going bankrupt ("tobi")
     bestHan: 0,
-    bestScore: 0,
+    bestScore: 0,        // largest single-HAND payout (tsumo/ron), not a game's final score
+    bestFinalScore: 0,   // largest GAME-ENDING score — see the 100k/105k point-milestone achievements
+    doubleBustWins: 0,   // tsumo wins that bankrupted 2+ opponents at once (sanma-only achievement)
     yaku: {},
   };
 }
@@ -147,7 +149,9 @@ function _fillVariantDefaults(v) {
         handsWon: v.handsWon, tsumoWon: v.tsumoWon, ronWon: v.ronWon,
         riichiDeclared: v.riichiDeclared, dealIns: v.dealIns,
         handsPlayed: v.handsPlayed, huro: v.huro, busts: v.busts,
-        bestHan: v.bestHan, bestScore: v.bestScore, yaku: { ...v.yaku },
+        bestHan: v.bestHan, bestScore: v.bestScore,
+        bestFinalScore: v.bestFinalScore, doubleBustWins: v.doubleBustWins,
+        yaku: { ...v.yaku },
       },
       room: _emptyMatchKindStats(),
     };
@@ -282,8 +286,10 @@ function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placeme
       bucket.handsPlayed += handsPlayed;
       bucket.huro += hs.huro || 0;
       if (seat === bustedSeat) bucket.busts++;
+      bucket.doubleBustWins += hs.doubleBust || 0;
       bucket.bestHan = Math.max(bucket.bestHan, hs.bestHan || 0);
       bucket.bestScore = Math.max(bucket.bestScore, hs.bestScore || 0);
+      bucket.bestFinalScore = Math.max(bucket.bestFinalScore, finalScores[seat]);
       for (const [k, v] of Object.entries(hs.yaku || {})) bucket.yaku[k] = (bucket.yaku[k] || 0) + v;
     }
     // Achievement checks see the whole record (both variants) — a "first

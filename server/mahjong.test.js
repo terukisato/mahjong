@@ -423,6 +423,62 @@ test('Suu Kantsu (4 kans, yakuman)', () => {
   assertHas(r, 'Suu Kantsu');
 });
 
+test('San Kantsu (3 kans)', () => {
+  const hand = [...tri(9, 'p'), ...pairT(5, 'm')];
+  const melds = [
+    meld('kan', [T(1, 'z'), T(1, 'z'), T(1, 'z'), T(1, 'z')]),
+    meld('kan', [T(2, 'z'), T(2, 'z'), T(2, 'z'), T(2, 'z')]),
+    meld('kan', [T(3, 'z'), T(3, 'z'), T(3, 'z'), T(3, 'z')]),
+  ];
+  const r = Y(hand, melds, { seatWind: 4, winTileKey: '5m' });
+  assertHas(r, 'San Kantsu');
+});
+
+test('San Kantsu does NOT fire on 4 kans (that is Suu Kantsu, checked first and returns early)', () => {
+  const hand = [T(9, 'p'), T(9, 'p')];
+  const melds = [
+    meld('kan', [T(1, 'm'), T(1, 'm'), T(1, 'm'), T(1, 'm')]),
+    meld('kan', [T(2, 'm'), T(2, 'm'), T(2, 'm'), T(2, 'm')]),
+    meld('kan', [T(3, 'm'), T(3, 'm'), T(3, 'm'), T(3, 'm')]),
+    meld('kan', [T(4, 'm'), T(4, 'm'), T(4, 'm'), T(4, 'm')]),
+  ];
+  const r = Y(hand, melds, { winTileKey: '9p' });
+  assertNotHas(r, 'San Kantsu');
+  assertHas(r, 'Suu Kantsu');
+});
+
+test('Honroutou (terminals + honours mix)', () => {
+  const hand = [...tri(1, 'm'), ...tri(9, 'p'), ...pairT(9, 's')];
+  const melds = [
+    meld('pon', tri(1, 'p'), { open: true }),
+    meld('pon', tri(3, 'z'), { open: true }),
+  ];
+  const r = Y(hand, melds, { seatWind: 4, winTileKey: '9s' });
+  assertHas(r, 'Honroutou');
+  assertHas(r, 'Toitoi');
+});
+
+test('Honroutou does NOT fire when a simple (non-terminal, non-honour) tile is present (regression)', () => {
+  const hand = [...tri(1, 'm'), ...tri(5, 'p'), ...pairT(9, 's')];
+  const melds = [
+    meld('pon', tri(1, 'p'), { open: true }),
+    meld('pon', tri(3, 'z'), { open: true }),
+  ];
+  const r = Y(hand, melds, { seatWind: 4, winTileKey: '9s' });
+  assertNotHas(r, 'Honroutou');
+});
+
+test('Honroutou does NOT fire on all-honours (that is Tsuuiisou, a yakuman, checked before Honroutou is reachable)', () => {
+  const hand = [...tri(1, 'z'), ...tri(2, 'z'), ...pairT(3, 'z')];
+  const melds = [
+    meld('pon', tri(5, 'z'), { open: true }),
+    meld('pon', tri(6, 'z'), { open: true }),
+  ];
+  const r = Y(hand, melds, { seatWind: 4, winTileKey: '3z' });
+  assertNotHas(r, 'Honroutou');
+  assertHas(r, 'Tsuuiisou');
+});
+
 test('Suu Ankou (4 closed triplets, tsumo)', () => {
   const pre = [...tri(3, 'm'), ...tri(7, 'p'), ...tri(9, 's'), ...pairT(2, 'z'), ...pairT(6, 'z')];
   const r = Y([...pre, T(6, 'z')], [], { isTsumo: true, winTileKey: '6z' });

@@ -280,7 +280,10 @@ class Room {
       // _finishGame/_recordHandWin. `huro` (hand opened via pon/chi/open
       // kan) is tallied in _initRound, not here, since it needs to inspect
       // each seat's melds right before they're wiped for the next hand.
-      stats:new Array(this.numPlayers).fill(0).map(()=>({riichi:0,wins:0,tsumo:0,ron:0,dealIn:0,huro:0,bestHan:0,bestScore:0,yaku:{}})),
+      // `doubleBust` (tsumo wins that bankrupted 2+ opponents at once — see
+      // _endRound) is bumped there, not here, since it needs prevScores vs.
+      // post-payment g.scores from that specific win.
+      stats:new Array(this.numPlayers).fill(0).map(()=>({riichi:0,wins:0,tsumo:0,ron:0,dealIn:0,huro:0,doubleBust:0,bestHan:0,bestScore:0,yaku:{}})),
       // Hands dealt this game so far — every _initRound() call is one more
       // hand played (win, draw, or abortive draw all count; nothing about
       // a hand's outcome excludes it). Used as the denominator for
@@ -661,7 +664,7 @@ class Room {
   _resolveReactions(){
     const g=this.game;
     if(!g.pending) return;
-    const {tile,fromSeat,seats,options,responses}=g.pending;
+    const {tile,fromSeat,seats,options,responses,kita}=g.pending;
     const humanResponded=seats.filter(s=>!this.seats[s]?.isBot).every(s=>responses[s]);
     if(!humanResponded) return;
 
@@ -672,6 +675,16 @@ class Room {
     if(ronSeats.length>0){
       // Multiple ron: all win, loser pays each separately
       this._multiRon(ronSeats,fromSeat,tile);
+      return;
+    }
+
+    // Kita reactions only ever offer ron (see _kita) — pon/kan/chi never
+    // apply to a tile that never enters the discard pond. Nobody ronned:
+    // the kita completes normally (bank + draw the bonus replacement),
+    // turn stays with the same seat exactly as an uncontested kita always
+    // has — NOT _nextTurn(), unlike an uncalled real discard.
+    if(kita){
+      this._completeKita(fromSeat,tile);
       return;
     }
 
@@ -935,9 +948,49 @@ class Room {
     const tile=hand.find(t=>t.id===tileId&&key(t)==='4z');
     if(!tile) return;
     g.hands[seat]=hand.filter(t=>t.id!==tileId);
-    g.kita[seat].push(tile);
     g.nagashi[seat]=false; // self-initiated action, same precedent as calling pon/chi/kan on your own turn
-    this._broadcastAll({type:'kita',seat,name:this.seats[seat]?.name,count:g.kita[seat].length});
+    this._broadcastAll({type:'kita',seat,name:this.seats[seat]?.name,count:g.kita[seat].length+1});
+
+    // "Robbing the kita" — like chankan, other seats get one chance to ron
+    // this tile before it's banked and a replacement is drawn. Reuses the
+    // normal discard-reaction checker (identical furiten/chonbo/win-check
+    // logic) filtered down to ron only — pon/kan/chi never apply here,
+    // since a kita tile never enters the discard pond for anyone to call a
+    // set off. Previously this tile was banked into g.kita[seat] and a
+    // replacement drawn immediately, with no reaction check at all — so a
+    // hand made complete by a kita tile could never actually be ronned.
+    const reactions=this._checkReactions(seat,tile)
+      .map(r=>({seat:r.seat,options:r.options.filter(o=>o.type==='ron')}))
+      .filter(r=>r.options.length>0);
+    if(reactions.length){
+      const humanInReactions=reactions.some(r=>!this.seats[r.seat]?.isBot);
+      // `kita:true` is what tells _resolveReactions to bank+redraw (via
+      // _completeKita) instead of _nextTurn() when nobody ends up ronning —
+      // an uncontested kita keeps the same seat's turn, unlike an uncalled
+      // real discard.
+      g.pending={tile,fromSeat:seat,seats:reactions.map(r=>r.seat),options:reactions,responses:{},kita:true,timer:null};
+      this._sendState();
+      if(!humanInReactions){
+        for(const r of reactions){
+          const dec=botReact(g.hands[r.seat],tile,r.options,g.melds[r.seat],this.seats[r.seat].difficulty);
+          setTimeout(()=>{
+            if(!g.pending) return;
+            g.pending.responses[r.seat]=dec;
+            if(g.pending.seats.every(s=>g.pending.responses[s])) this._resolveReactions();
+          },BOT_DELAY);
+        }
+      }
+      return;
+    }
+    this._completeKita(seat,tile);
+  }
+
+  // Banks the kita tile and draws its bonus replacement — the "nobody
+  // ronned it" completion of _kita, factored out so _resolveReactions can
+  // reach the same result after an offered-but-declined reaction window.
+  _completeKita(seat,tile){
+    const g=this.game;
+    g.kita[seat].push(tile);
     const draw=g.wall.pop();
     if(g.wall.length===0) g.haiteiNext=true;
     g.drawTile=draw;
@@ -1244,6 +1297,20 @@ class Room {
       if(extraWinners) for(const r of extraWinners) this._recordHandWin(r.winSeat,'ron',r.han,r.fu,null,r.pay);
     }
 
+    // How many opponents did THIS win newly bankrupt (were >=0 before,
+    // negative now)? Only meaningful for tsumo — a self-drawn win pays from
+    // EVERY other seat simultaneously (see _tsumo), so it's the only win
+    // type that can bankrupt more than one opponent at once; ron only ever
+    // has a single loser. Used for the sanma "bankrupts both opponents in
+    // one tsumo" achievement (see achievements.js) — tracked here as a
+    // per-seat counter rather than changing the single-value `bust`
+    // detection above, which every OTHER caller (tobi ending, game_over
+    // broadcast) still only needs one seat index from.
+    if(reason==='tsumo'&&prevScores){
+      const newlyBusted=g.scores.filter((sc,i)=>i!==winner&&prevScores[i]>=0&&sc<0).length;
+      if(newlyBusted>=2) g.stats[winner].doubleBust++;
+    }
+
     // Nagashi Mangan check (exhaustive draw only)
     if(reason==='draw'){
       const nagashiSeats=g.nagashi.map((ok,i)=>{
@@ -1465,6 +1532,12 @@ class Room {
     for(let winner=0;winner<this.numPlayers;winner++){
       if(!nagashiSeats[winner]) continue;
       g.stats[winner].wins++;
+      // Nagashi Mangan never goes through _recordHandWin/detectYaku (it's a
+      // draw-resolution mechanic, not a real yaku match), so unlike every
+      // other win path it wouldn't otherwise leave any st.yaku entry at
+      // all — needed for the achievement/leaderboard tracking that already
+      // reads yaku names for every other win type (see achievements.js).
+      g.stats[winner].yaku['Nagashi Mangan']=(g.stats[winner].yaku['Nagashi Mangan']||0)+1;
       const isDealer=winner===g.dealer;
       let gain=0;
       for(let payer=0;payer<this.numPlayers;payer++){

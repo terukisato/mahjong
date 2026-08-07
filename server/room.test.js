@@ -331,6 +331,124 @@ test('nagashiMangan=true (default): a genuinely nagashi-eligible exhaustive draw
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+// Kita ron + the double-discard/double-action guard
+// ══════════════════════════════════════════════════════════════════════════
+
+// Seat 0 is a real (non-bot) player with id 'p0' — action() only resolves a
+// seat via `this.seats.findIndex(p=>p&&!p.isBot&&p.id===playerId)`, so any
+// test driving room.action() (as opposed to calling _discard/_kita
+// directly) needs a genuinely non-bot seat to route through.
+function freshSanmaRoom(dealer = 0) {
+  const room = new Room('tonpuu', 'normal', {}, 3);
+  room.seats = [0, 1, 2].map(seat => seat === 0
+    ? { isBot: false, id: 'p0', seat, name: 'Seat0' }
+    : { isBot: true, seat, name: `Seat${seat}` });
+  room.phase = 'playing';
+  room.game = {
+    scores: [35000, 35000, 35000], turn: dealer, dealer, round: 1, roundWind: 1, honba: 0, riichiSticks: 0,
+    stats: [0, 1, 2].map(() => ({ riichi: 0, wins: 0, tsumo: 0, ron: 0, dealIn: 0, huro: 0, doubleBust: 0, bestHan: 0, bestScore: 0, yaku: {} })),
+  };
+  room._initRound();
+  room.game.dora = [{ v: 1, s: 's', id: -1 }]; // won't match any test hand below
+  return room;
+}
+
+test('Kita: a North tile declared via kita CAN be ronned by a waiting opponent', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  // Seat 1 tenpai, tanki-waiting on North (4z) to pair — Haku triplet gives
+  // a real yaku (Yakuhai) so the ron is legitimately valid, not just
+  // structurally complete.
+  g.hands[1] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), ...tri(5, 'z'), T(4, 'z')];
+  g.hands[0] = [...seq(1, 'p'), ...seq(4, 's'), ...seq(2, 'm'), T(7, 'm'), T(4, 'z')];
+  g.hands[2] = [...seq(1, 'm'), ...seq(4, 'm'), ...seq(2, 'p'), T(9, 's'), T(9, 's')];
+  g.wall = [T(1, 's')];
+  g.turn = 0;
+
+  const kitaTileId = g.hands[0].find(t => t.v === 4 && t.s === 'z').id;
+  room._kita(0, kitaTileId);
+
+  assert.ok(g.pending, 'kita should open a reaction window, not resolve silently');
+  assert.strictEqual(g.pending.tile.v, 4);
+  assert.strictEqual(g.pending.tile.s, 'z');
+  assert.deepStrictEqual(g.pending.seats, [1], 'only seat 1 is actually waiting on this tile');
+  assert.ok(g.pending.options[0].options.every(o => o.type === 'ron'), 'kita reactions must be ron-only, never pon/kan/chi');
+
+  room._reactResponse(1, { type: 'ron' });
+
+  // A ron ends the ROUND, not necessarily the whole game (tonpuu has more
+  // rounds left) — phase legitimately stays 'playing' here; what matters
+  // is that the ron was actually scored (before this fix, _kita never
+  // opened a reaction window at all, so this ron could never happen).
+  assert.strictEqual(g.pending, null, 'the reaction window should have resolved');
+  assert.ok(g.scores[1] > 35000, `seat 1 should have gained points from the ron, got ${g.scores[1]}`);
+  assert.ok(g.scores[0] < 35000, `seat 0 (discarder) should have paid, got ${g.scores[0]}`);
+});
+
+test('Kita: uncontested (nobody waiting on North) still banks the tile and draws a replacement, same as before', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.hands[1] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), ...tri(5, 'z'), T(9, 'p')]; // NOT waiting on North
+  g.hands[0] = [...seq(1, 'p'), ...seq(4, 's'), ...seq(2, 'm'), T(7, 'm'), T(4, 'z')];
+  g.hands[2] = [...seq(1, 'm'), ...seq(4, 'm'), ...seq(2, 'p'), T(9, 's'), T(9, 's')];
+  g.wall = [T(1, 's')];
+  g.turn = 0;
+
+  const kitaTileId = g.hands[0].find(t => t.v === 4 && t.s === 'z').id;
+  const handSizeBefore = g.hands[0].length;
+  room._kita(0, kitaTileId);
+
+  assert.strictEqual(g.pending, null, 'no reaction window when nobody is waiting on the tile');
+  assert.strictEqual(g.kita[0].length, 1, 'the North tile should be banked');
+  assert.strictEqual(g.hands[0].length, handSizeBefore, 'hand size unchanged: -1 for kita, +1 replacement draw');
+  assert.strictEqual(room.phase, 'playing', 'the game should still be going');
+});
+
+test('Double-discard guard: a second discard action while a reaction window is open is ignored', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  // Seat 1 tenpai on 9s so seat 0's first discard opens a real reaction window.
+  g.hands[1] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), ...tri(5, 'z'), T(9, 's')];
+  g.hands[0] = [...seq(1, 'p'), ...seq(4, 's'), ...seq(2, 'm'), T(7, 'm'), T(9, 's')];
+  g.hands[2] = [...seq(1, 'm'), ...seq(4, 'm'), ...seq(2, 'p'), T(8, 's'), T(8, 's')];
+  g.turn = 0;
+
+  const firstTileId = g.hands[0].find(t => t.v === 9 && t.s === 's').id;
+  const secondTileId = g.hands[0][0].id;
+  const handSizeBeforeAnyDiscard = g.hands[0].length;
+
+  room.action('p0', { type: 'discard', tileId: firstTileId });
+  assert.ok(g.pending, 'first discard should have opened a reaction window (seat 1 can ron 9s)');
+  const handSizeAfterFirst = g.hands[0].length;
+
+  // Attempt a second discard from the SAME seat while that window is open —
+  // this is exactly the scenario room.js's own myTurnOpen comment describes.
+  room.action('p0', { type: 'discard', tileId: secondTileId });
+
+  assert.strictEqual(g.hands[0].length, handSizeAfterFirst, 'a second discard while g.pending is set must be a no-op');
+  assert.strictEqual(handSizeBeforeAnyDiscard - handSizeAfterFirst, 1, 'exactly one tile should have left the hand total');
+});
+
+test('Double-discard guard: also holds during a kita reaction window (new pending state)', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.hands[1] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), ...tri(5, 'z'), T(4, 'z')];
+  g.hands[0] = [...seq(1, 'p'), ...seq(4, 's'), ...seq(2, 'm'), T(7, 'm'), T(4, 'z')];
+  g.hands[2] = [...seq(1, 'm'), ...seq(4, 'm'), ...seq(2, 'p'), T(9, 's'), T(9, 's')];
+  g.wall = [T(1, 's')];
+  g.turn = 0;
+
+  const kitaTileId = g.hands[0].find(t => t.v === 4 && t.s === 'z').id;
+  room.action('p0', { type: 'kita', tileId: kitaTileId });
+  assert.ok(g.pending, 'kita should have opened a reaction window');
+  const handSizeAfterKita = g.hands[0].length;
+
+  // Try to discard while the kita-ron window is still open.
+  room.action('p0', { type: 'discard', tileId: g.hands[0][0].id });
+  assert.strictEqual(g.hands[0].length, handSizeAfterKita, 'discard while a kita reaction window is open must be a no-op');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
 // Summary
 // ══════════════════════════════════════════════════════════════════════════
 

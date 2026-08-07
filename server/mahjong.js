@@ -628,6 +628,21 @@ function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIp
   // San Ankou (3 closed triplets)
   if(closedTris.length===3){yl.push({name:'San Ankou',jp:'三暗刻',han:2});han+=2;}
 
+  // San Kantsu (3 kans) — kanMelds already computed above for the Suu
+  // Kantsu (4-kan) yakuman check, which returns early on ===4, so reaching
+  // here means at most 3.
+  if(kanMelds.length===3){yl.push({name:'San Kantsu',jp:'三槓子',han:2});han+=2;}
+
+  // Honroutou (all terminals and honours) — a pure-honour or pure-terminal
+  // hand already returned as the Tsuuiisou/Chinroutou yakuman earlier in
+  // detectYaku, before evalDecomp is ever called, so reaching this check
+  // means it's genuinely a MIX of both. Terminals/honours can't form
+  // sequences, so any hand this restricted is inherently all triplets +
+  // pair already (Toitoi stacks with this, same as real rules).
+  if(allKeys.every(k=>TERMINALS.has(k)||HONORS.has(k))){
+    yl.push({name:'Honroutou',jp:'混老頭',han:2});han+=2;
+  }
+
   // Honitsu (one suit + honours)
   const nonHonorSuits=new Set(allKeys.filter(k=>!HONORS.has(k)).map(getSuit));
   if(nonHonorSuits.size===1&&allKeys.some(k=>HONORS.has(k))){
