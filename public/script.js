@@ -3728,6 +3728,7 @@ function onGameOver(m){
   // Hide Ready, show Main Menu — game fully over
   const btn=$('bround-ready'); if(btn) btn.style.display='none';
   const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display='none';
+  const paBtn=$('bplay-again'); if(paBtn) paBtn.style.display='';
   const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='';
   const status=$('ready-status'); if(status) status.textContent='';
   stopGameMusic();
@@ -3912,6 +3913,22 @@ function showGameOverResults(){
   if(!pendingGameOver) return;
   const m=pendingGameOver; pendingGameOver=null;
   onGameOver(m);
+}
+
+// Re-queues a new Quick Match with the same gameMode/variant/rules the
+// just-finished game used — those are module-level globals set by the
+// Match Settings modal (see setMode/setVariant/toggleRule) and never
+// touched by onGameOver/goLobby, so they're still exactly what the player
+// last picked. resetLobby() first for the same "clean slate" reasons
+// every other new-match entry point already goes through (fresh mySeat/
+// lastState/discarding/etc., and re-enables #bfind, which findMatch()
+// itself no-ops on if left disabled from the game that just ended).
+// quick_match's own server-side handler already leaves whatever room this
+// connection was just seated in, so no explicit {type:'leave'} is needed
+// here — same reasoning findMatch() itself relies on from the lobby.
+function playAgain(){
+  resetLobby();
+  findMatch();
 }
 
 
