@@ -1177,12 +1177,13 @@ function formatRankingPrimary(e,sortBy){
 
 // Clicking a name in Rankings opens a separate modal (#player-card-modal,
 // stacked on top of Rankings — see its own comment in index.html) showing
-// ONLY that one player's nameplate + their ranking data for the CURRENTLY
-// active sort/variant — the same single figure their leaderboard row
-// already shows, not their whole stats history (see renderPlayerCard).
-// Tracks the currently-requested name so a slow response can't clobber a
-// LATER click's result if the player clicks a second name (or closes the
-// modal) before the first response arrives.
+// ONLY that one player's nameplate + a SUMMARY of their rank in every
+// ranking category, both variants — not their whole detailed stats
+// history, but also not just whichever one sort tab happened to be active,
+// so it answers "how do they rank overall" without clicking through each
+// tab (see renderPlayerCard). Tracks the currently-requested name so a
+// slow response can't clobber a LATER click's result if the player clicks
+// a second name (or closes the modal) before the first response arrives.
 let pendingPlayerCardName=null;
 function openPlayerCard(labelEl){
   const row=labelEl.closest('.sp-row');
@@ -1191,7 +1192,7 @@ function openPlayerCard(labelEl){
   $('player-card-body').innerHTML=`<p class="player-card-loading">Loading…</p>`;
   $('player-card-modal').classList.add('visible');
   $('player-card-backdrop').classList.add('visible');
-  wss({type:'get_player_stats',name,variant:currentLeaderboardVariant,sortBy:currentLeaderboardSort});
+  wss({type:'get_player_stats',name});
 }
 
 function closePlayerCard(){
@@ -1200,33 +1201,41 @@ function closePlayerCard(){
   $('player-card-backdrop').classList.remove('visible');
 }
 
+// Renders one variant's worth of category rows (see server's `summarize`
+// in the get_player_stats handler) — one row per ranking category this
+// player currently qualifies for; categories they're not ranked in yet
+// (below a minimum-sample gate — see stats.js) are skipped rather than
+// shown as a blank/broken row. `list` is empty of qualifying entries when
+// this player has no ranked games at all in this variant.
+function renderRankSummary(list){
+  const rows=list.filter(r=>r.entry).map(r=>
+    `<div class="sp-row"><span class="sp-label">${escHtml(RANK_SORT_LABELS[r.sortBy]||'Points')}</span><span>#${r.rank} · ${formatRankingPrimary(r.entry,r.sortBy)}</span></div>`
+  ).join('');
+  return rows||`<p>Not ranked yet — not enough games/hands recorded in this mode.</p>`;
+}
+
 // Response handler for openPlayerCard's request — see onMsg's
 // 'player_stats' branch. Deliberately a separate message type from 'stats'
 // (the current user's OWN stats response), not reused: that handler also
 // refreshes the viewer's own unlockedThemes/unlockedTitles/achievements/
 // nameplate tier from whatever it's given, which would corrupt all of
 // those with some OTHER player's unlocks if this reused it.
-// `m.entry` is null when this player doesn't currently qualify for a rank
-// in this sort (e.g. below the minimum-sample gate for a rate stat, or no
-// profile by this name at all) — shown as a plain "not enough data"
-// message rather than a blank/broken row.
 function renderPlayerCard(m){
   if(m.name!==pendingPlayerCardName) return; // stale — modal closed or a different name clicked since
-  const nameplate=`
+  $('player-card-body').innerHTML=`
     <div class="about-title up-nameplate player-card-nameplate">
       <span class="pnp-icon">${iconSvg(m.icon)}</span>
       <span class="pnp-info">
         <span class="pnp-name">${escHtml(m.name)}</span>
         <span class="pnp-title">${escHtml(m.title||'Beginner')}</span>
       </span>
-    </div>`;
-  if(!m.entry){
-    $('player-card-body').innerHTML=nameplate+`<p>Not ranked yet — not enough games/hands recorded for this ranking.</p>`;
-    return;
-  }
-  $('player-card-body').innerHTML=nameplate+`
-    <div class="sp-row"><span class="sp-label">Rank</span><span>#${m.rank}</span></div>
-    <div class="sp-row"><span class="sp-label">${escHtml(RANK_SORT_LABELS[m.sortBy]||'Points')}</span><span>${formatRankingPrimary(m.entry,m.sortBy)}</span></div>
+    </div>
+    <div class="about-section-title">四人麻雀 YONMA</div>
+    ${renderRankSummary(m.yonma)}
+    <div class="about-section" style="margin-top:18px;">
+      <div class="about-section-title">三人麻雀 SANMA</div>
+      ${renderRankSummary(m.sanma)}
+    </div>
   `;
 }
 

@@ -390,16 +390,22 @@ wss.on('connection',(ws)=>{
 
     // Rankings "click a name to see their card" feature — keyed by an
     // arbitrary msg.name, unlike get_stats above, deliberately: not a new
-    // category of exposure, just the same public leaderboard row (see
+    // category of exposure, just the same public leaderboard rows (see
     // get_leaderboard right above) for ONE player instead of everyone.
-    // Reuses getLeaderboard() itself (not getStats()) so this is always
-    // exactly the same number, filtered by the same minimum-sample gates,
-    // that the leaderboard itself would show — no separate/duplicated
-    // computation to drift out of sync with it. `entry` is null if this
-    // player doesn't currently qualify for a rank in this sort (e.g. below
-    // the minimum-hands gate for a rate stat, or no profile by this name
-    // at all) — the client shows a "not enough data" message rather than
-    // treating that as an error.
+    // Sends a full SUMMARY — this player's rank+row in every category, for
+    // both variants — rather than just whichever one sort tab happened to
+    // be active, so the card answers "how do they rank overall" without
+    // needing to click through each tab. Reuses getLeaderboard() itself
+    // (not getStats()) once per category so every number is exactly what
+    // the leaderboard itself would show (same minimum-sample gates, same
+    // sort), never a separately-computed value that could drift out of
+    // sync with it — VALID_LEADERBOARD_SORTS.length (8) × 2 variants worth
+    // of calls, which is cheap at this app's scale (a full in-memory scan
+    // of the stats file each time, same as get_leaderboard already does
+    // once per open/tab-switch). Each category's `entry` is null if this
+    // player doesn't currently qualify for a rank in it (e.g. below the
+    // minimum-hands gate for a rate stat) — the client skips/labels those
+    // rather than showing a broken row.
     // Sent as its own 'player_stats' type, NOT reusing 'leaderboard' or
     // 'stats' — 'stats' in particular also refreshes the VIEWER's own
     // unlockedThemes/unlockedTitles/achievements/nameplate tier from
@@ -408,14 +414,15 @@ wss.on('connection',(ws)=>{
     if(msg.type==='get_player_stats'){
       const name=String(msg.name||'').trim();
       if(!name) return;
-      const variant=msg.variant==='sanma'?'sanma':'yonma';
-      const sortBy=VALID_LEADERBOARD_SORTS.includes(msg.sortBy)?msg.sortBy:'totalFinalScore';
       const id=getId(name);
-      const rows=getLeaderboard(sortBy,variant);
-      const idx=rows.findIndex(r=>r.id===id);
+      const summarize=variant=>VALID_LEADERBOARD_SORTS.map(sortBy=>{
+        const rows=getLeaderboard(sortBy,variant);
+        const idx=rows.findIndex(r=>r.id===id);
+        return {sortBy,rank:idx>=0?idx+1:null,entry:idx>=0?rows[idx]:null};
+      });
       ws.send(JSON.stringify({
         type:'player_stats',name,icon:getIcon(name),title:getTitle(name),
-        variant,sortBy,rank:idx>=0?idx+1:null,entry:idx>=0?rows[idx]:null,
+        yonma:summarize('yonma'),sanma:summarize('sanma'),
       }));
     }
 
