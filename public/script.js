@@ -1743,7 +1743,21 @@ const titles=[
   {id:'Double Twin', label:'Double Twin', hint:'Win with Ryanpeiko to unlock'},
   {id:'Clean Sweep', label:'Clean Sweep', hint:'Win with Nagashi Mangan to unlock'},
   {id:'One Suit Wonder', label:'One Suit Wonder', hint:'Win with Chinitsu to unlock'},
-  {id:'Grand Master', label:'Grand Master', hint:'Achieve any yakuman or double yakuman to unlock'},
+  {id:"Heaven's Chosen", label:"Heaven's Chosen", hint:'Achieve Tenhou to unlock'},
+  {id:"Earth's Chosen", label:"Earth's Chosen", hint:'Achieve Chiihou to unlock'},
+  {id:'Orphan Collector', label:'Orphan Collector', hint:'Achieve Kokushi Musou to unlock'},
+  {id:'Thirteen-Sided Master', label:'Thirteen-Sided Master', hint:'Achieve Kokushi Juusanmen to unlock'},
+  {id:'Iron Wall', label:'Iron Wall', hint:'Achieve Suu Ankou to unlock'},
+  {id:"Needle's Eye", label:"Needle's Eye", hint:'Achieve Suu Ankou Tanki to unlock'},
+  {id:'Dragon Lord', label:'Dragon Lord', hint:'Achieve Daisangen to unlock'},
+  {id:'Wind Whisperer', label:'Wind Whisperer', hint:'Achieve Shousuushii to unlock'},
+  {id:'Wind Sovereign', label:'Wind Sovereign', hint:'Achieve Daisuushii to unlock'},
+  {id:'Honor Bound', label:'Honor Bound', hint:'Achieve Tsuuiisou to unlock'},
+  {id:'Terminal Master', label:'Terminal Master', hint:'Achieve Chinroutou to unlock'},
+  {id:'Emerald Hand', label:'Emerald Hand', hint:'Achieve Ryuuiisou to unlock'},
+  {id:'Nine Gates', label:'Nine Gates', hint:'Achieve Chuuren Poutou to unlock'},
+  {id:'True Nine Gates', label:'True Nine Gates', hint:'Achieve Junsei Chuuren to unlock'},
+  {id:'Kan Emperor', label:'Kan Emperor', hint:'Achieve Suu Kantsu to unlock'},
 ];
 let currentPlayerTitle='Beginner';
 let unlockedTitles=['Beginner'];

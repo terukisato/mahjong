@@ -449,6 +449,95 @@ test('Double-discard guard: also holds during a kita reaction window (new pendin
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+// Kita draws from its own rinshan pool (Rinshan Kaihou eligibility)
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Dead wall is 18 tiles in sanma (14 + kita\'s own 4-slot pool), still 14 in yonma', () => {
+  const sanmaRoom = freshSanmaRoom(0);
+  assert.strictEqual(sanmaRoom.game.deadWall.length, 18);
+  const yonmaRoom = freshRoom(0);
+  assert.strictEqual(yonmaRoom.game.deadWall.length, 14);
+});
+
+test('Kita draws from the dead wall\'s kita pool, not the live wall — live wall length is unchanged', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.hands[0] = [...seq(1, 'p'), ...seq(4, 's'), ...seq(2, 'm'), T(7, 'm'), T(4, 'z')];
+  g.hands[1] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), ...tri(5, 'z'), T(9, 'p')]; // not waiting on North
+  g.deadWall[14] = T(2, 'p'); // force a known, unmistakable tile into the first kita slot
+  const wallLenBefore = g.wall.length;
+  const kitaCountBefore = g.kitaCount;
+  const kitaTileId = g.hands[0].find(t => t.v === 4 && t.s === 'z').id;
+  room._kita(0, kitaTileId);
+  assert.strictEqual(g.pending, null, 'uncontested kita (nobody waiting on North)');
+  assert.strictEqual(g.wall.length, wallLenBefore, 'the live wall must not shrink from a kita draw');
+  assert.strictEqual(g.kitaCount, kitaCountBefore + 1);
+  assert.strictEqual(g.drawTile.v, 2, 'must have drawn deadWall[14], not some other tile');
+  assert.strictEqual(g.drawTile.s, 'p');
+  assert.strictEqual(g.isRinshan, true, 'a kita replacement draw must now be marked as a rinshan draw');
+});
+
+test('Winning by tsumo on a kita replacement draw grants Rinshan Kaihou', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  // 13-tile tenpai shape (tanki wait on 9s, Haku triplet for a real yaku)
+  // PLUS one spare North tile — the North is what gets banked via kita;
+  // the tanki wait is unrelated to it. Forcing the dead wall's kita slot
+  // to be the exact 9s this hand is waiting on makes the win deterministic
+  // regardless of shuffle.
+  g.hands[0] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), ...tri(5, 'z'), T(9, 's'), T(4, 'z')];
+  g.deadWall[14] = T(9, 's'); // what _completeKita will hand back as the kita replacement
+  g.turn = 0;
+  // Without this, seat 0 (the dealer) winning on turn 0 with zero prior
+  // discards also satisfies Tenhou — a yakuman that early-returns out of
+  // detectYaku before the Rinshan Kaihou check ever runs, masking exactly
+  // the thing this test wants to isolate. Bumping turnCount simulates
+  // enough of the game having already happened that only Rinshan Kaihou
+  // applies.
+  g.turnCount = 4;
+
+  const kitaTileId = g.hands[0].find(t => t.v === 4 && t.s === 'z').id;
+  room._kita(0, kitaTileId);
+  assert.strictEqual(g.pending, null);
+  assert.strictEqual(g.drawTile.v, 9);
+  assert.strictEqual(g.drawTile.s, 's');
+  assert.strictEqual(g.isRinshan, true);
+
+  room._tsumo(0);
+  assert.ok(g.stats[0].yaku['Rinshan Kaihou'] > 0, 'a win on the kita replacement tile must record Rinshan Kaihou');
+});
+
+test('Kita is capped at 4 (the pool\'s actual size) as a defensive bound', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.kitaCount = 4;
+  const before = { wall: g.wall.length, kitaCount: g.kitaCount };
+  g.hands[0] = [...seq(1, 'p'), ...seq(4, 's'), ...seq(2, 'm'), T(7, 'm'), T(4, 'z')];
+  const kitaTileId = g.hands[0].find(t => t.v === 4 && t.s === 'z').id;
+  room._kita(0, kitaTileId);
+  assert.strictEqual(g.kitaCount, before.kitaCount, 'kita must no-op once the pool is exhausted');
+  assert.strictEqual(g.wall.length, before.wall, 'no side effects from a rejected kita attempt');
+});
+
+test('Dora/ura-dora indicator indices are unaffected by the larger sanma dead wall', () => {
+  // freshSanmaRoom pins g.dora to a fixed indicator AFTER _initRound() (for
+  // deterministic payment amounts in every other test in this file), so
+  // this checks _initRound's own linkage directly instead of going through
+  // that helper — a fresh, un-pinned Room is what actually exercises the
+  // deadWall[4] indexing this test cares about.
+  const room = new Room('tonpuu', 'normal', {}, 3);
+  room.seats = [0, 1, 2].map(seat => ({ isBot: true, seat, name: `Seat${seat}` }));
+  room.phase = 'playing';
+  room.game = {
+    scores: [35000, 35000, 35000], turn: 0, dealer: 0, round: 1, roundWind: 1, honba: 0, riichiSticks: 0,
+    stats: [0, 1, 2].map(() => ({ riichi: 0, wins: 0, tsumo: 0, ron: 0, dealIn: 0, huro: 0, doubleBust: 0, bestHan: 0, bestScore: 0, yaku: {} })),
+  };
+  room._initRound();
+  const g = room.game;
+  assert.strictEqual(g.dora[0], g.deadWall[4], 'initial dora indicator is still deadWall[4]');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
 // Summary
 // ══════════════════════════════════════════════════════════════════════════
 

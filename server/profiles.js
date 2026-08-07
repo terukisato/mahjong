@@ -45,7 +45,12 @@ const TITLES = [
   'Instant Riichi', 'Triple Threat', 'Triple Triplet', 'Rainbow Run',
   'Terminal Case', 'Straight Shooter', 'Edge Player', 'Dragon Tamer',
   'Kan Collector', 'Mono Color', 'Pure Edge', 'Double Twin', 'Clean Sweep',
-  'One Suit Wonder', 'Grand Master',
+  'One Suit Wonder',
+  // Per-yakuman titles (see server/achievements.js's *_win yakuman achievements)
+  "Heaven's Chosen", "Earth's Chosen", 'Orphan Collector', 'Thirteen-Sided Master',
+  'Iron Wall', "Needle's Eye", 'Dragon Lord', 'Wind Whisperer', 'Wind Sovereign',
+  'Honor Bound', 'Terminal Master', 'Emerald Hand', 'Nine Gates', 'True Nine Gates',
+  'Kan Emperor',
 ];
 
 // Keyed by a stable, never-reused `id` — a random 16-digit number (as a

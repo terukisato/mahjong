@@ -23,10 +23,17 @@ const SEAT_EMOJI=new Set(['😂','😢','😠','😱','👍','🔥','🏆','❤�
 // Message-reaction set — must match MSG_REACTIONS in public/script.js.
 const MSG_REACTIONS=new Set(['👍','❤️','😂','😮','😢']);
 
-// ── Dead wall layout (14 tiles) ─────────────────────────────────────────────
-// [0-3]  = rinshan tiles (drawn on kan)
-// [4-8]  = dora indicators  (dora[0] = deadWall[4], revealed on kan = deadWall[5..8])
-// [9-13] = ura dora indicators (revealed only on riichi win)
+// ── Dead wall layout (14 tiles, 18 in sanma) ────────────────────────────────
+// [0-3]   = rinshan tiles (drawn on kan)
+// [4-8]   = dora indicators  (dora[0] = deadWall[4], revealed on kan = deadWall[5..8])
+// [9-13]  = ura dora indicators (revealed only on riichi win)
+// [14-17] = sanma only: kita rinshan tiles (drawn on kita — see _completeKita).
+//           A SEPARATE 4-slot pool from kan's [0-3], not shared/counted
+//           together — kan and kita both cap out at 4 (kan via suukaikan;
+//           kita because only 4 North tiles physically exist in the game),
+//           but nothing stops both caps being reached independently in the
+//           same hand, so each needs its own reserved region rather than
+//           racing for the same 4 slots.
 
 // One Room = one table (this.numPlayers seats — 4 for standard yonma, 3 for
 // sanma) for a full game (tonpuu/hanchan). `this.seats` holds up to
@@ -232,7 +239,10 @@ class Room {
     const wall=shuffle(buildWall(this.rules.akaDora,this.rules.sanma));
     const hands=Array.from({length:n},()=>[]);
     for(let i=0;i<13*n;i++) hands[i%n].push(wall.shift());
-    const deadWall=wall.splice(-14);
+    // Sanma's dead wall reserves 4 extra tiles for kita's own separate
+    // rinshan pool (see the layout comment above) — yonma never calls
+    // kita, so its dead wall stays the standard 14.
+    const deadWall=wall.splice(-(this.rules.sanma?18:14));
 
     g.wall=wall;
     g.deadWall=deadWall;
@@ -251,6 +261,7 @@ class Room {
     g.riichiTileCalled={};
     g.kanCount=0;
     g.kanSeats=[];
+    g.kitaCount=0; // sanma: how many of the 4 kita-rinshan slots ([14-17]) have been drawn
     g.isRinshan=false;
     g.haiteiNext=false;
     g.firstRound=true;   // for double riichi / tenhou / chiihou detection
@@ -931,19 +942,18 @@ class Room {
   // script.js, which now checks canKita too so a post-riichi kita draw
   // isn't auto-discarded before the player gets to bank it.
   //
-  // The replacement draw is popped from the TAIL of the live wall, not the
-  // dead wall's 4 rinshan slots — those are reserved for kan and capped at
-  // exactly 4 kans; sourcing kita from the same slots risks running past
-  // that cap (kan count + kita count could exceed 4) and colliding with the
-  // dora-indicator slots just past them. This mirrors how the dead wall
-  // itself was carved from the wall's tail at round start (_initRound) — a
-  // real, once-only tile, just sourced differently than a kan's rinshan
-  // draw. Deliberately does NOT set g.isRinshan: kita isn't a kan, so it
-  // carries no Rinshan Kaihou eligibility.
+  // The replacement draw comes from the dead wall's OWN reserved 4-slot
+  // kita pool (deadWall[14-17] — see the layout comment near the top of
+  // this file), a real rinshan draw exactly like a kan's, just from a
+  // separate 4 slots rather than kan's [0-3] — so a hand completed by it
+  // correctly qualifies for Rinshan Kaihou (g.isRinshan, set in
+  // _completeKita below). Capped at 4 (g.kitaCount) as a defensive bound
+  // matching the pool's actual size — never reachable in real play anyway,
+  // since only 4 North tiles exist in the whole game to begin with.
   _kita(seat,tileId){
     const g=this.game;
     if(!this.rules.sanma) return;
-    if(g.wall.length===0) return; // nothing left to draw as a replacement
+    if(g.kitaCount>=4) return; // exhausted the reserved kita-rinshan pool
     const hand=g.hands[seat];
     const tile=hand.find(t=>t.id===tileId&&key(t)==='4z');
     if(!tile) return;
@@ -991,15 +1001,20 @@ class Room {
   _completeKita(seat,tile){
     const g=this.game;
     g.kita[seat].push(tile);
-    const draw=g.wall.pop();
-    if(g.wall.length===0) g.haiteiNext=true;
+    // Draws from the dead wall's dedicated kita pool (deadWall[14-17]), not
+    // the live wall — same "rinshan draws don't touch g.wall" convention
+    // kan's own _draw(fromRinshan=true) branch already follows, so
+    // haiteiNext (last-live-wall-tile tracking) is correspondingly left
+    // alone here too, exactly as it is for a kan's rinshan draw.
+    const draw=g.deadWall[14+g.kitaCount];
+    g.kitaCount++;
     g.drawTile=draw;
     g.hands[seat]=sort([...g.hands[seat],draw]);
     g.tempFuriten[seat]=false;
-    // Not a rinshan draw — clear any stale flag from an earlier kan this
-    // same turn so a win off this replacement tile can't wrongly claim
-    // Rinshan Kaihou.
-    g.isRinshan=false;
+    // A real rinshan draw — eligible for Rinshan Kaihou if this tile
+    // completes the hand (see g.isRinshan's use in _tsumo/_botTurn's own
+    // tsumo pre-check).
+    g.isRinshan=true;
     this._sendState();
     if(this.seats[seat]?.isBot) setTimeout(()=>this._botAct(seat),BOT_DELAY);
   }
@@ -1687,7 +1702,12 @@ class Room {
         }
       }
       let canKita=[];
-      if(this.rules.sanma&&g.turn===seat&&hand.length===fullHandSize&&g.wall.length>0){
+      // g.wall.length is irrelevant now — the replacement draw comes from
+      // the dead wall's own reserved kita pool (see _completeKita), not
+      // the live wall. g.kitaCount<4 is the real bound (also matches
+      // _kita's own guard), though in practice it can never actually be
+      // reached — only 4 North tiles exist in the whole game to begin with.
+      if(this.rules.sanma&&g.turn===seat&&hand.length===fullHandSize&&g.kitaCount<4){
         canKita=hand.filter(t=>key(t)==='4z').map(t=>t.id);
       }
       let canKakan=[];

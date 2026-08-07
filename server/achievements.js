@@ -145,7 +145,29 @@ const ACHIEVEMENTS = [
   { id: 'ryanpeiko_win', label: 'Win with Ryanpeiko', unlocksTitle: 'Double Twin', target: 1, progress: s => Math.min(yakuCount(s, 'Ryanpeiko'), 1), check: s => yakuCount(s, 'Ryanpeiko') > 0 },
   { id: 'nagashi_mangan_win', label: 'Win with Nagashi Mangan', unlocksTitle: 'Clean Sweep', target: 1, progress: s => Math.min(yakuCount(s, 'Nagashi Mangan'), 1), check: s => yakuCount(s, 'Nagashi Mangan') > 0 },
   { id: 'chinitsu_win', label: 'Win with Chinitsu', unlocksTitle: 'One Suit Wonder', target: 1, progress: s => Math.min(yakuCount(s, 'Chinitsu'), 1), check: s => yakuCount(s, 'Chinitsu') > 0 },
-  { id: 'yakuman_master', label: 'Achieve any yakuman or double yakuman', unlocksTitle: 'Grand Master', target: 1, progress: yakumanProgress, check: s => yakumanProgress(s) >= 1 },
+
+  // ── One achievement/title per individual yakuman/double yakuman —
+  // replaces the old single 'yakuman_master' catch-all (any yakuman at
+  // all). Independent of 'yakuman_hunter' above (same "any yakuman"
+  // catch-all, just an older one kept as-is) — this batch is deliberately
+  // granular instead. Suu Ankou/Suu Ankou Tanki and Chuuren Poutou/Junsei
+  // Chuuren are each other's single/double-yakuman variant of the same
+  // hand shape, so they get separate titles too, not folded together.
+  { id: 'tenhou_win', label: 'Achieve Tenhou', unlocksTitle: "Heaven's Chosen", target: 1, progress: s => Math.min(yakuCount(s, 'Tenhou'), 1), check: s => yakuCount(s, 'Tenhou') > 0 },
+  { id: 'chiihou_win', label: 'Achieve Chiihou', unlocksTitle: "Earth's Chosen", target: 1, progress: s => Math.min(yakuCount(s, 'Chiihou'), 1), check: s => yakuCount(s, 'Chiihou') > 0 },
+  { id: 'kokushi_musou_win', label: 'Achieve Kokushi Musou', unlocksTitle: 'Orphan Collector', target: 1, progress: s => Math.min(yakuCount(s, 'Kokushi Musou'), 1), check: s => yakuCount(s, 'Kokushi Musou') > 0 },
+  { id: 'kokushi_juusanmen_win', label: 'Achieve Kokushi Juusanmen', unlocksTitle: 'Thirteen-Sided Master', target: 1, progress: s => Math.min(yakuCount(s, 'Kokushi Juusanmen'), 1), check: s => yakuCount(s, 'Kokushi Juusanmen') > 0 },
+  { id: 'suuankou_win', label: 'Achieve Suu Ankou', unlocksTitle: 'Iron Wall', target: 1, progress: s => Math.min(yakuCount(s, 'Suu Ankou'), 1), check: s => yakuCount(s, 'Suu Ankou') > 0 },
+  { id: 'suuankou_tanki_win', label: 'Achieve Suu Ankou Tanki', unlocksTitle: "Needle's Eye", target: 1, progress: s => Math.min(yakuCount(s, 'Suu Ankou Tanki'), 1), check: s => yakuCount(s, 'Suu Ankou Tanki') > 0 },
+  { id: 'daisangen_win', label: 'Achieve Daisangen', unlocksTitle: 'Dragon Lord', target: 1, progress: s => Math.min(yakuCount(s, 'Daisangen'), 1), check: s => yakuCount(s, 'Daisangen') > 0 },
+  { id: 'shousuushii_win', label: 'Achieve Shousuushii', unlocksTitle: 'Wind Whisperer', target: 1, progress: s => Math.min(yakuCount(s, 'Shousuushii'), 1), check: s => yakuCount(s, 'Shousuushii') > 0 },
+  { id: 'daisuushii_win', label: 'Achieve Daisuushii', unlocksTitle: 'Wind Sovereign', target: 1, progress: s => Math.min(yakuCount(s, 'Daisuushii'), 1), check: s => yakuCount(s, 'Daisuushii') > 0 },
+  { id: 'tsuuiisou_win', label: 'Achieve Tsuuiisou', unlocksTitle: 'Honor Bound', target: 1, progress: s => Math.min(yakuCount(s, 'Tsuuiisou'), 1), check: s => yakuCount(s, 'Tsuuiisou') > 0 },
+  { id: 'chinroutou_win', label: 'Achieve Chinroutou', unlocksTitle: 'Terminal Master', target: 1, progress: s => Math.min(yakuCount(s, 'Chinroutou'), 1), check: s => yakuCount(s, 'Chinroutou') > 0 },
+  { id: 'ryuuiisou_win', label: 'Achieve Ryuuiisou', unlocksTitle: 'Emerald Hand', target: 1, progress: s => Math.min(yakuCount(s, 'Ryuuiisou'), 1), check: s => yakuCount(s, 'Ryuuiisou') > 0 },
+  { id: 'chuuren_poutou_win', label: 'Achieve Chuuren Poutou', unlocksTitle: 'Nine Gates', target: 1, progress: s => Math.min(yakuCount(s, 'Chuuren Poutou'), 1), check: s => yakuCount(s, 'Chuuren Poutou') > 0 },
+  { id: 'junsei_chuuren_win', label: 'Achieve Junsei Chuuren', unlocksTitle: 'True Nine Gates', target: 1, progress: s => Math.min(yakuCount(s, 'Junsei Chuuren'), 1), check: s => yakuCount(s, 'Junsei Chuuren') > 0 },
+  { id: 'suukantsu_win', label: 'Achieve Suu Kantsu', unlocksTitle: 'Kan Emperor', target: 1, progress: s => Math.min(yakuCount(s, 'Suu Kantsu'), 1), check: s => yakuCount(s, 'Suu Kantsu') > 0 },
 ];
 
 // Mutates `s` in place: grants any newly-qualifying achievement/theme/
