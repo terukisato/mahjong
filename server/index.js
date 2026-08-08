@@ -300,8 +300,13 @@ wss.on('connection',(ws)=>{
       };
       myRoom=createFreshRoom(mode,rules,numPlayers);
       myRoom.addHuman(player);
+      // Marks this connection as the one allowed to trigger a same-room
+      // rematch after game_over (see Room.hostStartPlayAgain) — stays the
+      // creator's id for the room's whole lifetime; join_room below never
+      // overwrites it.
+      myRoom.hostId=myId;
       if(player.profileId) seatedProfiles.set(player.profileId,{roomId:myRoom.id,playerId:myId});
-      ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,gameMode:myRoom.gameMode,numPlayers:myRoom.numPlayers,rules:myRoom.rules}));
+      ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,gameMode:myRoom.gameMode,numPlayers:myRoom.numPlayers,rules:myRoom.rules,isHost:true}));
     }
 
     // Join a specific open room by id, picked from 'list_rooms' — the
@@ -329,7 +334,9 @@ wss.on('connection',(ws)=>{
           ws.send(JSON.stringify({type:'join_room_result',ok:false,error:'That room is full.'}));
         } else {
           if(player.profileId) seatedProfiles.set(player.profileId,{roomId:myRoom.id,playerId:myId});
-          ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,gameMode:myRoom.gameMode,numPlayers:myRoom.numPlayers,rules:myRoom.rules}));
+          // isHost always false here — joiners never take over the
+          // create_room caller's hostId (see its own comment above).
+          ws.send(JSON.stringify({type:'joined',seat:player.seat,roomId:myRoom.id,gameMode:myRoom.gameMode,numPlayers:myRoom.numPlayers,rules:myRoom.rules,isHost:false}));
         }
       }
     }
@@ -364,6 +371,26 @@ wss.on('connection',(ws)=>{
     }
 
     if(msg.type==='action'&&myRoom) myRoom.action(myId,msg.action);
+
+    // Same-room rematch after game_over — create_room/join_room only (see
+    // Room.playAgain's own comment for why quick_match is excluded).
+    if(msg.type==='play_again'&&myRoom) myRoom.playAgain(myId);
+
+    // Only the room's creator can actually pull the trigger — Room itself
+    // enforces that (returns null for anyone else, or if ineligible), but
+    // it can't reach seatedProfiles (this module's own map) to release
+    // whichever humans it booted for not voting, so that happens here
+    // using the list it hands back.
+    if(msg.type==='play_again_start'&&myRoom){
+      const booted=myRoom.hostStartPlayAgain(myId);
+      if(booted){
+        for(const p of booted){
+          if(p.ws?.readyState===1) p.ws.send(JSON.stringify({type:'play_again_left_behind'}));
+          if(p.profileId&&seatedProfiles.get(p.profileId)?.playerId===p.id) seatedProfiles.delete(p.profileId);
+        }
+        closeIfStarted(myRoom);
+      }
+    }
 
     if(msg.type==='chat'&&myRoom) myRoom.chat(myId,msg.text||'',msg.color);
 
@@ -420,8 +447,15 @@ wss.on('connection',(ws)=>{
         const idx=rows.findIndex(r=>r.id===id);
         return {sortBy,rank:idx>=0?idx+1:null,entry:idx>=0?rows[idx]:null};
       });
+      // Nameplate tier (see nameplateTierClass in script.js) needs this
+      // player's own combined win count — the leaderboard-summary rows
+      // above don't carry it (a player below a category's ranking minimum
+      // still has real wins, they're just not represented in `entry`),
+      // so it's pulled straight from their stats record instead.
+      const st=getStats(id);
+      const wins=(st.yonma.gamesWon||0)+(st.sanma.gamesWon||0);
       ws.send(JSON.stringify({
-        type:'player_stats',name,icon:getIcon(name),title:getTitle(name),
+        type:'player_stats',name,icon:getIcon(name),title:getTitle(name),wins,
         yonma:summarize('yonma'),sanma:summarize('sanma'),
       }));
     }

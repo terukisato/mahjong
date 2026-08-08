@@ -83,6 +83,18 @@ class Room {
     this.roundReady=new Set();
     this.pendingNextRound=null;
     this.game=null;
+    // Connection id of whoever called create_room (set by index.js right
+    // after construction — never set for quick_match, so hostStartPlayAgain
+    // below can never fire for those rooms). Stays this same id for the
+    // room's whole lifetime, including into a playAgain() rematch — a
+    // join_room room keeps the ORIGINAL creator's id, joiners never
+    // overwrite it.
+    this.hostId=null;
+    // Seats (not player ids — a seat's occupant can change) that have
+    // opted into a same-room rematch after game_over via playAgain() below.
+    // Only meaningful while phase==='done'; cleared on every fresh
+    // hostStartPlayAgain restart.
+    this.playAgainVotes=new Set();
     // 'quick'|'room' — which stats bucket this game's results accumulate
     // into (see stats.js's per-variant quick/room split). Defaults to
     // 'room' since that's what a bare `new Room(...)` means everywhere
@@ -129,6 +141,11 @@ class Room {
     const seat=this.seats.findIndex(p=>p&&!p.isBot&&p.id===playerId);
     if(seat===-1) return;
     this.ready.delete(playerId);
+    // A pending play-again vote is keyed by seat number, not player id — if
+    // this seat leaves mid-'done' phase, its vote must go with it, or a
+    // seat it never actually cast (now holding a fresh bot below) would
+    // silently count as "wants to play again".
+    this.playAgainVotes.delete(seat);
     // Always refill with a fresh bot (not null) so the table stays full —
     // matches fillBots()/addHuman() always keeping every seat occupied.
     this.seats[seat]=this._makeBot(seat);
@@ -748,7 +765,7 @@ class Room {
       const isWinnerDealer = winSeat === g.dealer;
       const bp=basePoints(totalHan,fu);
       const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300;
-      results.push({winSeat,hand,yakuList,han:totalHan,fu,pay,uraDora,dc,kitaCount});
+      results.push({winSeat,hand,yakuList,han:totalHan,rawHan:han,fu,pay,uraDora,dc,kitaCount});
     }
     if(!results.length){
       // Every declarer turned out invalid. Scoped to the common case — a
@@ -788,11 +805,7 @@ class Room {
     // Build combined yaku display (show first winner's hand info in round_end, extras in extras)
     const primary=results[0];
     const primaryAkaDora=countAkaDora(primary.hand);
-    const primaryRegularDc=primary.dc-primaryAkaDora-primary.uraDora;
-    const yl=primaryRegularDc>0?[...primary.yakuList,{name:'Dora',jp:'ドラ',han:primaryRegularDc}]:[...primary.yakuList];
-    if(primary.uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:primary.uraDora});
-    if(primaryAkaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:primaryAkaDora});
-    if(primary.kitaCount>0) yl.push({name:'Kita',jp:'北',han:primary.kitaCount});
+    const yl=this._buildYakuList(primary.yakuList,primary.rawHan,primary.han,primary.dc,primary.uraDora,primaryAkaDora,primary.kitaCount);
     this._endRound('ron',primary.winSeat,loseSeat,primary.hand,yl,primary.han,primary.fu,totalLoss,
       results.length>1?results.slice(1):null,prevScores,g.melds[primary.winSeat]);
   }
@@ -1140,6 +1153,29 @@ class Room {
   }
 
   // ── Win ─────────────────────────────────────────────────────────────────────
+  // Builds the display yaku list for a win. Normally that's just the
+  // regular yaku plus any Dora/Ura Dora/Aka Dora/Kita breakdown lines. But
+  // if the hand only reaches yakuman-tier han (13+) once dora is folded
+  // in — i.e. `han` (detectYaku's own return, before dora) is under 13, so
+  // no single yaku here was itself flagged yakuman (those return >=13 han
+  // on their own — see mahjong.js's ym() calls, all of Tenhou/Kokushi/
+  // Suuankou/etc.) — this is Kazoe Yakuman: collapse the whole breakdown
+  // into one named entry instead. basePoints/handLabel already SCORE this
+  // exactly like a real yakuman (their own han>=13 threshold doesn't care
+  // where the han came from — see basePoints' own comment); this is what
+  // makes the WIN itself read as one too, which matters for both the
+  // round-end panel and achievements.js's YAKUMAN_NAMES/yakuman_hunter,
+  // which key off yaku NAMES in this list, not raw han.
+  _buildYakuList(yakuList,han,totalHan,dc,uraDora,akaDora,kitaCount){
+    if(han<13&&totalHan>=13) return [{name:'Kazoe Yakuman',jp:'数え役満',han:totalHan}];
+    const regularDc=dc-akaDora-uraDora;
+    const yl=regularDc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:regularDc}]:yakuList;
+    if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
+    if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
+    if(kitaCount>0) yl.push({name:'Kita',jp:'北',han:kitaCount});
+    return yl;
+  }
+
   _tsumo(seat){
     const g=this.game;
     const hand=g.hands[seat];
@@ -1184,11 +1220,7 @@ class Room {
     }
     g.scores[seat]+=gain+g.riichiSticks*1000;
     const akaDora=countAkaDora(hand);
-    const regularDc=dc-akaDora-uraDora;
-    const yl=regularDc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:regularDc}]:yakuList;
-    if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
-    if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
-    if(kitaCount>0) yl.push({name:'Kita',jp:'北',han:kitaCount});
+    const yl=this._buildYakuList(yakuList,han,totalHan,dc,uraDora,akaDora,kitaCount);
     this._endRound('tsumo',seat,null,hand,yl,totalHan,fu,gain,undefined,prevScores,g.melds[seat]);
   }
 
@@ -1220,11 +1252,7 @@ class Room {
     const prevScores=[...g.scores];
     g.scores[loseSeat]-=pay;g.scores[winSeat]+=pay;
     const akaDora=countAkaDora(hand);
-    const regularDc=dc-akaDora-uraDora;
-    const yl=regularDc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:regularDc}]:yakuList;
-    if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
-    if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
-    if(kitaCount>0) yl.push({name:'Kita',jp:'北',han:kitaCount});
+    const yl=this._buildYakuList(yakuList,han,totalHan,dc,uraDora,akaDora,kitaCount);
     this._endRound('ron',winSeat,loseSeat,hand,yl,totalHan,fu,pay,undefined,prevScores,g.melds[winSeat]);
   }
 
@@ -1298,6 +1326,54 @@ class Room {
       const p=this.seats[seat];
       if(p&&!p.isBot&&p.ws?.readyState===1) p.ws.send(JSON.stringify({type:'achievements_unlocked',achievements:list}));
     });
+  }
+
+  // ── Play Again (create_room/join_room rematch) ─────────────────────────────
+  // One seated human's vote, after game_over, to keep playing in this SAME
+  // room with the same mode/rules — see hostStartPlayAgain below for the
+  // actual restart, which only this.hostId can trigger. Room-only: a
+  // quick_match room never sets hostId or matchKind='room', so a rematch
+  // here can never actually be started for one (this vote alone is
+  // harmless either way, but gating it too keeps quick_match rooms from
+  // silently accumulating dead state).
+  playAgain(playerId){
+    if(this.matchKind!=='room'||this.phase!=='done') return;
+    const p=this.seats.find(p=>p&&!p.isBot&&p.id===playerId);
+    if(!p) return;
+    this.playAgainVotes.add(p.seat);
+    this._broadcastAll({type:'play_again_status',seats:[...this.playAgainVotes]});
+  }
+
+  // Only the room's creator (this.hostId) may call this, and only after
+  // voting playAgain() themself — deliberately no minimum vote count or
+  // expiry beyond that: the host decides when to go, same as any other
+  // "start with whoever's here" call the lobby's own Ready flow already
+  // allows (_checkAllReady starts on just one human + bots). Every human
+  // who did NOT vote gets bumped — index.js sends them 'play_again_left_behind'
+  // and releases their seatedProfiles entry using the returned list, since
+  // this class has no access to that map itself.
+  hostStartPlayAgain(playerId){
+    if(this.matchKind!=='room'||this.phase!=='done') return null;
+    if(!this.hostId||playerId!==this.hostId) return null;
+    const host=this.seats.find(p=>p&&!p.isBot&&p.id===playerId);
+    if(!host||!this.playAgainVotes.has(host.seat)) return null;
+    const booted=[];
+    for(let seat=0;seat<this.numPlayers;seat++){
+      const p=this.seats[seat];
+      if(p&&!p.isBot&&!this.playAgainVotes.has(seat)){
+        booted.push(p);
+        this.seats[seat]=null;
+      }
+    }
+    this.phase='waiting';
+    this.ready=new Set();
+    this.roundReady=new Set();
+    this.pendingNextRound=null;
+    this.playAgainVotes=new Set();
+    this.game=null;
+    this.fillBots();
+    this.start();
+    return booted;
   }
 
   _endRound(reason,winner,loser,hand,yakuList,han,fu,payment,extraWinners,prevScores,melds){

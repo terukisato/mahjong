@@ -31,15 +31,21 @@ const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
 // not here.
 const TITLES = [
   'Beginner', 'Regular', 'Veteran', 'Century Club', 'Ace',
-  'Yakuman Hunter', 'Flush Master', 'Riichi Machine', 'Renaissance Player',
+  'Yakuman Hunter', 'Riichi Machine', 'Renaissance Player',
   'Big Hand', 'High Roller', 'Safe Player', 'Sanma Specialist',
   'Tsumo Specialist', 'Ron Specialist', 'Hand Collector', 'Podium Regular',
-  'Lightning Reflexes', 'Quick Draw', 'All Triplets', 'Three Colors',
+  'Lightning Reflexes', 'Quick Draw', 'All Triplets',
   'Pure Runner', 'Dora Rich', 'The Diamond',
   // Point milestones (see server/achievements.js's yonma/sanma_100k/105k)
-  'Hoarder', 'Overlord', 'Sanma Hoarder', 'Sanma Overlord',
+  'Hoarder', 'Overlord', 'Plunderer', 'Conqueror',
   // Sanma double-bankruptcy (double_knockout)
   'Double Knockout',
+  // Higher-tier "harder" achievements (see server/achievements.js's own
+  // comment on this batch) — a second, tougher rung above several of the
+  // titles above, plus new stricter/compound conditions.
+  'Legend', 'Living Legend', 'Riichi Addict', 'Hand Hoarder', 'Tsumo Master',
+  'Ron Master', 'Dora Addict', 'Podium Veteran', 'Sharpshooter', 'Untouchable',
+  'Yakuman Collector', 'Yakuman Legend', 'Master of Forms', 'Survivor',
   // Per-yaku titles (see server/achievements.js's *_win achievements)
   'Robbing Kan', 'Dead Wall Diver', 'Last Tile Standing', "River's End",
   'Instant Riichi', 'Triple Threat', 'Triple Triplet', 'Rainbow Run',
@@ -50,7 +56,7 @@ const TITLES = [
   "Heaven's Chosen", "Earth's Chosen", 'Orphan Collector', 'Thirteen-Sided Master',
   'Iron Wall', "Needle's Eye", 'Dragon Lord', 'Wind Whisperer', 'Wind Sovereign',
   'Honor Bound', 'Terminal Master', 'Emerald Hand', 'Nine Gates', 'True Nine Gates',
-  'Kan Emperor',
+  'Kan Emperor', 'Counted Divinity',
 ];
 
 // Keyed by a stable, never-reused `id` — a random 16-digit number (as a

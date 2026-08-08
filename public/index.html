@@ -91,7 +91,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.12</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.13</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -814,10 +814,16 @@
     <div class="reb">
       <button id="bround-ready" class="ready-btn reb-btn" onclick="sendRoundReady()">✓ Ready</button>
       <button id="bview-results" class="bp reb-btn" style="display:none;" onclick="showGameOverResults()">View Results</button>
-      <button id="bplay-again" class="bp reb-btn" style="display:none;" onclick="playAgain()">↻ Play Again</button>
-      <button id="bend-menu" class="bp reb-btn" style="display:none;" onclick="goLobby()">Main Menu</button>
+      <div class="reb-split">
+        <div class="reb-left">
+          <button id="bplay-again" class="bp reb-btn reb-btn-green" style="display:none;" onclick="onPlayAgainClick()">↻ Play Again</button>
+          <button id="bplay-again-start" class="bp reb-btn reb-btn-gold" style="display:none;" onclick="wss({type:'play_again_start'})">▶ Start New Game</button>
+        </div>
+        <button id="bend-menu" class="bp reb-btn reb-btn-red" style="display:none;" onclick="goLobby()">Leave Room</button>
+      </div>
     </div>
     <div id="ready-status" class="ready-status"></div>
+    <div id="play-again-status" class="ready-status"></div>
   </div>
 </div>
 <div class="tc" id="tc"></div>

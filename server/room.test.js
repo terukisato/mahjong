@@ -538,6 +538,80 @@ test('Dora/ura-dora indicator indices are unaffected by the larger sanma dead wa
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+// Kazoe Yakuman — a hand that only reaches yakuman-tier han (13+) once dora
+// is folded in, with no single yaku itself flagged yakuman. Should score
+// exactly like a real yakuman AND be recorded under a 'Kazoe Yakuman' yaku
+// name (not left as a raw stack of Dora/Ura Dora/etc lines), since that
+// name is what both the round-end panel and achievements.js's
+// YAKUMAN_NAMES/yakuman_hunter key off — see room.js's _buildYakuList.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('_buildYakuList: collapses to a single Kazoe Yakuman entry when only dora pushes han to 13+', () => {
+  const room = freshRoom(0);
+  const yl = room._buildYakuList(
+    [{ name: 'Pinfu', jp: '平和', han: 1 }, { name: 'Menzen Tsumo', jp: '門前清自摸和', han: 1 }],
+    2,  // raw yaku han (no single yaku here is itself yakuman)
+    15, // totalHan (2 + 13 dora)
+    13, 0, 0, 0, // dc, uraDora, akaDora, kitaCount
+  );
+  assert.deepStrictEqual(yl, [{ name: 'Kazoe Yakuman', jp: '数え役満', han: 15 }]);
+});
+
+test('_buildYakuList: leaves a TRUE yakuman hand alone (still shows its own name + any incidental dora lines)', () => {
+  const room = freshRoom(0);
+  const yl = room._buildYakuList(
+    [{ name: 'Suu Ankou', jp: '四暗刻', han: 13 }],
+    13, // raw han already >=13 on its own — a real yakuman, not kazoe
+    15, // totalHan (13 + 2 incidental dora)
+    2, 0, 0, 0,
+  );
+  assert.deepStrictEqual(yl, [
+    { name: 'Suu Ankou', jp: '四暗刻', han: 13 },
+    { name: 'Dora', jp: 'ドラ', han: 2 },
+  ]);
+});
+
+test('_buildYakuList: ordinary sub-yakuman hand is untouched (no dora line when dc is 0)', () => {
+  const room = freshRoom(0);
+  const yl = room._buildYakuList(
+    [{ name: 'Riichi', jp: 'リーチ', han: 1 }],
+    1, 1, 0, 0, 0, 0,
+  );
+  assert.deepStrictEqual(yl, [{ name: 'Riichi', jp: 'リーチ', han: 1 }]);
+});
+
+test('Tsumo: a hand that only reaches 13+ han via dora scores as yakuman AND records under "Kazoe Yakuman"', () => {
+  const room = freshRoom(0); // seat 0 is dealer
+  const g = room.game;
+  g.hands[1] = pinfuTenpai13();
+  g.drawTile = winTile();
+  g.hands[1].push(g.drawTile);
+  g.turn = 1;
+  // _initRound() leaves g.firstRound true (only cleared once actual turns
+  // happen), which — combined with a fresh room's empty melds and a
+  // 14-tile hand — makes _tsumo's own isChiihou check fire for any
+  // non-dealer seat, turning this into a REAL yakuman before dora is even
+  // considered. Clear it so this test hand is scored on its own (regular)
+  // merits, same as it would be for a tsumo anywhere but literally the
+  // very first uninterrupted draw of the game.
+  g.firstRound = false;
+  // pinfuTenpai13's pair is 9p x2 — repeating the same dora indicator
+  // (8p → dora 9p) 7 times racks up 14 dora (2 matches x 7), pushing
+  // total han (2 raw + 14 dora = 16) well past the 13-han yakuman line
+  // without any single yaku here being a true yakuman.
+  g.dora = new Array(7).fill({ v: 8, s: 'p' });
+  const prevScores = [...g.scores];
+  room._tsumo(1);
+  const nonDealerPaid = prevScores[2] - g.scores[2];
+  const dealerPaid = prevScores[0] - g.scores[0];
+  // Yakuman base = 8000: non-dealer tsumo payers pay 8000, dealer pays 16000.
+  assert.strictEqual(nonDealerPaid, 8000, 'non-dealer payers pay the flat yakuman base');
+  assert.strictEqual(dealerPaid, 16000, 'dealer pays double the yakuman base');
+  assert.strictEqual(g.stats[1].yaku['Kazoe Yakuman'], 1, 'recorded under the Kazoe Yakuman name for achievements/stats');
+  assert.strictEqual(g.stats[1].yaku['Dora'], undefined, 'the raw Dora breakdown line is replaced, not just supplemented');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
 // Summary
 // ══════════════════════════════════════════════════════════════════════════
 

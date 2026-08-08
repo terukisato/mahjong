@@ -476,6 +476,14 @@ let P=['b','r','t','l'];
 // the previous game_state message, kept around so renderState can diff
 // against it (e.g. "did a new pon just happen" for sound effects).
 let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false, discarding=false, pendingGameOver=null;
+// Play Again (same-room rematch) state — isPrivateRoomGame/isRoomHost come
+// from 'joined' (see onMsg below: quick_match never sets isHost and marks
+// itself with `instant`, so both stay false there, keeping the whole
+// feature a no-op for quick_match same as Room.playAgain/hostStartPlayAgain
+// on the server). playAgainSeats/lastGameOverNames are set fresh by every
+// game_over/play_again_status, and only ever rendered while #s-end shows
+// the game-over buttons (bplay-again/bplay-again-start).
+let isPrivateRoomGame=false, isRoomHost=false, playAgainSeats=[], lastGameOverNames=null;
 // Last 'round_end' message shown on the results screen — kept around
 // purely so a resize (see scheduleTileRedraw) can redraw its tile artwork
 // at the new size, the same reason lastState is kept for the live board.
@@ -547,7 +555,7 @@ function onMsg(m){
   // the same tick (see server/index.js), so 'game_start' is right behind
   // this message; skip the waiting-room screen entirely rather than flash
   // "Looking for players..." for a single frame before it's replaced.
-  if(m.type==='joined'){mySeat=m.seat;currentRoomRules=m.rules||null;currentRoomMode=m.gameMode||null;currentRoomNumPlayers=m.numPlayers||null;if(!m.instant)showWaiting();return;}
+  if(m.type==='joined'){mySeat=m.seat;currentRoomRules=m.rules||null;currentRoomMode=m.gameMode||null;currentRoomNumPlayers=m.numPlayers||null;isPrivateRoomGame=!m.instant;isRoomHost=!!m.isHost;if(!m.instant)showWaiting();return;}
   if(m.type==='room_update'){updateSlots(m.seats);return;}
   if(m.type==='game_start'){startGame(m);return;}
   if(m.type==='round_start'){onRoundStart(m);return;}
@@ -558,6 +566,8 @@ function onMsg(m){
     return;
   }
   if(m.type==='ready_status'){onReadyStatus(m);return;}
+  if(m.type==='play_again_status'){onPlayAgainStatus(m);return;}
+  if(m.type==='play_again_left_behind'){onPlayAgainLeftBehind();return;}
   if(m.type==='stats'){
     renderStats(m);
     // Also refreshes theme/title-lock state (see renderVoiceThemes/
@@ -921,6 +931,7 @@ const ALL_YAKU_NAMES=[
   'Tenhou','Chiihou','Kokushi Musou','Kokushi Juusanmen','Suu Ankou',
   'Suu Ankou Tanki','Daisangen','Shousuushii','Daisuushii','Tsuuiisou',
   'Chinroutou','Ryuuiisou','Chuuren Poutou','Junsei Chuuren','Suu Kantsu',
+  'Kazoe Yakuman',
 ];
 
 // Expand/collapse for the Yaku Achieved section (see renderStatsBlock) —
@@ -1222,8 +1233,16 @@ function renderRankSummary(list){
 // those with some OTHER player's unlocks if this reused it.
 function renderPlayerCard(m){
   if(m.name!==pendingPlayerCardName) return; // stale — modal closed or a different name clicked since
+  // Tier class (see nameplateTierClass) applied directly here rather than
+  // via updateNameplateTier — that function targets the User Profile
+  // hub's OWN nameplate specifically, not whichever player is being
+  // viewed here. This used to go entirely unset (always reading as the
+  // default Bronze tier regardless of the viewed player's real wins) —
+  // see server/index.js's 'get_player_stats' handler for where m.wins
+  // comes from.
+  const tierCls=nameplateTierClass(m.wins||0);
   $('player-card-body').innerHTML=`
-    <div class="about-title up-nameplate player-card-nameplate">
+    <div class="about-title up-nameplate player-card-nameplate${tierCls?' '+tierCls:''}">
       <span class="pnp-icon">${iconSvg(m.icon)}</span>
       <span class="pnp-info">
         <span class="pnp-name">${escHtml(m.name)}</span>
@@ -1702,7 +1721,6 @@ const titles=[
   {id:'Century Club', label:'Century Club', hint:'Win 100 games to unlock'},
   {id:'Ace', label:'Ace', hint:'Win 50%+ of at least 20 games to unlock'},
   {id:'Yakuman Hunter', label:'Yakuman Hunter', hint:'Achieve a yakuman to unlock'},
-  {id:'Flush Master', label:'Flush Master', hint:'Achieve Chinitsu or Honitsu to unlock'},
   {id:'Riichi Machine', label:'Riichi Machine', hint:'Declare riichi 50 times to unlock'},
   {id:'Renaissance Player', label:'Renaissance Player', hint:'Achieve 10 different yaku to unlock'},
   {id:'Big Hand', label:'Big Hand', hint:'Win a hand worth 8+ han to unlock'},
@@ -1716,15 +1734,28 @@ const titles=[
   {id:'Lightning Reflexes', label:'Lightning Reflexes', hint:'Achieve Ippatsu to unlock'},
   {id:'Quick Draw', label:'Quick Draw', hint:'Achieve Double Riichi to unlock'},
   {id:'All Triplets', label:'All Triplets', hint:'Achieve Toitoi to unlock'},
-  {id:'Three Colors', label:'Three Colors', hint:'Achieve Sanshoku Doujun or Doukou to unlock'},
   {id:'Pure Runner', label:'Pure Runner', hint:'Achieve Ittsu to unlock'},
   {id:'Dora Rich', label:'Dora Rich', hint:'Win 30 hands with dora to unlock'},
   {id:'The Diamond', label:'The Diamond', hint:'Win 200 games to unlock'},
   {id:'Hoarder', label:'Hoarder', hint:'Reach a final score of 100,000+ in yonma to unlock'},
   {id:'Overlord', label:'Overlord', hint:'Reach a final score of 105,000+ in yonma to unlock'},
-  {id:'Sanma Hoarder', label:'Sanma Hoarder', hint:'Reach a final score of 100,000+ in sanma to unlock'},
-  {id:'Sanma Overlord', label:'Sanma Overlord', hint:'Reach a final score of 105,000+ in sanma to unlock'},
+  {id:'Plunderer', label:'Plunderer', hint:'Reach a final score of 100,000+ in sanma to unlock'},
+  {id:'Conqueror', label:'Conqueror', hint:'Reach a final score of 105,000+ in sanma to unlock'},
   {id:'Double Knockout', label:'Double Knockout', hint:'Win a tsumo that bankrupts both opponents (sanma) to unlock'},
+  {id:'Legend', label:'Legend', hint:'Play 500 games to unlock'},
+  {id:'Living Legend', label:'Living Legend', hint:'Win 500 games to unlock'},
+  {id:'Riichi Addict', label:'Riichi Addict', hint:'Declare riichi 200 times to unlock'},
+  {id:'Hand Hoarder', label:'Hand Hoarder', hint:'Win 300 hands to unlock'},
+  {id:'Tsumo Master', label:'Tsumo Master', hint:'Win 100 hands by tsumo to unlock'},
+  {id:'Ron Master', label:'Ron Master', hint:'Win 100 hands by ron to unlock'},
+  {id:'Dora Addict', label:'Dora Addict', hint:'Win 100 hands with dora to unlock'},
+  {id:'Podium Veteran', label:'Podium Veteran', hint:'Finish 1st, 2nd, or 3rd 100 times to unlock'},
+  {id:'Sharpshooter', label:'Sharpshooter', hint:'Win 60%+ of at least 50 games to unlock'},
+  {id:'Untouchable', label:'Untouchable', hint:'Keep a deal-in rate under 5% over 100+ hands to unlock'},
+  {id:'Yakuman Collector', label:'Yakuman Collector', hint:'Achieve 3 yakuman-tier hands (any combination) to unlock'},
+  {id:'Yakuman Legend', label:'Yakuman Legend', hint:'Achieve 10 yakuman-tier hands (any combination) to unlock'},
+  {id:'Master of Forms', label:'Master of Forms', hint:'Achieve 20 different yaku to unlock'},
+  {id:'Survivor', label:'Survivor', hint:'Play 50 games without ever busting to unlock'},
   {id:'Robbing Kan', label:'Robbing Kan', hint:'Win with Chankan to unlock'},
   {id:'Dead Wall Diver', label:'Dead Wall Diver', hint:'Win with Rinshan Kaihou to unlock'},
   {id:'Last Tile Standing', label:'Last Tile Standing', hint:'Win with Haitei to unlock'},
@@ -1758,6 +1789,7 @@ const titles=[
   {id:'Nine Gates', label:'Nine Gates', hint:'Achieve Chuuren Poutou to unlock'},
   {id:'True Nine Gates', label:'True Nine Gates', hint:'Achieve Junsei Chuuren to unlock'},
   {id:'Kan Emperor', label:'Kan Emperor', hint:'Achieve Suu Kantsu to unlock'},
+  {id:'Counted Divinity', label:'Counted Divinity', hint:'Achieve Kazoe Yakuman to unlock'},
 ];
 let currentPlayerTitle='Beginner';
 let unlockedTitles=['Beginner'];
@@ -1875,22 +1907,36 @@ function refreshProfileDisplay(){
   const upTitle=$('up-title'); if(upTitle) upTitle.textContent=titleText;
 }
 
-// User Profile hub nameplate's tier (see .up-nameplate/.tier-* in
-// style.css) — Bronze (default, no class) under 10 combined wins, Silver
-// at 10, Gold at 50, Platinum at 100, Diamond at 200. Driven by the
-// 'stats' handler in onMsg (combined yonma+sanma gamesWon) whenever a real
-// profile's stats load. Unlike icon/title, this class lives on the DOM
-// element itself rather than a JS variable refreshProfileDisplay re-reads
-// every time, so switching to Guest (see onGuestSelected) has to call this
-// explicitly with 0 — otherwise a previous real profile's tier would keep
-// showing.
+// Nameplate tier thresholds (see .tier-* in style.css) — Bronze (default,
+// no class) under 10 combined wins, Silver at 10, Gold at 50, Platinum at
+// 100, Diamond at 200. Shared by updateNameplateTier (the User Profile
+// hub's own nameplate) and renderPlayerCard (another player's nameplate in
+// the Rankings player-card modal) so the two never drift out of sync.
+function nameplateTierClass(wins){
+  if(wins>=200) return 'tier-diamond';
+  if(wins>=100) return 'tier-platinum';
+  if(wins>=50) return 'tier-gold';
+  if(wins>=10) return 'tier-silver';
+  return null;
+}
+
+// User Profile hub nameplate's tier. Driven by the 'stats' handler in
+// onMsg (combined yonma+sanma gamesWon) whenever a real profile's stats
+// load. Unlike icon/title, this class lives on the DOM element itself
+// rather than a JS variable refreshProfileDisplay re-reads every time, so
+// switching to Guest (see onGuestSelected) has to call this explicitly
+// with 0 — otherwise a previous real profile's tier would keep showing.
+// Scoped to #userprofile-modal specifically (not just '.up-nameplate')
+// since the Rankings player-card modal's nameplate (see renderPlayerCard)
+// reuses that exact class and sits EARLIER in index.html's DOM order —
+// once a player card has ever been opened, an unscoped querySelector
+// would silently start finding that leftover element instead of this
+// profile's own one.
 function updateNameplateTier(wins){
-  const el=document.querySelector('.up-nameplate'); if(!el) return;
+  const el=document.querySelector('#userprofile-modal .up-nameplate'); if(!el) return;
   el.classList.remove('tier-silver','tier-gold','tier-platinum','tier-diamond');
-  if(wins>=200) el.classList.add('tier-diamond');
-  else if(wins>=100) el.classList.add('tier-platinum');
-  else if(wins>=50) el.classList.add('tier-gold');
-  else if(wins>=10) el.classList.add('tier-silver');
+  const cls=nameplateTierClass(wins);
+  if(cls) el.classList.add(cls);
 }
 
 function renderPlayerIcons(){
@@ -2325,6 +2371,7 @@ function pressReady(){
 function resetLobby(){
   mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;discarding=false;
   currentRoomRules=null;currentRoomMode=null;currentRoomNumPlayers=null;
+  isPrivateRoomGame=false;isRoomHost=false;playAgainSeats=[];lastGameOverNames=null;
   $('wa').style.display='none';
   $('lobby-actions').style.display='flex';
   $('bfind').disabled=false;
@@ -2397,6 +2444,13 @@ function startGame(m){
   const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display='none';
   pendingGameOver=null;
   const status=$('ready-status'); if(status) status.textContent='';
+  // Play Again panel — reachable here via hostStartPlayAgain restarting
+  // the SAME room straight into a fresh game_start (no lobby round-trip),
+  // so it needs resetting same as the buttons above.
+  const paBtn=$('bplay-again'); if(paBtn){ paBtn.style.display='none'; paBtn.disabled=false; paBtn.textContent='↻ Play Again'; }
+  const startBtn=$('bplay-again-start'); if(startBtn){ startBtn.style.display='none'; startBtn.disabled=true; }
+  const paStatus=$('play-again-status'); if(paStatus) paStatus.textContent='';
+  playAgainSeats=[]; lastGameOverNames=null;
   // numSeats/P are fixed for the whole game — set once here from
   // game_start's numPlayers (3=sanma, 4=yonma default).
   numSeats=m.numPlayers||4;
@@ -3177,8 +3231,16 @@ function mkEl(tile,cls,w,h){
   const el=document.createElement('div');el.className='tile '+cls;
   // If w/h not provided, read from CSS vars
   const root=document.documentElement;
+  const explicit=!!(w&&h);
   if(!w) w=parseInt(root.style.getPropertyValue('--tmd-w'))||26;
   if(!h) h=parseInt(root.style.getPropertyValue('--tmd-h'))||36;
+  // The wrapper's box size normally comes from its class (.tlg/.tmd/.tdora,
+  // each hardcoded to a global --t*-w/h CSS var) — independent of the SVG's
+  // own width/height attributes below. Callers passing an explicit w/h
+  // that deliberately differs from that global var (see fitEndTileSize)
+  // need the box itself to shrink too, or the smaller SVG just gets
+  // centered/clipped inside the old, unchanged box.
+  if(explicit){el.style.width=w+'px';el.style.height=h+'px';}
   const svgStr=tsvg(tile,w,h);
   el.innerHTML=svgStr?svgStr.replace('<svg ','<svg style="pointer-events:none" '):'';
   return el;
@@ -3201,21 +3263,45 @@ function mkElDora(tile){
 // there's no "seat" to orient toward here. Ankan stays half face-down even
 // at final reveal, matching table convention; every other meld type shows
 // fully face-up with the originally-called tile marked.
-function appendEndPanelMeld(container,meld){
+function appendEndPanelMeld(container,meld,w,h){
   const calledId=meld.calledTileId;
+  const tile=t=>w?mkEl(t,'tmd',w,h):mkElMd(t);
   if(meld.kanType==='ankan'){
     const back=()=>{const d=document.createElement('div');d.className='kan-back re-kan-back';return d;};
     container.appendChild(back());
-    container.appendChild(mkElMd(meld.tiles[1]));
-    container.appendChild(mkElMd(meld.tiles[2]));
+    container.appendChild(tile(meld.tiles[1]));
+    container.appendChild(tile(meld.tiles[2]));
     container.appendChild(back());
   } else {
     for(const t of meld.tiles){
-      const el=mkElMd(t);
+      const el=tile(t);
       if(t.id===calledId) el.classList.add('called');
       container.appendChild(el);
     }
   }
+}
+
+// Shrinks the winning-hand/tenpai-reveal tile size (which normally reuses
+// --tmd-w/h, the discard-pile size tuned for 6 tiles per row) so a full
+// 14-tile hand plus any melds still fits on one line inside the round-end
+// panel. --tmd-w/h scales with the felt/window size with no ceiling, while
+// the panel itself (#s-end's --ui-vmin) is deliberately capped for
+// readability — on a large/4K display the two scales diverge enough that
+// the uncapped tile size no longer fits the capped panel width, wrapping
+// the hand onto a second line. Falls back to --tmd-w/h whenever it already
+// fits (small screens, short hands), so normal sizing is unaffected.
+function fitEndTileSize(container,count){
+  const root=document.documentElement;
+  const defaultW=parseInt(root.style.getPropertyValue('--tmd-w'))||26;
+  const defaultH=parseInt(root.style.getPropertyValue('--tmd-h'))||36;
+  if(!count||!container) return {w:defaultW,h:defaultH};
+  const avail=container.clientWidth;
+  if(!avail) return {w:defaultW,h:defaultH};
+  const gapTotal=(count-1)*3; // matches .re-tile-row's own gap:3px
+  const fitW=Math.floor((avail-gapTotal)/count);
+  const w=Math.max(14,Math.min(defaultW,fitW));
+  const h=Math.round(w*(defaultH/defaultW));
+  return {w,h};
 }
 
 
@@ -3811,9 +3897,27 @@ function onGameOver(m){
   // Hide Ready, show Main Menu — game fully over
   const btn=$('bround-ready'); if(btn) btn.style.display='none';
   const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display='none';
-  const paBtn=$('bplay-again'); if(paBtn) paBtn.style.display='';
   const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='';
   const status=$('ready-status'); if(status) status.textContent='';
+  // Play Again vote/start UI — private rooms (create_room/join_room) only,
+  // see isPrivateRoomGame's own comment. Quick_match keeps the plain
+  // solo-requeue button (onPlayAgainClick below falls back to that).
+  playAgainSeats=[];
+  lastGameOverNames=m.playerNames||null;
+  const paBtn=$('bplay-again');
+  const startBtn=$('bplay-again-start');
+  // The host is never actually undecided — they're the one who'll choose
+  // WHEN to start, so there's no point making them click a separate
+  // "Play Again" first. Skip straight to sending that vote for them and
+  // show only the gold Start button (initially disabled until the vote
+  // round-trip lands — see onPlayAgainStatus), instead of showing both
+  // buttons at once (green Play Again + gold Start + red Leave Room felt
+  // cluttered for what's really one decision for the host).
+  const isHostRematch=isPrivateRoomGame&&isRoomHost;
+  if(paBtn){ paBtn.style.display=isHostRematch?'none':''; paBtn.disabled=false; paBtn.textContent='↻ Play Again'; }
+  if(startBtn){ startBtn.style.display=isHostRematch?'':'none'; startBtn.disabled=true; }
+  const paStatus=$('play-again-status'); if(paStatus) paStatus.textContent='';
+  if(isHostRematch) wss({type:'play_again'});
   stopGameMusic();
   playLobbyMusic();
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
@@ -3828,6 +3932,46 @@ function onGameOver(m){
   $('rehn').textContent='';$('reyl').innerHTML='';$('rewt').innerHTML='';
   $('rest').innerHTML=rows;
   show('s-end');
+}
+
+// 'Play Again' button on the game-over panel — quick_match keeps its old
+// solo-requeue behaviour (playAgain() below, unchanged); a create_room/
+// join_room game instead casts this seat's vote to the room (see
+// Room.playAgain in server/room.js) and waits on onPlayAgainStatus to hear
+// back who else is in. Only the host (isRoomHost) additionally gets a
+// '#bplay-again-start' button, enabled once THEY'VE voted too (mirrors the
+// server-side guard in hostStartPlayAgain).
+function onPlayAgainClick(){
+  if(!isPrivateRoomGame){ playAgain(); return; }
+  wss({type:'play_again'});
+  const btn=$('bplay-again');
+  if(btn){ btn.disabled=true; btn.textContent='✓ Waiting for others…'; }
+}
+
+function onPlayAgainStatus(m){
+  playAgainSeats=m.seats||[];
+  const status=$('play-again-status');
+  if(status){
+    const names=playAgainSeats.map(seat=>seat===mySeat?($('iname').value.trim()||'You'):(lastGameOverNames?.[seat]||`Seat ${seat}`));
+    status.textContent=names.length?`Want to play again: ${names.join(', ')}`:'';
+  }
+  if(playAgainSeats.includes(mySeat)){
+    const btn=$('bplay-again');
+    if(btn){ btn.disabled=true; btn.textContent='✓ Waiting for others…'; }
+  }
+  if(isRoomHost){
+    const startBtn=$('bplay-again-start');
+    if(startBtn) startBtn.disabled=!playAgainSeats.includes(mySeat);
+  }
+}
+
+// Sent to any seat that didn't vote play_again once the host started the
+// rematch anyway (see hostStartPlayAgain) — this connection's seat was
+// already handed to a bot server-side, so there's nothing left to rejoin;
+// just explain what happened and drop back to the lobby.
+function onPlayAgainLeftBehind(){
+  toast('The host started a new game without you.');
+  resetLobby();
 }
 
 function limitLabel(han,fu){
@@ -3870,9 +4014,12 @@ function renderEndTiles(m){
     wt.appendChild(dr);
   }
   const tileRow=document.createElement('div');tileRow.className='re-tile-row';
-  for(const t of(m.hand||[])) if(t) tileRow.appendChild(mkElMd(t));
+  const handTiles=(m.hand||[]).filter(Boolean);
+  const meldTileCount=(m.melds||[]).reduce((n,meld)=>n+(meld.kanType==='ankan'?4:meld.tiles.length),0);
+  const {w:hw,h:hh}=fitEndTileSize(wt,handTiles.length+meldTileCount);
+  for(const t of handTiles) tileRow.appendChild(mkEl(t,'tmd',hw,hh));
   // Render melds right of closed hand, separated by a gap
-  for(const meld of(m.melds||[])) appendEndPanelMeld(tileRow,meld);
+  for(const meld of(m.melds||[])) appendEndPanelMeld(tileRow,meld,hw,hh);
   wt.appendChild(tileRow);
   // Tenpai reveal (exhaustive draw only) — name + hand for each tenpai
   // player; noten hands stay private (server sends null for those seats).
@@ -3886,8 +4033,10 @@ function renderEndTiles(m){
       nameEl.textContent=seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
       row.appendChild(nameEl);
       const tiles=document.createElement('div');tiles.className='re-tile-row';
-      for(const t of hand) tiles.appendChild(mkElMd(t));
-      for(const meld of(m.tenpaiMelds?.[seat]||[])) appendEndPanelMeld(tiles,meld);
+      const tpMeldCount=(m.tenpaiMelds?.[seat]||[]).reduce((n,meld)=>n+(meld.kanType==='ankan'?4:meld.tiles.length),0);
+      const {w:tw,h:th}=fitEndTileSize(tp,hand.length+tpMeldCount);
+      for(const t of hand) tiles.appendChild(mkEl(t,'tmd',tw,th));
+      for(const meld of(m.tenpaiMelds?.[seat]||[])) appendEndPanelMeld(tiles,meld,tw,th);
       row.appendChild(tiles);
       tp.appendChild(row);
     });
@@ -3939,7 +4088,13 @@ function onEnd(m){
   // Hand/dora/tenpai tile artwork — split into its own function (below)
   // since a resize needs to redraw just this part (see scheduleTileRedraw)
   // without replaying onEnd's one-time side effects (win/tsumo sound, the
-  // score count-up animation further down).
+  // score count-up animation further down). show() moves up here (rather
+  // than staying at the bottom) because renderEndTiles measures #rewt/
+  // #re-tenpai's actual layout width to size the winning-hand tiles (see
+  // fitEndTileSize) — both are display:none until the screen is shown, so
+  // measuring before this would always read 0 and silently fall back to
+  // the uncapped --tmd-w/h size the fit logic exists to override.
+  show('s-end');
   renderEndTiles(m);
   // Score table with delta column
   const tbl=$('rest');tbl.innerHTML='';
@@ -3987,7 +4142,6 @@ function onEnd(m){
     const btn=$('bround-ready'); if(btn) btn.style.display='none';
     const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display=pendingGameOver?'':'none';
   }
-  show('s-end');
   setTimeout(()=>{ inGame=true; },5500);
   }catch(e){ show('s-end'); }
 }
