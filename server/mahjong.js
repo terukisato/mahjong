@@ -416,6 +416,24 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
   if(menzen && isChiitoitsu(hand14)){
     const yl=[]; let h=2;
     yl.push({name:'Chiitoitsu',jp:'七対子',han:2});
+    // Composition-only yaku (Tanyao/Honroutou/Honitsu/Chinitsu) — these
+    // depend purely on which tiles are in the hand, not on how they're
+    // grouped into sets, so they stack with Chiitoitsu exactly like they
+    // do with any regular decomp (see the matching checks in evalDecomp
+    // below, which this hand shape bypasses entirely — chiitoitsu never
+    // goes through evalDecomp/decompose's set+pair grouping). A pure-
+    // honour/pure-terminal hand already returned as a yakuman above
+    // (Tsuuiisou/Chinroutou), so Honroutou here always means a genuine
+    // mix of both, same reasoning as evalDecomp's own Honroutou check.
+    // Chiitoitsu is always fully closed (menzen, gated above) — every
+    // ankan-only exception isMenzen allows still breaks the 7-pairs
+    // shape, so allKeys here is just hand14's own keys, no melds to fold
+    // in, unlike evalDecomp's allKeys which also includes meld tiles.
+    if(allKeys.every(isSimple)){ yl.push({name:'Tanyao',jp:'断么九',han:1}); h++; }
+    if(allKeys.every(k=>TERMINALS.has(k)||HONORS.has(k))){ yl.push({name:'Honroutou',jp:'混老頭',han:2}); h+=2; }
+    const nonHonorSuits=new Set(allKeys.filter(k=>!HONORS.has(k)).map(getSuit));
+    if(nonHonorSuits.size===1&&allKeys.some(k=>HONORS.has(k))){ yl.push({name:'Honitsu',jp:'混一色',han:3}); h+=3; }
+    if(nonHonorSuits.size===1&&!allKeys.some(k=>HONORS.has(k))){ yl.push({name:'Chinitsu',jp:'清一色',han:6}); h+=6; }
     if(isDoubleRiichi){yl.push({name:'Double Riichi',jp:'ダブルリーチ',han:2});h+=2;}
     else if(isRiichi){yl.push({name:'Riichi',jp:'リーチ',han:1});h++;}
     if(isIppatsu&&isRiichi){yl.push({name:'Ippatsu',jp:'一発',han:1});h++;}

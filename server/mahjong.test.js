@@ -345,6 +345,66 @@ test('Chiitoitsu (7 pairs)', () => {
   assertHas(r, 'Chiitoitsu');
 });
 
+// Composition-only yaku (Tanyao/Honroutou/Honitsu/Chinitsu) used to be
+// silently dropped on a Chiitoitsu win — the chiitoitsu branch in
+// detectYaku built its own yaku list from scratch (Chiitoitsu + riichi-
+// family + haitei/houtei only) instead of also checking these, unlike
+// every regular (non-chiitoitsu) decomp which computes them from the
+// hand's tile composition regardless of grouping shape. Each hand below
+// uses a non-sequential value spread specifically so no REGULAR decomp
+// exists to compete with (and potentially mask the bug by winning on han
+// count instead) — chiitoitsu must be the only legal interpretation.
+test('Chiitoitsu + Honitsu (one suit + honors) both apply', () => {
+  const hand = [...pairT(1, 'm'), ...pairT(3, 'm'), ...pairT(5, 'm'), ...pairT(7, 'm'),
+    ...pairT(9, 'm'), ...pairT(1, 'z'), ...pairT(2, 'z')];
+  const r = Y(hand, [], { winTileKey: '2z' });
+  assertHas(r, 'Chiitoitsu');
+  assertHas(r, 'Honitsu');
+  assert.strictEqual(r.yakuList.find(y => y.name === 'Honitsu').han, 3, 'Honitsu is always full (3 han) here — chiitoitsu is inherently closed');
+  assert.strictEqual(r.han, 5, 'Chiitoitsu(2) + Honitsu(3)');
+});
+
+test('Chiitoitsu + Chinitsu (one suit, no honors) both apply', () => {
+  const hand = [...pairT(1, 'm'), ...pairT(2, 'm'), ...pairT(4, 'm'), ...pairT(6, 'm'),
+    ...pairT(7, 'm'), ...pairT(8, 'm'), ...pairT(9, 'm')];
+  const r = Y(hand, [], { winTileKey: '9m' });
+  assertHas(r, 'Chiitoitsu');
+  assertHas(r, 'Chinitsu');
+  assert.strictEqual(r.han, 8, 'Chiitoitsu(2) + Chinitsu(6)');
+});
+
+test('Chiitoitsu + Tanyao (all simples, multi-suit — no flush) both apply', () => {
+  const hand = [...pairT(2, 'm'), ...pairT(3, 'm'), ...pairT(4, 'p'), ...pairT(5, 'p'),
+    ...pairT(6, 's'), ...pairT(7, 's'), ...pairT(8, 'm')];
+  const r = Y(hand, [], { winTileKey: '8m' });
+  assertHas(r, 'Chiitoitsu');
+  assertHas(r, 'Tanyao');
+  assertNotHas(r, 'Honitsu');
+  assertNotHas(r, 'Chinitsu');
+  assert.strictEqual(r.han, 3, 'Chiitoitsu(2) + Tanyao(1)');
+});
+
+test('Chiitoitsu + Honroutou (mix of terminals and honors, no simples) both apply', () => {
+  const hand = [...pairT(1, 'm'), ...pairT(9, 'm'), ...pairT(1, 'p'), ...pairT(9, 's'),
+    ...pairT(1, 'z'), ...pairT(2, 'z'), ...pairT(3, 'z')];
+  const r = Y(hand, [], { winTileKey: '3z' });
+  assertHas(r, 'Chiitoitsu');
+  assertHas(r, 'Honroutou');
+  assert.strictEqual(r.han, 4, 'Chiitoitsu(2) + Honroutou(2)');
+});
+
+test('Chiitoitsu alone (mixed suits, mixed simples/terminals/honors) gets no bonus yaku', () => {
+  const hand = [...pairT(1, 'm'), ...pairT(9, 'p'), ...pairT(5, 's'), ...pairT(3, 'm'),
+    ...pairT(7, 'p'), ...pairT(2, 's'), ...pairT(1, 'z')];
+  const r = Y(hand, [], { winTileKey: '1z' });
+  assertHas(r, 'Chiitoitsu');
+  assertNotHas(r, 'Tanyao');
+  assertNotHas(r, 'Honroutou');
+  assertNotHas(r, 'Honitsu');
+  assertNotHas(r, 'Chinitsu');
+  assert.strictEqual(r.han, 2, 'Chiitoitsu alone');
+});
+
 test('Kokushi Musou (single-tile wait: one type pre-paired, one type missing)', () => {
   // Pre-win 13: 1z is already paired, 7z is the sole missing type -> single wait on 7z.
   const hand = [T(1, 'm'), T(9, 'm'), T(1, 'p'), T(9, 'p'), T(1, 's'), T(9, 's'),
