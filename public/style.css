@@ -204,9 +204,19 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .cd{font-size:calc(var(--ui-vmin) * 1.389);color:rgba(201,168,76,.9);text-align:center;margin-top:8px;letter-spacing:calc(var(--ui-vmin) * .139);}
 /* Invite Players — a plain text link (see #binvite in index.html), not a
    third full-width button alongside Ready/Cancel below it. */
-.invite-link{display:block;text-align:center;margin-top:10px;font-size:calc(var(--ui-vmin) * 1.389);
-  color:rgba(245,237,216,.55);text-decoration:underline;letter-spacing:calc(var(--ui-vmin) * .139);cursor:pointer;transition:color .2s;}
+.invite-link{display:block;text-align:left;padding-left:2vmin;font-size:calc(var(--ui-vmin) * 1.389);
+  color:rgba(245,237,216,.55);text-decoration:none;letter-spacing:calc(var(--ui-vmin) * .139);cursor:pointer;transition:color .2s;}
 .invite-link:hover{color:var(--gold);}
+/* Create Room's Invite Players link sits in an .about-section wrapper
+   (see #rules-invite-section in index.html) purely so JS can show/hide it
+   as one unit — keeps that class's own top margin/divider-line/padding (a
+   thin rule + gap, same as every other .about-section) so it reads as its
+   own section below Rules rather than butting right up against the toggle
+   list, but drops the BOTTOM margin .about-section doesn't otherwise have
+   an opinion on — "+ Create Room" right below (see
+   #rules-modal-create-btn) sits snug against it/its invited-chip list
+   instead of leaving a gap. */
+#rules-invite-section{margin-bottom:0;}
 /* Fallback (7.2px), same value/reason as .about-close below: .mode-btn is
    used both in #s-lobby (defines --ui-vmin) and, since Game Mode/Players
    moved into #rules-modal, inside a modal that never defines it — without
