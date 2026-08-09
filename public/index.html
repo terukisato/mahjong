@@ -138,7 +138,18 @@
          picking rules here IS the room's rules, unlike every other place
          this modal opens from (Quick Match/lobby gear icon), where toggles
          just update the picks for whatever's queued/created NEXT and there
-         is no explicit "confirm" step. -->
+         is no explicit "confirm" step. Invite Players is gated the exact
+         same way and for the exact same reason (see toggleRulesModal) — the
+         link below opens the picker (see openInviteModal/closeInviteModal
+         in script.js) in its own window rather than inline; picks are
+         staged (rulesSelectedInvites) and listed here as chips once that
+         window closes, then actually sent right after "+ Create Room" below
+         creates the room (see the 'joined' handler in onMsg), since there's
+         no room to invite anyone into before that. -->
+    <div class="about-section" id="rules-invite-section" style="display:none;">
+      <a href="#" class="invite-link" onclick="openInviteModal('create');return false;">✉ Invite Players</a>
+      <div id="rules-invited-list" class="invite-chip-list"></div>
+    </div>
     <button class="bp" id="rules-modal-create-btn" style="display:none;margin-top:14px;" onclick="confirmCreateRoom()">+ Create Room</button>
   </div>
 </div>
@@ -561,6 +572,45 @@
   <div id="achv-unlock-body"></div>
 </div>
 
+<!-- Room Invite notification — same corner-toast pattern as Achievement
+     Unlocked above (own id/element though, so both could show at once
+     without clobbering each other), but actionable rather than purely
+     informational: it deliberately does NOT auto-dismiss (see
+     showRoomInvite/closeRoomInvite in script.js) since an invite is
+     something to act on, not just glance at. Fires on a 'room_invite'
+     message — sent directly to this connection's own socket by the host
+     who invited it (see 'invite_player' in server/index.js), never a
+     broadcast, so nobody else in that room sees who was invited. Accept
+     reuses the exact same joinRoom() the Room List's Join button calls. -->
+<div id="invite-toast" class="achv-toast">
+  <button class="about-close" onclick="closeRoomInvite()">✕</button>
+  <div class="achv-toast-title">Room Invite</div>
+  <div id="invite-toast-body"></div>
+  <button class="bp" id="invite-toast-accept" onclick="acceptRoomInvite()">Join Room</button>
+</div>
+
+<!-- Invite Players — its own window, opened either from the waiting room's
+     link or from Create Room's own link (see openInviteModal/
+     closeInviteModal in script.js — both routes share this one modal,
+     onlineProfilesTarget says which called it). #invite-list lists every
+     OTHER known profile (see 'get_online_profiles'), online ones first and
+     marked with a glowing dot (see .profile-card-dot), reusing the same
+     .icon-grid/.profile-card visual language as the Select Profile picker
+     below. From the waiting room, picking a card sends an invite right away
+     and marks it Invited (see sendInvite/onInviteResult); from Create Room,
+     picking a card just stages it (see rulesSelectedInvites) — closing this
+     window (← Back, only shown in that case) returns to Create Room's own
+     panel with the picks listed as chips. -->
+<div id="invite-backdrop" class="about-backdrop" onclick="closeInviteModal()"></div>
+<div id="invite-modal" class="about-modal">
+  <button class="about-back" id="invite-modal-back" onclick="closeInviteModal()" style="display:none;">←</button>
+  <button class="about-close" onclick="closeInviteModal()">✕</button>
+  <div class="about-title">Invite Players</div>
+  <div class="about-body">
+    <div id="invite-list" class="icon-grid">Loading…</div>
+  </div>
+</div>
+
 <!-- ════════════════════════════════════════════════════════════
      LOBBY SCREEN
      ════════════════════════════════════════════════════════════ -->
@@ -640,6 +690,15 @@
         <div class="slot"><span class="si">🀄</span></div><div class="slot"><span class="si">🀄</span></div>
       </div>
       <div class="cd" id="cdiv"></div>
+      <!-- Host-only — hidden by default, shown by showWaiting() when
+           isRoomHost is set (create_room's own creator only; quick_match
+           has no host at all, and join_room's caller is never the host —
+           see 'joined's isHost in server/index.js). Opens the Invite
+           Players picker (see toggleInviteModal in script.js). A plain
+           text link rather than a third button — Ready/Cancel are already
+           two full-width buttons on this panel, and Invite is a much
+           rarer, lower-stakes action than either. -->
+      <a href="#" class="invite-link" id="binvite" onclick="openInviteModal('waiting');return false;" style="display:none;">✉ Invite Players</a>
       <button class="ready-btn" id="bready">⚔ Ready!</button>
       <button class="bs" id="bcancel">✕ Cancel</button>
     </div>

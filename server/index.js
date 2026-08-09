@@ -92,6 +92,21 @@ function createFreshRoom(mode,rules,numPlayers){
 // runs through, so nothing extra needs to hook disconnects separately.
 const seatedProfiles=new Map(); // profileId -> {roomId, playerId}
 
+// Every profiled connection currently unlocked ANYWHERE in the lobby or a
+// room — not just seated ones (see seatedProfiles above, which only covers
+// players actually sitting in a room). This is what Room Invite's player
+// picker ('get_online_profiles' below) draws from, and how an invite
+// actually reaches the invited player's own socket ('invite_player' below).
+// Keyed by profiles.js's stable id; one entry per profile (a second tab/
+// device unlocking the same profile just overwrites the previous
+// connection's entry here — see goOnline below), storing just enough to
+// name them in a picker and reach their live socket. Populated on a
+// successful 'unlock_profile'/'unlock_profile_token' (see goOnline) and
+// removed on 'select_guest' or connection close (see goOffline) — NOT tied
+// to room join/leave, since a player can be online in the lobby without
+// ever being seated anywhere.
+const onlineProfiles=new Map(); // profileId -> {name, ws, playerId}
+
 // One WebSocket connection = one prospective player. `player` is a plain
 // object handed to Room (see room.js) — it stays the same object across
 // join/leave/reconnect-to-a-new-room within this connection's lifetime, so
@@ -186,6 +201,23 @@ wss.on('connection',(ws)=>{
     myRoom.removeHuman(myId);
     if(myRoom.phase==='waiting'&&myRoom.humanCount()===0) openRooms.delete(myRoom.id);
     myRoom=null;
+  }
+
+  // Marks this connection's unlocked profile as online (see onlineProfiles
+  // above) — called right after 'unlock_profile'/'unlock_profile_token'
+  // succeed. A no-op for guests (unlockedId is null). Storing `myId`
+  // alongside lets goOffline below tell "this connection's own entry" apart
+  // from a newer one a second tab/device may have since overwritten it with.
+  function goOnline(){
+    if(unlockedId) onlineProfiles.set(unlockedId,{name:unlockedName,ws,playerId:myId});
+  }
+  // Reverse of goOnline — called on 'select_guest' (before the profile is
+  // actually cleared, see its handler below) and on connection close.
+  // Checked against playerId, same reasoning as leaveCurrentRoom's
+  // seatedProfiles cleanup above: a stale call can never clear a DIFFERENT,
+  // newer connection's entry for the same profile.
+  function goOffline(){
+    if(unlockedId&&onlineProfiles.get(unlockedId)?.playerId===myId) onlineProfiles.delete(unlockedId);
   }
 
   // Called after assignIdentity()+leaveCurrentRoom() but before actually
@@ -485,6 +517,61 @@ wss.on('connection',(ws)=>{
       ws.send(JSON.stringify({type:'profiles',profiles:listProfiles()}));
     }
 
+    // Room Invite's player picker (see the "Invite Players" link in
+    // script.js, used both from the waiting room and from Create Room) —
+    // every OTHER known profile (minus this connection's own), each tagged
+    // `online`: reachable right now (unlocked somewhere — see
+    // onlineProfiles above — AND not already seated in a room, since
+    // inviting a busy profile wouldn't be actionable either way). Unlike
+    // the old online-only list, profiles that are offline (or just busy)
+    // are still included — dimmed and unpickable client-side — rather than
+    // silently missing, so a host can see "not online" instead of just not
+    // finding a name they expected. Online-first, then alphabetical within
+    // each group, so the people you can actually invite right now are
+    // always the ones on top.
+    if(msg.type==='get_online_profiles'){
+      const profiles=listProfiles()
+        .filter(p=>p.name!==unlockedName)
+        .map(p=>{
+          const id=getId(p.name);
+          const online=!!(id&&onlineProfiles.has(id)&&!seatedProfiles.has(id));
+          return {name:p.name,icon:p.icon,online};
+        })
+        .sort((a,b)=>(b.online-a.online)||a.name.localeCompare(b.name));
+      ws.send(JSON.stringify({type:'online_profiles',profiles}));
+    }
+
+    // Host-only — invites one online profile to this connection's own room.
+    // Doesn't reserve a seat or touch Room state at all: create_room already
+    // registers every room in openRooms, so the invitee could always have
+    // found and joined it via the Room List (see join_room below); this
+    // just pushes a direct notification to their socket ('room_invite') so
+    // they don't have to go browsing for it, with a one-click Join that
+    // reuses the exact same join_room path. Mirrors 'achievements_unlocked'
+    // in room.js — a direct unicast to one connection's own `ws`, never a
+    // room broadcast (nobody else in the room should see who was invited).
+    if(msg.type==='invite_player'&&myRoom){
+      const targetName=String(msg.name||'').slice(0,20);
+      if(myRoom.hostId!==myId||myRoom.phase!=='waiting'){
+        ws.send(JSON.stringify({type:'invite_result',ok:false,name:targetName,error:'Only the host can invite players.'}));
+        return;
+      }
+      if(myRoom.humanCount()>=myRoom.numPlayers){
+        ws.send(JSON.stringify({type:'invite_result',ok:false,name:targetName,error:'Room is full.'}));
+        return;
+      }
+      const targetId=getId(targetName);
+      const online=targetId&&onlineProfiles.get(targetId);
+      if(!online||online.ws.readyState!==1){
+        ws.send(JSON.stringify({type:'invite_result',ok:false,name:targetName,error:'That player is no longer online.'}));
+        return;
+      }
+      online.ws.send(JSON.stringify({type:'room_invite',roomId:myRoom.id,
+        fromName:player.name,fromIcon:player.icon,
+        gameMode:myRoom.gameMode,numPlayers:myRoom.numPlayers,rules:myRoom.rules}));
+      ws.send(JSON.stringify({type:'invite_result',ok:true,name:targetName}));
+    }
+
     if(msg.type==='unlock_profile'){
       const name=String(msg.name||'').slice(0,20);
       if(verifyProfile(name,msg.code)){
@@ -497,6 +584,7 @@ wss.on('connection',(ws)=>{
         // the code again.
         const token=msg.remember?createRememberToken(name):undefined;
         ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),token}));
+        goOnline();
         syncSeatedIdentity();
       } else {
         ws.send(JSON.stringify({type:'profile_unlocked',ok:false,error:'Incorrect code'}));
@@ -513,6 +601,7 @@ wss.on('connection',(ws)=>{
         unlockedName=name;
         unlockedId=getId(name);
         ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),silent:true}));
+        goOnline();
         syncSeatedIdentity();
       } else {
         ws.send(JSON.stringify({type:'profile_unlocked',ok:false,silent:true}));
@@ -524,6 +613,7 @@ wss.on('connection',(ws)=>{
     // none, this is a no-op). The next quick_match/create_room/join_room then falls into the same
     // Guest-assignment branch above as if nothing had ever been unlocked.
     if(msg.type==='select_guest'){
+      goOffline();
       unlockedName=null;
       unlockedId=null;
       ws.send(JSON.stringify({type:'guest_selected'}));
@@ -572,7 +662,13 @@ wss.on('connection',(ws)=>{
         ws.send(JSON.stringify({type:'change_username_result',ok:false,error:'Incorrect code'}));
       } else {
         const result=renameProfile(unlockedName,msg.newName);
-        if(result.ok) unlockedName=result.name;
+        if(result.ok){
+          unlockedName=result.name;
+          // Keep the online-profiles registry's display name in sync too —
+          // otherwise another host's invite picker would keep showing this
+          // profile under its old name until they reconnect.
+          if(onlineProfiles.get(unlockedId)?.playerId===myId) onlineProfiles.get(unlockedId).name=unlockedName;
+        }
         ws.send(JSON.stringify({type:'change_username_result',...result}));
       }
     }
@@ -636,6 +732,7 @@ wss.on('connection',(ws)=>{
   });
 
   ws.on('close',()=>{
+    goOffline();
     leaveCurrentRoom();
   });
 });

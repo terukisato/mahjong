@@ -555,7 +555,22 @@ function onMsg(m){
   // the same tick (see server/index.js), so 'game_start' is right behind
   // this message; skip the waiting-room screen entirely rather than flash
   // "Looking for players..." for a single frame before it's replaced.
-  if(m.type==='joined'){mySeat=m.seat;currentRoomRules=m.rules||null;currentRoomMode=m.gameMode||null;currentRoomNumPlayers=m.numPlayers||null;isPrivateRoomGame=!m.instant;isRoomHost=!!m.isHost;if(!m.instant)showWaiting();return;}
+  if(m.type==='joined'){
+    mySeat=m.seat;currentRoomRules=m.rules||null;currentRoomMode=m.gameMode||null;currentRoomNumPlayers=m.numPlayers||null;isPrivateRoomGame=!m.instant;isRoomHost=!!m.isHost;
+    if(!m.instant)showWaiting();
+    // Fire off any invites picked in the Create Room flow (see
+    // rulesSelectedInvites/openCreateRoomRules) now that the room this
+    // connection just created actually exists — invite_player needs a real
+    // roomId to invite into, which doesn't exist until this very message.
+    // isHost-gated so a join_room's own 'joined' (isHost always false)
+    // never accidentally replays a stale pick from the last room this
+    // connection created.
+    if(m.isHost&&rulesSelectedInvites.size){
+      for(const name of rulesSelectedInvites) wss({type:'invite_player',name});
+      rulesSelectedInvites=new Set();
+    }
+    return;
+  }
   if(m.type==='room_update'){updateSlots(m.seats);return;}
   if(m.type==='game_start'){startGame(m);return;}
   if(m.type==='round_start'){onRoundStart(m);return;}
@@ -591,6 +606,12 @@ function onMsg(m){
   if(m.type==='player_stats'){renderPlayerCard(m);return;}
   if(m.type==='room_list'){renderRoomList(m);return;}
   if(m.type==='join_room_result'){if(!m.ok) toast(m.error||'Could not join that room.');return;}
+  // Reply to the shared Invite Players window's fetch (see
+  // openInviteModal) — renderInvitePlayers itself reads onlineProfilesTarget
+  // to decide what a click does (send immediately vs. stage a pick).
+  if(m.type==='online_profiles'){renderInvitePlayers(m.profiles);return;}
+  if(m.type==='invite_result'){onInviteResult(m);return;}
+  if(m.type==='room_invite'){showRoomInvite(m);return;}
   // Generic server-side rejection (currently just quick_match/create_room
   // refusing a profile that's already seated in another room — see
   // isProfileSeatedElsewhere in server/index.js; join_room reuses
@@ -688,8 +709,13 @@ function toggleRulesModal(){
   // Opening normally (gear icon/Quick Match) hides the "+ Create Room"
   // confirm button — only openCreateRoomRules (below) re-shows it, since
   // that's the one path where picking rules here actually creates a room
-  // rather than just updating what's queued for next time.
-  if(!open) $('rules-modal-create-btn').style.display='none';
+  // rather than just updating what's queued for next time. Invite Players
+  // is gated the exact same way, for the exact same reason — there's no
+  // room to invite anyone into outside that one path.
+  if(!open){
+    $('rules-modal-create-btn').style.display='none';
+    $('rules-invite-section').style.display='none';
+  }
 }
 
 // Hub for everything specific to the unlocked profile (player icon, voice
@@ -2448,19 +2474,30 @@ function toggleRoomList(){
 
 // Routes Room List's "+ Create Room" through Match Settings instead of
 // firing create_room immediately with whatever was last picked — closes
-// Room List, opens the rules modal with its confirm button showing (see
-// toggleRulesModal), and leaves the actual request to confirmCreateRoom
-// once the player's happy with their picks.
+// Room List, opens the rules modal with its confirm button (and the Invite
+// Players link right below it — see openInviteModal/rulesSelectedInvites)
+// showing, and leaves the actual request to confirmCreateRoom once the
+// player's happy with their picks.
 function openCreateRoomRules(){
   toggleRoomList();
   toggleRulesModal();
   $('rules-modal-create-btn').style.display='block';
+  $('rules-invite-section').style.display='block';
+  rulesSelectedInvites=new Set();
+  renderInvitedChips();
 }
 
 function confirmCreateRoom(){
   toggleRulesModal();
   createRoom();
 }
+
+// Selected during openCreateRoomRules (see renderRulesInviteList) — staged
+// here rather than sent immediately (unlike the waiting room's own Invite
+// Players picker) because there's no room to invite anyone into yet. Read
+// once by the 'joined' handler in onMsg right after this connection's own
+// create_room actually creates one, then cleared — see its own comment.
+let rulesSelectedInvites=new Set();
 
 function createRoom(){
   playLobbyMusic();
@@ -2470,7 +2507,13 @@ function createRoom(){
 function joinRoom(id){
   playLobbyMusic();
   wss({type:'join_room',roomId:id,voiceTheme:currentVoiceTheme,icon:currentPlayerIcon});
-  toggleRoomList();
+  // Only close the Room List modal if that's actually where this call came
+  // from — acceptRoomInvite() also calls joinRoom() directly (accepting a
+  // Room Invite toast never opens Room List at all), and toggleRoomList()
+  // would otherwise OPEN it instead of closing it in that case, since it
+  // just flips whichever state the modal's currently in.
+  const modal=$('roomlist-modal');
+  if(modal&&modal.classList.contains('visible')) toggleRoomList();
 }
 
 // One card per open room — host is just the first non-bot seat (whoever
@@ -2510,6 +2553,163 @@ function showWaiting(){
   $('rankings-icon-btn').style.display='none';
   renderWaitingRules();
   $('cdiv').textContent='Press Ready when you are set to start';
+  // Room Invite — host-only (isRoomHost is set right before showWaiting()
+  // is called, see 'joined' in onMsg); quick_match rooms have no host at
+  // all (hostId stays null server-side), and join_room's caller is never
+  // the host, so neither ever sees this button.
+  $('binvite').style.display=isRoomHost?'':'none';
+}
+
+// ── Room Invite ──────────────────────────────────────────────────────────
+// Which caller opened the Invite Players window (see index.html's single
+// shared #invite-modal) — 'waiting' (the waiting room's own link, picks
+// send immediately) or 'create' (Create Room's link, picks are staged —
+// see openCreateRoomRules/rulesSelectedInvites). Read by renderInvitePlayers
+// (to decide what a click does) and closeInviteModal (to decide what
+// closing the window returns to). Set at the top of openInviteModal.
+let onlineProfilesTarget='waiting';
+
+// Opens the Invite Players window (see the modal in index.html) — shared by
+// both the waiting room's link and Create Room's link, `target` says which.
+// Fetches a fresh list every open, same "never show stale content from a
+// previous visit" reasoning as every other on-demand modal in this file.
+// From Create Room, this hides the rules modal's own box (not its backdrop
+// — see closeInviteModal) rather than just stacking on top of it, mirroring
+// the User Profile hub's "child panel replaces the hub" pattern elsewhere
+// in this file, and shows the ← Back control instead of just ✕.
+function openInviteModal(target){
+  onlineProfilesTarget=target;
+  $('invite-list').innerHTML='Loading…';
+  wss({type:'get_online_profiles'});
+  if(target==='create') $('rules-modal').classList.remove('visible');
+  $('invite-modal-back').style.display=target==='create'?'':'none';
+  $('invite-modal').classList.add('visible');
+  $('invite-backdrop').classList.add('visible');
+}
+
+// Closing the window: from the waiting room this just closes it; from
+// Create Room it also brings the rules modal's box back (its backdrop was
+// never hidden — see openInviteModal) showing whatever got picked as chips
+// (see renderInvitedChips) above the "+ Create Room" button.
+function closeInviteModal(){
+  $('invite-modal').classList.remove('visible');
+  $('invite-backdrop').classList.remove('visible');
+  if(onlineProfilesTarget==='create'){
+    $('rules-modal').classList.add('visible');
+    renderInvitedChips();
+  }
+}
+
+// One .profile-card per known profile (minus this connection's own — see
+// server/index.js's 'get_online_profiles'), online ones first and marked
+// with a glowing dot (.profile-card-dot); offline ones are dimmed and
+// unpickable (.profile-card-offline) rather than hidden, so a host can see
+// "not online right now" instead of a name just silently missing. Same
+// markup as the Select Profile picker's cards (renderProfileList), but a
+// click's effect depends on onlineProfilesTarget: 'waiting' sends an invite
+// immediately (see sendInvite); 'create' just stages the pick
+// (rulesSelectedInvites) — either way the modal stays open so a host can
+// pick several without reopening it.
+function renderInvitePlayers(profiles){
+  const grid=$('invite-list'); if(!grid) return;
+  if(!profiles||!profiles.length){ grid.innerHTML='<p>No other players yet.</p>'; return; }
+  grid.innerHTML='';
+  for(const p of profiles){
+    const btn=document.createElement('button');
+    btn.type='button';
+    const picked=onlineProfilesTarget==='create'&&rulesSelectedInvites.has(p.name);
+    btn.className='profile-card'+(p.online?'':' profile-card-offline')+(picked?' active':'');
+    btn.dataset.name=p.name;
+    btn.innerHTML=`${iconSvg(p.icon)}${p.online?'<span class="profile-card-dot" title="Online"></span>':''}<span class="profile-card-name">${escHtml(p.name)}</span>`;
+    if(p.online){
+      btn.onclick=onlineProfilesTarget==='create'
+        ?()=>{
+          if(rulesSelectedInvites.has(p.name)){ rulesSelectedInvites.delete(p.name); btn.classList.remove('active'); }
+          else { rulesSelectedInvites.add(p.name); btn.classList.add('active'); }
+        }
+        :()=>sendInvite(p.name,btn);
+    }
+    grid.appendChild(btn);
+  }
+}
+
+function sendInvite(name,btn){
+  if(btn.disabled) return;
+  btn.disabled=true;
+  wss({type:'invite_player',name});
+}
+
+// 'invite_result' reply (see onMsg) — marks the card Invited on success, or
+// re-enables it (so the host can retry) plus a toast explaining why on
+// failure. Looked up by data-name rather than closing over the exact `btn`
+// from sendInvite, so this still works correctly even if renderInvitePlayers
+// re-rendered the grid in between (e.g. the modal was closed and reopened).
+function onInviteResult(m){
+  const btn=document.querySelector(`#invite-list .profile-card[data-name="${cssEscape(m.name)}"]`);
+  if(m.ok){
+    if(btn){ btn.classList.add('active'); const nm=btn.querySelector('.profile-card-name'); if(nm) nm.textContent=`${m.name} ✓`; }
+  } else {
+    if(btn) btn.disabled=false;
+    toast(m.error||'Could not send invite.');
+  }
+}
+
+// The chip list shown above Create Room's "+ Create Room" button (see
+// #rules-invited-list in index.html) — one removable chip per name in
+// rulesSelectedInvites, rebuilt from scratch on every call rather than
+// diffed (this list is short and only ever changes from direct user
+// action, never a server push). Removing a chip here is the only way back
+// out of a pick besides reopening the Invite Players window and clicking
+// the card again — both stay in sync since they share the same
+// rulesSelectedInvites Set.
+function renderInvitedChips(){
+  const wrap=$('rules-invited-list'); if(!wrap) return;
+  wrap.innerHTML='';
+  for(const name of rulesSelectedInvites){
+    const chip=document.createElement('span'); chip.className='invite-chip';
+    chip.appendChild(document.createTextNode(name));
+    const x=document.createElement('button');
+    x.type='button'; x.className='invite-chip-x'; x.textContent='✕'; x.setAttribute('aria-label',`Remove ${name}`);
+    x.onclick=()=>{ rulesSelectedInvites.delete(name); renderInvitedChips(); };
+    chip.appendChild(x);
+    wrap.appendChild(chip);
+  }
+}
+
+// CSS.escape isn't available in every embedded/older WebView this app might
+// run in — a minimal inline fallback (escape everything CSS.escape would)
+// rather than pulling in a dependency for one attribute-selector lookup.
+function cssEscape(s){
+  return window.CSS&&CSS.escape?CSS.escape(s):String(s).replace(/[^a-zA-Z0-9_-]/g,c=>'\\'+c);
+}
+
+// Invitee side — the currently-shown invite, if any (see onMsg's
+// 'room_invite'), so acceptRoomInvite() below knows which room to join.
+// Deliberately does NOT auto-dismiss (unlike the achievement toast this
+// visually mirrors) — an invite is something to act on, not just glance at.
+let pendingRoomInvite=null;
+
+function showRoomInvite(m){
+  pendingRoomInvite=m;
+  const modeLabel=m.gameMode==='hanchan'?'Hanchan':'Tonpuu';
+  const variantLabel=m.numPlayers===3?'Sanma':'Yonma';
+  $('invite-toast-body').innerHTML=`<div class="achv-item">
+      <div class="achv-label">${escHtml(m.fromName)} invited you to a game</div>
+      <div class="achv-reward">${escHtml(modeLabel)} · ${escHtml(variantLabel)}</div>
+    </div>`;
+  $('invite-toast').classList.add('show');
+}
+
+function closeRoomInvite(){
+  pendingRoomInvite=null;
+  $('invite-toast').classList.remove('show');
+}
+
+function acceptRoomInvite(){
+  if(!pendingRoomInvite) return;
+  const roomId=pendingRoomInvite.roomId;
+  closeRoomInvite();
+  joinRoom(roomId);
 }
 
 // Cached across calls so toggling a bot's difficulty popup can re-render
@@ -2597,6 +2797,7 @@ function resetLobby(){
   currentRoomRules=null;currentRoomMode=null;currentRoomNumPlayers=null;
   isPrivateRoomGame=false;isRoomHost=false;playAgainSeats=[];lastGameOverNames=null;
   $('wa').style.display='none';
+  $('binvite').style.display='none';
   $('lobby-actions').style.display='flex';
   $('bfind').disabled=false;
   $('lobby-inputs').style.display='block';

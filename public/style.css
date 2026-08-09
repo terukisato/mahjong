@@ -202,6 +202,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.6);z-index:50;}
 .diff-popup-btn{padding:5px 8px;font-size:10px;white-space:nowrap;}
 .cd{font-size:calc(var(--ui-vmin) * 1.389);color:rgba(201,168,76,.9);text-align:center;margin-top:8px;letter-spacing:calc(var(--ui-vmin) * .139);}
+/* Invite Players — a plain text link (see #binvite in index.html), not a
+   third full-width button alongside Ready/Cancel below it. */
+.invite-link{display:block;text-align:center;margin-top:10px;font-size:calc(var(--ui-vmin) * 1.389);
+  color:rgba(245,237,216,.55);text-decoration:underline;letter-spacing:calc(var(--ui-vmin) * .139);cursor:pointer;transition:color .2s;}
+.invite-link:hover{color:var(--gold);}
 /* Fallback (7.2px), same value/reason as .about-close below: .mode-btn is
    used both in #s-lobby (defines --ui-vmin) and, since Game Mode/Players
    moved into #rules-modal, inside a modal that never defines it — without
@@ -1085,6 +1090,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   transform:translateX(calc(100% + 24px));transition:transform .4s ease;
   pointer-events:none;max-height:calc(100vh - 32px);overflow-y:auto;}
 .achv-toast.show{transform:translateX(0);pointer-events:auto;}
+/* Room Invite toast's Accept button (#invite-toast-accept) — the
+   achievement toast has no equivalent, it's purely informational, so this
+   only applies to the invite variant. */
+#invite-toast-accept{margin-top:calc(var(--ui-vmin, 7.2px) * 1.389);}
 .achv-toast-title{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 1.806);
   color:var(--gold);margin-bottom:calc(var(--ui-vmin, 7.2px) * 1.389);padding-right:calc(var(--ui-vmin, 7.2px) * 2.778);}
 /* Wordless on/off switch (replaces the old "ON"/"OFF" text pill) — a knob
@@ -1354,7 +1363,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    renderProfileList/selectProfileCard in script.js). Reuses .icon-grid's
    3-column layout but each cell needs a taller, name-labeled card instead
    of .icon-btn's icon-only square. */
-.profile-card{background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;
+.profile-card{position:relative;background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;
   padding:calc(var(--ui-vmin, 7.2px) * 1.111) calc(var(--ui-vmin, 7.2px) * .556);cursor:pointer;transition:all .2s;display:flex;flex-direction:column;
   align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .556);overflow:hidden;}
 .profile-card svg{width:calc(var(--ui-vmin, 7.2px) * 5);height:calc(var(--ui-vmin, 7.2px) * 5);display:block;}
@@ -1362,6 +1371,32 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   letter-spacing:calc(var(--ui-vmin, 7.2px) * .069);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 .profile-card:hover{border-color:rgba(201,168,76,.5);}
 .profile-card.active{background:rgba(201,168,76,.2);border-color:var(--gold);}
+/* Online-status dot (see the Invite Players picker, renderInvitePlayers in
+   script.js) — a small glowing green mark, top-right of the card, only
+   present on profiles the server reported as online right now. Pulses
+   gently rather than sitting static, so "online" reads as a live signal
+   rather than just another icon. */
+.profile-card-dot{position:absolute;top:calc(var(--ui-vmin, 7.2px) * .556);right:calc(var(--ui-vmin, 7.2px) * .556);
+  width:calc(var(--ui-vmin, 7.2px) * .972);height:calc(var(--ui-vmin, 7.2px) * .972);border-radius:50%;
+  background:#4eff9a;box-shadow:0 0 6px 2px rgba(78,255,154,.8);animation:profile-dot-pulse 1.8s ease-in-out infinite;}
+@keyframes profile-dot-pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+/* Offline (or just currently unreachable — see server/index.js's
+   'get_online_profiles') profiles are still listed, just dimmed and
+   non-interactive (renderInvitePlayers never attaches an onclick to
+   these), rather than missing from the picker entirely. */
+.profile-card-offline{opacity:.4;cursor:default;}
+.profile-card-offline:hover{border-color:rgba(201,168,76,.2);}
+/* Invite Players' staged picks (see #rules-invited-list in index.html,
+   renderInvitedChips in script.js) — shown above "+ Create Room" once the
+   picker window closes. */
+.invite-chip-list{display:flex;flex-wrap:wrap;gap:calc(var(--ui-vmin, 7.2px) * .556);margin-top:calc(var(--ui-vmin, 7.2px) * .833);}
+.invite-chip{display:inline-flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .417);
+  background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.35);border-radius:999px;
+  padding:calc(var(--ui-vmin, 7.2px) * .278) calc(var(--ui-vmin, 7.2px) * .278) calc(var(--ui-vmin, 7.2px) * .278) calc(var(--ui-vmin, 7.2px) * .833);
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:var(--cream);}
+.invite-chip-x{background:none;border:none;color:rgba(245,237,216,.6);cursor:pointer;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.111);line-height:1;padding:calc(var(--ui-vmin, 7.2px) * .417);border-radius:50%;}
+.invite-chip-x:hover{color:#ff8080;background:rgba(255,128,128,.15);}
 #profile-code-section{margin-top:calc(var(--ui-vmin, 7.2px) * 2.222);}
 .leave-modal .about-body{text-align:center;}
 .leave-actions{display:flex;gap:calc(var(--ui-vmin, 7.2px) * 1.389);margin-top:calc(var(--ui-vmin, 7.2px) * 2.5);}
