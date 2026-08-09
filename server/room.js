@@ -1,8 +1,9 @@
 'use strict';
 const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
-       detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose,isMenzen} = require('./mahjong');
+       detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,isMenzen} = require('./mahjong');
 const {botName,bestDiscard,botReact} = require('./bot');
 const {recordGameResult} = require('./stats');
+const {recordGame} = require('./history');
 
 let _roomId=0;
 const BOT_DELAY=1200; // pause before a bot acts, so its move is readable on screen
@@ -312,6 +313,13 @@ class Room {
       // _endRound) is bumped there, not here, since it needs prevScores vs.
       // post-payment g.scores from that specific win.
       stats:new Array(this.numPlayers).fill(0).map(()=>({riichi:0,wins:0,tsumo:0,ron:0,dealIn:0,huro:0,doubleBust:0,bestHan:0,bestScore:0,yaku:{}})),
+      // One entry per round_end this game (see _recordRoundHistory below) —
+      // exactly the same payload each round already broadcasts to clients,
+      // plus that round's own number/wind/dealer/honba context. Fed into
+      // history.recordGame at game end (_finishGame) so the Play History
+      // panel's per-game dropdown can show precisely what the round-results
+      // screen showed at the time, not a re-derived summary.
+      roundHistory:[],
       // Hands dealt this game so far — every _initRound() call is one more
       // hand played (win, draw, or abortive draw all count; nothing about
       // a hand's outcome excludes it). Used as the denominator for
@@ -750,18 +758,19 @@ class Room {
       const sw=this._seatWindOf(winSeat);
       const isHoutei=g.haiteiNext&&!g.isRinshan;
       const isDblRiichi=g.doubleRiichi[winSeat];
-      const {han,yakuList}=detectYaku(hand,g.melds[winSeat],false,sw,this._roundWindValue(),
+      const result=detectYaku(hand,g.melds[winSeat],false,sw,this._roundWindValue(),
         g.riichi[winSeat],g.ippatsu[winSeat],isDblRiichi,false,false,false,isHoutei,false,false,key(tile),
         {kuitanAri:this.rules.kuitanAri});
+      const {han,yakuList}=result;
       if(han===0) continue;
       // Ura dora for riichi players
-      const uraDora=g.riichi[winSeat]?this._countUraDora(hand):0;
+      const doraPool=this._doraPool(winSeat,hand);
+      const uraDora=g.riichi[winSeat]?this._countUraDora(doraPool):0;
       const kitaCount=g.kita[winSeat].length;
-      const dc=countDora(hand,g.dora)+uraDora+countAkaDora(hand);
+      const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(hand);
       const totalHan=han+dc+kitaCount;
-      const decomps=decompose(hand);
       const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
-      const fu=decomps.length?calcFu(decomps[0],false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu):30;
+      const fu=this._computeFu(result,false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu);
       const isWinnerDealer = winSeat === g.dealer;
       const bp=basePoints(totalHan,fu);
       const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300;
@@ -1153,6 +1162,19 @@ class Room {
   }
 
   // ── Win ─────────────────────────────────────────────────────────────────────
+  // Tiles eligible for regular/ura dora matching: the concealed hand plus
+  // this seat's own banked kita tiles (g.kita[seat] — set aside into their
+  // own array the moment kita is declared, see _kita/_completeKita, so
+  // they'd otherwise be invisible to countDora entirely). A banked North
+  // tile is real and face-up same as any meld tile — if this round's dora
+  // indicator happens to be West (making North the dora), it should count
+  // the same as a North tile the player simply held in hand/a meld would.
+  // Doesn't touch aka dora (countAkaDora) — kita is always a 4z tile,
+  // never a red 5, so there's nothing for it to add there.
+  _doraPool(seat,hand){
+    return [...hand,...this.game.kita[seat]];
+  }
+
   // Builds the display yaku list for a win. Normally that's just the
   // regular yaku plus any Dora/Ura Dora/Aka Dora/Kita breakdown lines. But
   // if the hand only reaches yakuman-tier han (13+) once dora is folded
@@ -1176,6 +1198,25 @@ class Room {
     return yl;
   }
 
+  // Fu for a win. Chiitoitsu is always a fixed 25 — real rule, and it
+  // never goes through the set+pair grouping calcFu needs (see
+  // mahjong.js's detectYaku, whose chiitoitsu branch never calls
+  // evalDecomp/decompose at all). Otherwise uses the EXACT decomposition
+  // detectYaku itself picked as the winning interpretation (`result.groups`
+  // — see evalDecomp's own return) instead of independently recomputing
+  // decompose(hand) and grabbing whichever grouping happens to come back
+  // first. That used to silently disagree with detectYaku's own choice on
+  // any hand with more than one valid grouping — breaking Pinfu-ron's
+  // fixed-30-fu guarantee whenever the mismatched grouping had extra fu
+  // (a triplet, a non-ryanmen wait) — and never included meld tiles at
+  // all, since decompose(hand) only ever saw the concealed hand, so open
+  // pon/chi/kan contributed zero fu regardless of hand shape.
+  _computeFu(result,isTsumo,menzen,winKey,hasPinfu){
+    if(result.isChiitoitsu) return 25;
+    if(result.groups) return calcFu(result.groups,isTsumo,menzen,winKey,hasPinfu);
+    return 30; // yakuman (or, in principle, no valid decomp) — basePoints ignores fu once han>=13 anyway
+  }
+
   _tsumo(seat){
     const g=this.game;
     const hand=g.hands[seat];
@@ -1192,23 +1233,24 @@ class Room {
     const isChiihou=seat!==g.dealer&&g.firstRound&&g.melds.every(m=>m.length===0)&&hand.length===14;
     const isDblRiichi=g.doubleRiichi[seat];
 
-    const {han,yakuList}=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),
+    const result=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),
       g.riichi[seat],g.ippatsu[seat],isDblRiichi,g.isRinshan,false,isHaitei,false,isTenhou,isChiihou,
       g.drawTile?key(g.drawTile):null,{kuitanAri:this.rules.kuitanAri});
+    const {han,yakuList}=result;
     if(han===0){
       if(this.rules.chonbo) this._chonboPenalty(seat);
       return;
     }
 
     // Ura dora (only on riichi)
-    const uraDora=g.riichi[seat]?this._countUraDora(hand):0;
+    const doraPool=this._doraPool(seat,hand);
+    const uraDora=g.riichi[seat]?this._countUraDora(doraPool):0;
     const kitaCount=g.kita[seat].length;
-    const dc=countDora(hand,g.dora)+uraDora+countAkaDora(hand);
+    const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(hand);
     const totalHan=han+dc+kitaCount;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
-    const decomps=decompose(hand);
     const winKey=g.drawTile?key(g.drawTile):null;
-    const fu=decomps.length?calcFu(decomps[0],true,isMenzen(g.melds[seat]),winKey,hasPinfu):30;
+    const fu=this._computeFu(result,true,isMenzen(g.melds[seat]),winKey,hasPinfu);
     const bp=basePoints(totalHan,fu);
     const isDealer=seat===g.dealer;
     const prevScores=[...g.scores];
@@ -1234,18 +1276,19 @@ class Room {
     const sw=this._seatWindOf(winSeat);
     const isHoutei=g.haiteiNext&&!g.isRinshan;
     const isDblRiichi=g.doubleRiichi[winSeat];
-    const {han,yakuList}=detectYaku(hand,g.melds[winSeat],false,sw,this._roundWindValue(),
+    const result=detectYaku(hand,g.melds[winSeat],false,sw,this._roundWindValue(),
       g.riichi[winSeat],g.ippatsu[winSeat],isDblRiichi,false,isChankan,false,isHoutei,false,false,key(tile),
       {kuitanAri:this.rules.kuitanAri});
+    const {han,yakuList}=result;
     if(han===0){this._sendState();return;}
 
-    const uraDora=g.riichi[winSeat]?this._countUraDora(hand):0;
+    const doraPool=this._doraPool(winSeat,hand);
+    const uraDora=g.riichi[winSeat]?this._countUraDora(doraPool):0;
     const kitaCount=g.kita[winSeat].length;
-    const dc=countDora(hand,g.dora)+uraDora+countAkaDora(hand);
+    const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(hand);
     const totalHan=han+dc+kitaCount;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
-    const decomps=decompose(hand);
-    const fu=decomps.length?calcFu(decomps[0],false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu):30;
+    const fu=this._computeFu(result,false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu);
     const bp=basePoints(totalHan,fu);
     const isWinnerDealer=winSeat===g.dealer;
     const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300+g.riichiSticks*1000;
@@ -1272,6 +1315,23 @@ class Room {
   // Records one won hand into this game's per-seat stats accumulator
   // (g.stats — see start()). yakuList may be null (multi-ron secondary
   // winners don't carry a full yaku breakdown, only han/fu/payment).
+  // Shared tail for every round_end broadcast (tsumo/ron via _endRound,
+  // draw via _resolveTenpaiPayments, nagashi via _resolveNagashi) — stores
+  // the exact same payload just sent to clients into g.roundHistory, tagged
+  // with this round's own number/wind/dealer/honba (read from g.round/
+  // g.dealer/g.honba, which the caller hasn't advanced yet at this point —
+  // see each call site). _finishGame hands the whole array to
+  // history.recordGame once the game ends.
+  _recordRoundHistory(payload){
+    const g=this.game;
+    if(!g.roundHistory) g.roundHistory=[];
+    g.roundHistory.push({...payload,
+      round:g.round,roundWind:g.roundWind,dealer:g.dealer,
+      displayWind:Math.ceil(g.round/this.numPlayers),
+      displayRound:((g.round-1)%this.numPlayers)+1,
+    });
+  }
+
   _recordHandWin(seat,reason,han,fu,yakuList,payment){
     const g=this.game;
     const st=g.stats[seat];
@@ -1316,6 +1376,22 @@ class Room {
       // calls throughout this file).
       bustedSeat:reason==='tobi'?extra.bust:-1,
       matchKind:this.matchKind,
+    });
+    // Play History — same seat-indexed arrays as recordGameResult above,
+    // plus this game's full round-by-round detail (g.roundHistory, built up
+    // by _recordRoundHistory as each round ended). See history.js.
+    recordGame({
+      playerIds:this.seats.map(p=>p?.profileId||null),
+      isBot:this.seats.map(p=>!p||p.isBot),
+      isGuest:this.seats.map(p=>!!p?.isGuest),
+      variant:this.numPlayers===3?'sanma':'yonma',
+      matchKind:this.matchKind,
+      gameMode:this.gameMode,
+      numPlayers:this.numPlayers,
+      playerNames:this.seats.map(p=>p?.name||'—'),
+      finalScores:g.scores,
+      placements:this._computePlacements(g.scores),
+      rounds:g.roundHistory||[],
     });
     // Each seat only ever hears about ITS OWN newly-earned achievements
     // (see recordGameResult's return shape) — sent directly to that
@@ -1444,7 +1520,7 @@ class Room {
           // with 'tobi' unconditionally (as this used to) mislabelled every
           // ordinary agariyame ending as "飛び - Bankruptcy" on the client
           // (see m.reason==='tobi' in script.js) even though nobody busted.
-          this._broadcastAll({type:'round_end',reason,winner,loser,hand,yakuList,han,fu,payment,
+          const agariyamePayload={type:'round_end',reason,winner,loser,hand,yakuList,han,fu,payment,
             scores:g.scores,handLabel:han?handLabel(han):'',
             playerNames:this.seats.map(p=>p?.name||'—'),
             extraWinners:extraWinners||null,
@@ -1453,7 +1529,9 @@ class Room {
             prevScores:prevScores||null,
             melds:melds||[],
             gameOver:true,
-          });
+          };
+          this._broadcastAll(agariyamePayload);
+          this._recordRoundHistory(agariyamePayload);
           if(bust>=0) this._finishGame('tobi',{bust});
           else this._finishGame('end');
           return;
@@ -1477,7 +1555,7 @@ class Room {
     const maxRound=this._maxRound();
     const isGameOver=bust>=0||newRound>maxRound;
 
-    this._broadcastAll({type:'round_end',reason,winner,loser,hand,yakuList,han,fu,payment,
+    const roundEndPayload={type:'round_end',reason,winner,loser,hand,yakuList,han,fu,payment,
       scores:g.scores,handLabel:han?handLabel(han):'',
       playerNames:this.seats.map(p=>p?.name||'—'),
       extraWinners:extraWinners||null,
@@ -1490,7 +1568,9 @@ class Room {
       // claims every riichi stick on the table (newRiichiSticks is 0 here
       // regardless of who won), computed above before this broadcast.
       honba:newHonba,riichiSticks:newRiichiSticks,
-    });
+    };
+    this._broadcastAll(roundEndPayload);
+    this._recordRoundHistory(roundEndPayload);
 
     // Game over conditions
     if(bust>=0){
@@ -1562,7 +1642,7 @@ class Room {
     // Every draw adds a honba regardless of dealer-repeat/advance; riichi
     // sticks are never claimed on a draw, so they carry over unchanged.
     const newHonba=g.honba+1;
-    this._broadcastAll({type:'round_end',reason:'draw',scores:g.scores,
+    const drawPayload={type:'round_end',reason:'draw',scores:g.scores,
       inTenpai,payments,tenpaiHands,tenpaiMelds:g.melds,
       playerNames:this.seats.map(p=>p?.name||'—'),
       dora:g.dora,
@@ -1570,7 +1650,9 @@ class Room {
       prevScores,
       gameOver:drawGameOver,
       honba:newHonba,riichiSticks:g.riichiSticks,
-    });
+    };
+    this._broadcastAll(drawPayload);
+    this._recordRoundHistory(drawPayload);
 
     // Dealer tenpai = repeat; dealer noten = advance
     const dealerTenpai=inTenpai[g.dealer];
@@ -1650,9 +1732,11 @@ class Room {
     // outcome — every seat's discards were exhausted, nobody called ron/
     // tsumo on a discard — so riichi sticks are never claimed here either.
     const newHonba=g.honba+1;
-    this._broadcastAll({type:'round_end',reason:'nagashi',nagashiSeats,scores:g.scores,
+    const nagashiPayload={type:'round_end',reason:'nagashi',nagashiSeats,scores:g.scores,
       playerNames:this.seats.map(p=>p?.name||'—'),dora:g.dora,gameOver:nagashiGameOver,
-      honba:newHonba,riichiSticks:g.riichiSticks});
+      honba:newHonba,riichiSticks:g.riichiSticks};
+    this._broadcastAll(nagashiPayload);
+    this._recordRoundHistory(nagashiPayload);
 
     // Nagashi: dealer repeat if dealer is nagashi winner
     const dealerNagashi=nagashiSeats[g.dealer];

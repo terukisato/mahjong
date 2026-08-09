@@ -91,7 +91,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.13</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.14</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -278,6 +278,7 @@
   <div class="about-body">
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleVoiceThemeModal();return false;">Voice Theme</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleUserStatsModal();return false;">My Stats</a>
+    <a href="#" class="hub-link" onclick="toggleUserProfile();togglePlayHistoryModal();return false;">Play History</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleAchievementsModal();return false;">Achievements</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleChangeUsernameModal();return false;">Change Username</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleChangeCodeModal();return false;">Change Key</a>
@@ -344,6 +345,22 @@
       <button class="mode-btn" id="btn-stats-room" onclick="setStatsMatchKind('room')">Room Match</button>
     </div>
     <div id="stats-body">Loading…</div>
+  </div>
+</div>
+
+<!-- Play History — same pattern as My Stats above. #playhistory-list keeps
+     one row per past game (final score/placement from THIS profile's own
+     seat), and each row's own dropdown expands to that game's round-by-
+     round detail (see renderPlayHistory/togglePlayHistoryGame in
+     script.js) — the same information the live round-results screen
+     (#s-end) shows for each round, just rendered as a static card. -->
+<div id="playhistory-backdrop" class="about-backdrop" onclick="togglePlayHistoryModal()"></div>
+<div id="playhistory-modal" class="about-modal">
+  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-close" onclick="togglePlayHistoryModal()">✕</button>
+  <div class="about-title">Play History</div>
+  <div class="about-body">
+    <div id="playhistory-list">Loading…</div>
   </div>
 </div>
 

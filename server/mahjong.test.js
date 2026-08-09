@@ -915,6 +915,68 @@ test('calcFu: open-hand ron with genuinely nothing extra can land below 30 befor
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+// detectYaku's `groups`/`isChiitoitsu` result fields — callers (room.js)
+// used to independently recompute decompose(hand) and grab decomps[0] for
+// fu purposes, which is NOT guaranteed to be the same decomposition
+// detectYaku itself picked when deciding which yaku apply. Fixed by having
+// detectYaku hand back the actual winning decomposition (`groups`) instead,
+// shaped for calcFu specifically — including meld tiles (which decompose()
+// never saw at all, since it only ever ran on the concealed hand) with
+// kans correctly distinguished from plain triplets.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('detectYaku: a Pinfu-shaped decomp\'s groups always produce the fixed 30 fu, even when the SAME tiles also admit a non-pinfu (triplet) reading', () => {
+  // 1111m 2222m 3333m 44s: also readable as (111m)(222m)(333m tri) + a
+  // leftover 1m/2m/3m forming... — the point isn't the alternate reading's
+  // validity, it's that decompose(hand) returns MULTIPLE decomps for this
+  // shape and detectYaku must hand back groups consistent with whichever
+  // one it actually used to grant Pinfu, not just "some" decomp of the hand.
+  const hand = [
+    T(1, 'm'), T(1, 'm'), T(1, 'm'), T(1, 'm'),
+    T(2, 'm'), T(2, 'm'), T(2, 'm'), T(2, 'm'),
+    T(3, 'm'), T(3, 'm'), T(3, 'm'), T(3, 'm'),
+    T(4, 's'), T(4, 's'),
+  ];
+  const r = Y(hand, [], { winTileKey: '1m' });
+  assertHas(r, 'Pinfu');
+  const hasPinfu = true;
+  const fu = calcFu(r.groups, false, true, '1m', hasPinfu);
+  assert.strictEqual(fu, 30, 'Pinfu-ron is always exactly 30 fu, regardless of which alternate reading the same tiles admit');
+});
+
+test('detectYaku: a Chiitoitsu win is flagged isChiitoitsu and carries no `groups` (fu is a fixed 25, not derived from any set breakdown)', () => {
+  const hand = [...pairT(1, 'm'), ...pairT(3, 'm'), ...pairT(5, 'p'), ...pairT(7, 'p'),
+    ...pairT(2, 's'), ...pairT(4, 's'), T(6, 'z'), T(6, 'z')];
+  const r = Y(hand, [], { winTileKey: '6z' });
+  assertHas(r, 'Chiitoitsu');
+  assert.strictEqual(r.isChiitoitsu, true);
+  assert.strictEqual(r.groups, undefined);
+});
+
+test('detectYaku: an open meld is included in `groups` with the correct openness and kan-vs-triplet type, for calcFu to see', () => {
+  const melds = [meld('pon', [T(5, 's'), T(5, 's'), T(5, 's')])];
+  const hand = [...seq(2, 'm'), ...seq(4, 'p'), ...pairT(4, 's'), T(7, 'm'), T(8, 'm'), T(6, 'm')];
+  const r = Y(hand, melds, { winTileKey: '6m' });
+  assertHas(r, 'Tanyao');
+  const openTri = r.groups.find(g => g.t === 'tri' && g.k[0] === '5s');
+  assert.ok(openTri, 'the pon shows up in groups as a triplet');
+  assert.strictEqual(openTri.open, true);
+  // Old bug: decompose(hand) only ever saw the concealed hand, so this
+  // meld's fu (2, for an open simple triplet) was silently dropped —
+  // fu would have landed at 20, not 30.
+  assert.strictEqual(calcFu(r.groups, false, isMenzen(melds), '6m', false), 30);
+});
+
+test('detectYaku: a concealed ankan is included in `groups` as a KAN (not a plain triplet) and marked closed', () => {
+  const melds = [meld('kan', [T(3, 's'), T(3, 's'), T(3, 's'), T(3, 's')], { kanType: 'ankan' })];
+  const hand = [...seq(2, 'm'), ...seq(4, 'p'), ...pairT(4, 'm'), T(7, 'm'), T(8, 'm'), T(6, 'm')];
+  const r = Y(hand, melds, { winTileKey: '6m' });
+  const kanGroup = r.groups.find(g => g.t === 'kan');
+  assert.ok(kanGroup, 'the ankan shows up in groups typed as a kan, not a triplet');
+  assert.strictEqual(kanGroup.open, false, 'an ankan is concealed even though it lives in melds, not groups');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
 // basePoints (server/mahjong.js) — yakuman/double-yakuman were paying out
 // exactly 2x the correct amount (8000->16000, 16000->32000 base). Pinned
 // here against the universally-referenced standard payout table so a

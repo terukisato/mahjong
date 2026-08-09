@@ -439,7 +439,12 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
     if(isIppatsu&&isRiichi){yl.push({name:'Ippatsu',jp:'一発',han:1});h++;}
     if(isHaitei){yl.push({name:'Haitei',jp:'海底摸月',han:1});h++;}
     if(isHoutei){yl.push({name:'Houtei',jp:'河底撈魚',han:1});h++;}
-    chiitoi={han:h,yakuList:yl};
+    // isChiitoitsu marks that fu is a fixed 25 (see calcFu callers), not
+    // computed from any group breakdown — chiitoitsu's 7-pairs shape never
+    // goes through evalDecomp/decompose's set+pair grouping at all, so
+    // there's no `groups` to hand back the way the regular-decomp path
+    // below does.
+    chiitoi={han:h,yakuList:yl,isChiitoitsu:true};
     if(!decomps.length) return chiitoi;
   }
 
@@ -486,6 +491,21 @@ function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIp
   const yl=[]; let han=0;
   const allKeys=[...hand14.map(key),...melds.flatMap(m=>m.tiles.map(key))];
   const allGroups=[...groups,...melds.map(m=>({t:m.type==='chi'?'seq':'tri',k:m.tiles.map(key),open:true}))];
+  // Groups shaped for calcFu specifically — deliberately separate from
+  // allGroups above. allGroups collapses a kan into an ordinary triplet-
+  // family group on purpose, because Daisangen/Toitoi/Sanankou/etc. below
+  // only care "is this 3-or-4-of-a-kind", not which — but fu genuinely
+  // differs between a triplet (2/4 open, 4/8 closed) and a kan (16/32
+  // open, 32/64 closed), so calcFu needs that distinction kept. This also
+  // fixes open melds never contributing fu at all: room.js used to run
+  // decompose() on the concealed hand only and hand calcFu just that,
+  // silently dropping every pon/chi/kan's fu since meld tiles were never
+  // part of what it decomposed.
+  const fuGroups=[...groups,...melds.map(m=>({
+    t: m.type==='chi'?'seq':m.type==='kan'?'kan':'tri',
+    k: m.tiles.map(key),
+    open: !(m.type==='kan'&&m.kanType==='ankan'),
+  }))];
   const pairs=groups.filter(g=>g.t==='pair');
   const seqs=allGroups.filter(g=>g.t==='seq');
   const closedSeqs=groups.filter(g=>g.t==='seq');
@@ -682,7 +702,7 @@ function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIp
   }
 
   if(han===0) return {han:0,yakuList:[]};
-  return {han,yakuList:yl};
+  return {han,yakuList:yl,groups:fuGroups};
 }
 
 // Dora indicator -> actual dora is "next tile in sequence". For m/p/s that's

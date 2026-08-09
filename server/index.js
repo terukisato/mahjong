@@ -5,6 +5,7 @@ const WebSocket=require('ws');
 const path=require('path');
 const {Room}=require('./room');
 const {getStats,getLeaderboard,deleteStats,migrateToIds}=require('./stats');
+const {getHistory,getGameDetail,deleteHistory}=require('./history');
 const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,migrateLegacyIds}=require('./profiles');
 
 // One-time upgrade of both data files from the old name-keyed shape to the
@@ -405,6 +406,24 @@ wss.on('connection',(ws)=>{
       if(unlockedId) ws.send(JSON.stringify({type:'stats',name:unlockedName,stats:getStats(unlockedId)}));
     }
 
+    // Play History list — summary rows only (no round detail, see
+    // history.getHistory) for this connection's own unlocked profile, same
+    // "trust unlockedId, never msg.name" reasoning as get_stats above.
+    if(msg.type==='get_game_history'){
+      if(unlockedId) ws.send(JSON.stringify({type:'game_history',games:getHistory(unlockedId)}));
+    }
+
+    // One game's full round-by-round detail, fetched on demand when a Play
+    // History row is expanded (see history.getGameDetail) — still scoped to
+    // this connection's own unlockedId, so a client can't fetch another
+    // profile's game detail just by guessing its id.
+    if(msg.type==='get_game_history_detail'){
+      if(unlockedId){
+        const game=getGameDetail(unlockedId,String(msg.gameId||''));
+        ws.send(JSON.stringify({type:'game_history_detail',gameId:msg.gameId,game}));
+      }
+    }
+
     if(msg.type==='get_leaderboard'){
       const variant=msg.variant==='sanma'?'sanma':'yonma';
       const sortBy=VALID_LEADERBOARD_SORTS.includes(msg.sortBy)?msg.sortBy:'totalFinalScore';
@@ -605,7 +624,7 @@ wss.on('connection',(ws)=>{
         ws.send(JSON.stringify({type:'delete_profile_result',ok:false,error:'Invalid developer key'}));
       } else {
         const result=deleteProfile(msg.name);
-        if(result.ok) deleteStats(result.id);
+        if(result.ok){ deleteStats(result.id); deleteHistory(result.id); }
         ws.send(JSON.stringify({type:'delete_profile_result',ok:result.ok,error:result.error}));
       }
     }

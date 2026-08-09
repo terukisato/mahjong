@@ -585,6 +585,8 @@ function onMsg(m){
     updateNameplateTier((m.stats?.yonma?.gamesWon||0)+(m.stats?.sanma?.gamesWon||0));
     return;
   }
+  if(m.type==='game_history'){renderPlayHistory(m.games);return;}
+  if(m.type==='game_history_detail'){onGameHistoryDetail(m);return;}
   if(m.type==='leaderboard'){renderLeaderboard(m);return;}
   if(m.type==='player_stats'){renderPlayerCard(m);return;}
   if(m.type==='room_list'){renderRoomList(m);return;}
@@ -709,7 +711,7 @@ function toggleUserProfile(){
 // unconditionally clearing every child (not just the caller's own) so this
 // stays correct even if a future setting gets added here.
 function backToUserProfile(){
-  ['playericon','title','voicetheme','userstats','achievements','changeusername','changecode'].forEach(id=>{
+  ['playericon','title','voicetheme','userstats','playhistory','achievements','changeusername','changecode'].forEach(id=>{
     $(id+'-modal').classList.remove('visible');
     $(id+'-backdrop').classList.remove('visible');
   });
@@ -762,6 +764,228 @@ function toggleUserStatsModal(){
   wss({type:'get_stats'});
   modal.classList.add('visible');
   backdrop.classList.add('visible');
+}
+
+// Play History — same open/fetch/render pattern as My Stats above, fetched
+// fresh each open so it never shows a stale list from a previous open (a
+// game finished since the last time this was opened, etc). 'game_history'
+// (see onMsg) carries summary rows only, no round detail — a game's own
+// rounds are fetched on demand the first time its row is expanded (see
+// togglePlayHistoryGame/phDetailCache below), not all up front.
+function togglePlayHistoryModal(){
+  const modal=$('playhistory-modal');
+  const backdrop=$('playhistory-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  phDetailCache={};
+  $('playhistory-list').textContent='Loading…';
+  wss({type:'get_game_history'});
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+// gameId -> full game record (with `rounds`) once fetched — persists for
+// this modal open only (cleared on every togglePlayHistoryModal open above)
+// so re-collapsing/re-expanding the same row within one visit doesn't
+// re-fetch. `phPendingDetail` tracks the one row currently awaiting its
+// 'get_game_history_detail' reply, so onGameHistoryDetail (below) knows
+// which DOM node to fill in once it arrives.
+let phDetailCache={};
+let phPendingDetail=null;
+
+const ORDINALS=['1st','2nd','3rd','4th'];
+
+// One row per past game — every seat's placement/name/final points, sorted
+// by placement (winner first), not just this profile's own seat, so a game
+// summary reads as a real standings table. The viewing profile's own row
+// (g.seat, stamped by history.recordGame server-side) is marked
+// .ph-standing-mine so it stands out from the opponents around it. Clicking
+// a row expands/collapses its round-by-round detail (see
+// togglePlayHistoryGame) rather than navigating to a separate screen, so
+// scrolling back through several games' rounds stays in one place.
+function renderPlayHistory(games){
+  const body=$('playhistory-list');
+  if(!games||!games.length){ body.innerHTML='<p>No games played yet.</p>'; return; }
+  body.innerHTML='';
+  for(const g of games){
+    const seat=g.seat;
+    const dateStr=new Date(g.date).toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+    const ruleLabel=`${g.gameMode==='hanchan'?'Hanchan':'Tonpuu'} · ${g.variant==='sanma'?'Sanma':'Yonma'} · ${g.matchKind==='quick'?'Quick Match':'Room Match'}`;
+    const standings=(g.playerNames||[]).map((name,i)=>({
+      seat:i,name,place:g.placements?.[i],score:g.finalScores?.[i],
+    })).sort((a,b)=>(a.place||99)-(b.place||99));
+    const row=document.createElement('div'); row.className='ph-game-row';
+    const head=document.createElement('div'); head.className='ph-game-head';
+    // Field order per the Play History spec: game rule + date/time sharing
+    // one line (saves a whole row of vertical space over stacking them),
+    // then every player's placement/username/final points (own seat
+    // highlighted) — the chevron (expand for the round breakdown) sits to
+    // the right of all of it, spanning the whole card via flex.
+    const standingsHtml=standings.map(s=>{
+      const ordinal=s.place?(ORDINALS[s.place-1]||`${s.place}th`):'—';
+      return `<span class="ph-standing-row${s.seat===seat?' ph-standing-mine':''}">
+          <span class="ph-game-place place-${s.place||''}">${escHtml(ordinal)}</span>
+          <span class="ph-game-name">${escHtml(s.name)}</span>
+          <span class="ph-game-score">${(s.score??0).toLocaleString()}</span>
+        </span>`;
+    }).join('');
+    head.innerHTML=`<span class="ph-game-info">
+        <span class="ph-game-topline">
+          <span class="ph-game-rule">${escHtml(ruleLabel)}</span>
+          <span class="ph-game-date">${escHtml(dateStr)}</span>
+        </span>
+        <span class="ph-game-standings">${standingsHtml}</span>
+      </span>
+      <button type="button" class="ph-game-chevron" aria-label="Show round breakdown">▾</button>`;
+    const detailWrap=document.createElement('div'); detailWrap.className='ph-game-detail';
+    row.appendChild(head); row.appendChild(detailWrap);
+    head.onclick=()=>togglePlayHistoryGame(g.id,row,detailWrap,seat);
+    body.appendChild(row);
+  }
+}
+
+// Expands/collapses one game's round-by-round detail. First expand for a
+// given gameId fetches it (see phDetailCache); every expand after that (or
+// after collapsing and re-expanding) reuses the cached copy instead of
+// round-tripping again.
+function togglePlayHistoryGame(gameId,row,detailWrap,mySeat){
+  if(row.classList.contains('open')){ row.classList.remove('open'); return; }
+  row.classList.add('open');
+  if(phDetailCache[gameId]){ renderPlayHistoryDetail(detailWrap,phDetailCache[gameId],mySeat); return; }
+  detailWrap.innerHTML='<p class="ph-loading">Loading…</p>';
+  phPendingDetail={gameId,detailWrap,mySeat};
+  wss({type:'get_game_history_detail',gameId});
+}
+
+// 'game_history_detail' reply handler (see onMsg) — fills in whichever row
+// is currently awaiting it (phPendingDetail), and caches the result so
+// collapsing/re-expanding that same row doesn't fetch it again this visit.
+// A stale reply for a row the player has since collapsed-and-moved-past
+// (gameId no longer matches phPendingDetail) is just ignored.
+function onGameHistoryDetail(m){
+  if(m.game) phDetailCache[m.gameId]=m.game;
+  if(!phPendingDetail||phPendingDetail.gameId!==m.gameId) return;
+  const {detailWrap,mySeat}=phPendingDetail;
+  phPendingDetail=null;
+  renderPlayHistoryDetail(detailWrap,m.game||{rounds:[]},mySeat);
+}
+
+function renderPlayHistoryDetail(container,game,mySeat){
+  container.innerHTML='';
+  const rounds=game.rounds||[];
+  if(!rounds.length){ container.innerHTML='<p class="ph-loading">No round data.</p>'; return; }
+  for(const r of rounds) container.appendChild(buildHistoryRoundCard(r,mySeat));
+}
+
+// Round reason labels — same mapping onEnd (the live round-results screen)
+// uses, kept as its own copy here rather than a shared constant so this
+// file's two renderers (live vs. history) can't accidentally couple to each
+// other's exact needs later.
+const phReasonLabels={tsumo:'ツモ - TSUMO',ron:'ロン - RON',draw:'流局 - Exhaustive Draw',suukaikan:'四開槓 - Suukaikan',nagashi:'流し満貫 - Mangan at Draw',kyuushu:'九種九牌 - Kyuushu Kyuuhai',chonbo:'チョンボ - Chonbo'};
+
+// One round's worth of the same information the live round-results screen
+// (#s-end, see onEnd) shows — winner/hand/yaku/dora/score-deltas — built
+// from the exact payload room.js broadcast at the time (see
+// room.js's _recordRoundHistory), just rendered as a static card instead of
+// the live panel's one-time sound/animation. mySeat (this profile's own
+// seat in the game, not necessarily 0) is used only to label that seat
+// "(You)" in the name lists below.
+function buildHistoryRoundCard(round,mySeat){
+  const card=document.createElement('div'); card.className='ph-round-card';
+  const windChar=['東','南','西','北'];
+  const wind=round.displayWind||round.roundWind||1;
+  const rnd=round.displayRound||round.round||1;
+  const head=document.createElement('div'); head.className='ph-round-head';
+  head.innerHTML=`<span class="ph-round-kyoku">${windChar[wind-1]}${rnd}局 ${round.honba||0}本場</span><span class="ph-round-reason">${escHtml(phReasonLabels[round.reason]||'Round Over')}</span>`;
+  card.appendChild(head);
+
+  const names=round.playerNames||[];
+  const nameFor=seat=>{
+    const n=names[seat]||`Seat ${seat}`;
+    return seat===mySeat?`${n} (You)`:n;
+  };
+
+  if(round.reason==='tsumo'||round.reason==='ron'){
+    const limit=limitLabel(round.han||0,round.fu||0);
+    const info=document.createElement('div'); info.className='ph-round-info';
+    let html=`<span class="re-winner">${escHtml(nameFor(round.winner))}</span>`;
+    if(limit) html+=`<span class="re-limit ${limit.cls}">${limit.en} · ${limit.label}</span>`;
+    if(round.fu) html+=`<span class="re-hand"> · ${round.han} Han · ${round.fu} Fu</span>`;
+    info.innerHTML=html;
+    card.appendChild(info);
+    if((round.yakuList||[]).length){
+      const yl=document.createElement('div'); yl.className='ph-yaku-row';
+      for(const y of round.yakuList){
+        const c=document.createElement('div');c.className='yc';
+        c.innerHTML=`${escHtml(y.name)}<span class="yh">${y.han}Han</span><span class="yj">${escHtml(y.jp||'')}</span>`;
+        yl.appendChild(c);
+      }
+      card.appendChild(yl);
+    }
+    if((round.dora||[]).length||(round.uraDora||[]).length){
+      const dr=document.createElement('div');dr.className='re-dora-row';
+      if((round.dora||[]).length){ const lbl=document.createElement('span');lbl.className='re-dora-lbl';lbl.textContent='Dora'; dr.appendChild(lbl); for(const t of round.dora) dr.appendChild(mkElMd(t)); }
+      if((round.uraDora||[]).length){ const lbl2=document.createElement('span');lbl2.className='re-dora-lbl re-ura-lbl';lbl2.textContent='Ura Dora'; dr.appendChild(lbl2); for(const t of round.uraDora) dr.appendChild(mkElMd(t)); }
+      card.appendChild(dr);
+    }
+    if((round.hand||[]).filter(Boolean).length){
+      const tileRow=document.createElement('div'); tileRow.className='re-tile-row';
+      for(const t of round.hand.filter(Boolean)) tileRow.appendChild(mkElMd(t));
+      for(const meld of(round.melds||[])) appendEndPanelMeld(tileRow,meld);
+      card.appendChild(tileRow);
+    }
+  } else if(round.reason==='chonbo'){
+    const info=document.createElement('div'); info.className='ph-round-info';
+    info.innerHTML=`<span class="re-winner re-offender">${escHtml(nameFor(round.winner))}</span><span class="re-hand"> declared a false win</span>`;
+    card.appendChild(info);
+  } else if(round.reason==='draw'){
+    if(Array.isArray(round.tenpaiHands)&&round.tenpaiHands.some(Boolean)){
+      const tp=document.createElement('div'); tp.className='ph-tenpai';
+      round.tenpaiHands.forEach((hand,seat)=>{
+        if(!hand) return;
+        const row=document.createElement('div');row.className='re-tenpai-row';
+        const nameEl=document.createElement('div');nameEl.className='re-tenpai-name';nameEl.textContent=nameFor(seat);
+        row.appendChild(nameEl);
+        const tiles=document.createElement('div');tiles.className='re-tile-row';
+        for(const t of hand) tiles.appendChild(mkElMd(t));
+        for(const meld of(round.tenpaiMelds?.[seat]||[])) appendEndPanelMeld(tiles,meld);
+        row.appendChild(tiles);
+        tp.appendChild(row);
+      });
+      card.appendChild(tp);
+    } else {
+      const info=document.createElement('div'); info.className='ph-round-info'; info.textContent='All players noten.';
+      card.appendChild(info);
+    }
+  } else if(round.reason==='nagashi'){
+    const info=document.createElement('div'); info.className='ph-round-info';
+    const winners=(round.nagashiSeats||[]).map((ok,seat)=>ok?nameFor(seat):null).filter(Boolean);
+    info.textContent=`Nagashi Mangan: ${winners.join(', ')}`;
+    card.appendChild(info);
+  } else {
+    const info=document.createElement('div'); info.className='ph-round-info';
+    info.textContent=phReasonLabels[round.reason]||'Round Over';
+    card.appendChild(info);
+  }
+
+  // Score table with delta column, same shape as onEnd's #rest.
+  const tbl=document.createElement('table'); tbl.className='ph-score-table';
+  const scores=round.scores||[];
+  const sorted=scores.map((sc,seat)=>({sc,seat})).sort((a,b)=>b.sc-a.sc);
+  sorted.forEach(({sc,seat},rank)=>{
+    const delta=round.prevScores?sc-round.prevScores[seat]:null;
+    const row=document.createElement('tr');
+    if(seat===round.winner) row.className=round.reason==='chonbo'?'l':'w';
+    const ordinal=['1st','2nd','3rd','4th'][rank]||`${rank+1}th`;
+    const deltaHtml=delta!=null&&delta!==0
+      ?`<span class="re-delta ${delta>0?'re-delta-pos':'re-delta-neg'}">${delta>0?'+':''}${delta.toLocaleString()}</span>`
+      :`<span class="re-delta re-delta-nil">—</span>`;
+    row.innerHTML=`<td>${ordinal} ${escHtml(nameFor(seat))}</td><td>${sc.toLocaleString()}</td><td class="re-td-delta">${deltaHtml}</td>`;
+    tbl.appendChild(row);
+  });
+  card.appendChild(tbl);
+
+  return card;
 }
 
 // Same open/fetch pattern as My Stats above — 'stats' carries
@@ -2955,13 +3179,16 @@ function drawActions(m){
     else if(m.canAttemptTsumo)
       ab(bar,'⚠ Declare…','bchonbo',()=>showDeclareConfirm('tsumo'));
 
-    // LEFT: ANKAN — a single candidate skips straight to a one-tap button
-    // (showing the tile's face, same as before); more than one candidate
-    // (rare, but possible) opens the same tile-picker overlay CHI/RIICHI
-    // use below instead of piling up several identically-labeled buttons.
+    // LEFT: ANKAN — a single candidate skips straight to a one-tap plain
+    // button (the player's own hand already shows which tile it is, same
+    // as TSUMO/RIICHI's one-tap buttons never showing a tile either); more
+    // than one candidate (rare, but possible) opens the same tile-picker
+    // overlay CHI/RIICHI use below instead of piling up several
+    // identically-labeled buttons — that picker is where a tile face is
+    // actually needed, to tell the candidates apart.
     const canAnkan=m.canAnkan||[];
     if(canAnkan.length===1){
-      abTile(bar,keyToTile(canAnkan[0]),'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey:canAnkan[0]}}));
+      ab(bar,'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey:canAnkan[0]}}));
     } else if(canAnkan.length>1){
       ab(bar,'ANKAN','bkan',()=>showAnkanPicker(canAnkan));
     }
@@ -3212,20 +3439,6 @@ function hint(c,t){const h=document.createElement('span');h.className='hint';h.t
 
 // "<v><suit>" tile key (e.g. "3m") -> a plain tile object usable by tsvg/mkEl.
 function keyToTile(k){ return {v:parseInt(k), s:k.slice(-1)}; }
-
-// Same as ab(), but shows the tile's face next to the label — used where
-// multiple same-labeled buttons could otherwise be indistinguishable (e.g.
-// two ANKAN candidates at once).
-function abTile(c,tile,l,cls,fn){
-  const b=document.createElement('button');b.className='ba ba-tile '+cls;
-  // mkElMd gives the tile its usual ivory face + gold border (same as
-  // discards/melds) — a bare tsvg() string has a transparent background and
-  // is unreadable against a dark button like .bkan's purple gradient.
-  b.appendChild(mkElMd(tile));
-  const span=document.createElement('span');span.textContent=l;
-  b.appendChild(span);
-  b.onclick=fn;c.appendChild(b);
-}
 
 function mkEl(tile,cls,w,h){
   const el=document.createElement('div');el.className='tile '+cls;

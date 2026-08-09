@@ -517,8 +517,6 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .ba:hover{filter:brightness(1.2);transform:translateY(--0.3vmin);box-shadow:0 0.6vmin 2vmin rgba(0,0,0,.7);}
 .ba:active{transform:translateY(0);}
 .ba:disabled{opacity:.3;cursor:default;transform:none;filter:none;}
-.ba-tile{display:flex;align-items:center;gap:0.6vmin;}
-.ba-tile .tmd{width:2.46vmin;height:3.4vmin;flex-shrink:0;}
 .hint{display:none;}
 .bdis{background:#8a1818;color:#ffd8d8;border:0.2vmin solid #d44;}
 .btsu{background:#8a6500;color:#fff8d0;border:0.2vmin solid #f0d060;font-weight:900;}
@@ -1532,7 +1530,16 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    Scoped to its own wrapper (.reb-split) rather than making .reb itself
    flex, so those single-button states keep their existing centered look
    instead of collapsing to the flex-row start edge. */
-.reb-split{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;width:100%;}
+/* flex-wrap:wrap — .reb-left and Leave Room are BOTH flex-shrink:0 (see
+   their own rules below), fixed to their intended sizes rather than
+   squeezing to fit. On a narrow viewport .rec itself shrinks (its width
+   is capped at 96vw below a point — see .rec's own comment) faster than
+   these two fixed-size items do, so without wrap they silently overflow
+   past the panel's right edge instead of adapting. Wrapping drops Leave
+   Room to its own full-width row underneath instead, which reads fine —
+   it's already a standalone action, not visually paired with the left
+   group beyond sharing this row when there's room. */
+.reb-split{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px;width:100%;}
 /* Widened past .reb-btn's shared 27.78-unit cap (see #bplay-again-start's
    own override below) — "Start New Game" is the longest label in this
    row and wraps to 2 lines at the shared width, throwing its height out
@@ -1558,3 +1565,65 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
 /* ── Lobby mode row ── */
 .mode-row{display:flex;gap:8px;margin-top:4px;}
+
+/* ── Play History (User Profile hub) ──────────────────────────────────
+   One collapsed row per past game (renderPlayHistory in script.js); clicking
+   a row expands its round-by-round detail (.ph-game-detail), each round
+   rendered as its own .ph-round-card reusing the same .re-*/.yc/.st visual
+   language as the live round-results screen (#s-end) so a past round looks
+   like what the player actually saw at the time. */
+.ph-game-row{border-bottom:1px solid rgba(201,168,76,.12);}
+.ph-game-row:last-child{border-bottom:none;}
+.ph-game-head{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.111);
+  padding:calc(var(--ui-vmin, 7.2px) * 1.111) 0;cursor:pointer;}
+/* Field order top-to-bottom: game rule + date/time sharing one line, then
+   every player's placement+username+points (own row highlighted) — see
+   renderPlayHistory in script.js. */
+.ph-game-info{flex:1;display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .417);min-width:0;}
+.ph-game-topline{display:flex;justify-content:space-between;align-items:baseline;gap:calc(var(--ui-vmin, 7.2px) * .833);}
+.ph-game-rule{flex:1;min-width:0;font-size:calc(var(--ui-vmin, 7.2px) * 1.25);letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);
+  color:rgba(201,168,76,.85);text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* 2 columns × N rows (2 rows for yonma's 4 seats, 2+1 for sanma's 3) rather
+   than one player per line — a 4-seat game standing on 4 stacked lines was
+   the single biggest driver of this modal's scroll height. */
+.ph-game-standings{display:grid;grid-template-columns:1fr 1fr;
+  column-gap:calc(var(--ui-vmin, 7.2px) * .833);row-gap:calc(var(--ui-vmin, 7.2px) * .278);}
+.ph-standing-row{display:flex;align-items:baseline;gap:calc(var(--ui-vmin, 7.2px) * .556);min-width:0;
+  padding:calc(var(--ui-vmin, 7.2px) * .139) calc(var(--ui-vmin, 7.2px) * .556);border-radius:calc(var(--ui-vmin, 7.2px) * .417);}
+/* The viewing profile's own seat in the standings — same gold-tinted
+   highlight language as .sp-row-mine in Rankings, so "which row is me"
+   reads the same way it does elsewhere in the app. */
+.ph-standing-mine{background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);}
+.ph-standing-mine .ph-game-name{color:var(--gold);font-weight:700;}
+.ph-game-place{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 1.25);
+  font-weight:700;color:rgba(245,237,216,.5);flex:0 0 calc(var(--ui-vmin, 7.2px) * 2.5);}
+.ph-game-place.place-1{color:#f0d080;}
+.ph-game-place.place-2{color:#c0c0c0;}
+.ph-game-place.place-3{color:#cd7f32;}
+.ph-game-name{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:var(--cream);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ph-game-score{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);font-weight:700;color:var(--gl);}
+.ph-game-date{font-size:calc(var(--ui-vmin, 7.2px) * 1.111);color:rgba(245,237,216,.4);flex:0 0 auto;white-space:nowrap;}
+.ph-game-chevron{flex:0 0 auto;background:none;border:none;padding:calc(var(--ui-vmin, 7.2px) * .556);
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.667);color:var(--gold);cursor:pointer;transition:transform .2s;line-height:1;}
+.ph-game-row.open .ph-game-chevron{transform:rotate(180deg);}
+.ph-game-detail{display:none;padding:0 0 calc(var(--ui-vmin, 7.2px) * 1.389);}
+.ph-game-row.open .ph-game-detail{display:block;}
+.ph-loading{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:rgba(245,237,216,.5);}
+.ph-round-card{background:rgba(0,0,0,.2);border:1px solid rgba(201,168,76,.15);border-radius:calc(var(--ui-vmin, 7.2px) * .694);
+  padding:calc(var(--ui-vmin, 7.2px) * 1.111);margin-bottom:calc(var(--ui-vmin, 7.2px) * .833);}
+.ph-round-card:last-child{margin-bottom:0;}
+.ph-round-head{display:flex;justify-content:space-between;align-items:baseline;gap:calc(var(--ui-vmin, 7.2px) * .833);
+  margin-bottom:calc(var(--ui-vmin, 7.2px) * .694);}
+.ph-round-kyoku{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:var(--gold);}
+.ph-round-reason{font-size:calc(var(--ui-vmin, 7.2px) * 1.111);color:rgba(245,237,216,.5);}
+.ph-round-info{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);margin-bottom:calc(var(--ui-vmin, 7.2px) * .694);}
+.ph-yaku-row{display:flex;flex-wrap:wrap;gap:calc(var(--ui-vmin, 7.2px) * .556);margin-bottom:calc(var(--ui-vmin, 7.2px) * .694);}
+.ph-tenpai{display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .556);margin-bottom:calc(var(--ui-vmin, 7.2px) * .694);}
+.ph-score-table{width:100%;border-collapse:collapse;margin-top:calc(var(--ui-vmin, 7.2px) * .694);}
+.ph-score-table td{padding:calc(var(--ui-vmin, 7.2px) * .417) 0;font-size:calc(var(--ui-vmin, 7.2px) * 1.25);
+  border-top:1px solid rgba(201,168,76,.08);}
+.ph-score-table td:nth-child(2){text-align:right;font-weight:700;color:var(--cream);}
+.ph-score-table td:nth-child(3){text-align:right;}
+.ph-score-table tr.w td:first-child{color:var(--gl);}
+.ph-score-table tr.l td:first-child{color:#e07070;}

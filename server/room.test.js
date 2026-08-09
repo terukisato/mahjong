@@ -7,6 +7,7 @@
 
 const assert = require('assert');
 const { Room } = require('./room');
+const { basePoints } = require('./mahjong');
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -170,6 +171,59 @@ test('Ron: riichi sticks on the table go entirely to the winner, not paid again 
   assert.ok(totalGain > 3000, 'sanity: won something beyond just the riichi sticks');
   assert.strictEqual(totalGain, loserPaid + 3000, 'winner gains their ron payment plus all 3 riichi sticks');
   assert.strictEqual(prev[0] - g.scores[0], loserPaid, 'the loser only ever pays the ron amount, never the riichi sticks too');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Fu correctness end-to-end via _multiRon — room.js used to independently
+// recompute decompose(hand) and grab decomps[0] for fu, instead of the
+// SAME decomposition detectYaku itself used to decide the win's yaku (see
+// mahjong.js's detectYaku `groups`/`isChiitoitsu` return, room.js's
+// _computeFu). Three symptoms, all from the same root cause: Pinfu-ron
+// could get inflated fu on hands with more than one valid decomposition,
+// Chiitoitsu always got the generic 30-fu fallback instead of its real
+// fixed 25, and open melds (pon/chi/open kan) never contributed fu at all
+// since decompose(hand) only ever saw the concealed hand.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Ron: a Pinfu-shaped hand whose tiles ALSO admit an all-triplets reading still scores the fixed 30 fu, not the triplet reading\'s higher fu', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  // 111222333m + 44s (13 tiles) + ron on 1m: also fully readable as three
+  // closed triplets (111m)(222m)(333m) + pair(44s) — an alternate valid
+  // decomposition of the exact same tiles that decompose(hand)[0] could
+  // easily have returned instead of the Pinfu one.
+  g.hands[1] = [T(1, 'm'), T(1, 'm'), T(1, 'm'), T(2, 'm'), T(2, 'm'), T(2, 'm'), T(2, 'm'),
+    T(3, 'm'), T(3, 'm'), T(3, 'm'), T(3, 'm'), T(4, 's'), T(4, 's')];
+  const prev = [...g.scores];
+  room._multiRon([1], 2, T(1, 'm'));
+  const loserPaid = prev[2] - g.scores[2];
+  // han=2 (Pinfu + Iipeiko), fu=30 (fixed) -> base=min(30*2^4,2000)=480 -> pay x4=1920 -> round up 2000
+  assert.strictEqual(loserPaid, 2000);
+});
+
+test('Ron: Chiitoitsu is scored at its real fixed 25 fu, not the generic 30-fu fallback', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  g.hands[1] = [...pairT(1, 'm'), ...pairT(3, 'm'), ...pairT(5, 'p'), ...pairT(7, 'p'),
+    ...pairT(2, 's'), ...pairT(4, 's'), T(6, 'z')];
+  const prev = [...g.scores];
+  room._multiRon([1], 2, T(6, 'z'));
+  const loserPaid = prev[2] - g.scores[2];
+  // han=2 (Chiitoitsu), fu=25 -> base=min(25*2^4,2000)=400 -> pay x4=1600
+  assert.strictEqual(loserPaid, 1600);
+});
+
+test('Ron: an open pon correctly contributes its triplet fu (previously silently dropped to zero)', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  g.melds[1] = [{ type: 'pon', tiles: [T(5, 's'), T(5, 's'), T(5, 's')], calledTileId: 1, fromSeat: 2 }];
+  g.hands[1] = [...seq(2, 'm'), ...seq(4, 'p'), ...pairT(4, 's'), T(7, 'm'), T(8, 'm')];
+  const prev = [...g.scores];
+  room._multiRon([1], 0, T(6, 'm'));
+  const loserPaid = prev[0] - g.scores[0];
+  // han=1 (Tanyao), fu=20 base + 2 (open simple pon) = 22 -> rounds to 30
+  // -> base=min(30*2^3,2000)=240 -> pay x4=960 -> round up 1000
+  assert.strictEqual(loserPaid, 1000);
 });
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -402,6 +456,71 @@ test('Kita: uncontested (nobody waiting on North) still banks the tile and draws
   assert.strictEqual(g.kita[0].length, 1, 'the North tile should be banked');
   assert.strictEqual(g.hands[0].length, handSizeBefore, 'hand size unchanged: -1 for kita, +1 replacement draw');
   assert.strictEqual(room.phase, 'playing', 'the game should still be going');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Banked kita tiles used to be entirely invisible to dora counting — once
+// _kita/_completeKita moves a North tile out of g.hands[seat] into its own
+// g.kita[seat] array, countDora(hand, ...) never sees it again, even when
+// this round's dora indicator points straight at North (West indicator ->
+// North is dora). Fixed via _doraPool, which folds g.kita[seat] back in
+// for both regular and ura dora purposes only (never aka dora — kita is
+// always a 4z tile, never a red 5).
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Dora: banked kita tiles count as regular dora when the indicator points to North', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.turn = 1;
+  g.firstRound = false; // avoid an incidental Chiihou (seat!==dealer, first uninterrupted draw) muddying the yakuList
+  g.dora = [T(3, 'z')]; // indicator West -> dora is North (4z)
+  g.kita[1] = [T(4, 'z'), T(4, 'z')]; // 2 banked North tiles this hand
+  g.hands[1] = [...seq(1, 'p'), ...seq(4, 'p'), ...seq(7, 'p'), T(2, 's'), T(3, 's'), ...pairT(9, 'm')];
+  g.drawTile = T(4, 's');
+  g.hands[1].push(g.drawTile);
+
+  let logged;
+  room._endRound = (reason, winner, loser, hand, yakuList) => { logged = yakuList; };
+  room._tsumo(1);
+  const dora = logged.find(y => y.name === 'Dora');
+  assert.ok(dora, `expected a Dora entry, got ${JSON.stringify(logged)}`);
+  assert.strictEqual(dora.han, 2, 'both banked North tiles should count');
+});
+
+test('Dora: banked kita tiles do NOT count when the indicator does not point to North', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.turn = 1;
+  g.firstRound = false;
+  g.dora = [T(5, 's')]; // indicator 5s -> dora is 6s, which appears nowhere in this hand
+  g.kita[1] = [T(4, 'z')];
+  g.hands[1] = [...seq(1, 'p'), ...seq(4, 'p'), ...seq(7, 'p'), T(2, 's'), T(3, 's'), ...pairT(9, 'm')];
+  g.drawTile = T(4, 's');
+  g.hands[1].push(g.drawTile);
+
+  let logged;
+  room._endRound = (reason, winner, loser, hand, yakuList) => { logged = yakuList; };
+  room._tsumo(1);
+  assert.ok(!logged.some(y => y.name === 'Dora'), `expected no Dora entry, got ${JSON.stringify(logged)}`);
+});
+
+test('Ura Dora: a banked kita tile counts as ura dora when the ura indicator points to North', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.turn = 1;
+  g.firstRound = false;
+  g.dora = [T(1, 'z')]; // omote indicator East -> irrelevant to this hand
+  g.deadWall[9] = T(3, 'z'); // ura indicator West -> ura dora is North
+  g.riichi[1] = true;
+  g.kita[1] = [T(4, 'z')];
+  g.hands[1] = [...seq(1, 'p'), ...seq(4, 'p'), ...seq(7, 'p'), T(2, 's'), T(3, 's'), ...pairT(9, 'm')];
+
+  let logged;
+  room._endRound = (reason, winner, loser, hand, yakuList) => { logged = yakuList; };
+  room._multiRon([1], 0, T(4, 's'));
+  const uraDora = logged.find(y => y.name === 'Ura Dora');
+  assert.ok(uraDora, `expected an Ura Dora entry, got ${JSON.stringify(logged)}`);
+  assert.strictEqual(uraDora.han, 1);
 });
 
 test('Double-discard guard: a second discard action while a reaction window is open is ignored', () => {
