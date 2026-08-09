@@ -1566,12 +1566,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* ── Lobby mode row ── */
 .mode-row{display:flex;gap:8px;margin-top:4px;}
 
-/* ── Play History (User Profile hub) ──────────────────────────────────
-   One collapsed row per past game (renderPlayHistory in script.js); clicking
-   a row expands its round-by-round detail (.ph-game-detail), each round
-   rendered as its own .ph-round-card reusing the same .re-*/.yc/.st visual
-   language as the live round-results screen (#s-end) so a past round looks
-   like what the player actually saw at the time. */
+/* ── Play History (User Profile hub) ────────────────────────────────── */
 .ph-game-row{border-bottom:1px solid rgba(201,168,76,.12);}
 .ph-game-row:last-child{border-bottom:none;}
 .ph-game-head{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.111);
