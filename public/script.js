@@ -2931,6 +2931,15 @@ function startGame(m){
   const riichiCountEl0=$('stick-riichi-count'); if(riichiCountEl0) riichiCountEl0.textContent='0';
   const honbaCountEl0=$('stick-honba-count'); if(honbaCountEl0) honbaCountEl0.textContent='0';
   $('dora-panel').style.display='flex';
+  // Same stale-leftover problem as the dora/riichi/honba reset above, for
+  // the center wind/round readout (#cw-wind/#cw-kyoku) — only ever written
+  // by renderState (game_state) and onRoundStart (round_start), neither of
+  // which fires until after this loading screen, so without this a
+  // multi-round previous game's last "東2局" would sit there, visible
+  // through/around the loading overlay, until the new game's first
+  // game_state quietly swaps it out.
+  $('cw-wind').textContent='—';
+  $('cw-kyoku').textContent='';
   show('s-game');
   // Show loading overlay until first game_state arrives
   $('game-loading').style.display='flex';
