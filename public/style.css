@@ -958,8 +958,16 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    hand + a meld — see fitEndTileSize in script.js, which sizes those
    tiles to whatever width .rec actually gives it, so this doesn't risk
    re-breaking that). */
+/* Horizontal padding uses clamp(...,vw,...) rather than pure --ui-vmin —
+   --ui-vmin bottoms out at a fixed 6px floor (see its own comment above),
+   so past that floor this padding used to stay frozen at ~38px/side even
+   as the panel itself kept shrinking with the viewport. That fixed cost
+   was exactly what starved .reb-split's game-over action row of room to
+   stay on one line on real phone widths (~360-414px) — see .reb-split's
+   own comment. The vw term lets padding keep shrinking below the vmin
+   floor on narrow screens instead of eating into content width forever. */
 .rec{background:linear-gradient(155deg,rgba(18,52,30,.98),rgba(6,16,9,.99));border:2px solid var(--gold);border-radius:16px;
-  padding:calc(var(--ui-vmin, 7.2px) * 4.722) calc(var(--ui-vmin, 7.2px) * 6.389);text-align:center;
+  padding:calc(var(--ui-vmin, 7.2px) * 4.722) clamp(14px, 4.5vw, calc(var(--ui-vmin, 7.2px) * 6.389));text-align:center;
   box-shadow:0 0 100px rgba(201,168,76,.35);width:min(calc(var(--ui-vmin, 7.2px) * 70), 96vw);position:relative;}
 .rec::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);}
 .ret{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 3.125);color:var(--gl);filter:drop-shadow(0 0 14px rgba(201,168,76,.6));margin-bottom:5px;}
@@ -1590,22 +1598,35 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    Scoped to its own wrapper (.reb-split) rather than making .reb itself
    flex, so those single-button states keep their existing centered look
    instead of collapsing to the flex-row start edge. */
-/* flex-wrap:wrap — .reb-left and Leave Room are BOTH flex-shrink:0 (see
-   their own rules below), fixed to their intended sizes rather than
-   squeezing to fit. On a narrow viewport .rec itself shrinks (its width
-   is capped at 96vw below a point — see .rec's own comment) faster than
-   these two fixed-size items do, so without wrap they silently overflow
-   past the panel's right edge instead of adapting. Wrapping drops Leave
-   Room to its own full-width row underneath instead, which reads fine —
-   it's already a standalone action, not visually paired with the left
-   group beyond sharing this row when there's room. */
-.reb-split{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px;width:100%;}
-/* Widened past .reb-btn's shared 27.78-unit cap (see #bplay-again-start's
-   own override below) — "Start New Game" is the longest label in this
-   row and wraps to 2 lines at the shared width, throwing its height out
-   of sync with the single-line Leave Room button beside it. */
-.reb-left{display:flex;flex-direction:column;gap:10px;flex:0 0 calc(var(--ui-vmin, 7.2px) * 30);}
-#bplay-again-start{max-width:calc(var(--ui-vmin, 7.2px) * 30);}
+/* flex-wrap:wrap stays as a last-resort safety net, but .reb-left and
+   Leave Room are no longer hard-pinned to a fixed size below it (see their
+   own rules) — they were both flex-shrink:0 at a fixed --ui-vmin-based
+   width, which stopped shrinking the moment --ui-vmin hit its 6px floor
+   (see #s-end's own comment) even though .rec kept shrinking past that
+   point via its 96vw cap. That mismatch — fixed content demand vs.
+   shrinking available width — was exactly what forced Leave Room onto its
+   own wrapped row on ordinary phone widths (~360-414px), not just on
+   genuinely tiny screens. Both items now shrink together to stay on one
+   row as long as there's any reasonable room at all; wrap only kicks in
+   as the true last resort on extreme widths. */
+.reb-split{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:clamp(6px, 3vw, 12px);width:100%;}
+/* clamp() floor (165px) is "▶ Start New Game" 's real single-line minimum
+   at this row's font-size (the longest label here) — below that,
+   shrinking further wraps it onto 2 lines instead, which reads worse than
+   the row-wrap this whole fix is meant to avoid. Above the floor,
+   flex-shrink:1 lets this column compress alongside .reb-split's
+   available width; flex-basis (the clamp's preferred value) still targets
+   the original 30-unit width whenever there's room for it, and
+   flex-grow:0 keeps it from ballooning past that on wide screens (a plain
+   flex:1 here fought .reb-split's justify-content:space-between by eating
+   the gap itself instead of leaving it as empty space). min-width matches
+   the floor so flexbox's own content-based auto-minimum can't override
+   the clamp. Only below ~340px content width (an already-legacy phone
+   size, e.g. the 320px iPhone SE) does honoring this floor leave no room
+   for Leave Room beside it — .reb-split's flex-wrap then takes over as
+   the last-resort fallback exactly as it already did before this fix. */
+.reb-left{display:flex;flex-direction:column;gap:10px;flex:0 1 clamp(176px, 38vw, calc(var(--ui-vmin, 7.2px) * 30));min-width:176px;}
+#bplay-again-start{max-width:100%;}
 /* Distinct colour per action so Play Again/Start New Game/Leave Room read
    apart at a glance instead of all sharing .bp's same jade pill. */
 .reb-btn-green{background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);color:var(--cream);}
@@ -1615,8 +1636,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* width/flex overrides (not just colour): unlike the left-side buttons
    above, which fill .reb-left's column via .bp's own width:100%, this one
    sits alone as a direct .reb-split flex item and should size to its own
-   label instead of stretching to match that column's width. */
-.reb-btn-red{width:auto;flex:0 0 auto;padding-left:calc(var(--ui-vmin, 7.2px) * 2.5);padding-right:calc(var(--ui-vmin, 7.2px) * 2.5);
+   label instead of stretching to match that column's width. Horizontal
+   padding uses the same clamp(...,vw,...) shrink as .rec's own padding
+   (see its comment) instead of a pure --ui-vmin value, so it keeps giving
+   up room on narrow phone widths rather than freezing at the vmin floor —
+   same fix as .reb-left, for the same "everything stayed fixed-size past
+   the floor" reason. flex-shrink:1 (not 0) lets it compress alongside
+   .reb-left rather than being the one item forcing the wrap. */
+.reb-btn-red{width:auto;flex:0 1 auto;min-width:0;white-space:nowrap;
+  padding-left:clamp(10px, 2.5vw, calc(var(--ui-vmin, 7.2px) * 2.5));padding-right:clamp(10px, 2.5vw, calc(var(--ui-vmin, 7.2px) * 2.5));
   background:linear-gradient(135deg,rgba(120,20,20,.9),rgba(60,10,10,.95));border:1px solid rgba(200,60,60,.6);color:rgba(255,214,214,.95);}
 .reb-btn-red:hover{box-shadow:0 10px 28px rgba(160,30,30,.45);border-color:rgba(255,120,120,.8);}
 
