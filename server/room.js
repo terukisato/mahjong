@@ -344,7 +344,7 @@ class Room {
     // this onto its own mySeat (see game_start handling in script.js),
     // overriding whatever lobby slot 'joined' gave it.
     for(let seat=0;seat<this.numPlayers;seat++){
-      this._send(this.seats[seat],{type:'game_start',seat,seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,chonbo:this.rules.chonbo});
+      this._send(this.seats[seat],{type:'game_start',seat,seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,chonbo:this.rules.chonbo,scores:this.game.scores});
     }
     setTimeout(()=>this._draw(),2000);
   }

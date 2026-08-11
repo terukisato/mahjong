@@ -270,14 +270,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .table.sanma .pa-t,
 .table.sanma .np-wrap-t,
 .table.sanma .ml-t,
+.table.sanma .kita-t,
 .table.sanma .dzt{display:none;}
 .table.sanma #ctr-s-t,
 .table.sanma .rs-top{visibility:hidden;}
-
-/* Kita (sanma only) — banked North tiles rendered into the same meld row
-   as real melds (see renderState in script.js), set apart with a gold
-   outline so they don't read as an actual pon/chi/kan. */
-.kita-mg{outline:1.5px solid var(--gold, #c9a84c);outline-offset:-1px;border-radius:2px;}
 
 /* ── Sizing variable — single source of truth ── */
 :root{
@@ -1527,6 +1523,19 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .np-wrap-r{position:absolute;bottom:15%;right:calc(var(--tsm-h) + 3vmin);transform:translateX(50%) rotate(90deg);transform-origin:center top;z-index:20;}
 .np-flip{transform:rotate(180deg); transform-origin:center center;}
 
+/* ── Kita strip (sanma only) — banked North tiles, in line with each
+   seat's own nameplate row but mirrored to that seat's own right side
+   (matching the meld row's own-right convention: ml-b/ml-r/ml-l already
+   anchor melds to each seat's own right; kita-t/kita-l mirror np-wrap-t/
+   np-wrap-l the same way kita-b mirrors np-wrap-b). ── */
+.kita-strip{position:absolute;display:flex;gap:0;align-items:flex-end;z-index:20;}
+.kita-strip:empty{display:none;}
+.kita-b{bottom:calc(var(--tlg-h) + 3vmin);right:15%;}
+.kita-t{top:calc(var(--tsm-h) + 3vmin);left:15%;transform:rotate(180deg);}
+.kita-l{bottom:15%;left:calc(var(--tsm-h) + 3vmin);transform:translateX(-50%) rotate(90deg);transform-origin:center bottom;}
+.kita-r{top:15%;right:calc(var(--tsm-h) + 3vmin);transform:translateX(50%) rotate(90deg);transform-origin:center top;}
+.kita-strip .mg{outline:1.5px solid var(--gold, #c9a84c);outline-offset:-1px;border-radius:2px;}
+
 /* ── Dora panel ── */
 /* --ui-vmin: same clamped-scale-unit approach as #s-start/#s-lobby, so
    padding/font-size/margins stay proportional to each other at any
@@ -1655,6 +1664,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .mode-row{display:flex;gap:8px;margin-top:4px;}
 
 /* ── Play History (User Profile hub) ────────────────────────────────── */
+/* Wider than the default .about-modal (round-detail cards need room for a
+   full hand's worth of tiles on one line — see buildHistoryRoundCard's own
+   fit-sizing pass in script.js, which caps tile size to whatever width
+   actually ends up available here). */
+#playhistory-modal{width:calc(var(--ui-vmin) * 70);}
 .ph-game-row{border-bottom:1px solid rgba(201,168,76,.12);}
 .ph-game-row:last-child{border-bottom:none;}
 .ph-game-head{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.111);
