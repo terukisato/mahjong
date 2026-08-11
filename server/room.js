@@ -1364,6 +1364,12 @@ class Room {
     // for exactly this reason; honba needs the same override; the comment
     // above (from before this fix) claimed it already did.
     g.roundHistory.push({...payload,
+      // payload.scores is a live reference to g.scores, which keeps
+      // mutating in place for the rest of the game (see the g.scores[i]+=…
+      // sites throughout this file) — snapshot it here or every past
+      // round's history entry would silently end up showing the FINAL
+      // game scores instead of that round's own scores.
+      scores:payload.scores?[...payload.scores]:payload.scores,
       round:g.round,roundWind:g.roundWind,dealer:g.dealer,honba:g.honba,
       displayWind:Math.ceil(g.round/this.numPlayers),
       displayRound:((g.round-1)%this.numPlayers)+1,
