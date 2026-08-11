@@ -24,17 +24,17 @@
 
 <!-- Settings panel -->
 <div id="settings-panel">
-  <div class="sp-title">SETTINGS</div>
+  <div class="sp-title" data-i18n="settings_title">SETTINGS</div>
   <!-- Audio section -->
   <div class="sp-section">
-    <div class="sp-header">AUDIO</div>
+    <div class="sp-header" data-i18n="audio_header">AUDIO</div>
     <div class="sp-row">
-      <span class="sp-label">Music</span>
-      <button id="bmute" class="sp-toggle" onclick="toggleMusic()" title="Music on/off"></button>
+      <span class="sp-label" data-i18n="music_label">Music</span>
+      <button id="bmute" class="sp-toggle" onclick="toggleMusic()" title="Music on/off" data-i18n-title="music_title"></button>
     </div>
     <div class="sp-vol">
       <div class="sp-vol-row">
-        <span class="sp-label">Volume</span>
+        <span class="sp-label" data-i18n="volume_label">Volume</span>
         <span id="vol-label" class="sp-vol-label">30%</span>
       </div>
       <input id="vol-slider" class="sp-slider" type="range" min="0" max="100" value="30" oninput="setVolume(this.value)">
@@ -43,12 +43,12 @@
   <!-- Voice section -->
   <div class="sp-section">
     <div class="sp-row">
-      <span class="sp-label">Voice</span>
-      <button id="bfx" class="sp-toggle" onclick="toggleFx()" title="Voice on/off"></button>
+      <span class="sp-label" data-i18n="voice_label">Voice</span>
+      <button id="bfx" class="sp-toggle" onclick="toggleFx()" title="Voice on/off" data-i18n-title="voice_title"></button>
     </div>
     <div class="sp-vol">
       <div class="sp-vol-row">
-        <span class="sp-label">Volume</span>
+        <span class="sp-label" data-i18n="volume_label">Volume</span>
         <span id="fx-vol-label" class="sp-vol-label">35%</span>
       </div>
       <input id="fx-vol-slider" class="sp-slider" type="range" min="0" max="100" value="35" oninput="setFxVolume(this.value)">
@@ -57,15 +57,26 @@
   <!-- FX section -->
   <div class="sp-section">
     <div class="sp-row">
-      <span class="sp-label">FX</span>
-      <button id="bdiscard-sfx" class="sp-toggle" onclick="toggleDiscardSfx()" title="FX on/off"></button>
+      <span class="sp-label" data-i18n="fx_label">FX</span>
+      <button id="bdiscard-sfx" class="sp-toggle" onclick="toggleDiscardSfx()" title="FX on/off" data-i18n-title="fx_title"></button>
     </div>
     <div class="sp-vol">
       <div class="sp-vol-row">
-        <span class="sp-label">Volume</span>
+        <span class="sp-label" data-i18n="volume_label">Volume</span>
         <span id="discard-vol-label" class="sp-vol-label">35%</span>
       </div>
       <input id="discard-vol-slider" class="sp-slider" type="range" min="0" max="100" value="35" oninput="setDiscardVolume(this.value)">
+    </div>
+  </div>
+  <!-- Language section — EN/JA is the only pair right now, so a simple
+       two-button row (same visual language as .mode-btn's toggle pairs)
+       beats reusing .sp-toggle, which is styled purely as an on/off pill
+       with no room for a text label. See setLang in script.js. -->
+  <div class="sp-section">
+    <div class="sp-header" data-i18n="language_header">LANGUAGE</div>
+    <div class="lang-toggle">
+      <button id="blang-en" class="lang-btn active" onclick="setLang('en')">EN</button>
+      <button id="blang-ja" class="lang-btn" onclick="setLang('ja')">日本語</button>
     </div>
   </div>
 </div>
@@ -76,14 +87,14 @@
      START SCREEN
      ════════════════════════════════════════════════════════════ -->
 <div class="screen" id="s-start">
-  <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
+  <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings" data-i18n-title="settings_icon_title">☰</button>
   <div class="logo">
     <div class="logo-k">雀 心</div>
     <div class="logo-s">Janshin</div>
   </div>
-  <button id="bstart">▶ START</button>
+  <button id="bstart" data-i18n="start_button">▶ START</button>
   <div class="start-copy">© 2026 雀心 - Janshin</div>
-  <a href="#" class="about-link" onclick="toggleAbout();return false;">About</a>
+  <a href="#" class="about-link" onclick="toggleAbout();return false;" data-i18n="about_link">About</a>
 </div>
 
 <!-- About modal -->
@@ -111,7 +122,7 @@
 <div id="rules-backdrop" class="about-backdrop" onclick="toggleRulesModal()"></div>
 <div id="rules-modal" class="about-modal">
   <button class="about-close" onclick="toggleRulesModal()">✕</button>
-  <div class="about-title">Match Settings</div>
+  <div class="about-title" data-i18n="match_settings_title">Match Settings</div>
   <div class="about-body">
     <div class="ig">
       <div class="mode-row">
@@ -126,7 +137,7 @@
       </div>
     </div>
     <div class="about-section">
-      <div class="about-section-title">Rules</div>
+      <div class="about-section-title" data-i18n="rules_section_title">Rules</div>
       <div class="sp-row"><span class="sp-label">Aka Dora</span><button class="sp-toggle" id="btn-rule-akaDora" onclick="toggleRule('akaDora')" title="Aka Dora on/off"></button></div>
       <div class="sp-row"><span class="sp-label">Kuitan (Open Tanyao)</span><button class="sp-toggle" id="btn-rule-kuitanAri" onclick="toggleRule('kuitanAri')" title="Kuitan on/off"></button></div>
       <div class="sp-row"><span class="sp-label">Double Ron</span><button class="sp-toggle" id="btn-rule-doubleRon" onclick="toggleRule('doubleRon')" title="Double Ron on/off"></button></div>
@@ -147,10 +158,10 @@
          creates the room (see the 'joined' handler in onMsg), since there's
          no room to invite anyone into before that. -->
     <div class="about-section" id="rules-invite-section" style="display:none;">
-      <a href="#" class="invite-link" onclick="openInviteModal('create');return false;">Invite Players</a>
+      <a href="#" class="invite-link" onclick="openInviteModal('create');return false;" data-i18n="invite_players_label">Invite Players</a>
       <div id="rules-invited-list" class="invite-chip-list"></div>
     </div>
-    <button class="bp" id="rules-modal-create-btn" style="display:none;" onclick="confirmCreateRoom()">+ Create Room</button>
+    <button class="bp" id="rules-modal-create-btn" style="display:none;" onclick="confirmCreateRoom()" data-i18n="create_room_button">+ Create Room</button>
   </div>
 </div>
 
@@ -618,8 +629,8 @@
   <!-- Settings button top-right of the window, same as every other screen. -->
   <!-- Hidden until a profile is unlocked (see onProfileUnlocked) — there's
        no per-profile content to show before then. -->
-  <button class="settings-icon-btn user-icon-btn" id="user-icon-btn" onclick="toggleUserProfile()" title="User Profile" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 5.556);">人</button>
-  <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
+  <button class="settings-icon-btn user-icon-btn" id="user-icon-btn" onclick="toggleUserProfile()" title="User Profile" data-i18n-title="user_profile_title" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 5.556);">人</button>
+  <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings" data-i18n-title="settings_icon_title">☰</button>
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Janshin</div></div>
   <div class="card">
     <!-- Back button, header, and Rankings/Match Settings all share one
@@ -628,7 +639,7 @@
          same visual baseline — see .card-header-row. -->
     <div class="card-header-row">
       <!-- Back-to-menu, this panel's own top-left corner. -->
-      <button class="back-icon-btn" onclick="backToMenu()" title="Back to Menu">←</button>
+      <button class="back-icon-btn" onclick="backToMenu()" title="Back to Menu" data-i18n-title="back_to_menu_title">←</button>
       <!-- Live readout of what you're about to play — mode/player-count
            (e.g. "東風戦 TONPUU · 四人麻雀 YONMA"); other active rules go on
            the line right below this whole row (.lobby-rules-summary).
@@ -644,10 +655,10 @@
            Match Settings (closest to the corner). Both are hidden once in
            the waiting room — see showWaiting/resetLobby. -->
       <div class="card-icon-btns">
-        <button class="card-icon-btn" id="rankings-icon-btn" onclick="toggleRankings()" title="Rankings">
+        <button class="card-icon-btn" id="rankings-icon-btn" onclick="toggleRankings()" title="Rankings" data-i18n-title="rankings_title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="6" height="9"></rect><rect x="9" y="7" width="6" height="14"></rect><rect x="15" y="15" width="6" height="6"></rect></svg>
         </button>
-        <button class="card-icon-btn" id="match-settings-link" onclick="toggleRulesModal()" title="Match Settings">
+        <button class="card-icon-btn" id="match-settings-link" onclick="toggleRulesModal()" title="Match Settings" data-i18n-title="match_settings_title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </button>
       </div>
@@ -663,7 +674,7 @@
          pure display of it plus the icon, kept in sync by
          refreshProfileDisplay(). -->
     <input type="hidden" id="iname" value="Guest">
-    <button class="profile-nameplate" id="profile-nameplate" onclick="toggleProfilePicker()" title="Select Profile">
+    <button class="profile-nameplate" id="profile-nameplate" onclick="toggleProfilePicker()" title="Select Profile" data-i18n-title="select_profile_title">
       <span class="pnp-icon" id="pnp-icon"></span>
       <span class="pnp-info">
         <span class="pnp-name" id="pnp-name">Guest</span>
@@ -671,7 +682,7 @@
              in script.js, same as #pnp-name above. -->
         <span class="pnp-title" id="pnp-title"></span>
       </span>
-      <span class="pnp-change">Change</span>
+      <span class="pnp-change" data-i18n="change_label">Change</span>
     </button>
     </div>
     <!-- Two distinct entry points, not one ambiguous "Find Match": Quick
@@ -680,11 +691,11 @@
          deliberately finding/hosting a game with a specific person (see
          toggleRoomList/createRoom/joinRoom in script.js). -->
     <div class="lobby-actions" id="lobby-actions">
-      <button class="bp" id="bfind">Quick Match</button>
-      <button class="bp" onclick="toggleRoomList()">Room List</button>
+      <button class="bp" id="bfind" data-i18n="quick_match_button">Quick Match</button>
+      <button class="bp" onclick="toggleRoomList()" data-i18n="room_list_button">Room List</button>
     </div>
     <div class="wa" id="wa">
-      <div class="wm" id="wmsg">Looking for players...</div>
+      <div class="wm" id="wmsg" data-i18n="looking_for_players">Looking for players...</div>
       <div class="slots" id="slots">
         <div class="slot"><span class="si">🀄</span></div><div class="slot"><span class="si">🀄</span></div>
         <div class="slot"><span class="si">🀄</span></div><div class="slot"><span class="si">🀄</span></div>
@@ -698,9 +709,9 @@
            text link rather than a third button — Ready/Cancel are already
            two full-width buttons on this panel, and Invite is a much
            rarer, lower-stakes action than either. -->
-      <a href="#" class="invite-link" id="binvite" onclick="openInviteModal('waiting');return false;" style="display:none;">✉ Invite Players</a>
-      <button class="ready-btn" id="bready">⚔ Ready!</button>
-      <button class="bs" id="bcancel">✕ Cancel</button>
+      <a href="#" class="invite-link" id="binvite" onclick="openInviteModal('waiting');return false;" style="display:none;" data-i18n="invite_players_cta">✉ Invite Players</a>
+      <button class="ready-btn" id="bready" data-i18n="ready_button">⚔ Ready!</button>
+      <button class="bs" id="bcancel" data-i18n="cancel_button">✕ Cancel</button>
     </div>
   </div>
 </div>

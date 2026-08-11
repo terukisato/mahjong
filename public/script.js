@@ -455,6 +455,93 @@ function svgHon(v,w,h){
   );
 }
 
+// I18N — English/Japanese toggle for menu chrome (Start screen, Lobby,
+// Settings panel, Match Settings). Deliberately NOT applied to in-game
+// mahjong terminology (東風戦/ツモ/ロン/yaku names/etc.) — those are
+// authentic game terms shown bilingually on purpose, not app UI text, and
+// stay fixed regardless of currentLang. Gameplay screens (#s-game/#s-end)
+// aren't wired up yet; that's a later pass.
+const I18N={
+  en:{
+    settings_title:'SETTINGS', audio_header:'AUDIO', music_label:'Music', music_title:'Music on/off',
+    volume_label:'Volume', voice_label:'Voice', voice_title:'Voice on/off', fx_label:'FX', fx_title:'FX on/off',
+    language_header:'LANGUAGE',
+    settings_icon_title:'Settings', start_button:'▶ START', about_link:'About',
+    match_settings_title:'Match Settings', rules_section_title:'Rules',
+    create_room_button:'+ Create Room', invite_players_label:'Invite Players', invite_players_cta:'✉ Invite Players',
+    user_profile_title:'User Profile', back_to_menu_title:'Back to Menu', rankings_title:'Rankings',
+    change_label:'Change', select_profile_title:'Select Profile',
+    quick_match_button:'Quick Match', room_list_button:'Room List',
+    looking_for_players:'Looking for players...', players_count:'{count}/{total} players',
+    ready_button:'⚔ Ready!', cancel_button:'✕ Cancel', press_ready_hint:'Press Ready when you are set to start',
+    no_optional_rules:'No optional rules enabled',
+    diff_easy:'Easy', diff_normal:'Normal', diff_hard:'Hard',
+  },
+  ja:{
+    settings_title:'設定', audio_header:'オーディオ', music_label:'音楽', music_title:'音楽 オン/オフ',
+    volume_label:'音量', voice_label:'ボイス', voice_title:'ボイス オン/オフ', fx_label:'効果音', fx_title:'効果音 オン/オフ',
+    language_header:'言語',
+    settings_icon_title:'設定', start_button:'▶ スタート', about_link:'このゲームについて',
+    match_settings_title:'対局設定', rules_section_title:'ルール',
+    create_room_button:'+ ルーム作成', invite_players_label:'プレイヤーを招待', invite_players_cta:'✉ プレイヤーを招待',
+    user_profile_title:'プロフィール', back_to_menu_title:'メニューに戻る', rankings_title:'ランキング',
+    change_label:'変更', select_profile_title:'プロフィールを選択',
+    quick_match_button:'クイックマッチ', room_list_button:'ルーム一覧',
+    looking_for_players:'対戦相手を探しています...', players_count:'{count}/{total} 人',
+    ready_button:'⚔ 準備完了！', cancel_button:'✕ キャンセル', press_ready_hint:'準備ができたら「準備完了」を押してください',
+    no_optional_rules:'追加ルールは有効になっていません',
+    diff_easy:'イージー', diff_normal:'ノーマル', diff_hard:'ハード',
+  },
+};
+let currentLang='en';
+try{ const saved=localStorage.getItem('mj-lang'); if(saved==='en'||saved==='ja') currentLang=saved; }catch(e){}
+
+// t('key') looks up currentLang's string, falling back to English then the
+// raw key itself (so a typo'd/missing key still shows SOMETHING instead of
+// silently rendering blank). vars does simple {name} substitution — only
+// used by players_count right now, but kept generic rather than one-off
+// string-splicing at that call site.
+function t(key,vars){
+  let s=(I18N[currentLang]&&I18N[currentLang][key])||I18N.en[key]||key;
+  if(vars) for(const k in vars) s=s.replace('{'+k+'}',vars[k]);
+  return s;
+}
+
+// Fills every [data-i18n]/[data-i18n-title] element under root (default:
+// whole document) from the current language — call once at boot, and again
+// whenever setLang() below actually changes currentLang. Scoped to a root
+// so a specific re-render (e.g. a freshly-opened modal) doesn't need to
+// wait for the next full setLang() call.
+function applyI18n(root){
+  const scope=root||document;
+  scope.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent=t(el.dataset.i18n); });
+  scope.querySelectorAll('[data-i18n-title]').forEach(el=>{ el.title=t(el.dataset.i18nTitle); });
+}
+
+function setLang(lang){
+  if(lang!=='en'&&lang!=='ja') return;
+  currentLang=lang;
+  try{ localStorage.setItem('mj-lang',lang); }catch(e){}
+  applyI18n();
+  const enBtn=$('blang-en'), jaBtn=$('blang-ja');
+  if(enBtn) enBtn.classList.toggle('active',lang==='en');
+  if(jaBtn) jaBtn.classList.toggle('active',lang==='ja');
+  // Dynamic lobby text that isn't a static [data-i18n] node (built from
+  // live state — waiting-room player count, current Match Settings picks) —
+  // re-run whichever of these are currently relevant so a language switch
+  // updates them immediately instead of on their next natural refresh.
+  if(typeof updateMatchSummary==='function') updateMatchSummary();
+  if(typeof renderWaitingRules==='function') renderWaitingRules();
+  if(typeof lastSeats!=='undefined'&&lastSeats&&typeof updateSlots==='function') updateSlots(lastSeats);
+  // #cdiv (the "Press Ready..." hint) has no [data-i18n] of its own — it's
+  // only ever set imperatively (showWaiting()/resetLobby()), same reason
+  // wmsg's dynamic "{count}/{total} players" text overrides its own
+  // [data-i18n] default above — so it needs its own explicit re-set here,
+  // but only while the waiting room is actually the thing on screen
+  // (resetLobby's blank '' state should stay blank, not get re-filled).
+  const wa=$('wa'); if(wa&&getComputedStyle(wa).display!=='none'){ const cd=$('cdiv'); if(cd) cd.textContent=t('press_ready_hint'); }
+}
+
 // APP STATE
 // Table layout: every seat-indexed value from the server (scores, discards,
 // melds, riichi flags, ...) is in ABSOLUTE seat order (0..numSeats-1, stable
@@ -2416,7 +2503,7 @@ function updateMatchSummary(){
   const el=$('lobby-rules-summary'); if(!el) return;
   const RULE_LABELS={akaDora:'Aka Dora',kuitanAri:'Kuitan',doubleRon:'Double Ron',nagashiMangan:'Nagashi Mangan',chonbo:'Chonbo'};
   const onRules=Object.keys(RULE_LABELS).filter(k=>rules[k]).map(k=>RULE_LABELS[k]);
-  el.textContent=onRules.length?onRules.join(', '):'No optional rules enabled';
+  el.textContent=onRules.length?onRules.join(', '):t('no_optional_rules');
 }
 
 // Waiting-room slot count follows the selected variant even before a
@@ -2458,7 +2545,7 @@ function renderWaitingRules(){
   const el=$('lobby-rules-summary'); if(!el||!currentRoomRules) return;
   const RULE_LABELS={akaDora:'Aka Dora',kuitanAri:'Kuitan',doubleRon:'Double Ron',nagashiMangan:'Nagashi Mangan',chonbo:'Chonbo'};
   const onRules=Object.keys(RULE_LABELS).filter(k=>currentRoomRules[k]).map(k=>RULE_LABELS[k]);
-  el.textContent=onRules.length?onRules.join(', '):'No optional rules enabled';
+  el.textContent=onRules.length?onRules.join(', '):t('no_optional_rules');
 }
 function toggleRule(name){
   rules[name]=!rules[name];
@@ -2604,7 +2691,7 @@ function showWaiting(){
   $('match-settings-link').style.display='none';
   $('rankings-icon-btn').style.display='none';
   renderWaitingRules();
-  $('cdiv').textContent='Press Ready when you are set to start';
+  $('cdiv').textContent=t('press_ready_hint');
   // Room Invite — host-only (isRoomHost is set right before showWaiting()
   // is called, see 'joined' in onMsg); quick_match rooms have no host at
   // all (hostId stays null server-side), and join_room's caller is never
@@ -2780,7 +2867,7 @@ let prevReady=[];
 
 function updateSlots(seats){
   lastSeats=seats;
-  $('wmsg').textContent=`${seats.filter(Boolean).length}/${seats.length} players`;
+  $('wmsg').textContent=t('players_count',{count:seats.filter(Boolean).length,total:seats.length});
   document.querySelectorAll('.slot').forEach((sl,i)=>{
     // seats.length is the room's real numPlayers (3 for sanma, 4 otherwise)
     // — hide any static slot div past that (there are always 4 in the DOM).
@@ -2805,7 +2892,7 @@ function updateSlots(seats){
         sl.classList.add('clickable-bot');
         const lbl=document.createElement('span');
         lbl.className='sd';
-        lbl.textContent=diff[0].toUpperCase()+diff.slice(1);
+        lbl.textContent=t('diff_'+diff);
         sl.appendChild(lbl);
         sl.onclick=(e)=>{e.stopPropagation();openDiffPopupSeat=openDiffPopupSeat===i?null:i;updateSlots(lastSeats);};
         if(openDiffPopupSeat===i) renderDiffPopup(sl,i,diff);
@@ -2826,7 +2913,7 @@ function renderDiffPopup(sl,seat,current){
   for(const level of['easy','normal','hard']){
     const btn=document.createElement('button');
     btn.className='mode-btn diff-popup-btn'+(level===current?' active':'');
-    btn.textContent=level[0].toUpperCase()+level.slice(1);
+    btn.textContent=t('diff_'+level);
     btn.onclick=e=>{e.stopPropagation();wss({type:'set_bot_difficulty',seat,difficulty:level});openDiffPopupSeat=null;updateSlots(lastSeats);};
     pop.appendChild(btn);
   }
@@ -4807,6 +4894,15 @@ try{
   }
 }catch(e){}
 updateMatchSummary();
+// Applies whatever language was restored from localStorage (see currentLang
+// near the top of this file) to the static [data-i18n] menu chrome, and
+// syncs the EN/日本語 toggle buttons' active state to match — without this
+// the page always boots showing English text (data-i18n's HTML defaults)
+// even when currentLang was actually restored as 'ja'.
+applyI18n();
+{ const enBtn=$('blang-en'), jaBtn=$('blang-ja');
+  if(enBtn) enBtn.classList.toggle('active',currentLang==='en');
+  if(jaBtn) jaBtn.classList.toggle('active',currentLang==='ja'); }
 // Start music on first user interaction — via Press Start button
 function enterLobby(){
   const btn=$('bstart');

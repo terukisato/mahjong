@@ -1149,6 +1149,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   transition:left .2s,background .2s;}
 .sp-toggle.off{background:rgba(0,0,0,.3);border-color:rgba(201,168,76,.25);}
 .sp-toggle.off::after{left:calc(var(--ui-vmin, 7.2px) * .225);background:rgba(245,237,216,.55);}
+/* Language toggle (Settings panel) — EN/JA is a 2-way pick with real text
+   labels, unlike .sp-toggle's pure on/off pill (no room for a label), so
+   it reuses .mode-btn's active/inactive color language (jade tint = on)
+   instead at a smaller footprint. */
+.lang-toggle{display:flex;gap:calc(var(--ui-vmin, 7.2px) * .833);}
+.lang-btn{flex:1;padding:calc(var(--ui-vmin, 7.2px) * .833) calc(var(--ui-vmin, 7.2px) * .556);
+  background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:6px;
+  color:rgba(245,237,216,.9);font-size:calc(var(--ui-vmin, 7.2px) * 1.389);
+  font-family:'Noto Serif JP',serif;cursor:pointer;transition:all .2s;text-align:center;}
+.lang-btn.active{background:rgba(26,107,69,.4);border-color:var(--jl);color:var(--cream);}
+.lang-btn:hover:not(.active){border-color:rgba(201,168,76,.4);color:var(--cream);}
 .sp-vol{display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .833);}
 .sp-vol-row{display:flex;justify-content:space-between;align-items:center;}
 .sp-vol-label{font-size:calc(var(--ui-vmin, 7.2px) * 1.528);color:var(--gold);}
