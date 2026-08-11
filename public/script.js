@@ -3406,13 +3406,20 @@ function drawActions(m){
       ab(bar,'ANKAN','bkan',()=>showAnkanPicker(canAnkan));
     }
 
-    // LEFT: KAKAN
+    // LEFT: KAKAN — must show whenever canKakan is non-empty, same as
+    // ANKAN above never depending on selId. The old version only rendered
+    // when selId happened to already be a kakan candidate, or when nothing
+    // else was selected at all — any OTHER tile being selected (e.g. just
+    // idly tapped while looking at the hand) fell into neither branch and
+    // silently hid the button even though kakan was legal, making it look
+    // like kakan "randomly" stopped working depending on unrelated
+    // selection state.
     const canKakan=m.canKakan||[];
-    if(canKakan.length>0){
-      if(selId&&canKakan.includes(selId))
-        ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:selId}}));
-      else if(canKakan.length===1&&!selId)
-        ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:canKakan[0]}}));
+    if(canKakan.length===1){
+      ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:canKakan[0]}}));
+    } else if(canKakan.length>1){
+      const tid=(selId&&canKakan.includes(selId))?selId:canKakan[0];
+      ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:tid}}));
     }
 
     // LEFT: KITA (sanma only) — banks a North tile for a +1 han bonus later;
