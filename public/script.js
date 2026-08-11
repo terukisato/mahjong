@@ -903,7 +903,18 @@ function renderPlayHistoryDetail(container,game,mySeat){
   container.innerHTML='';
   const rounds=game.rounds||[];
   if(!rounds.length){ container.innerHTML='<p class="ph-loading">No round data.</p>'; return; }
-  for(const r of rounds) container.appendChild(buildHistoryRoundCard(r,mySeat));
+  // Two passes: append every card first, THEN run each one's tile-row fit
+  // pass (see buildHistoryRoundCard's own comment) — fitEndTileSize needs
+  // a real clientWidth to measure against, which .ph-round-card doesn't
+  // have until it's actually attached under this (already-visible)
+  // container.
+  const fills=[];
+  for(const r of rounds){
+    const {card,fill}=buildHistoryRoundCard(r,mySeat);
+    container.appendChild(card);
+    if(fill) fills.push(fill);
+  }
+  for(const fill of fills) fill();
 }
 
 // Round reason labels — same mapping onEnd (the live round-results screen)
@@ -921,6 +932,25 @@ const phReasonLabels={tsumo:'ツモ - TSUMO',ron:'ロン - RON',draw:'流局 - E
 // "(You)" in the name lists below.
 function buildHistoryRoundCard(round,mySeat){
   const card=document.createElement('div'); card.className='ph-round-card';
+  // Tile rows (hand+melds, tenpai reveals) are sized to fit in one line
+  // the same way the live round-end panel does (see fitEndTileSize) —
+  // populating them can't happen until `card` is actually attached to the
+  // visible DOM (fitEndTileSize needs a real clientWidth to measure
+  // against), so each one is queued here and run by the caller
+  // (renderPlayHistoryDetail) right after appending this card.
+  //
+  // Each queued row also gets a temporary min-height reservation (see
+  // reserveTileRowHeight below) equal to the tallest a tile row could be —
+  // #playhistory-modal scrolls (overflow-y:auto), so an EMPTY placeholder
+  // row can measure as wider than it'll actually end up: the browser only
+  // decides a scrollbar is needed once the round's real (filled-in)
+  // height is on the page, which happens strictly after the width
+  // measurement below runs. Without the reservation, a scrollbar that
+  // pops in exactly because this row's tiles were added would silently
+  // invalidate the width just used to size them, wrapping the row anyway.
+  const fills=[];
+  const tmdDefaultH=parseInt(document.documentElement.style.getPropertyValue('--tmd-h'))||36;
+  const reserveTileRowHeight=el=>{ el.style.minHeight=tmdDefaultH+'px'; };
   const windChar=['東','南','西','北'];
   const wind=round.displayWind||round.roundWind||1;
   const rnd=round.displayRound||round.round||1;
@@ -957,11 +987,23 @@ function buildHistoryRoundCard(round,mySeat){
       if((round.uraDora||[]).length){ const lbl2=document.createElement('span');lbl2.className='re-dora-lbl re-ura-lbl';lbl2.textContent='Ura Dora'; dr.appendChild(lbl2); for(const t of round.uraDora) dr.appendChild(mkElMd(t)); }
       card.appendChild(dr);
     }
-    if((round.hand||[]).filter(Boolean).length){
+    const handTiles=(round.hand||[]).filter(Boolean);
+    if(handTiles.length){
       const tileRow=document.createElement('div'); tileRow.className='re-tile-row';
-      for(const t of round.hand.filter(Boolean)) tileRow.appendChild(mkElMd(t));
-      for(const meld of(round.melds||[])) appendEndPanelMeld(tileRow,meld);
+      reserveTileRowHeight(tileRow);
       card.appendChild(tileRow);
+      const melds=round.melds||[];
+      fills.push(()=>{
+        const meldTileCount=melds.reduce((n,meld)=>n+(meld.kanType==='ankan'?4:meld.tiles.length),0);
+        // tileRow itself, not card — card's own padding would otherwise get
+        // counted as extra tile-row width, overestimating how much
+        // actually fits and wrapping anyway (tileRow, an unstyled block
+        // div, already spans exactly card's content box).
+        const {w,h}=fitEndTileSize(tileRow,handTiles.length+meldTileCount);
+        tileRow.style.minHeight='';
+        for(const t of handTiles) tileRow.appendChild(mkEl(t,'tmd',w,h));
+        for(const meld of melds) appendEndPanelMeld(tileRow,meld,w,h);
+      });
     }
   } else if(round.reason==='chonbo'){
     const info=document.createElement('div'); info.className='ph-round-info';
@@ -976,9 +1018,16 @@ function buildHistoryRoundCard(round,mySeat){
         const nameEl=document.createElement('div');nameEl.className='re-tenpai-name';nameEl.textContent=nameFor(seat);
         row.appendChild(nameEl);
         const tiles=document.createElement('div');tiles.className='re-tile-row';
-        for(const t of hand) tiles.appendChild(mkElMd(t));
-        for(const meld of(round.tenpaiMelds?.[seat]||[])) appendEndPanelMeld(tiles,meld);
+        reserveTileRowHeight(tiles);
         row.appendChild(tiles);
+        const tpMelds=round.tenpaiMelds?.[seat]||[];
+        fills.push(()=>{
+          const tpMeldCount=tpMelds.reduce((n,meld)=>n+(meld.kanType==='ankan'?4:meld.tiles.length),0);
+          const {w,h}=fitEndTileSize(row,hand.length+tpMeldCount);
+          tiles.style.minHeight='';
+          for(const t of hand) tiles.appendChild(mkEl(t,'tmd',w,h));
+          for(const meld of tpMelds) appendEndPanelMeld(tiles,meld,w,h);
+        });
         tp.appendChild(row);
       });
       card.appendChild(tp);
@@ -1014,7 +1063,7 @@ function buildHistoryRoundCard(round,mySeat){
   });
   card.appendChild(tbl);
 
-  return card;
+  return {card,fill:fills.length?()=>fills.forEach(fn=>fn()):null};
 }
 
 // Same open/fetch pattern as My Stats above — 'stats' carries
@@ -2917,6 +2966,21 @@ function startGame(m){
     const wb=$('wb'+id);
     if(wb) wb.textContent=windLabels[(abs-dealer+numSeats)%numSeats];
   }
+  // Paint starting scores immediately from game_start's own scores (all
+  // equal — 25000 yonma / 35000 sanma, see room.js's start()) rather than
+  // leaving the centre panel blank until the first game_state arrives —
+  // that's delayed a couple seconds server-side (see the setTimeout in
+  // room.js's start()) for the round-start banner/dealing animation, so
+  // without this the points display visibly lagged the rest of the loading
+  // screen by those same couple seconds.
+  const ctrIds={b:'ctr-s-b',r:'ctr-s-r',t:'ctr-s-t',l:'ctr-s-l'};
+  if(m.scores){
+    for(let i=0;i<numSeats;i++){
+      const abs=(mySeat+i)%numSeats,id=P[i];
+      const ctrEl=$(ctrIds[id]);
+      if(ctrEl&&m.scores[abs]!==undefined) ctrEl.textContent=m.scores[abs];
+    }
+  }
   // Show game mode in topbar
   const modeLabel=m.gameMode==='hanchan'?'半荘戦':'東風戦';
   $('tb-mode').textContent=modeLabel;
@@ -3207,18 +3271,20 @@ function renderState(m, prev){
     }
   });
 
-  // Kita (sanma only) — banked North tiles, shown face-up in each seat's
-  // meld row (same .mr flex container melds already render into) with a
-  // distinguishing outline (.kita-mg) rather than a whole new positioned
-  // element, since the meld row's layout/positioning is already correct.
+  // Kita (sanma only) — banked North tiles, shown face-up in their own
+  // strip (.kita-strip, id 'k'+seat) in line with that seat's nameplate
+  // rather than mixed into the meld row, since kita tiles aren't melds —
+  // they don't affect hand shape/fu and mixing them in made the meld row
+  // harder to read at a glance.
   if(m.sanma&&m.kita){
     for(let i=0;i<numSeats;i++){
       const abs=(mySeat+i)%numSeats,id=P[i];
-      const mlEl=$('ml'+id); if(!mlEl) continue;
+      const kEl=$('k'+id); if(!kEl) continue;
+      kEl.innerHTML='';
       for(const t of(m.kita[abs]||[])){
-        const g=document.createElement('div');g.className='mg kita-mg';
+        const g=document.createElement('div');g.className='mg';
         g.appendChild(mkElMd(t));
-        mlEl.appendChild(g);
+        kEl.appendChild(g);
       }
     }
   }
