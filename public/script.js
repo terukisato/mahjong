@@ -1058,7 +1058,16 @@ function buildHistoryRoundCard(round,mySeat){
     const deltaHtml=delta!=null&&delta!==0
       ?`<span class="re-delta ${delta>0?'re-delta-pos':'re-delta-neg'}">${delta>0?'+':''}${delta.toLocaleString()}</span>`
       :`<span class="re-delta re-delta-nil">—</span>`;
-    row.innerHTML=`<td>${ordinal} ${escHtml(nameFor(seat))}</td><td>${sc.toLocaleString()}</td><td class="re-td-delta">${deltaHtml}</td>`;
+    // Dealer marker — a plain gold dot rather than reusing the live table's
+    // circular wind badge (.wb): this row already carries an ordinal medal
+    // AND a win/loss color, so a text/badge dealer mark competed for the
+    // same small amount of space and read as cluttered. A dot is the
+    // minimum viable signal and doesn't fight either of those. Superscript
+    // and trailing the name (not leading) so it reads as an annotation ON
+    // the name, like a footnote marker, rather than a bullet stacked in
+    // front of it competing with the ordinal medal right next to it.
+    const dealerHtml=seat===round.dealer?'<sup class="ph-dealer-dot" title="Dealer"></sup>':'';
+    row.innerHTML=`<td>${ordinal} ${escHtml(nameFor(seat))}${dealerHtml}</td><td>${sc.toLocaleString()}</td><td class="re-td-delta">${deltaHtml}</td>`;
     tbl.appendChild(row);
   });
   card.appendChild(tbl);

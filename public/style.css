@@ -1722,5 +1722,13 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   border-top:1px solid rgba(201,168,76,.08);}
 .ph-score-table td:nth-child(2){text-align:right;font-weight:700;color:var(--cream);}
 .ph-score-table td:nth-child(3){text-align:right;}
+/* Dealer marker (see buildHistoryRoundCard in script.js) — a plain gold
+   dot, superscript after the name (a real <sup>, so it rides the raised
+   baseline for free instead of a manual vertical-align offset), same
+   sizing convention as .profile-card-dot, just static/no glow since "who
+   was dealer" is a fixed historical fact, not a live status worth calling
+   extra attention to. */
+.ph-dealer-dot{display:inline-block;width:calc(var(--ui-vmin, 7.2px) * .556);height:calc(var(--ui-vmin, 7.2px) * .556);
+  border-radius:50%;background:var(--gold);margin-left:calc(var(--ui-vmin, 7.2px) * .417);}
 .ph-score-table tr.w td:first-child{color:var(--gl);}
 .ph-score-table tr.l td:first-child{color:#e07070;}
