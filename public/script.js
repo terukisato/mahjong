@@ -572,7 +572,10 @@ function onMsg(m){
     return;
   }
   if(m.type==='room_update'){updateSlots(m.seats);return;}
-  if(m.type==='game_start'){startGame(m);return;}
+  // Table seating is reshuffled server-side on every game_start (see
+  // Room.start in room.js) — the lobby-join seat from 'joined' is only a
+  // starting guess, this personalized message's `seat` is the real one.
+  if(m.type==='game_start'){if(Number.isInteger(m.seat))mySeat=m.seat;startGame(m);return;}
   if(m.type==='round_start'){onRoundStart(m);return;}
   if(m.type==='round_end'){onEnd(m);return;}
   if(m.type==='game_over'){
@@ -4191,6 +4194,11 @@ function callBanner(type,name,label){
   b.className='call-banner';b.dataset.type=type;
   const content=document.createElement('div');content.className='cb-content';
   const lb=document.createElement('span');lb.className='cb-label';lb.textContent=label;
+  // ダブルリーチ (6 chars) is twice as long as every other call-banner label
+  // (リーチ/ポン/カン/チー/北, all <=3) — at the shared font-size it wraps
+  // onto a second line inside the fixed-width banner. Shrink just the long
+  // ones instead of the label font-size in general.
+  if(label.length>4) lb.classList.add('cb-label-long');
   const nm=document.createElement('span');nm.className='cb-name';
   const who=document.createElement('b');who.textContent=name;
   nm.appendChild(who);nm.appendChild(document.createTextNode(' called'));

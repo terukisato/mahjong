@@ -849,7 +849,22 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   /* calc() off --cb-size (not plain vmin) so the label shrinks in lockstep
      whenever --cb-size hits its 92vw/92vh cap, instead of continuing to
      scale with vmin past the point the box itself has stopped growing. */
-  font-size:calc(var(--cb-size) * 0.16364);letter-spacing:.08em;color:var(--accent);line-height:1;}
+  font-size:calc(var(--cb-size) * 0.16364);letter-spacing:.08em;color:var(--accent);
+  /* Fixed (not 1em) on purpose — .cb-label-long below shrinks font-size but
+     deliberately does NOT touch line-height, so its line box (and therefore
+     the whole banner's flex-sized height, since .call-banner has no fixed
+     height of its own) stays identical to every other call type. Without
+     this, a 1em line-height would shrink right along with the smaller font
+     and the double-riichi banner would end up visibly shorter than a pon/
+     kan/chi/riichi banner. */
+  line-height:calc(var(--cb-size) * 0.16364);}
+/* ダブルリーチ is twice the character count of every other call-banner
+   label — same scaling basis as .cb-label above, just half the ratio so it
+   fits the same banner width on one line instead of wrapping (see the
+   cb-label-long toggle in callBanner, script.js). Only font-size shrinks;
+   line-height is inherited unchanged from .cb-label above so the banner's
+   height matches every other call type. */
+.call-banner .cb-label.cb-label-long{font-size:calc(var(--cb-size) * 0.082);}
 .call-banner .cb-name{font-family:'Cinzel Decorative',serif;
   font-size:calc(var(--cb-size) * 0.01455);letter-spacing:2px;color:rgba(245,237,216,.7);}
 .call-banner .cb-name b{color:var(--accent-strong);}

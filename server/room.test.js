@@ -137,6 +137,39 @@ test('Tsumo: honba adds 100 per payer (300 total) per stick', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+// _recordRoundHistory used to tag each recorded round with `payload.honba`
+// verbatim — but that field is the NEXT round's honba ("carrying forward",
+// see roundEndPayload's own comment in room.js), not the honba this round
+// was actually played at. A dealer win at honba 0 broadcasts honba:1 (for
+// the repeat that's about to start), so Play History showed every dealer's
+// very first (0-honba) win mislabelled as "1本場" — the true 0-honba hand
+// never appeared. Fixed by overriding honba with the pre-advance g.honba,
+// same as round/roundWind/dealer already were.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Play History: a dealer win at honba 0 is recorded as honba 0, not the next round\'s honba 1', () => {
+  const room = freshRoom(0); // seat 0 is dealer
+  const g = room.game;
+  g.honba = 0;
+  g.hands[0] = pinfuTenpai13();
+  g.drawTile = winTile();
+  g.hands[0].push(g.drawTile);
+  g.turn = 0;
+  room._tsumo(0);
+  assert.strictEqual(g.roundHistory.length, 1);
+  assert.strictEqual(g.roundHistory[0].honba, 0, 'this round was played at 0 honba, not the 1 honba the dealer-repeat broadcasts for next round');
+});
+
+test('Play History: an abortive draw at honba 0 is recorded as honba 0, not the repeat\'s honba 1', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  g.honba = 0;
+  room._endRound('kyuushu', undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, [...g.scores], undefined);
+  assert.strictEqual(g.roundHistory.length, 1);
+  assert.strictEqual(g.roundHistory[0].honba, 0);
+});
+
+// ══════════════════════════════════════════════════════════════════════════
 // Ron payment (dealer x6, non-dealer x4) + riichi stick handling via _multiRon
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -439,6 +472,74 @@ test('Kita: a North tile declared via kita CAN be ronned by a waiting opponent',
   assert.ok(g.scores[0] < 35000, `seat 0 (discarder) should have paid, got ${g.scores[0]}`);
 });
 
+// ══════════════════════════════════════════════════════════════════════════
+// Double Riichi's "no interruption yet" gate checked g.melds only — a sanma
+// Kita never touches g.melds (it banks into g.kita[seat] instead, see
+// _kita's own comment), so a player could kita on their own turn and still
+// declare double riichi on their next discard as if nothing had happened.
+// Standard sanma ruling treats kita as an interruption same as any call.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Double Riichi: a Kita banked earlier this hand blocks double riichi on the seat\'s own first discard', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.turn = 1;
+  g.firstRound = true;
+  g.kita[1] = [T(4, 'z')]; // this seat already banked a kita tile earlier in the same hand
+  g.hands[1] = [...seq(1, 'p'), ...seq(4, 'p'), ...seq(7, 'p'), T(2, 's'), T(3, 's'), ...pairT(9, 'm')];
+  g.drawTile = T(4, 's');
+  g.hands[1].push(g.drawTile);
+  room._riichi(1, g.drawTile.id);
+  assert.strictEqual(g.riichi[1], true);
+  assert.strictEqual(g.doubleRiichi[1], false, 'a kita earlier this hand should block double riichi, same as a call would');
+});
+
+test('Double Riichi: still granted on a genuinely undisturbed first discard (no kita, no calls)', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.turn = 1;
+  g.firstRound = true;
+  g.hands[1] = [...seq(1, 'p'), ...seq(4, 'p'), ...seq(7, 'p'), T(2, 's'), T(3, 's'), ...pairT(9, 'm')];
+  g.drawTile = T(4, 's');
+  g.hands[1].push(g.drawTile);
+  room._riichi(1, g.drawTile.id);
+  assert.strictEqual(g.doubleRiichi[1], true, 'sanity check: without any kita/calls this should still be double riichi');
+});
+
+// Tenhou's own gate (g.turnCount===0) can't rule out a call either (none is
+// possible before any discard exists), but same as double riichi/Chiihou,
+// it couldn't rule out the DEALER having kita'd their own original hand
+// before winning off the rinshan replacement, since kita never touches
+// g.turnCount or g.melds.
+test('Tenhou: a Kita banked before the win (still turn 0) blocks Tenhou', () => {
+  const room = freshSanmaRoom(0); // seat 0 is dealer
+  const g = room.game;
+  g.turn = 0;
+  g.kita[0] = [T(4, 'z')]; // dealer already banked a kita tile before completing this hand
+  g.hands[0] = [...seq(1, 'p'), ...seq(4, 'p'), ...seq(7, 'p'), T(2, 's'), T(3, 's'), ...pairT(9, 'm')];
+  g.drawTile = T(4, 's');
+  g.hands[0].push(g.drawTile);
+
+  let logged;
+  room._endRound = (reason, winner, loser, hand, yakuList) => { logged = yakuList; };
+  room._tsumo(0);
+  assert.ok(!logged.some(y => y.name === 'Tenhou'), `expected no Tenhou entry, got ${JSON.stringify(logged)}`);
+});
+
+test('Tenhou: still granted on a genuinely undisturbed dealer first-draw win (no kita)', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.turn = 0;
+  g.hands[0] = [...seq(1, 'p'), ...seq(4, 'p'), ...seq(7, 'p'), T(2, 's'), T(3, 's'), ...pairT(9, 'm')];
+  g.drawTile = T(4, 's');
+  g.hands[0].push(g.drawTile);
+
+  let logged;
+  room._endRound = (reason, winner, loser, hand, yakuList) => { logged = yakuList; };
+  room._tsumo(0);
+  assert.ok(logged.some(y => y.name === 'Tenhou'), `sanity check: expected a Tenhou entry, got ${JSON.stringify(logged)}`);
+});
+
 test('Kita: uncontested (nobody waiting on North) still banks the tile and draws a replacement, same as before', () => {
   const room = freshSanmaRoom(0);
   const g = room.game;
@@ -521,6 +622,54 @@ test('Ura Dora: a banked kita tile counts as ura dora when the ura indicator poi
   const uraDora = logged.find(y => y.name === 'Ura Dora');
   assert.ok(uraDora, `expected an Ura Dora entry, got ${JSON.stringify(logged)}`);
   assert.strictEqual(uraDora.han, 1);
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Called-meld tiles (pon/chi/kan) used to be entirely invisible to dora/aka
+// dora too, same root cause as the kita bug above: _pon/_chi/_daiminkan/
+// _ankan all strip their tiles OUT of g.hands[seat] into g.melds[seat], and
+// _doraPool only ever folded g.kita[seat] back in — never g.melds[seat] — so
+// a called triplet/sequence that happened to match the dora indicator (or
+// contained a called red 5) silently scored 0 extra han for it.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Dora: an open pon meld counts as regular dora when the indicator matches it', () => {
+  const room = freshRoom(1); // seat 1 wins
+  const g = room.game;
+  g.turn = 1;
+  g.firstRound = false;
+  g.dora = [T(5, 'z')]; // indicator Haku (White) -> dora is Hatsu (Green, 6z)
+  g.melds[1] = [{ type: 'pon', tiles: tri(6, 'z'), calledTileId: -1, fromSeat: 0 }]; // called Hatsu triplet
+  g.hands[1] = [...seq(1, 'p'), ...seq(4, 'p'), T(7, 'p'), T(8, 'p'), ...pairT(9, 'm')];
+  g.drawTile = T(9, 'p');
+  g.hands[1].push(g.drawTile);
+
+  let logged;
+  room._endRound = (reason, winner, loser, hand, yakuList) => { logged = yakuList; };
+  room._tsumo(1);
+  const dora = logged.find(y => y.name === 'Dora');
+  assert.ok(dora, `expected a Dora entry, got ${JSON.stringify(logged)}`);
+  assert.strictEqual(dora.han, 3, 'all 3 tiles of the called Hatsu meld should count as dora');
+});
+
+test('Aka Dora: a red 5 called into a chi meld still counts as aka dora', () => {
+  const room = freshRoom(1);
+  const g = room.game;
+  g.turn = 1;
+  g.firstRound = false;
+  g.dora = [T(1, 'z')]; // irrelevant to this hand
+  const chiTiles = [{ v: 3, s: 's', id: 9001 }, { v: 4, s: 's', id: 9002 }, { v: 5, s: 's', id: 9003, red: true }];
+  g.melds[1] = [{ type: 'chi', tiles: chiTiles, calledTileId: 9003, fromSeat: 0 }]; // called red-5s into 3-4-5s
+  g.hands[1] = [...seq(1, 'p'), ...seq(4, 'p'), T(7, 'p'), T(8, 'p'), ...pairT(9, 'm')];
+  g.drawTile = T(9, 'p');
+  g.hands[1].push(g.drawTile);
+
+  let logged;
+  room._endRound = (reason, winner, loser, hand, yakuList) => { logged = yakuList; };
+  room._tsumo(1);
+  const aka = logged.find(y => y.name === 'Aka Dora');
+  assert.ok(aka, `expected an Aka Dora entry, got ${JSON.stringify(logged)}`);
+  assert.strictEqual(aka.han, 1);
 });
 
 test('Double-discard guard: a second discard action while a reaction window is open is ignored', () => {

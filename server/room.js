@@ -291,6 +291,14 @@ class Room {
   start(){
     if(this.phase!=='waiting'||this.totalCount()<this.numPlayers) return;
     this.phase='playing';
+    // addHuman fills the lowest-numbered open seat purely for lobby-slot
+    // display (join order, left to right) — actual table seating (who
+    // ends up on whose right/left) is reshuffled fresh here every game, so
+    // it's never just "host=seat0, then join order" the way the lobby
+    // slots are. Runs before dealing, so it also reshuffles a same-room
+    // Play Again rematch (hostStartPlayAgain also funnels through here).
+    this.seats=shuffle(this.seats);
+    this.seats.forEach((p,i)=>{if(p) p.seat=i;});
     const startDealer=Math.floor(Math.random()*this.numPlayers);
     // Sanma conventionally starts with more points per player (one fewer
     // opponent to redistribute among) — 35000 is the standard Tenhou/club
@@ -330,7 +338,14 @@ class Room {
       handsPlayed:0,
     };
     this._initRound();
-    this._broadcastAll({type:'game_start',seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,chonbo:this.rules.chonbo});
+    // Personalized (not _broadcastAll) — each player's actual seat just got
+    // reshuffled above, so unlike every other game_start field (identical
+    // for everyone) `seat` has to be sent per-recipient. The client latches
+    // this onto its own mySeat (see game_start handling in script.js),
+    // overriding whatever lobby slot 'joined' gave it.
+    for(let seat=0;seat<this.numPlayers;seat++){
+      this._send(this.seats[seat],{type:'game_start',seat,seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,chonbo:this.rules.chonbo});
+    }
     setTimeout(()=>this._draw(),2000);
   }
 
@@ -767,7 +782,7 @@ class Room {
       const doraPool=this._doraPool(winSeat,hand);
       const uraDora=g.riichi[winSeat]?this._countUraDora(doraPool):0;
       const kitaCount=g.kita[winSeat].length;
-      const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(hand);
+      const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(doraPool);
       const totalHan=han+dc+kitaCount;
       const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
       const fu=this._computeFu(result,false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu);
@@ -813,7 +828,7 @@ class Room {
 
     // Build combined yaku display (show first winner's hand info in round_end, extras in extras)
     const primary=results[0];
-    const primaryAkaDora=countAkaDora(primary.hand);
+    const primaryAkaDora=countAkaDora(this._doraPool(primary.winSeat,primary.hand));
     const yl=this._buildYakuList(primary.yakuList,primary.rawHan,primary.han,primary.dc,primary.uraDora,primaryAkaDora,primary.kitaCount);
     this._endRound('ron',primary.winSeat,loseSeat,primary.hand,yl,primary.han,primary.fu,totalLoss,
       results.length>1?results.slice(1):null,prevScores,g.melds[primary.winSeat]);
@@ -1122,8 +1137,13 @@ class Room {
     g.riichi[seat]=true;
     g.ippatsu[seat]=true;
     g.stats[seat].riichi++;
-    // Double riichi: declared on first discard before any calls have been made
-    const isDouble=g.firstRound&&g.melds.every(m=>m.length===0);
+    // Double riichi: declared on first discard before any calls have been
+    // made — a sanma Kita swap counts as an interruption here too, same as
+    // pon/chi/kan (it's a self-declared action that reveals/replaces a tile
+    // out of turn order, standard sanma ruling), even though it never
+    // touches g.melds (kita tiles bank into g.kita[seat], not a meld — see
+    // _kita's own comment).
+    const isDouble=g.firstRound&&g.melds.every(m=>m.length===0)&&g.kita.every(k=>k.length===0);
     g.doubleRiichi[seat]=isDouble;
     g.scores[seat]-=1000;g.riichiSticks++;
     if(!g.riichiTile) g.riichiTile={};
@@ -1162,17 +1182,20 @@ class Room {
   }
 
   // ── Win ─────────────────────────────────────────────────────────────────────
-  // Tiles eligible for regular/ura dora matching: the concealed hand plus
-  // this seat's own banked kita tiles (g.kita[seat] — set aside into their
-  // own array the moment kita is declared, see _kita/_completeKita, so
-  // they'd otherwise be invisible to countDora entirely). A banked North
-  // tile is real and face-up same as any meld tile — if this round's dora
-  // indicator happens to be West (making North the dora), it should count
-  // the same as a North tile the player simply held in hand/a meld would.
-  // Doesn't touch aka dora (countAkaDora) — kita is always a 4z tile,
-  // never a red 5, so there's nothing for it to add there.
+  // Tiles eligible for regular/ura/aka dora matching: the concealed hand,
+  // plus every tile sitting in this seat's called melds (g.melds[seat] —
+  // _pon/_chi/_daiminkan/_ankan all strip their tiles OUT of g.hands[seat]
+  // the moment the call happens, so a called triplet/sequence is otherwise
+  // entirely invisible to countDora/countAkaDora even though it's real and
+  // face-up same as a concealed group), plus this seat's own banked kita
+  // tiles (g.kita[seat] — set aside into their own array the moment kita is
+  // declared, see _kita/_completeKita, same invisibility problem). If this
+  // round's dora indicator happens to match a called meld's tile (or a
+  // called meld happens to include a red 5), it should count exactly the
+  // same as if that tile were still sitting in the concealed hand.
   _doraPool(seat,hand){
-    return [...hand,...this.game.kita[seat]];
+    const meldTiles=this.game.melds[seat].flatMap(m=>m.tiles);
+    return [...hand,...meldTiles,...this.game.kita[seat]];
   }
 
   // Builds the display yaku list for a win. Normally that's just the
@@ -1227,10 +1250,17 @@ class Room {
     if(this._isFuriten(seat)) return;
     const sw=this._seatWindOf(seat);
     const isHaitei=g.haiteiNext&&!g.isRinshan;
-    // Tenhou: dealer tsumo on very first draw (no discards yet from anyone)
-    const isTenhou=seat===g.dealer&&g.turnCount===0&&hand.length===14;
-    // Chiihou: non-dealer tsumo on own first draw before any calls
-    const isChiihou=seat!==g.dealer&&g.firstRound&&g.melds.every(m=>m.length===0)&&hand.length===14;
+    // Tenhou: dealer tsumo on very first draw (no discards yet from anyone).
+    // turnCount===0 alone can't rule out a call (none is possible before
+    // any discard exists to call), but it can't rule out the dealer having
+    // kita'd their own original hand before winning off the rinshan
+    // replacement — same Kita-counts-as-an-interruption gate as double
+    // riichi/Chiihou (see _riichi's comment).
+    const isTenhou=seat===g.dealer&&g.turnCount===0&&g.kita.every(k=>k.length===0)&&hand.length===14;
+    // Chiihou: non-dealer tsumo on own first draw before any calls — same
+    // Kita-counts-as-an-interruption gate as double riichi above (see
+    // _riichi's comment).
+    const isChiihou=seat!==g.dealer&&g.firstRound&&g.melds.every(m=>m.length===0)&&g.kita.every(k=>k.length===0)&&hand.length===14;
     const isDblRiichi=g.doubleRiichi[seat];
 
     const result=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),
@@ -1246,7 +1276,7 @@ class Room {
     const doraPool=this._doraPool(seat,hand);
     const uraDora=g.riichi[seat]?this._countUraDora(doraPool):0;
     const kitaCount=g.kita[seat].length;
-    const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(hand);
+    const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(doraPool);
     const totalHan=han+dc+kitaCount;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
     const winKey=g.drawTile?key(g.drawTile):null;
@@ -1261,7 +1291,7 @@ class Room {
       g.scores[i]-=pay;gain+=pay;
     }
     g.scores[seat]+=gain+g.riichiSticks*1000;
-    const akaDora=countAkaDora(hand);
+    const akaDora=countAkaDora(doraPool);
     const yl=this._buildYakuList(yakuList,han,totalHan,dc,uraDora,akaDora,kitaCount);
     this._endRound('tsumo',seat,null,hand,yl,totalHan,fu,gain,undefined,prevScores,g.melds[seat]);
   }
@@ -1285,7 +1315,7 @@ class Room {
     const doraPool=this._doraPool(winSeat,hand);
     const uraDora=g.riichi[winSeat]?this._countUraDora(doraPool):0;
     const kitaCount=g.kita[winSeat].length;
-    const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(hand);
+    const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(doraPool);
     const totalHan=han+dc+kitaCount;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
     const fu=this._computeFu(result,false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu);
@@ -1294,7 +1324,7 @@ class Room {
     const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300+g.riichiSticks*1000;
     const prevScores=[...g.scores];
     g.scores[loseSeat]-=pay;g.scores[winSeat]+=pay;
-    const akaDora=countAkaDora(hand);
+    const akaDora=countAkaDora(doraPool);
     const yl=this._buildYakuList(yakuList,han,totalHan,dc,uraDora,akaDora,kitaCount);
     this._endRound('ron',winSeat,loseSeat,hand,yl,totalHan,fu,pay,undefined,prevScores,g.melds[winSeat]);
   }
@@ -1325,8 +1355,16 @@ class Room {
   _recordRoundHistory(payload){
     const g=this.game;
     if(!g.roundHistory) g.roundHistory=[];
+    // payload.honba (like payload.round/roundWind/dealer) is whatever the
+    // caller broadcast for CARRYING FORWARD into the next round (see
+    // roundEndPayload's own "Honba/riichi-stick pot carrying into the next
+    // round" comment) — for a dealer win or abortive draw that's honba+1,
+    // not the honba this round was actually played at. round/roundWind/
+    // dealer already get overridden below with the pre-advance g.* values
+    // for exactly this reason; honba needs the same override; the comment
+    // above (from before this fix) claimed it already did.
     g.roundHistory.push({...payload,
-      round:g.round,roundWind:g.roundWind,dealer:g.dealer,
+      round:g.round,roundWind:g.roundWind,dealer:g.dealer,honba:g.honba,
       displayWind:Math.ceil(g.round/this.numPlayers),
       displayRound:((g.round-1)%this.numPlayers)+1,
     });
@@ -1524,7 +1562,13 @@ class Room {
             scores:g.scores,handLabel:han?handLabel(han):'',
             playerNames:this.seats.map(p=>p?.name||'—'),
             extraWinners:extraWinners||null,
-            uraDora:g.deadWall.slice(9,9+g.dora.length),
+            // Ura dora indicators stay hidden unless the win actually used
+            // them — same gate _countUraDora scores against
+            // (g.riichi[winSeat]). Sending the real tiles here regardless of
+            // riichi used to leak them into the results screen even on a
+            // plain non-riichi win, where they're not part of the score at
+            // all (see the matching fix on roundEndPayload/drawPayload below).
+            uraDora:g.riichi[winner]?g.deadWall.slice(9,9+g.dora.length):[],
             dora:g.dora,
             prevScores:prevScores||null,
             melds:melds||[],
@@ -1559,7 +1603,11 @@ class Room {
       scores:g.scores,handLabel:han?handLabel(han):'',
       playerNames:this.seats.map(p=>p?.name||'—'),
       extraWinners:extraWinners||null,
-      uraDora: g.deadWall.slice(9,9+g.dora.length),
+      // See the matching comment on agariyamePayload above — only reveal
+      // the actual indicators when the win used them (g.riichi[winner]),
+      // otherwise an empty array so the client's results screen doesn't
+      // show an "Ura Dora" section for a plain (non-riichi) win.
+      uraDora: g.riichi[winner]?g.deadWall.slice(9,9+g.dora.length):[],
       dora: g.dora,
       prevScores:prevScores||null,
       melds:melds||[],
@@ -1646,7 +1694,10 @@ class Room {
       inTenpai,payments,tenpaiHands,tenpaiMelds:g.melds,
       playerNames:this.seats.map(p=>p?.name||'—'),
       dora:g.dora,
-      uraDora:g.deadWall.slice(9,9+g.dora.length),
+      // An exhaustive draw has no winner at all, so ura dora (only ever
+      // relevant to a riichi win) is never applicable here — see the
+      // matching fix on agariyamePayload/roundEndPayload above.
+      uraDora:[],
       prevScores,
       gameOver:drawGameOver,
       honba:newHonba,riichiSticks:g.riichiSticks,
