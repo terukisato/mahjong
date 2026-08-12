@@ -78,6 +78,15 @@ function _emptyMatchKindStats() {
     bestFinalScore: 0,   // largest GAME-ENDING score — see the 100k/105k point-milestone achievements
     doubleBustWins: 0,   // tsumo wins that bankrupted 2+ opponents at once (sanma-only achievement)
     yaku: {},
+    // Rolling window of this bucket's most recent hands (see
+    // ROUND_WINDOW_SIZE/_pushRound/recordGameResult below) — every OTHER
+    // field above is a lifetime running total (used by achievements.js,
+    // which needs numbers that never shrink) and is left completely alone
+    // by the windowing logic; this is the only field it actually writes
+    // to. getStats/getLeaderboard derive the numbers actually shown in
+    // Rankings/My Stats from this array instead of the lifetime fields —
+    // see _deriveWindowStats.
+    recentRounds: [],
   };
 }
 
@@ -98,6 +107,18 @@ function _emptyVariantStats() {
   return {
     ..._emptyMatchKindStats(),
     byMatchKind: { quick: _emptyMatchKindStats(), room: _emptyMatchKindStats() },
+    // Weekly/Monthly Rankings — one DATED delta per game (see
+    // recordGameResult's push below and getPeriodLeaderboard), separate
+    // from recentRounds above: that one is a fixed-COUNT rolling window
+    // (last 100 hands, whatever span of time that happens to cover), this
+    // one needs every game inside a real calendar week/month however many
+    // that is, so it has to be bounded by DATE instead (see
+    // _prunePeriodGames) — a count-based cap could silently drop games
+    // still inside the current period for an active player. Combined
+    // only, same as the top-level fields above (not split per
+    // byMatchKind) — Weekly/Monthly Rankings reads the same combined
+    // aggregate All Time Rankings already does.
+    periodGames: [],
   };
 }
 
@@ -159,6 +180,10 @@ function _fillVariantDefaults(v) {
     v.byMatchKind.quick = _fillMatchKindDefaults(v.byMatchKind.quick);
     v.byMatchKind.room = _fillMatchKindDefaults(v.byMatchKind.room);
   }
+  // Predates Weekly/Monthly Rankings — no games from before this shipped
+  // have a date on them, so there's nothing to backfill; it just starts
+  // empty and fills in from here on.
+  if (!v.periodGames) v.periodGames = [];
   return v;
 }
 
@@ -209,18 +234,135 @@ function _normalize(s) {
   return s;
 }
 
-function _cloneMatchKindStats(mk) {
-  return { ...mk, placements: [...mk.placements], yaku: { ...mk.yaku } };
+// How many of a profile's most recent HANDS (not games — see
+// _extractSeatRound below) feed the windowed numbers Rankings/My Stats
+// actually display. Deliberately short, unlike the lifetime totals
+// achievements.js checks (see _emptyMatchKindStats' recentRounds comment)
+// — this is meant to read as "how you're playing lately", not a career
+// total.
+const ROUND_WINDOW_SIZE = 100;
+
+// Appends one round to a rolling window, trimming from the front once it's
+// over ROUND_WINDOW_SIZE long — used for every recentRounds array
+// (top-level per variant, and each of its byMatchKind buckets).
+function _pushRound(arr, entry) {
+  arr.push(entry);
+  if (arr.length > ROUND_WINDOW_SIZE) arr.splice(0, arr.length - ROUND_WINDOW_SIZE);
 }
 
-function _cloneVariant(v) {
+// Drops periodGames entries too old for ANY currently-relevant Weekly/
+// Monthly query to still need — keeps that array from growing forever
+// without ever discarding something getPeriodLeaderboard might still read.
+// A calendar week can span two different months (e.g. Aug 28 – Sep 3), so
+// "the start of THIS month" alone isn't a safe cutoff for a 'week' query
+// made right after a month boundary — going back to the start of the
+// PREVIOUS calendar month is always safe for both 'week' and 'month'.
+// Entries are always appended in chronological order (see
+// recordGameResult), so trimming from the front is enough — no full-array
+// re-scan needed.
+function _prunePeriodGames(arr) {
+  const now = new Date();
+  const cutoff = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+  let i = 0;
+  while (i < arr.length && arr[i].date < cutoff) i++;
+  if (i > 0) arr.splice(0, i);
+}
+
+// One roundHistory entry (see room.js's _recordRoundHistory) reduced to
+// just what ONE seat needs for its rolling window. Every field mirrors the
+// exact same condition the lifetime accumulation in recordGameResult below
+// (and room.js's own _recordHandWin/_initRound) uses for the equivalent
+// lifetime counter, so windowed numbers agree with lifetime ones in shape,
+// just over a shorter span. `gameFinal` is attached by the caller (only on
+// each game's own last round) rather than here — this function only knows
+// about one round, not the whole game's outcome.
+// Known gap: extraWinners (multi-ron) never got their own yakuList
+// broadcast (see room.js's roundEndPayload) — same gap the lifetime yaku
+// tally already has, not new here.
+function _extractSeatRound(round, seat) {
+  const isPrimaryWinner = round.winner === seat && (round.reason === 'tsumo' || round.reason === 'ron');
+  const extraWin = (round.extraWinners || []).find(r => r.winSeat === seat);
   return {
-    ...v,
-    placements: [...v.placements],
-    yaku: { ...v.yaku },
+    win: isPrimaryWinner || !!extraWin,
+    tsumo: round.reason === 'tsumo' && isPrimaryWinner,
+    ron: round.reason === 'ron' && (isPrimaryWinner || !!extraWin),
+    dealIn: round.reason === 'ron' && round.loser === seat,
+    riichi: !!(round.riichiSeats && round.riichiSeats[seat]),
+    huro: !!(round.openSeats && round.openSeats[seat]),
+    han: isPrimaryWinner ? (round.han || 0) : (extraWin ? (extraWin.han || 0) : null),
+    score: isPrimaryWinner ? (round.payment || 0) : (extraWin ? (extraWin.pay || 0) : null),
+    yaku: isPrimaryWinner ? (round.yakuList || []) : [],
+    gameFinal: null,
+  };
+}
+
+// Folds a bucket's rolling window into the same shape _emptyMatchKindStats
+// defines — this is what getStats/getLeaderboard actually hand back for
+// gamesPlayed/handsWon/etc, computed fresh from the window on every read
+// (nothing windowed is persisted) rather than kept in sync incrementally.
+// doubleBustWins stays 0 — not derivable per-round (see room.js's
+// _endRound; it's a computed side-effect at the moment of a tsumo, not
+// part of the round payload itself) — harmless, since nothing in the UI
+// displays it and achievements.js reads the real lifetime figure directly
+// off the unwindowed record instead.
+function _deriveWindowStats(entries) {
+  const out = _emptyMatchKindStats();
+  out.handsPlayed = entries.length;
+  const games = new Map(); // gameId -> that game's own final outcome
+  for (const e of entries) {
+    if (e.win) out.handsWon++;
+    if (e.tsumo) out.tsumoWon++;
+    if (e.ron) out.ronWon++;
+    if (e.riichi) out.riichiDeclared++;
+    if (e.dealIn) out.dealIns++;
+    if (e.huro) out.huro++;
+    if (e.han != null) out.bestHan = Math.max(out.bestHan, e.han);
+    if (e.score != null) out.bestScore = Math.max(out.bestScore, e.score);
+    for (const y of e.yaku) out.yaku[y.name] = (out.yaku[y.name] || 0) + 1;
+    if (e.gameFinal && !games.has(e.gameFinal.gameId)) games.set(e.gameFinal.gameId, e.gameFinal);
+  }
+  for (const gf of games.values()) {
+    out.gamesPlayed++;
+    if (gf.placement === 1) out.gamesWon++;
+    if (gf.placement >= 1 && gf.placement <= 4) out.placements[gf.placement - 1]++;
+    out.totalFinalScore += gf.finalScore;
+    out.bestFinalScore = Math.max(out.bestFinalScore, gf.finalScore);
+    if (gf.isBust) out.busts++;
+  }
+  return out;
+}
+
+// Lifetime view of one byMatchKind bucket, for the client — a plain clone
+// (own copies of placements/yaku so a caller mutating the response can't
+// corrupt the stored record) plus its own windowed rates (see
+// _deriveWindowStats), MINUS the internal recentRounds log itself, which
+// is bookkeeping only, never rendered.
+function _matchKindView(mk) {
+  // periodGames only ever exists on the top-level variant object (see
+  // _emptyVariantStats — it's combined-only, not per-byMatchKind bucket),
+  // so it's undefined/a no-op here when mk is actually a byMatchKind
+  // sub-bucket; stripped either way since Weekly/Monthly Rankings reads it
+  // straight off the stored record server-side (getPeriodLeaderboard), not
+  // through this client-facing view.
+  const { recentRounds, periodGames, ...rest } = mk;
+  return { ...rest, placements: [...mk.placements], yaku: { ...mk.yaku }, windowed: _deriveWindowStats(recentRounds) };
+}
+
+// A variant's full client-facing view: every accumulating/"best ever"
+// number (gamesPlayed, handsWon, bestHan, yaku counts, ...) stays the real
+// lifetime total, unchanged and uncapped — those are meaningful as
+// standing records, and achievements.js already depends on them never
+// shrinking. `windowed` alongside carries the SAME shape recomputed from
+// just the last 100 rounds (see _deriveWindowStats) — the client uses that
+// one only for its rate/average rows (Hora/Tsumo/Huro/Riichi/Deal-In/
+// Bankruptcy Rate, Avg Final Score, Avg Placement), where a whole-career
+// average would barely move game to game and stop reflecting recent form.
+function _variantView(v) {
+  return {
+    ..._matchKindView(v),
     byMatchKind: {
-      quick: _cloneMatchKindStats(v.byMatchKind.quick),
-      room: _cloneMatchKindStats(v.byMatchKind.room),
+      quick: _matchKindView(v.byMatchKind.quick),
+      room: _matchKindView(v.byMatchKind.room),
     },
   };
 }
@@ -229,8 +371,8 @@ function getStats(id) {
   const all = _load();
   const s = _normalize(all[id] || _emptyStats());
   return {
-    yonma: _cloneVariant(s.yonma),
-    sanma: _cloneVariant(s.sanma),
+    yonma: _variantView(s.yonma),
+    sanma: _variantView(s.sanma),
     unlockedThemes: [...s.unlockedThemes],
     unlockedTitles: [...s.unlockedTitles],
     achievements: { ...s.achievements },
@@ -255,11 +397,17 @@ function getStats(id) {
 // _finishGame, which sends each seat's own entry to that player as an
 // 'achievements_unlocked' message so the notification only ever shows the
 // achievements THEY just earned, not their opponents'.
-function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placements, handStats, handsPlayed = 0, bustedSeat = -1, matchKind = 'room' }) {
+function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placements, handStats, handsPlayed = 0, bustedSeat = -1, matchKind = 'room', rounds = [] }) {
   const variant = playerIds.length === 3 ? 'sanma' : 'yonma';
   const kind = matchKind === 'quick' ? 'quick' : 'room';
   const all = _load();
   const newlyUnlocked = new Array(playerIds.length).fill(null);
+  // Shared across every seat's rolling-window entries below, purely so
+  // _deriveWindowStats can tell "these entries came from the same game"
+  // apart when counting windowed gamesPlayed/placements/etc — never
+  // written anywhere, never compared against history.js's own per-game id
+  // (that file generates its own, independently — see recordGame).
+  const gameId = String(Date.now()) + Math.random().toString(36).slice(2, 8);
   for (let seat = 0; seat < playerIds.length; seat++) {
     if (isBot[seat] || isGuest[seat]) continue;
     const id = playerIds[seat];
@@ -292,6 +440,51 @@ function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placeme
       bucket.bestFinalScore = Math.max(bucket.bestFinalScore, finalScores[seat]);
       for (const [k, v] of Object.entries(hs.yaku || {})) bucket.yaku[k] = (bucket.yaku[k] || 0) + v;
     }
+    // Rolling "last 100 rounds" window (see recentRounds on
+    // _emptyMatchKindStats, and _deriveWindowStats/getStats/getLeaderboard
+    // below, which are the only things that ever read this) — one entry
+    // per round this seat actually played this game, with the game's own
+    // final outcome attached to the LAST one (see _extractSeatRound's
+    // gameFinal field) so windowed gamesPlayed/placements/totalFinalScore
+    // count this game exactly once, not once per round. Pushed into both
+    // the top-level window and this game's matching byMatchKind window,
+    // same dual-bucket shape the lifetime counters above use.
+    const seatRounds = rounds.map(r => _extractSeatRound(r, seat));
+    if (seatRounds.length) {
+      seatRounds[seatRounds.length - 1].gameFinal = { placement: place, finalScore: finalScores[seat], isBust: seat === bustedSeat, gameId };
+    }
+    for (const entry of seatRounds) {
+      _pushRound(s.recentRounds, entry);
+      _pushRound(s.byMatchKind[kind].recentRounds, entry);
+    }
+    // Weekly/Monthly Rankings — this one game's own numbers (not a running
+    // total, unlike the dual-bucket loop above; getPeriodLeaderboard sums
+    // matching entries itself, filtered by date) tagged with a real
+    // timestamp, combined only (no byMatchKind split — see periodGames'
+    // own comment on _emptyVariantStats). Pruned by date after every
+    // push, not by count, since a real calendar week/month needs every
+    // game inside it regardless of how many that turns out to be.
+    s.periodGames.push({
+      date: new Date().toISOString(),
+      gamesPlayed: 1,
+      gamesWon: place === 1 ? 1 : 0,
+      placements: [1, 2, 3, 4].map(p => (p === place ? 1 : 0)),
+      totalFinalScore: finalScores[seat],
+      handsWon: hs.wins || 0,
+      tsumoWon: hs.tsumo || 0,
+      ronWon: hs.ron || 0,
+      riichiDeclared: hs.riichi || 0,
+      dealIns: hs.dealIn || 0,
+      handsPlayed,
+      huro: hs.huro || 0,
+      busts: seat === bustedSeat ? 1 : 0,
+      bestHan: hs.bestHan || 0,
+      bestScore: hs.bestScore || 0,
+      bestFinalScore: finalScores[seat],
+      doubleBustWins: hs.doubleBust || 0,
+      yaku: { ...(hs.yaku || {}) },
+    });
+    _prunePeriodGames(s.periodGames);
     // Achievement checks see the whole record (both variants) — a "first
     // win" achievement, for instance, should trigger from either mode.
     const before = new Set(Object.keys(rec.achievements));
@@ -343,64 +536,72 @@ const MIN_GAMES_FOR_AVG_PLACEMENT = 5;
 // looking) 100% rate, not a real trend.
 const MIN_HANDS_FOR_DEAL_IN_RATE = 5;
 
-// No query engine needed at this scale — just load everything, derive
-// whatever the requested sort needs, and sort in JS. sortBy must be one of
-// the fields on the mapped row below; an unrecognized one sorts everyone as
-// equal (falls through the final `(b[sortBy]||0)-(a[sortBy]||0)` — see
-// index.js's whitelist, which is what actually keeps this to known values).
-// Returns `id`, not a display name — this file has no notion of names at
-// all anymore (see the top-of-file comment); index.js's 'get_leaderboard'
-// handler joins each entry against profiles.getNameById before it ever
-// reaches the client.
-function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
-  const all = _load();
-  const key = variant === 'sanma' ? 'sanma' : 'yonma';
-  let rows = Object.entries(all)
-    .map(([id, raw]) => {
-      const s = _normalize(raw)[key];
-      const yakumanCount = Object.entries(s.yaku)
-        .reduce((n, [name, count]) => n + (YAKUMAN_NAMES.has(name) ? count : 0), 0);
-      // Every game increments exactly one placements[] slot, so a genuine
-      // record's four counts always sum to gamesPlayed exactly. A record
-      // that predates placement tracking gets [0,0,0,0] from
-      // _fillVariantDefaults (see _normalize) instead, which — left
-      // unchecked — computes as a flawless 0.00 average (better than
-      // always finishing 1st!) rather than "we don't actually know". This
-      // check tells the two apart: only trust the average when the counts
-      // add up to a real game history.
-      const hasRealPlacementData = s.placements.reduce((a, b) => a + b, 0) === s.gamesPlayed;
-      const avgPlacement = s.gamesPlayed > 0 && hasRealPlacementData
-        ? s.placements.reduce((sum, count, i) => sum + count * (i + 1), 0) / s.gamesPlayed
-        : null;
-      // Rate, not raw count — a raw dealIns count just tracks how much
-      // you've played, same problem totalFinalScore already covers. The
-      // denominator is "hands where you either won or dealt in" (matches
-      // the My Stats panel's own dealInRate calc), not gamesPlayed —
-      // hands, not games, are the unit a deal-in actually happens in.
-      const dealInHands = s.handsWon + s.dealIns;
-      const dealInRate = dealInHands > 0 ? (s.dealIns / dealInHands) * 100 : null;
-      return {
-        id,
-        gamesPlayed: s.gamesPlayed,
-        gamesWon: s.gamesWon,
-        totalFinalScore: s.totalFinalScore,
-        bestScore: s.bestScore,
-        bestHan: s.bestHan,
-        handsWon: s.handsWon,
-        yakumanCount,
-        avgPlacement,
-        dealInHands,
-        dealInRate,
-      };
-    });
+// Shared row-shaping for both getLeaderboard (below) and
+// getPeriodLeaderboard (further below) — `s` supplies every raw-count
+// column (gamesPlayed, gamesWon, totalFinalScore, bestScore, bestHan,
+// handsWon, yakumanCount), `w` supplies avgPlacement/dealInRate's inputs.
+// The two callers pass different things for these: getLeaderboard passes
+// lifetime totals for `s` and the last-100-rounds window for `w` (a
+// lifetime average/rate barely moves and stops reflecting recent form);
+// getPeriodLeaderboard passes the SAME summed period totals for both — a
+// week/month ranking has no separate "lifetime" number to contrast against,
+// the whole row already IS scoped to that period.
+function _rankingRow(id, s, w) {
+  const yakumanCount = Object.entries(s.yaku)
+    .reduce((n, [name, count]) => n + (YAKUMAN_NAMES.has(name) ? count : 0), 0);
+  // Every game increments exactly one placements[] slot, so a genuine
+  // record's four counts always sum to gamesPlayed exactly. A record that
+  // predates placement tracking gets [0,0,0,0] from _fillVariantDefaults
+  // (see _normalize) instead, which — left unchecked — computes as a
+  // flawless 0.00 average (better than always finishing 1st!) rather than
+  // "we don't actually know". This check tells the two apart: only trust
+  // the average when the counts add up to a real game history.
+  const hasRealPlacementData = w.placements.reduce((a, b) => a + b, 0) === w.gamesPlayed;
+  const avgPlacement = w.gamesPlayed > 0 && hasRealPlacementData
+    ? w.placements.reduce((sum, count, i) => sum + count * (i + 1), 0) / w.gamesPlayed
+    : null;
+  // Rate, not raw count — a raw dealIns count just tracks how much you've
+  // played, same problem totalFinalScore already covers. The denominator
+  // is "hands where you either won or dealt in" (matches the My Stats
+  // panel's own dealInRate calc), not gamesPlayed — hands, not games, are
+  // the unit a deal-in actually happens in.
+  const dealInHands = w.handsWon + w.dealIns;
+  const dealInRate = dealInHands > 0 ? (w.dealIns / dealInHands) * 100 : null;
+  return {
+    id,
+    gamesPlayed: s.gamesPlayed,
+    gamesWon: s.gamesWon,
+    totalFinalScore: s.totalFinalScore,
+    bestScore: s.bestScore,
+    bestHan: s.bestHan,
+    handsWon: s.handsWon,
+    yakumanCount,
+    avgPlacement,
+    avgPlacementGames: w.gamesPlayed,
+    dealInHands,
+    dealInRate,
+  };
+}
+
+// sortBy must be one of the fields _rankingRow returns; an unrecognized one
+// sorts everyone as equal (falls through the final
+// `(b[sortBy]||0)-(a[sortBy]||0)` — see index.js's whitelist, which is what
+// actually keeps this to known values).
+function _sortLeaderboardRows(rows, sortBy) {
   if (sortBy === 'avgPlacement') {
     // Lower is better here (1st place = 1) — the only sort field that
     // sorts ascending instead of descending, and the only one that filters
     // rows out entirely rather than just ranking them last (see the
     // MIN_GAMES_FOR_AVG_PLACEMENT comment above for why a low-sample
-    // average shouldn't be shown as ranked at all, not even at the bottom).
+    // average shouldn't be shown as ranked at all, not even at the
+    // bottom). Gated on avgPlacementGames (the count `w` was actually
+    // computed from — the last-100-rounds window for getLeaderboard, or
+    // the period itself for getPeriodLeaderboard), not the lifetime/period
+    // gamesPlayed above — a veteran with thousands of lifetime games but
+    // only 2 in the relevant window still has a 2-game-sample average, not
+    // a trustworthy one.
     return rows
-      .filter(r => r.gamesPlayed >= MIN_GAMES_FOR_AVG_PLACEMENT && r.avgPlacement != null)
+      .filter(r => r.avgPlacementGames >= MIN_GAMES_FOR_AVG_PLACEMENT && r.avgPlacement != null)
       .sort((a, b) => a.avgPlacement - b.avgPlacement);
   }
   if (sortBy === 'dealInRate') {
@@ -411,6 +612,89 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
       .sort((a, b) => b.dealInRate - a.dealInRate);
   }
   return rows.sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));
+}
+
+// No query engine needed at this scale — just load everything, derive
+// whatever the requested sort needs, and sort in JS. Returns `id`, not a
+// display name — this file has no notion of names at all anymore (see the
+// top-of-file comment); index.js's 'get_leaderboard' handler joins each
+// entry against profiles.getNameById before it ever reaches the client.
+function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
+  const all = _load();
+  const key = variant === 'sanma' ? 'sanma' : 'yonma';
+  const rows = Object.entries(all).map(([id, raw]) => {
+    const s = _normalize(raw)[key];
+    const w = _deriveWindowStats(s.recentRounds);
+    return _rankingRow(id, s, w);
+  });
+  return _sortLeaderboardRows(rows, sortBy);
+}
+
+// Folds an array of dated per-game deltas (see periodGames on
+// _emptyVariantStats/recordGameResult) into one _emptyMatchKindStats-shaped
+// total — same idea as _deriveWindowStats above, just summing whole-game
+// entries instead of building them up hand-by-hand, since each periodGames
+// entry already IS one complete game's numbers.
+function _sumGameDeltas(entries) {
+  const out = _emptyMatchKindStats();
+  for (const e of entries) {
+    out.gamesPlayed += e.gamesPlayed;
+    out.gamesWon += e.gamesWon;
+    for (let i = 0; i < 4; i++) out.placements[i] += e.placements[i];
+    out.totalFinalScore += e.totalFinalScore;
+    out.handsWon += e.handsWon;
+    out.tsumoWon += e.tsumoWon;
+    out.ronWon += e.ronWon;
+    out.riichiDeclared += e.riichiDeclared;
+    out.dealIns += e.dealIns;
+    out.handsPlayed += e.handsPlayed;
+    out.huro += e.huro;
+    out.busts += e.busts;
+    out.bestHan = Math.max(out.bestHan, e.bestHan);
+    out.bestScore = Math.max(out.bestScore, e.bestScore);
+    out.bestFinalScore = Math.max(out.bestFinalScore, e.bestFinalScore);
+    out.doubleBustWins += e.doubleBustWins;
+    for (const [k, v] of Object.entries(e.yaku)) out.yaku[k] = (out.yaku[k] || 0) + v;
+  }
+  return out;
+}
+
+// Calendar period boundaries, both computed in SERVER LOCAL TIME (plain
+// Date getters) — good enough for a casual per-server leaderboard reset;
+// not worth pulling in a timezone-aware library for this. Week starts
+// Monday (ISO-style), not Sunday.
+function _periodRange(period) {
+  const now = new Date();
+  if (period === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return { start: start.toISOString(), end: end.toISOString() };
+  }
+  const day = now.getDay(); // 0=Sun..6=Sat
+  const sinceMonday = (day + 6) % 7; // Mon=0, Tue=1, ..., Sun=6
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - sinceMonday);
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+// Weekly/Monthly Rankings — same sort options and row shape as
+// getLeaderboard above, just scoped to periodGames entries whose date
+// falls within the current calendar week/month (see _periodRange) instead
+// of a player's whole history. Profiles with zero games in the period are
+// dropped entirely rather than ranked at the bottom with all-zero stats.
+function getPeriodLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma', period = 'week') {
+  const all = _load();
+  const key = variant === 'sanma' ? 'sanma' : 'yonma';
+  const { start, end } = _periodRange(period);
+  const rows = Object.entries(all)
+    .map(([id, raw]) => {
+      const v = _normalize(raw)[key];
+      const entries = (v.periodGames || []).filter(g => g.date >= start && g.date < end);
+      const w = _sumGameDeltas(entries);
+      return _rankingRow(id, w, w);
+    })
+    .filter(r => r.gamesPlayed > 0);
+  return _sortLeaderboardRows(rows, sortBy);
 }
 
 // Called alongside profiles.deleteProfile (see index.js's delete_profile) —
@@ -456,4 +740,4 @@ function recheckAchievements() {
   return granted;
 }
 
-module.exports = { getStats, recordGameResult, getLeaderboard, deleteStats, migrateToIds, recheckAchievements };
+module.exports = { getStats, recordGameResult, getLeaderboard, getPeriodLeaderboard, deleteStats, migrateToIds, recheckAchievements };

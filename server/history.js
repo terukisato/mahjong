@@ -18,7 +18,7 @@ const HISTORY_FILE = path.join(DATA_DIR, 'game-history.json');
 // hand/yaku/tile detail is not a handful of bytes) while still covering
 // "what did I just play" far past what anyone realistically scrolls back
 // through.
-const MAX_GAMES_PER_PLAYER = 50;
+const MAX_GAMES_PER_PLAYER = 20;
 
 function _load() {
   try {
@@ -99,4 +99,12 @@ function deleteHistory(id) {
   }
 }
 
-module.exports = { recordGame, getHistory, getGameDetail, deleteHistory };
+// Developer-only, whole-file wipe — every profile's play history at once,
+// not just one (see index.js's 'clear_all_history', gated by DEV_SECRET
+// same as delete_profile). Profiles/stats/achievements are untouched; this
+// only ever clears this file's game-history.json.
+function clearAllHistory() {
+  _save({});
+}
+
+module.exports = { recordGame, getHistory, getGameDetail, deleteHistory, clearAllHistory };

@@ -1373,6 +1373,19 @@ class Room {
       round:g.round,roundWind:g.roundWind,dealer:g.dealer,honba:g.honba,
       displayWind:Math.ceil(g.round/this.numPlayers),
       displayRound:((g.round-1)%this.numPlayers)+1,
+      // Per-seat state at this round's end — not shown on any client screen
+      // (added AFTER this round's own _broadcastAll already went out, so it
+      // never reaches the live round-results payload), only read by
+      // stats.js's recordGameResult when it walks g.roundHistory to build
+      // the rolling "last 100 rounds" stats window. riichiSeats mirrors
+      // g.riichi (reset fresh every hand in _initRound, so "true" here
+      // means "declared THIS hand", not just "in riichi at some point
+      // ever"); openSeats mirrors the exact isMenzen check _initRound's own
+      // lifetime huro tally uses, just captured per-round instead of only
+      // once at game end — g.melds isn't wiped until the NEXT _initRound,
+      // so it's still this round's real final meld state right now.
+      riichiSeats:g.riichi.slice(),
+      openSeats:g.melds.map(ms=>!isMenzen(ms)),
     });
   }
 
@@ -1420,6 +1433,11 @@ class Room {
       // calls throughout this file).
       bustedSeat:reason==='tobi'?extra.bust:-1,
       matchKind:this.matchKind,
+      // This game's own round-by-round detail (same array recordGame right
+      // below already gets) — stats.js's rolling "last 100 rounds" window
+      // needs the actual per-hand results, not just this game's final
+      // tallies, to compute windowed Rankings/My Stats numbers.
+      rounds:g.roundHistory||[],
     });
     // Play History — same seat-indexed arrays as recordGameResult above,
     // plus this game's full round-by-round detail (g.roundHistory, built up

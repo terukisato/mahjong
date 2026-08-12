@@ -4,8 +4,8 @@ const http=require('http');
 const WebSocket=require('ws');
 const path=require('path');
 const {Room}=require('./room');
-const {getStats,getLeaderboard,deleteStats,migrateToIds}=require('./stats');
-const {getHistory,getGameDetail,deleteHistory}=require('./history');
+const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats,migrateToIds}=require('./stats');
+const {getHistory,getGameDetail,deleteHistory,clearAllHistory}=require('./history');
 const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,migrateLegacyIds}=require('./profiles');
 
 // One-time upgrade of both data files from the old name-keyed shape to the
@@ -26,6 +26,12 @@ const wss=new WebSocket.Server({server});
 // 'get_player_stats' below — the latter looks up one player's row out of
 // the exact same getLeaderboard() call, so it needs the same gate.
 const VALID_LEADERBOARD_SORTS=['totalFinalScore','gamesWon','avgPlacement','bestScore','bestHan','handsWon','yakumanCount','dealInRate'];
+
+// Whitelisted against stats.js's getPeriodLeaderboard the same reason
+// VALID_LEADERBOARD_SORTS gates sortBy above — 'get_period_leaderboard'
+// only ever needs to ask for the two periods the Rankings UI's Weekly/
+// Monthly tabs actually offer.
+const VALID_PERIODS=['week','month'];
 
 // Gates 'create_profile'/'delete_profile' only — everything else
 // (unlocking/playing as an existing profile) only ever needs that
@@ -466,6 +472,21 @@ wss.on('connection',(ws)=>{
       ws.send(JSON.stringify({type:'leaderboard',variant,sortBy,entries}));
     }
 
+    // Weekly/Monthly Rankings tabs — same shape/gating as get_leaderboard
+    // above (see VALID_LEADERBOARD_SORTS), just scoped to the current
+    // calendar week/month instead of all time (see stats.js's
+    // getPeriodLeaderboard/_periodRange). Its own message type (not an
+    // extra param on get_leaderboard) so the two stay independently
+    // cacheable/obviously-different on the client, same reasoning
+    // 'player_stats' below stays separate from 'stats'.
+    if(msg.type==='get_period_leaderboard'){
+      const variant=msg.variant==='sanma'?'sanma':'yonma';
+      const sortBy=VALID_LEADERBOARD_SORTS.includes(msg.sortBy)?msg.sortBy:'totalFinalScore';
+      const period=VALID_PERIODS.includes(msg.period)?msg.period:'week';
+      const entries=getPeriodLeaderboard(sortBy,variant,period).map(e=>({...e,name:getNameById(e.id)}));
+      ws.send(JSON.stringify({type:'period_leaderboard',variant,sortBy,period,entries}));
+    }
+
     // Rankings "click a name to see their card" feature — keyed by an
     // arbitrary msg.name, unlike get_stats above, deliberately: not a new
     // category of exposure, just the same public leaderboard rows (see
@@ -722,6 +743,21 @@ wss.on('connection',(ws)=>{
         const result=deleteProfile(msg.name);
         if(result.ok){ deleteStats(result.id); deleteHistory(result.id); }
         ws.send(JSON.stringify({type:'delete_profile_result',ok:result.ok,error:result.error}));
+      }
+    }
+
+    // Developer-only, same DEV_SECRET gate as create/delete_profile —
+    // wipes EVERY profile's play history in one shot (see
+    // history.clearAllHistory). Deliberately independent of delete_profile:
+    // this clears game-history.json only, leaving every profile/stats
+    // record untouched, for a "reset what Play History shows" tool rather
+    // than a "remove these players" one.
+    if(msg.type==='clear_all_history'){
+      if(msg.devSecret!==DEV_SECRET){
+        ws.send(JSON.stringify({type:'clear_all_history_result',ok:false,error:'Invalid developer key'}));
+      } else {
+        clearAllHistory();
+        ws.send(JSON.stringify({type:'clear_all_history_result',ok:true}));
       }
     }
 

@@ -160,6 +160,24 @@
   <button class="about-close" onclick="toggleRankings()">✕</button>
   <div class="about-title">Rankings</div>
   <div class="about-body">
+    <!-- All Time vs. this calendar week/month (see setLeaderboardPeriod in
+         script.js) — All Time queries get_leaderboard (lifetime totals,
+         same as before this existed); Weekly/Monthly query
+         get_period_leaderboard instead (server/stats.js's
+         getPeriodLeaderboard — real calendar Mon-Sun week / calendar
+         month, resetting at the boundary, not a rolling window). Same
+         sort tabs and row rendering either way — only which request gets
+         sent changes. A real tab strip (shared bottom border, active tab
+         picked out by an underline — see .rank-period-tab in style.css),
+         same visual language as #rank-sort-tabs below rather than a row of
+         pill buttons — these text labels stay visible (unlike
+         #rank-sort-tabs' icon-only tabs, which have no room for a label
+         and lean on their title tooltip instead). -->
+    <div class="rank-period-tabs" id="rank-period-tabs">
+      <button class="rank-period-tab active" id="btn-rank-period-all" onclick="setLeaderboardPeriod('all')">All Time</button>
+      <button class="rank-period-tab" id="btn-rank-period-week" onclick="setLeaderboardPeriod('week')">This Week</button>
+      <button class="rank-period-tab" id="btn-rank-period-month" onclick="setLeaderboardPeriod('month')">This Month</button>
+    </div>
     <!-- Sanma/yonma are scored on different scales (see stats.js), so the
          leaderboard is per-variant too — this toggle picks which board
          get_leaderboard fetches (see toggleLeaderboardVariant). -->
@@ -490,6 +508,21 @@
     <div id="devpanel-content" style="display:none;">
       <a href="#" class="hub-link" onclick="toggleDevPanel();toggleCreateProfileModal();return false;">Create Profile</a>
       <a href="#" class="hub-link" onclick="toggleDevPanel();toggleDeleteProfileModal();return false;">Delete Profile</a>
+      <!-- Clear All Play History — inline (arm/confirm row) rather than its
+           own modal like Create/Delete Profile: those need a name/code
+           input or a profile picker first, this needs no selection at all
+           (it's EVERY profile at once), so a whole extra screen would just
+           be empty chrome around one button. Same two-step confirm as
+           Delete Profile below for the same reason — destructive, no undo. -->
+      <div id="dev-clear-history-confirm-row" style="display:none;margin-top:calc(var(--ui-vmin, 7.2px) * 1.667);">
+        <p class="profile-error" style="min-height:auto;">Clear EVERY profile's play history? This can't be undone.</p>
+        <div class="leave-actions">
+          <button class="leave-btn-stay" onclick="cancelClearAllHistory()">Cancel</button>
+          <button class="leave-btn-confirm" onclick="confirmClearAllHistory()">Clear</button>
+        </div>
+      </div>
+      <div id="devclearhistory-error" class="profile-error"></div>
+      <button class="bp" id="dev-clear-history-btn" onclick="armClearAllHistory()" style="margin-top:calc(var(--ui-vmin, 7.2px) * 1.667);background:linear-gradient(135deg,#5a1a0a,#9a3a1a);border-color:#ff8040;">Clear All Play History</button>
     </div>
   </div>
 </div>

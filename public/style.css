@@ -1060,6 +1060,18 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .rank-sort-tab svg{width:calc(var(--ui-vmin, 7.2px) * 2.222);height:calc(var(--ui-vmin, 7.2px) * 2.222);display:block;}
 .rank-sort-tab:hover{color:var(--gl);}
 .rank-sort-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+/* Rankings' period picker (All Time/This Week/This Month — see
+   setLeaderboardPeriod in script.js) — same real-tab-strip language as
+   .rank-sort-tabs right above (shared bottom border, active tab picked out
+   by an underline), just with the label always visible as plain text
+   instead of an icon+tooltip, since only 3 tabs need to fit rather than 7. */
+.rank-period-tabs{display:flex;border-bottom:1px solid rgba(201,168,76,.2);margin-bottom:calc(var(--ui-vmin, 7.2px) * 1.111);}
+.rank-period-tab{flex:1;padding:calc(var(--ui-vmin, 7.2px) * 1.111) 0;margin-bottom:-1px;
+  background:none;border:none;border-bottom:2px solid transparent;
+  font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 1.389);
+  color:rgba(245,237,216,.45);cursor:pointer;transition:all .2s;}
+.rank-period-tab:hover{color:var(--gl);}
+.rank-period-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
 /* Persistent label for whichever tab above is active (see
    updateRankSortHeader in script.js) — icon-only tabs otherwise have no
    always-visible indicator of what's actually selected, especially on

@@ -599,13 +599,17 @@ function onMsg(m){
     renderAchievements(m.stats?.achievementsInfo);
     // Combined wins (both variants — the nameplate is one identity, not
     // split by mode) drive the User Profile hub's nameplate tier — see
-    // updateNameplateTier.
+    // updateNameplateTier. m.stats.yonma/sanma.gamesWon are lifetime
+    // totals (see server/stats.js's getStats — only the nested `windowed`
+    // sub-object is capped to the last 100 rounds), same numbers
+    // 'the_diamond'/'century_club' in achievements.js check.
     updateNameplateTier((m.stats?.yonma?.gamesWon||0)+(m.stats?.sanma?.gamesWon||0));
     return;
   }
   if(m.type==='game_history'){renderPlayHistory(m.games);return;}
   if(m.type==='game_history_detail'){onGameHistoryDetail(m);return;}
   if(m.type==='leaderboard'){renderLeaderboard(m);return;}
+  if(m.type==='period_leaderboard'){renderLeaderboard(m);return;}
   if(m.type==='player_stats'){renderPlayerCard(m);return;}
   if(m.type==='room_list'){renderRoomList(m);return;}
   if(m.type==='join_room_result'){if(!m.ok) toast(m.error||'Could not join that room.');return;}
@@ -653,6 +657,7 @@ function onMsg(m){
   if(m.type==='dev_key_result'){onDevKeyResult(m);return;}
   if(m.type==='create_profile_result'){onCreateProfileResult(m);return;}
   if(m.type==='delete_profile_result'){onDeleteProfileResult(m);return;}
+  if(m.type==='clear_all_history_result'){onClearAllHistoryResult(m);return;}
   if(m.type==='change_username_result'){onChangeUsernameResult(m);return;}
   if(m.type==='change_code_result'){onChangeCodeResult(m);return;}
   if(!inGame) return;
@@ -1283,39 +1288,53 @@ function renderPlacementBar(rank,count,total){
 
 function renderStatsBlock(s,variant){
   if(!s||s.gamesPlayed===0) return `<p>No games recorded yet in this mode. Play a full match to start building stats.</p>`;
-  const avgScore=Math.round(s.totalFinalScore/s.gamesPlayed);
-  const dealInRate=s.handsWon+s.dealIns>0?((s.dealIns/(s.handsWon+s.dealIns))*100).toFixed(1):'0.0';
+  // Two sources on `s`: the top-level fields are lifetime totals (never
+  // shrink, same numbers achievements track — Games Played, Hands Played,
+  // Best Hand stay these). `s.windowed` is the exact same shape recomputed
+  // from just this profile's last 100 rounds (see server/stats.js's
+  // _deriveWindowStats) — every RATE or AVERAGE below (a lifetime rate
+  // barely moves after enough games and stops reflecting how you're
+  // actually playing lately) reads from that instead, numerator/
+  // denominator and all, so each rate row's own numbers stay internally
+  // consistent rather than mixing a windowed % with a lifetime count.
+  const w=s.windowed||s;
+  const avgScore=w.gamesPlayed>0?Math.round(w.totalFinalScore/w.gamesPlayed):0;
+  const dealInRate=w.handsWon+w.dealIns>0?((w.dealIns/(w.handsWon+w.dealIns))*100).toFixed(1):'0.0';
   // Hora/Tsumo/Huro/Riichi rate are all "X per hand played" (handsPlayed is
   // the denominator throughout — see stats.js's getLeaderboard, which uses
   // the exact same formulas server-side for the Rankings versions of these).
   // Bankruptcy is "X per GAME" instead — you bust at most once per game,
   // not per hand.
-  const horaRate=s.handsPlayed>0?((s.handsWon/s.handsPlayed)*100).toFixed(1):'0.0';
-  const tsumoRate=s.handsPlayed>0?((s.tsumoWon/s.handsPlayed)*100).toFixed(1):'0.0';
-  const huroRate=s.handsPlayed>0?((s.huro/s.handsPlayed)*100).toFixed(1):'0.0';
-  const riichiRate=s.handsPlayed>0?((s.riichiDeclared/s.handsPlayed)*100).toFixed(1):'0.0';
-  const bustRate=s.gamesPlayed>0?((s.busts/s.gamesPlayed)*100).toFixed(1):'0.0';
+  const horaRate=w.handsPlayed>0?((w.handsWon/w.handsPlayed)*100).toFixed(1):'0.0';
+  const tsumoRate=w.handsPlayed>0?((w.tsumoWon/w.handsPlayed)*100).toFixed(1):'0.0';
+  const huroRate=w.handsPlayed>0?((w.huro/w.handsPlayed)*100).toFixed(1):'0.0';
+  const riichiRate=w.handsPlayed>0?((w.riichiDeclared/w.handsPlayed)*100).toFixed(1):'0.0';
+  const bustRate=w.gamesPlayed>0?((w.busts/w.gamesPlayed)*100).toFixed(1):'0.0';
   // Achieved yaku, most-common first, followed by every yaku NOT yet
   // achieved (count 0, dimmed, alphabetical) — see ALL_YAKU_NAMES above.
+  // Lifetime (s.yaku), not windowed — a yaku you've ever pulled off stays
+  // "achieved" even if it ages out of the last 100 rounds.
   const achievedNames=new Set(Object.keys(s.yaku));
   const achieved=Object.entries(s.yaku).sort((a,b)=>b[1]-a[1]);
   const notAchieved=ALL_YAKU_NAMES.filter(n=>!achievedNames.has(n)).sort();
   // Sanma is 3 players — placements[3] (4th) is always 0/unused there (see
   // stats.js's own comment on the placements array), so only sanma's real
-  // three ranks get a bar; yonma still shows all four.
+  // three ranks get a bar; yonma still shows all four. Windowed (recent
+  // placement distribution reads as recent form, same reasoning as every
+  // other rate above), not lifetime.
   const numRanks=variant==='sanma'?3:4;
-  const placementBars=Array.from({length:numRanks},(_,i)=>renderPlacementBar(i+1,s.placements[i],s.gamesPlayed)).join('');
+  const placementBars=Array.from({length:numRanks},(_,i)=>renderPlacementBar(i+1,w.placements[i],w.gamesPlayed)).join('');
   let rows=`
     <div class="sp-row"><span class="sp-label">Games Played</span><span>${s.gamesPlayed}</span></div>
-    <div class="place-bars"><div class="sp-label">Placements</div>${placementBars}</div>
-    <div class="sp-row"><span class="sp-label">Avg Final Score</span><span>${avgScore.toLocaleString()}</span></div>
+    <div class="place-bars"><div class="sp-label">Placements (last ${w.gamesPlayed} games)</div>${placementBars}</div>
+    <div class="sp-row"><span class="sp-label">Avg Final Score (recent)</span><span>${avgScore.toLocaleString()}</span></div>
     <div class="sp-row"><span class="sp-label">Hands Played</span><span>${s.handsPlayed}</span></div>
-    <div class="sp-row"><span class="sp-label">Hora Rate</span><span>${s.handsWon}/${s.handsPlayed} (${horaRate}%)</span></div>
-    <div class="sp-row"><span class="sp-label">Tsumo Rate</span><span>${s.tsumoWon}/${s.handsPlayed} (${tsumoRate}%) — Ron ${s.ronWon}</span></div>
-    <div class="sp-row"><span class="sp-label">Huro Rate</span><span>${s.huro}/${s.handsPlayed} (${huroRate}%)</span></div>
-    <div class="sp-row"><span class="sp-label">Riichi Rate</span><span>${s.riichiDeclared}/${s.handsPlayed} (${riichiRate}%)</span></div>
-    <div class="sp-row"><span class="sp-label">Deal-In Rate</span><span>${s.dealIns}/${s.handsWon+s.dealIns} (${dealInRate}%)</span></div>
-    <div class="sp-row"><span class="sp-label">Bankruptcy Rate</span><span>${s.busts}/${s.gamesPlayed} (${bustRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Hora Rate</span><span>${w.handsWon}/${w.handsPlayed} (${horaRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Tsumo Rate</span><span>${w.tsumoWon}/${w.handsPlayed} (${tsumoRate}%) — Ron ${w.ronWon}</span></div>
+    <div class="sp-row"><span class="sp-label">Huro Rate</span><span>${w.huro}/${w.handsPlayed} (${huroRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Riichi Rate</span><span>${w.riichiDeclared}/${w.handsPlayed} (${riichiRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Deal-In Rate</span><span>${w.dealIns}/${w.handsWon+w.dealIns} (${dealInRate}%)</span></div>
+    <div class="sp-row"><span class="sp-label">Bankruptcy Rate</span><span>${w.busts}/${w.gamesPlayed} (${bustRate}%)</span></div>
     <div class="sp-row"><span class="sp-label">Best Hand</span><span>${s.bestHan} Han · ${s.bestScore.toLocaleString()} pts</span></div>
   `;
   rows+=`<div class="about-section">
@@ -1382,6 +1401,10 @@ let currentLeaderboardVariant='sanma';
 // rank WITHIN. Reset to the default on every open, same "don't remember
 // stale sub-state" spirit as the variant reset already had.
 let currentLeaderboardSort='totalFinalScore';
+// 'all'|'week'|'month' — which request fetchLeaderboard sends (see below).
+// Reset to 'all' on every open, same "don't remember stale sub-state"
+// spirit as the variant/sort resets already had.
+let currentLeaderboardPeriod='all';
 // Same labels as each rank-sort-tab's `title` (index.html) — duplicated
 // here rather than read off the DOM since #rank-sort-header needs to show
 // the CURRENT one at all times, not just on hover, and touch devices never
@@ -1394,6 +1417,32 @@ const RANK_SORT_LABELS={
 function updateRankSortHeader(sortBy){
   const el=$('rank-sort-header'); if(el) el.textContent=RANK_SORT_LABELS[sortBy]||'';
 }
+// Single place that actually sends the leaderboard request — routes to
+// get_leaderboard (all-time) or get_period_leaderboard (Weekly/Monthly,
+// see server/stats.js's getPeriodLeaderboard) purely based on
+// currentLeaderboardPeriod, so toggleLeaderboardVariant/setLeaderboardSort
+// below don't each need their own if/else for it.
+function fetchLeaderboard(){
+  $('rankings-body').textContent='Loading…';
+  if(currentLeaderboardPeriod==='all'){
+    wss({type:'get_leaderboard',variant:currentLeaderboardVariant,sortBy:currentLeaderboardSort});
+  } else {
+    wss({type:'get_period_leaderboard',variant:currentLeaderboardVariant,sortBy:currentLeaderboardSort,period:currentLeaderboardPeriod});
+  }
+}
+// Switches between All Time/This Week/This Month — mirrors
+// toggleLeaderboardVariant/setLeaderboardSort below, just for the third
+// axis. Sort selection and variant both carry over across a period switch,
+// same "no reason to reset just because you changed one axis" reasoning
+// toggleLeaderboardVariant's own comment already gives.
+function setLeaderboardPeriod(period){
+  if(period===currentLeaderboardPeriod) return;
+  currentLeaderboardPeriod=period;
+  $('btn-rank-period-all').classList.toggle('active',period==='all');
+  $('btn-rank-period-week').classList.toggle('active',period==='week');
+  $('btn-rank-period-month').classList.toggle('active',period==='month');
+  fetchLeaderboard();
+}
 function toggleRankings(){
   const modal=$('rankings-modal');
   const backdrop=$('rankings-backdrop');
@@ -1401,14 +1450,17 @@ function toggleRankings(){
   if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
   currentLeaderboardVariant='sanma';
   currentLeaderboardSort='totalFinalScore';
+  currentLeaderboardPeriod='all';
   $('btn-rank-sanma').classList.add('active');
   $('btn-rank-yonma').classList.remove('active');
+  $('btn-rank-period-all').classList.add('active');
+  $('btn-rank-period-week').classList.remove('active');
+  $('btn-rank-period-month').classList.remove('active');
   document.querySelectorAll('#rank-sort-tabs .rank-sort-tab').forEach(btn=>{
     btn.classList.toggle('active',btn.dataset.sort==='totalFinalScore');
   });
   updateRankSortHeader('totalFinalScore');
-  $('rankings-body').textContent='Loading…';
-  wss({type:'get_leaderboard',variant:'sanma',sortBy:'totalFinalScore'});
+  fetchLeaderboard();
   modal.classList.add('visible');
   backdrop.classList.add('visible');
 }
@@ -1424,8 +1476,7 @@ function toggleLeaderboardVariant(variant){
   currentLeaderboardVariant=variant;
   $('btn-rank-yonma').classList.toggle('active',variant==='yonma');
   $('btn-rank-sanma').classList.toggle('active',variant==='sanma');
-  $('rankings-body').textContent='Loading…';
-  wss({type:'get_leaderboard',variant,sortBy:currentLeaderboardSort});
+  fetchLeaderboard();
 }
 
 // Switches which stat the board is ranked by (see rank-sort-tabs in
@@ -1438,30 +1489,39 @@ function setLeaderboardSort(sortBy){
     btn.classList.toggle('active',btn.dataset.sort===sortBy);
   });
   updateRankSortHeader(sortBy);
-  $('rankings-body').textContent='Loading…';
-  wss({type:'get_leaderboard',variant:currentLeaderboardVariant,sortBy});
+  fetchLeaderboard();
 }
 
 function renderLeaderboard(m){
   // Guards against a stale response landing after the user already
-  // switched tabs again (two get_leaderboard requests in flight, an older
-  // one resolving after a newer one) — server echoes back which variant
-  // AND which sort this response is for (see the get_leaderboard handler
-  // in index.js), so either one having since moved on discards it.
+  // switched tabs again (multiple requests in flight, an older one
+  // resolving after a newer one) — server echoes back which variant, sort,
+  // AND period this response is for (see the get_leaderboard/
+  // get_period_leaderboard handlers in index.js), so any one of them
+  // having since moved on discards it. get_leaderboard's own 'leaderboard'
+  // response has no `period` field at all (it's always All Time), hence
+  // the `||'all'` — matches currentLeaderboardPeriod's own default.
   if(m.variant&&m.variant!==currentLeaderboardVariant) return;
   if(m.sortBy&&m.sortBy!==currentLeaderboardSort) return;
+  if((m.period||'all')!==currentLeaderboardPeriod) return;
   const body=$('rankings-body');
   const entries=m.entries||[];
+  const periodLabel=currentLeaderboardPeriod==='week'?'this week':currentLeaderboardPeriod==='month'?'this month':null;
   if(!entries.length){
     // avgPlacement and dealInRate rows are filtered server-side below a
     // minimum games/hands count (see stats.js) — an empty list there
     // almost always means that threshold, not literally zero games
     // played, so says so specifically rather than the generic "no games
-    // recorded" message.
+    // recorded" message. The same threshold applies within Weekly/Monthly
+    // too (see getPeriodLeaderboard) — a harder bar to clear in just a
+    // week, but not called out differently here; the message already
+    // explains the real reason either way.
     if(currentLeaderboardSort==='avgPlacement'){
-      body.innerHTML=`<p>Nobody's played enough games yet (5+ needed) for an average placement ranking.</p>`;
+      body.innerHTML=`<p>Nobody's played enough games${periodLabel?' '+periodLabel:''} yet (5+ needed) for an average placement ranking.</p>`;
     }else if(currentLeaderboardSort==='dealInRate'){
-      body.innerHTML=`<p>Nobody's played enough hands yet (5+ needed) for a deal-in rate ranking.</p>`;
+      body.innerHTML=`<p>Nobody's played enough hands${periodLabel?' '+periodLabel:''} yet (5+ needed) for a deal-in rate ranking.</p>`;
+    }else if(periodLabel){
+      body.innerHTML=`<p>No games recorded ${periodLabel} yet. Play a full match to appear on the board.</p>`;
     }else{
       body.innerHTML=`<p>No games recorded yet. Play a full match to appear on the board.</p>`;
     }
@@ -1807,6 +1867,9 @@ function toggleDevPanel(){
   $('devgate-error').textContent='';
   $('devpanel-gate').style.display='';
   $('devpanel-content').style.display='none';
+  cancelClearAllHistory();
+  $('devclearhistory-error').textContent='';
+  $('devclearhistory-error').style.color='';
   modal.classList.add('visible');
   backdrop.classList.add('visible');
 }
@@ -1924,6 +1987,34 @@ function onDeleteProfileResult(m){
   } else {
     $('devdelete-error').style.color='';
     $('devdelete-error').textContent=m.error||'Failed to delete profile';
+  }
+}
+
+// Clear All Play History — same arm/cancel/confirm two-step as Delete
+// Profile above (destructive, no undo), just with no selection step first
+// since this always targets every profile at once.
+function armClearAllHistory(){
+  $('dev-clear-history-btn').style.display='none';
+  $('dev-clear-history-confirm-row').style.display='block';
+}
+
+function cancelClearAllHistory(){
+  $('dev-clear-history-btn').style.display='';
+  $('dev-clear-history-confirm-row').style.display='none';
+}
+
+function confirmClearAllHistory(){
+  wss({type:'clear_all_history',devSecret:verifiedDevSecret});
+}
+
+function onClearAllHistoryResult(m){
+  cancelClearAllHistory();
+  if(m.ok){
+    $('devclearhistory-error').style.color='#8fffb0';
+    $('devclearhistory-error').textContent='Every profile\'s play history has been cleared.';
+  } else {
+    $('devclearhistory-error').style.color='';
+    $('devclearhistory-error').textContent=m.error||'Failed to clear play history';
   }
 }
 
