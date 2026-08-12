@@ -519,6 +519,13 @@ const YAKUMAN_NAMES = new Set([
   'Suu Ankou', 'Suu Ankou Tanki', // four concealed triplets (+tanki wait)
   'Daisangen', // big three dragons
   'Shousuushii', 'Daisuushii', // small/big four winds
+  // Kazoe Yakuman — reaches yakuman-tier han (13+) by stacking regular yaku
+  // + dora rather than any single named yakuman (see room.js's
+  // _buildYakuList). Was missing here despite being in achievements.js's
+  // own copy of this same name list, so a Kazoe Yakuman win correctly
+  // unlocked the 'Counted Divinity' achievement but never counted toward
+  // this leaderboard's Yakuman Count column.
+  'Kazoe Yakuman',
 ]);
 
 // Below this many games played, an average-placement ranking is more noise

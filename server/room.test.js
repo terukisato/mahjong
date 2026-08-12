@@ -808,29 +808,30 @@ test('Dora/ura-dora indicator indices are unaffected by the larger sanma dead wa
 // ══════════════════════════════════════════════════════════════════════════
 // Kazoe Yakuman — a hand that only reaches yakuman-tier han (13+) once dora
 // is folded in, with no single yaku itself flagged yakuman. Should score
-// exactly like a real yakuman AND be recorded under a 'Kazoe Yakuman' yaku
-// name (not left as a raw stack of Dora/Ura Dora/etc lines), since that
-// name is what both the round-end panel and achievements.js's
-// YAKUMAN_NAMES/yakuman_hunter key off — see room.js's _buildYakuList.
+// exactly like a real yakuman AND still show its full itemized yaku/dora
+// breakdown (not collapsed into one opaque line) AND be recorded under a
+// 'Kazoe Yakuman' yaku name alongside that breakdown, since that name is
+// what both achievements.js's YAKUMAN_NAMES/yakuman_hunter and stats.js's
+// own copy key off — see room.js's _buildYakuList/_isKazoeYakuman.
 // ══════════════════════════════════════════════════════════════════════════
 
-test('_buildYakuList: collapses to a single Kazoe Yakuman entry when only dora pushes han to 13+', () => {
+test('_buildYakuList: always shows the full itemized breakdown, even when dora alone pushes han to 13+', () => {
   const room = freshRoom(0);
   const yl = room._buildYakuList(
     [{ name: 'Pinfu', jp: '平和', han: 1 }, { name: 'Menzen Tsumo', jp: '門前清自摸和', han: 1 }],
-    2,  // raw yaku han (no single yaku here is itself yakuman)
-    15, // totalHan (2 + 13 dora)
     13, 0, 0, 0, // dc, uraDora, akaDora, kitaCount
   );
-  assert.deepStrictEqual(yl, [{ name: 'Kazoe Yakuman', jp: '数え役満', han: 15 }]);
+  assert.deepStrictEqual(yl, [
+    { name: 'Pinfu', jp: '平和', han: 1 },
+    { name: 'Menzen Tsumo', jp: '門前清自摸和', han: 1 },
+    { name: 'Dora', jp: 'ドラ', han: 13 },
+  ]);
 });
 
-test('_buildYakuList: leaves a TRUE yakuman hand alone (still shows its own name + any incidental dora lines)', () => {
+test('_buildYakuList: a TRUE yakuman hand still shows its own name + any incidental dora lines', () => {
   const room = freshRoom(0);
   const yl = room._buildYakuList(
     [{ name: 'Suu Ankou', jp: '四暗刻', han: 13 }],
-    13, // raw han already >=13 on its own — a real yakuman, not kazoe
-    15, // totalHan (13 + 2 incidental dora)
     2, 0, 0, 0,
   );
   assert.deepStrictEqual(yl, [
@@ -843,12 +844,19 @@ test('_buildYakuList: ordinary sub-yakuman hand is untouched (no dora line when 
   const room = freshRoom(0);
   const yl = room._buildYakuList(
     [{ name: 'Riichi', jp: 'リーチ', han: 1 }],
-    1, 1, 0, 0, 0, 0,
+    0, 0, 0, 0,
   );
   assert.deepStrictEqual(yl, [{ name: 'Riichi', jp: 'リーチ', han: 1 }]);
 });
 
-test('Tsumo: a hand that only reaches 13+ han via dora scores as yakuman AND records under "Kazoe Yakuman"', () => {
+test('_isKazoeYakuman: true only when raw yaku han is under 13 but the dora-inclusive total reaches 13+', () => {
+  const room = freshRoom(0);
+  assert.strictEqual(room._isKazoeYakuman(2, 15), true);
+  assert.strictEqual(room._isKazoeYakuman(13, 15), false, 'a true yakuman already hit 13+ on raw han alone');
+  assert.strictEqual(room._isKazoeYakuman(8, 10), false, 'under 13 total han at all');
+});
+
+test('Tsumo: a hand that only reaches 13+ han via dora scores as yakuman, keeps its real yaku breakdown, AND records under "Kazoe Yakuman" too', () => {
   const room = freshRoom(0); // seat 0 is dealer
   const g = room.game;
   g.hands[1] = pinfuTenpai13();
@@ -875,8 +883,8 @@ test('Tsumo: a hand that only reaches 13+ han via dora scores as yakuman AND rec
   // Yakuman base = 8000: non-dealer tsumo payers pay 8000, dealer pays 16000.
   assert.strictEqual(nonDealerPaid, 8000, 'non-dealer payers pay the flat yakuman base');
   assert.strictEqual(dealerPaid, 16000, 'dealer pays double the yakuman base');
-  assert.strictEqual(g.stats[1].yaku['Kazoe Yakuman'], 1, 'recorded under the Kazoe Yakuman name for achievements/stats');
-  assert.strictEqual(g.stats[1].yaku['Dora'], undefined, 'the raw Dora breakdown line is replaced, not just supplemented');
+  assert.strictEqual(g.stats[1].yaku['Kazoe Yakuman'], 1, 'recorded under the Kazoe Yakuman name too, for achievements/stats');
+  assert.strictEqual(g.stats[1].yaku['Dora'], 1, 'the real itemized Dora line is still counted, not replaced');
 });
 
 // ══════════════════════════════════════════════════════════════════════════

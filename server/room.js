@@ -829,9 +829,9 @@ class Room {
     // Build combined yaku display (show first winner's hand info in round_end, extras in extras)
     const primary=results[0];
     const primaryAkaDora=countAkaDora(this._doraPool(primary.winSeat,primary.hand));
-    const yl=this._buildYakuList(primary.yakuList,primary.rawHan,primary.han,primary.dc,primary.uraDora,primaryAkaDora,primary.kitaCount);
+    const yl=this._buildYakuList(primary.yakuList,primary.dc,primary.uraDora,primaryAkaDora,primary.kitaCount);
     this._endRound('ron',primary.winSeat,loseSeat,primary.hand,yl,primary.han,primary.fu,totalLoss,
-      results.length>1?results.slice(1):null,prevScores,g.melds[primary.winSeat]);
+      results.length>1?results.slice(1):null,prevScores,g.melds[primary.winSeat],this._isKazoeYakuman(primary.rawHan,primary.han));
   }
 
   // Removes a called tile from its discarder's pond. If it was their rotated
@@ -1198,27 +1198,36 @@ class Room {
     return [...hand,...meldTiles,...this.game.kita[seat]];
   }
 
-  // Builds the display yaku list for a win. Normally that's just the
-  // regular yaku plus any Dora/Ura Dora/Aka Dora/Kita breakdown lines. But
-  // if the hand only reaches yakuman-tier han (13+) once dora is folded
-  // in — i.e. `han` (detectYaku's own return, before dora) is under 13, so
-  // no single yaku here was itself flagged yakuman (those return >=13 han
-  // on their own — see mahjong.js's ym() calls, all of Tenhou/Kokushi/
-  // Suuankou/etc.) — this is Kazoe Yakuman: collapse the whole breakdown
-  // into one named entry instead. basePoints/handLabel already SCORE this
-  // exactly like a real yakuman (their own han>=13 threshold doesn't care
-  // where the han came from — see basePoints' own comment); this is what
-  // makes the WIN itself read as one too, which matters for both the
-  // round-end panel and achievements.js's YAKUMAN_NAMES/yakuman_hunter,
-  // which key off yaku NAMES in this list, not raw han.
-  _buildYakuList(yakuList,han,totalHan,dc,uraDora,akaDora,kitaCount){
-    if(han<13&&totalHan>=13) return [{name:'Kazoe Yakuman',jp:'数え役満',han:totalHan}];
+  // Builds the display yaku list for a win: the regular yaku plus any Dora/
+  // Ura Dora/Aka Dora/Kita breakdown lines — always the full itemized
+  // breakdown, even when the hand only reaches yakuman-tier han (13+) once
+  // dora is folded in (Kazoe Yakuman). basePoints/handLabel already SCORE
+  // that case exactly like a real yakuman (their own han>=13 threshold
+  // doesn't care where the han came from — see basePoints' own comment);
+  // this just controls what the round-end panel actually lists, and
+  // players want to see what got them there, not one opaque line — see
+  // _isKazoeYakuman below for how the 'Kazoe Yakuman' NAME (which
+  // achievements.js's YAKUMAN_NAMES/yakuman_hunter and stats.js's own copy
+  // key off) still gets recorded despite not appearing in this list.
+  _buildYakuList(yakuList,dc,uraDora,akaDora,kitaCount){
     const regularDc=dc-akaDora-uraDora;
     const yl=regularDc>0?[...yakuList,{name:'Dora',jp:'ドラ',han:regularDc}]:yakuList;
     if(uraDora>0) yl.push({name:'Ura Dora',jp:'裏ドラ',han:uraDora});
     if(akaDora>0) yl.push({name:'Aka Dora',jp:'赤ドラ',han:akaDora});
     if(kitaCount>0) yl.push({name:'Kita',jp:'北',han:kitaCount});
     return yl;
+  }
+
+  // True when a hand only reaches yakuman-tier han (13+) once dora is
+  // folded in — i.e. `han` (detectYaku's own return, before dora) is under
+  // 13, so no single yaku here was itself flagged yakuman (those return
+  // >=13 han on their own — see mahjong.js's ym() calls, all of Tenhou/
+  // Kokushi/Suuankou/etc). Used by _recordHandWin (via _endRound's trailing
+  // arg) to tally a 'Kazoe Yakuman' stat entry alongside the real itemized
+  // yaku breakdown _buildYakuList now always displays, rather than in place
+  // of it.
+  _isKazoeYakuman(han,totalHan){
+    return han<13&&totalHan>=13;
   }
 
   // Fu for a win. Chiitoitsu is always a fixed 25 — real rule, and it
@@ -1292,8 +1301,8 @@ class Room {
     }
     g.scores[seat]+=gain+g.riichiSticks*1000;
     const akaDora=countAkaDora(doraPool);
-    const yl=this._buildYakuList(yakuList,han,totalHan,dc,uraDora,akaDora,kitaCount);
-    this._endRound('tsumo',seat,null,hand,yl,totalHan,fu,gain,undefined,prevScores,g.melds[seat]);
+    const yl=this._buildYakuList(yakuList,dc,uraDora,akaDora,kitaCount);
+    this._endRound('tsumo',seat,null,hand,yl,totalHan,fu,gain,undefined,prevScores,g.melds[seat],this._isKazoeYakuman(han,totalHan));
   }
 
   // NOTE: appears unused — _resolveReactions/_checkChankanReacted both route
@@ -1325,8 +1334,8 @@ class Room {
     const prevScores=[...g.scores];
     g.scores[loseSeat]-=pay;g.scores[winSeat]+=pay;
     const akaDora=countAkaDora(doraPool);
-    const yl=this._buildYakuList(yakuList,han,totalHan,dc,uraDora,akaDora,kitaCount);
-    this._endRound('ron',winSeat,loseSeat,hand,yl,totalHan,fu,pay,undefined,prevScores,g.melds[winSeat]);
+    const yl=this._buildYakuList(yakuList,dc,uraDora,akaDora,kitaCount);
+    this._endRound('ron',winSeat,loseSeat,hand,yl,totalHan,fu,pay,undefined,prevScores,g.melds[winSeat],this._isKazoeYakuman(han,totalHan));
   }
 
   // ── Round end ───────────────────────────────────────────────────────────────
@@ -1389,7 +1398,7 @@ class Room {
     });
   }
 
-  _recordHandWin(seat,reason,han,fu,yakuList,payment){
+  _recordHandWin(seat,reason,han,fu,yakuList,payment,isKazoeYakuman=false){
     const g=this.game;
     const st=g.stats[seat];
     st.wins++;
@@ -1397,6 +1406,12 @@ class Room {
     if(han>st.bestHan) st.bestHan=han;
     if(payment>st.bestScore) st.bestScore=payment;
     if(yakuList) for(const y of yakuList) st.yaku[y.name]=(st.yaku[y.name]||0)+1;
+    // Kazoe Yakuman no longer collapses the displayed breakdown (see
+    // _buildYakuList/_isKazoeYakuman) — this is what still tallies the
+    // 'Kazoe Yakuman' NAME itself for achievements.js's YAKUMAN_NAMES/
+    // yakuman_hunter and stats.js's own copy, alongside (not instead of)
+    // the real itemized yaku already counted just above.
+    if(isKazoeYakuman) st.yaku['Kazoe Yakuman']=(st.yaku['Kazoe Yakuman']||0)+1;
   }
 
   // Ranks seats by final score, descending; ties keep seat order (stable
@@ -1514,14 +1529,14 @@ class Room {
     return booted;
   }
 
-  _endRound(reason,winner,loser,hand,yakuList,han,fu,payment,extraWinners,prevScores,melds){
+  _endRound(reason,winner,loser,hand,yakuList,han,fu,payment,extraWinners,prevScores,melds,isKazoeYakuman=false){
     const g=this.game;
     // Tobi check (bankruptcy)
     const bust=g.scores.findIndex(s=>s<0);
 
     // Per-game hand-stats bookkeeping (feeds recordGameResult at game end).
     if(reason==='tsumo'||reason==='ron'){
-      this._recordHandWin(winner,reason,han,fu,yakuList,payment);
+      this._recordHandWin(winner,reason,han,fu,yakuList,payment,isKazoeYakuman);
       if(reason==='ron') g.stats[loser].dealIn++;
       if(extraWinners) for(const r of extraWinners) this._recordHandWin(r.winSeat,'ron',r.han,r.fu,null,r.pay);
     }

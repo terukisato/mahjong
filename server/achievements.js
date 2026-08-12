@@ -36,6 +36,10 @@ const ronWon = s => s.yonma.ronWon + s.sanma.ronWon;
 // index 3 is always 0 in sanma anyway (see stats.js), so just summing 0-2
 // naturally excludes last place in either mode without special-casing.
 const podiumFinishes = s => [0, 1, 2].reduce((n, i) => n + s.yonma.placements[i] + s.sanma.placements[i], 0);
+// Sanma-only, 1st/2nd finishes only (unlike podiumFinishes above, which
+// combines both variants and includes 3rd) — used by 'flawless_record'
+// below, deliberately restricted to sanma's tighter 3-player field.
+const sanmaTop2Finishes = s => s.sanma.placements[0] + s.sanma.placements[1];
 
 // Yakuman-tier yaku names (see server/mahjong.js's ym() calls) — used by
 // 'yakuman_hunter' below. Duplicated here rather than imported since
@@ -156,6 +160,17 @@ const ACHIEVEMENTS = [
   // check() is still the sole source of truth for the real (percentage)
   // condition.
   { id: 'ace_plus', label: 'Win 60%+ of at least 50 games', unlocksTitle: 'Sharpshooter', target: 50, progress: s => Math.min(gamesPlayed(s), 50), check: s => gamesPlayed(s) >= 50 && (gamesWon(s) / gamesPlayed(s)) >= 0.6 },
+  // Top of the win-rate ladder, above 'ace_plus' — same "progress tracks
+  // the game-count prerequisite only" caveat.
+  { id: 'undisputed', label: 'Win 70%+ of at least 100 games', unlocksTitle: 'The Last Emperor', target: 100, progress: s => Math.min(gamesPlayed(s), 100), check: s => gamesPlayed(s) >= 100 && (gamesWon(s) / gamesPlayed(s)) >= 0.7 },
+  // Above 'renaissance_plus' (20 different yaku).
+  { id: 'yaku_grandmaster', label: 'Achieve 30 different yaku', unlocksTitle: 'Mighty Mouse', target: 30, progress: distinctYakuCount, check: s => distinctYakuCount(s) >= 30 },
+  // Lifetime-cumulative like 'survivor' above — never once finishing 3rd
+  // across 30+ sanma games permanently flips to unearnable the moment a
+  // single non-top-2 finish is recorded, same "can't un-happen" shape.
+  // Sanma-only by design (see sanmaTop2Finishes above) — not a yonma
+  // equivalent of 'podium_regular'/'podium_veteran'.
+  { id: 'flawless_record', label: 'Finish 1st or 2nd in every one of at least 30 sanma games', unlocksTitle: 'The Eagle', target: 30, progress: s => sanmaTop2Finishes(s) === s.sanma.gamesPlayed ? Math.min(s.sanma.gamesPlayed, 30) : 0, check: s => s.sanma.gamesPlayed >= 30 && sanmaTop2Finishes(s) === s.sanma.gamesPlayed },
   {
     id: 'safe_player_plus', label: 'Keep a deal-in rate under 5% over 100+ hands', unlocksTitle: 'Untouchable',
     target: 100, progress: s => Math.min(dealInHands(s), 100),

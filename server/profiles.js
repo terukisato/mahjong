@@ -46,6 +46,7 @@ const TITLES = [
   'Legend', 'Living Legend', 'Riichi Addict', 'Hand Hoarder', 'Tsumo Master',
   'Ron Master', 'Dora Addict', 'Podium Veteran', 'Sharpshooter', 'Untouchable',
   'Yakuman Collector', 'Yakuman Legend', 'Master of Forms', 'Survivor',
+  'The Last Emperor', 'Mighty Mouse', 'The Eagle',
   // Per-yaku titles (see server/achievements.js's *_win achievements)
   'Robbing Kan', 'Dead Wall Diver', 'Last Tile Standing', "River's End",
   'Instant Riichi', 'Triple Threat', 'Triple Triplet', 'Rainbow Run',
