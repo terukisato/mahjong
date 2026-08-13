@@ -276,8 +276,19 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .table.sanma .rs-top{visibility:hidden;}
 
 /* ── Sizing variable — single source of truth ── */
+/* Plain 110vmin assumes .table's box is the full viewport, but .table
+   sits below the 36px-tall .topbar (top:36px), so its real height is
+   (100vh - 36px). Since vmin = min(vw, vh), using raw vh under-reports
+   how little vertical room the container actually has whenever height
+   is the limiting dimension — which is most landscape/widescreen
+   viewports, not just short mobile-landscape windows. That let the felt
+   (and everything anchored to its edge — seat rows, emoji reactions)
+   render partly outside .table's clipped bounds. Swapping the vh side
+   for the container's real height keeps the portrait/width-limited case
+   byte-for-byte identical (min(vw,...) still wins there) while fixing
+   every height-limited one. */
 :root{
-  --table-size: 110vmin;
+  --table-size: min(110vw, calc((100vh - 36px) * 1.1));
   --felt-size: calc(var(--table-size) * 0.86);
 }
 
@@ -1536,16 +1547,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .np-flip{transform:rotate(180deg); transform-origin:center center;}
 
 /* ── Kita strip (sanma only) — banked North tiles, in line with each
-   seat's own nameplate row but mirrored to that seat's own right side
-   (matching the meld row's own-right convention: ml-b/ml-r/ml-l already
-   anchor melds to each seat's own right; kita-t/kita-l mirror np-wrap-t/
-   np-wrap-l the same way kita-b mirrors np-wrap-b). ── */
+   seat's own nameplate row. Rotation follows the tile-facing convention
+   used by ml-l/ml-r (left:+90deg, right:-90deg), not the nameplate rows
+   (which both use +90deg since text orientation doesn't mirror). ── */
 .kita-strip{position:absolute;display:flex;gap:0;align-items:flex-end;z-index:20;}
 .kita-strip:empty{display:none;}
 .kita-b{bottom:calc(var(--tlg-h) + 3vmin);right:15%;}
 .kita-t{top:calc(var(--tsm-h) + 3vmin);left:15%;transform:rotate(180deg);}
 .kita-l{bottom:15%;left:calc(var(--tsm-h) + 3vmin);transform:translateX(-50%) rotate(90deg);transform-origin:center bottom;}
-.kita-r{top:15%;right:calc(var(--tsm-h) + 3vmin);transform:translateX(50%) rotate(90deg);transform-origin:center top;}
+.kita-r{top:15%;right:calc(var(--tsm-h) + 3vmin);transform:translateX(50%) rotate(-90deg);transform-origin:center top;}
 .kita-strip .mg{outline:1.5px solid var(--gold, #c9a84c);outline-offset:-1px;border-radius:2px;}
 
 /* ── Dora panel ── */

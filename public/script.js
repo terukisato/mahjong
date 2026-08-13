@@ -3058,6 +3058,10 @@ function startGame(m){
   // in case the tab later starts a 4-player game).
   ['hdb','hdt','hdl','hdr','mlb','mlt','mll','mlr'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
   ['dzb','dzt','dzl','dzr'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
+  // Clear leftover kita (pei-nuki) tiles from a previous sanma game — renderState()
+  // only repopulates these when m.sanma is true, so a stale sanma game's banked
+  // North tiles would otherwise stay on screen through a subsequent yonma game.
+  ['kb','kt','kl','kr'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
   // Set seat winds based on dealer
   const windLabels=['東','南','西','北'];
   const dealer=m.dealer??0;
@@ -4475,6 +4479,8 @@ function onRoundStart(m){
   $('mlr').innerHTML='';
   // Clear all discard zones
   ['dzb','dzt','dzl','dzr'].forEach(id=>{ const el=$(id); if(el) el.innerHTML=''; });
+  // Clear leftover kita (pei-nuki) tiles from a previous sanma game (see startGame)
+  ['kb','kt','kl','kr'].forEach(id=>{ const el=$(id); if(el) el.innerHTML=''; });
   // Clear riichi sticks
   ['b','r','t','l'].forEach(p=>{ const el=$('rs'+p); if(el) el.style.display='none'; });
   // Clear dora panel
