@@ -128,7 +128,22 @@ function _emptyStats() {
     sanma: _emptyVariantStats(),
     unlockedThemes: ['Default'],
     unlockedTitles: ['Beginner'],
+    // 'tea' (Table Tea, the original default in-game track) is always
+    // available — everything else in public/script.js's gameTracks list is
+    // earned via an achievement's `unlocksTrack` (see achievements.js).
+    unlockedTracks: ['tea'],
     achievements: {},
+    // Consecutive-hands-without-dealing-in streak — combined across both
+    // variants (a deal-in in either resets it) since it's account-wide like
+    // achievements/unlocks, not a per-variant stat — see the 'safe_player_*'
+    // achievements in achievements.js, the only things that read these.
+    // Not surfaced anywhere in the UI (My Stats/Rankings), purely bookkeeping
+    // for those achievement checks. currentNoDealInStreak persists across
+    // games (unlike everything windowed/derived elsewhere in this file);
+    // bestNoDealInStreak is the lifetime high-water mark, same "never
+    // shrinks" shape achievements.js's other lifetime counters rely on.
+    currentNoDealInStreak: 0,
+    bestNoDealInStreak: 0,
   };
 }
 
@@ -230,7 +245,10 @@ function _normalize(s) {
   s.sanma = _fillVariantDefaults(s.sanma);
   if (!s.unlockedThemes) s.unlockedThemes = ['Default'];
   if (!s.unlockedTitles) s.unlockedTitles = ['Beginner'];
+  if (!s.unlockedTracks) s.unlockedTracks = ['tea'];
   if (!s.achievements) s.achievements = {};
+  if (s.currentNoDealInStreak === undefined) s.currentNoDealInStreak = 0;
+  if (s.bestNoDealInStreak === undefined) s.bestNoDealInStreak = 0;
   return s;
 }
 
@@ -375,6 +393,7 @@ function getStats(id) {
     sanma: _variantView(s.sanma),
     unlockedThemes: [...s.unlockedThemes],
     unlockedTitles: [...s.unlockedTitles],
+    unlockedTracks: [...s.unlockedTracks],
     achievements: { ...s.achievements },
     // One row per achievement (label/reward/current progress/earned) —
     // powers the Achievements panel (see renderAchievements in
@@ -456,6 +475,16 @@ function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placeme
     for (const entry of seatRounds) {
       _pushRound(s.recentRounds, entry);
       _pushRound(s.byMatchKind[kind].recentRounds, entry);
+    }
+    // Consecutive-hands-without-dealing-in streak (see currentNoDealInStreak/
+    // bestNoDealInStreak on _emptyStats) — walked in the same chronological
+    // order as the rolling-window push above, but onto `rec` (top-level,
+    // combined across variants) rather than `s` (this variant only), so a
+    // deal-in in yonma resets a streak built up in sanma and vice versa.
+    for (const entry of seatRounds) {
+      if (entry.dealIn) rec.currentNoDealInStreak = 0;
+      else rec.currentNoDealInStreak++;
+      if (rec.currentNoDealInStreak > rec.bestNoDealInStreak) rec.bestNoDealInStreak = rec.currentNoDealInStreak;
     }
     // Weekly/Monthly Rankings — this one game's own numbers (not a running
     // total, unlike the dual-bucket loop above; getPeriodLeaderboard sums

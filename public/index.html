@@ -39,6 +39,7 @@
       </div>
       <input id="vol-slider" class="sp-slider" type="range" min="0" max="100" value="30" oninput="setVolume(this.value)">
     </div>
+    <a href="#" class="hub-link" onclick="toggleGameMusicModal();return false;">Game Music ▸</a>
   </div>
   <!-- Voice section -->
   <div class="sp-section">
@@ -103,6 +104,23 @@
       <div class="about-section-title">Special Thanks</div>
       <p>Natsu "Daijoubu Ma" Hashimoto - Tester/Voice Actor</p>
     </div>
+  </div>
+</div>
+
+<!-- Game Music modal — pick which tracks are in the in-game rotation
+     (multi-select, at least one must stay selected — see toggleGameTrack)
+     and whether they play in the order picked or shuffled. Lobby music
+     stays a single fixed track for now, so it has no picker of its own. -->
+<div id="gamemusic-backdrop" class="about-backdrop" onclick="toggleGameMusicModal()"></div>
+<div id="gamemusic-modal" class="about-modal">
+  <button class="about-close" onclick="toggleGameMusicModal()">✕</button>
+  <div class="about-title">Game Music</div>
+  <div class="about-body">
+    <div class="sp-row">
+      <span class="sp-label">Shuffle</span>
+      <button id="bgame-music-shuffle" class="sp-toggle off" onclick="toggleGameMusicShuffle()" title="Shuffle on/off"></button>
+    </div>
+    <div id="game-music-list" class="sp-theme-list"></div>
   </div>
 </div>
 

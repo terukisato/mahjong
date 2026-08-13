@@ -596,6 +596,8 @@ function onMsg(m){
     renderVoiceThemes();
     unlockedTitles=m.stats?.unlockedTitles||['Beginner'];
     renderTitles();
+    unlockedTracks=m.stats?.unlockedTracks||['tea'];
+    renderGameMusicList();
     renderAchievements(m.stats?.achievementsInfo);
     // Combined wins (both variants — the nameplate is one identity, not
     // split by mode) drive the User Profile hub's nameplate tier — see
@@ -1102,6 +1104,9 @@ function achievementRewardText(a){
   const parts=[];
   if(a.unlocksTitle) parts.push(`Title "${a.unlocksTitle}"`);
   if(a.unlocksTheme) parts.push(`Voice Theme "${a.unlocksTheme}"`);
+  // unlocksTrack carries the track's internal id (see gameTracks) — look up
+  // its display label rather than showing the raw id to the player.
+  if(a.unlocksTrack) parts.push(`Music Track "${gameTracks.find(t=>t.id===a.unlocksTrack)?.label||a.unlocksTrack}"`);
   return parts.length?parts.join(' + '):'Achievement';
 }
 
@@ -2048,14 +2053,136 @@ function stopLobbyMusic(){
   m.pause(); m.currentTime=0;
 }
 
+// Game music playlist — user picks which of these are in rotation (at
+// least one always stays selected, see toggleGameTrack) and whether they
+// play in list order or shuffled. Reuses the single #game-music-1 element
+// across tracks (swap src, don't create one <audio> per track) so the
+// existing volume/mute plumbing in allTracks()/setVolume keeps working
+// untouched. A single selected track sets the element's own `loop` so it
+// gaplessly repeats itself exactly like before this feature existed;
+// picking 2+ tracks turns `loop` off and chains tracks via the 'ended'
+// listener registered below instead.
+// 'tea' is free from the start; the rest are earned via the 'safe_player_*'
+// achievements' `unlocksTrack` (see server/achievements.js) and gated in
+// renderGameMusicList/toggleGameTrack below by unlockedTracks — same
+// locked/hint treatment voiceThemes gets from unlockedThemes.
+const gameTracks=[
+  {id:'tea', label:'Table Tea', src:'/audio/Music/Mahjong_Table_Tea.mp3'},
+  {id:'elegy', label:'Ceremony Elegy', src:'/audio/Music/Mahjong_Ceremony_Elegy.mp3', hint:'Go 5 hands in a row without dealing in to unlock'},
+  {id:'city_lights', label:'City Lights', src:'/audio/Music/Mahjong_City_Lights.mp3', hint:'Go 10 hands in a row without dealing in to unlock'},
+  {id:'groovy_tea', label:'Groovy Tea', src:'/audio/Music/Mahjong_Groovy_Tea.mp3', hint:'Go 20 hands in a row without dealing in to unlock'},
+];
+let unlockedTracks=['tea'];
+let selectedGameTracks=['tea'];
+let gameMusicShuffle=false;
+let gameMusicQueue=[];
+let gameMusicQueueIdx=0;
+
+function saveGameTrackPrefs(){
+  try{
+    localStorage.setItem('mj-game-tracks',JSON.stringify(selectedGameTracks));
+    localStorage.setItem('mj-game-shuffle',gameMusicShuffle?'1':'0');
+  }catch(e){}
+}
+
+function shuffleArray(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function buildGameMusicQueue(){
+  // Re-filters against unlockedTracks every time (not just when a track is
+  // toggled) — a saved selection can outlive its unlock, e.g. 'elegy' was
+  // freely selectable before this locking system existed, so an existing
+  // localStorage selection could still name a track this profile hasn't
+  // actually earned. Falls back to the always-free 'tea' if that empties
+  // the list out entirely.
+  const unlocked=selectedGameTracks.filter(id=>unlockedTracks.includes(id));
+  const chosen=unlocked.length?unlocked:[gameTracks[0].id];
+  gameMusicQueue=gameMusicShuffle?shuffleArray(chosen):[...chosen];
+  gameMusicQueueIdx=0;
+}
+
+function currentGameTrack(){
+  return gameTracks.find(t=>t.id===gameMusicQueue[gameMusicQueueIdx])||gameTracks[0];
+}
+
+// Only reached when loop is off, i.e. 2+ tracks are selected — wraps back
+// to the start of the queue (reshuffling if shuffle is on) once the last
+// track in it finishes.
+function advanceGameMusic(){
+  gameMusicQueueIdx++;
+  if(gameMusicQueueIdx>=gameMusicQueue.length) buildGameMusicQueue();
+  const t1=$('game-music-1');
+  if(!t1) return;
+  t1.src=currentGameTrack().src;
+  t1.currentTime=0;
+  if(musicEnabled) t1.play().catch(()=>{});
+}
+
+function toggleGameMusicShuffle(){
+  gameMusicShuffle=!gameMusicShuffle;
+  const btn=$('bgame-music-shuffle');
+  if(btn) btn.classList.toggle('off',!gameMusicShuffle);
+  saveGameTrackPrefs();
+}
+
+function toggleGameTrack(id){
+  if(!unlockedTracks.includes(id)) return; // locked — no achievement earned yet
+  const idx=selectedGameTracks.indexOf(id);
+  if(idx>=0){
+    if(selectedGameTracks.length===1) return; // at least one track must stay selected
+    selectedGameTracks.splice(idx,1);
+  } else {
+    selectedGameTracks.push(id);
+  }
+  renderGameMusicList();
+  saveGameTrackPrefs();
+}
+
+function renderGameMusicList(){
+  const list=$('game-music-list'); if(!list) return;
+  list.innerHTML='';
+  gameTracks.forEach(t=>{
+    const locked=!unlockedTracks.includes(t.id);
+    const btn=document.createElement('button');
+    // Same locked/hint treatment as renderVoiceThemes — dimmed via .locked,
+    // no lock icon, disabled + hint as the tooltip instead of a click handler.
+    btn.className=locked?'theme-btn locked':(selectedGameTracks.includes(t.id)?'theme-btn selected':'theme-btn');
+    btn.textContent=t.label;
+    if(locked){ btn.disabled=true; btn.title=t.hint||'Locked'; }
+    else btn.onclick=()=>toggleGameTrack(t.id);
+    list.appendChild(btn);
+  });
+}
+
+function toggleGameMusicModal(){
+  const modal=$('gamemusic-modal');
+  const backdrop=$('gamemusic-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  renderGameMusicList();
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
 function playGameMusic(){
   if(!musicEnabled) return;
   const t1=$('game-music-1');
   if(!t1) return;
-  t1.pause(); t1.currentTime=0;
+  buildGameMusicQueue();
+  t1.pause();
+  t1.loop=gameMusicQueue.length<=1;
+  t1.src=currentGameTrack().src;
+  t1.currentTime=0;
   t1.volume=musicVolume;
   t1.play().catch(()=>{});
 }
+$('game-music-1')?.addEventListener('ended',advanceGameMusic);
 
 function stopGameMusic(){
   const t1=$('game-music-1');
@@ -2127,7 +2254,10 @@ const titles=[
   {id:'Renaissance Player', label:'Renaissance Player', hint:'Achieve 10 different yaku to unlock'},
   {id:'Big Hand', label:'Big Hand', hint:'Win a hand worth 8+ han to unlock'},
   {id:'High Roller', label:'High Roller', hint:'Reach a final score of 50,000+ to unlock'},
-  {id:'Safe Player', label:'Safe Player', hint:'Keep a deal-in rate under 10% over 20+ hands to unlock'},
+  {id:'Safe Player', label:'Safe Player', hint:'Go 5 hands in a row without dealing in to unlock'},
+  {id:'Disciplined Safe Player', label:'Disciplined Safe Player', hint:'Go 10 hands in a row without dealing in to unlock'},
+  {id:'Elite Safe Player', label:'Elite Safe Player', hint:'Go 20 hands in a row without dealing in to unlock'},
+  {id:'Legendary Safe Player', label:'Legendary Safe Player', hint:'Go 30 hands in a row without dealing in to unlock'},
   {id:'Sanma Specialist', label:'Sanma Specialist', hint:'Win your first sanma game to unlock'},
   {id:'Tsumo Specialist', label:'Tsumo Specialist', hint:'Win 30 hands by tsumo to unlock'},
   {id:'Ron Specialist', label:'Ron Specialist', hint:'Win 30 hands by ron to unlock'},
@@ -2151,9 +2281,6 @@ const titles=[
   {id:'Tsumo Master', label:'Tsumo Master', hint:'Win 100 hands by tsumo to unlock'},
   {id:'Ron Master', label:'Ron Master', hint:'Win 100 hands by ron to unlock'},
   {id:'Dora Addict', label:'Dora Addict', hint:'Win 100 hands with dora to unlock'},
-  {id:'Podium Veteran', label:'Podium Veteran', hint:'Finish 1st, 2nd, or 3rd 100 times to unlock'},
-  {id:'Sharpshooter', label:'Sharpshooter', hint:'Win 60%+ of at least 50 games to unlock'},
-  {id:'Untouchable', label:'Untouchable', hint:'Keep a deal-in rate under 5% over 100+ hands to unlock'},
   {id:'Yakuman Collector', label:'Yakuman Collector', hint:'Achieve 3 yakuman-tier hands (any combination) to unlock'},
   {id:'Yakuman Legend', label:'Yakuman Legend', hint:'Achieve 10 yakuman-tier hands (any combination) to unlock'},
   {id:'Master of Forms', label:'Master of Forms', hint:'Achieve 20 different yaku to unlock'},
@@ -4881,6 +5008,17 @@ try{
   if(savedDiscardSfx==='0'){
     discardSfxEnabled=false;
     const b=$('bdiscard-sfx'); if(b) b.classList.add('off');
+  }
+  const savedGameTracks=localStorage.getItem('mj-game-tracks');
+  if(savedGameTracks){
+    const parsed=JSON.parse(savedGameTracks);
+    if(Array.isArray(parsed)&&parsed.length&&parsed.every(id=>gameTracks.some(t=>t.id===id))){
+      selectedGameTracks=parsed;
+    }
+  }
+  if(localStorage.getItem('mj-game-shuffle')==='1'){
+    gameMusicShuffle=true;
+    const b=$('bgame-music-shuffle'); if(b) b.classList.remove('off');
   }
   const savedTheme=localStorage.getItem('mj-voice-theme');
   if(savedTheme) currentVoiceTheme=savedTheme;

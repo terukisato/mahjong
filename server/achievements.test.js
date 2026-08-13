@@ -27,8 +27,8 @@ function mkVariant(overrides = {}) {
     placements: [0, 0, 0, 0], bestFinalScore: 0, busts: 0,
   }, overrides);
 }
-function mkStats({ yonma = {}, sanma = {} } = {}) {
-  return { achievements: {}, unlockedThemes: [], unlockedTitles: [], yonma: mkVariant(yonma), sanma: mkVariant(sanma) };
+function mkStats({ yonma = {}, sanma = {}, bestNoDealInStreak = 0 } = {}) {
+  return { achievements: {}, unlockedThemes: [], unlockedTitles: [], unlockedTracks: [], bestNoDealInStreak, yonma: mkVariant(yonma), sanma: mkVariant(sanma) };
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -93,27 +93,17 @@ test('Legend: just under 500 games played does not unlock it', () => {
   assert.strictEqual(s.achievements['legend'], undefined);
 });
 
-test('Sharpshooter: 60%+ win rate over 50+ games required — a 50%-flat record over the same 50 games does not qualify', () => {
-  const s1 = mkStats({ yonma: { gamesPlayed: 50, gamesWon: 30 } }); // 60%
-  applyUnlocks(s1);
-  assert.strictEqual(s1.achievements['ace_plus'], true);
-  assert.strictEqual(s1.achievements['ace'], true, 'the easier 50%-over-20 tier is also satisfied');
+test('Safe Player ladder: the 5/10/20-hand tiers each unlock their Game Music track, 30 does not (only 3 bonus tracks exist)', () => {
+  const s = mkStats({ bestNoDealInStreak: 15 });
+  applyUnlocks(s);
+  assert.strictEqual(s.achievements['safe_player_5'], true);
+  assert.strictEqual(s.achievements['safe_player_10'], true);
+  assert.strictEqual(s.achievements['safe_player_20'], undefined);
+  assert.deepStrictEqual(s.unlockedTracks, ['elegy', 'city_lights']);
 
-  const s2 = mkStats({ yonma: { gamesPlayed: 50, gamesWon: 25 } }); // exactly 50%
+  const s2 = mkStats({ bestNoDealInStreak: 30 });
   applyUnlocks(s2);
-  assert.strictEqual(s2.achievements['ace_plus'], undefined);
-  assert.strictEqual(s2.achievements['ace'], true, 'still clears the easier 50% tier though');
-});
-
-test('Untouchable: under 5% deal-in rate over 100+ hands required — 8% over the same 100 hands does not qualify', () => {
-  const s1 = mkStats({ yonma: { dealIns: 4, handsWon: 100 } }); // 4/104 ≈ 3.8%
-  applyUnlocks(s1);
-  assert.strictEqual(s1.achievements['safe_player_plus'], true);
-
-  const s2 = mkStats({ yonma: { dealIns: 8, handsWon: 92 } }); // 8/100 = 8%
-  applyUnlocks(s2);
-  assert.strictEqual(s2.achievements['safe_player_plus'], undefined);
-  assert.strictEqual(s2.achievements['safe_player'], true, 'still clears the easier under-10% tier though');
+  assert.deepStrictEqual(s2.unlockedTracks, ['elegy', 'city_lights', 'groovy_tea'], 'safe_player_30 grants a title but no track');
 });
 
 test('Yakuman Collector/Legend: sums ANY combination of yakuman-tier wins, not one specific kind', () => {

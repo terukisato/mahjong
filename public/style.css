@@ -1188,6 +1188,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);
   color:var(--cream);font-family:'Cinzel Decorative',serif;cursor:pointer;}
 .theme-btn.locked{opacity:.45;cursor:default;}
+/* Game Music picker (see renderGameMusicList) reuses .theme-btn but is
+   multi-select rather than pick-one, so it needs its own persistent
+   "selected" look instead of applyVoiceTheme's single-active inline style. */
+.theme-btn.selected{background:rgba(201,168,76,.25);border-color:var(--gold);}
+.theme-btn.selected::before{content:'✓ ';color:var(--gold);}
 /* Player Icon grid — User Profile modal only (see renderPlayerIcons in
    script.js). Each icon is a small hand-coded SVG mark, not an uploaded
    image — the app has no image-upload capability. */
@@ -1550,12 +1555,12 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    seat's own nameplate row. Rotation follows the tile-facing convention
    used by ml-l/ml-r (left:+90deg, right:-90deg), not the nameplate rows
    (which both use +90deg since text orientation doesn't mirror). ── */
-.kita-strip{position:absolute;display:flex;gap:0;align-items:flex-end;z-index:20;}
+.kita-strip{position:absolute;display:flex;flex-direction:row-reverse;gap:0;align-items:flex-end;z-index:20;}
 .kita-strip:empty{display:none;}
 .kita-b{bottom:calc(var(--tlg-h) + 3vmin);right:15%;}
 .kita-t{top:calc(var(--tsm-h) + 3vmin);left:15%;transform:rotate(180deg);}
-.kita-l{bottom:15%;left:calc(var(--tsm-h) + 3vmin);transform:translateX(-50%) rotate(90deg);transform-origin:center bottom;}
-.kita-r{top:15%;right:calc(var(--tsm-h) + 3vmin);transform:translateX(50%) rotate(-90deg);transform-origin:center top;}
+.kita-l{bottom:15%;left:calc(var(--tsm-h) + 3vmin);transform:rotate(90deg) translateX(-100%);transform-origin:bottom left;}
+.kita-r{top:15%;right:calc(var(--tsm-h) + 3vmin);transform:rotate(-90deg) translateY(-100%);transform-origin:top right;}
 .kita-strip .mg{outline:1.5px solid var(--gold, #c9a84c);outline-offset:-1px;border-radius:2px;}
 
 /* ── Dora panel ── */

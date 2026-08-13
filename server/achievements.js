@@ -7,7 +7,10 @@
 // no fallback for a missing theme folder, sound playback just 404s
 // silently. `unlocksTitle`, if set, must be listed in server/profiles.js's
 // TITLES — that's the set setTitle actually accepts, this is just where
-// a title gets earned.
+// a title gets earned. `unlocksTrack`, if set, must match a real id in
+// public/script.js's gameTracks list — same "just where it gets earned"
+// role, the Game Music picker (renderGameMusicList) is what actually gates
+// selecting it.
 // `check` receives the whole stats record (see stats.js's _emptyStats —
 // .yonma/.sanma are separate per-variant buckets), not one variant's
 // numbers alone, so e.g. "first win" triggers regardless of which mode it
@@ -17,7 +20,7 @@
 // `target`/`progress(s)` power the Achievements panel's progress bar (see
 // getProgressList below, and renderAchievements in public/script.js) —
 // progress is clamped to target, so it always reads as "how close" even
-// once actually earned. For compound conditions (ace, safe_player) that
+// once actually earned. For compound conditions (ace, undisputed) that
 // don't reduce to one clean number, progress tracks the games/hands
 // PREREQUISITE only (documented at each one) — `check` stays the sole
 // source of truth for whether it's actually earned, the bar is just a
@@ -28,7 +31,6 @@ const riichiDeclared = s => s.yonma.riichiDeclared + s.sanma.riichiDeclared;
 const bestHan = s => Math.max(s.yonma.bestHan, s.sanma.bestHan);
 const yakuCount = (s, name) => (s.yonma.yaku[name] || 0) + (s.sanma.yaku[name] || 0);
 const distinctYakuCount = s => new Set([...Object.keys(s.yonma.yaku), ...Object.keys(s.sanma.yaku)]).size;
-const dealInHands = s => s.yonma.dealIns + s.sanma.dealIns + s.yonma.handsWon + s.sanma.handsWon;
 const handsWon = s => s.yonma.handsWon + s.sanma.handsWon;
 const tsumoWon = s => s.yonma.tsumoWon + s.sanma.tsumoWon;
 const ronWon = s => s.yonma.ronWon + s.sanma.ronWon;
@@ -81,6 +83,12 @@ const doubleBustWins = s => s.sanma.doubleBustWins;
 // 'survivor' below.
 const totalYakumanCount = s => YAKUMAN_NAMES.reduce((n, name) => n + yakuCount(s, name), 0);
 const totalBusts = s => s.yonma.busts + s.sanma.busts;
+// Longest-ever run of consecutive hands without dealing in — top-level on
+// the record (combined across both variants), not derived from yonma/sanma
+// sub-objects like everything above; see currentNoDealInStreak/
+// bestNoDealInStreak on stats.js's _emptyStats, updated incrementally in
+// recordGameResult (the only writer — nothing here computes it).
+const noDealInStreak = s => s.bestNoDealInStreak || 0;
 
 const ACHIEVEMENTS = [
   { id: 'first_win', label: 'Win your first game', unlocksTheme: 'Natsu', target: 1, progress: s => Math.min(gamesWon(s), 1), check: s => gamesWon(s) >= 1 },
@@ -96,17 +104,19 @@ const ACHIEVEMENTS = [
   { id: 'renaissance', label: 'Achieve 10 different yaku', unlocksTitle: 'Renaissance Player', target: 10, progress: distinctYakuCount, check: s => distinctYakuCount(s) >= 10 },
   { id: 'big_hand', label: 'Win a hand worth 8+ han', unlocksTitle: 'Big Hand', target: 8, progress: bestHan, check: s => bestHan(s) >= 8 },
   { id: 'high_roller', label: 'Reach a final score of 50,000+', unlocksTitle: 'High Roller', target: 50000, progress: bestFinalScore, check: s => bestFinalScore(s) >= 50000 },
-  // Progress tracks the 20-hand prerequisite only — the real gate also
-  // needs a <10% deal-in rate, same reasoning as 'ace' above.
-  {
-    id: 'safe_player', label: 'Keep a deal-in rate under 10% over 20+ hands', unlocksTitle: 'Safe Player',
-    target: 20, progress: s => Math.min(dealInHands(s), 20),
-    check: s => {
-      const dealIns = s.yonma.dealIns + s.sanma.dealIns;
-      const hands = dealInHands(s);
-      return hands >= 20 && (dealIns / hands) < 0.1;
-    },
-  },
+  // Safe Player ladder — consecutive hands without dealing in (see
+  // noDealInStreak above), combined across both variants and persisted
+  // across games. Each tier reuses the SAME lifetime high-water mark, not a
+  // fresh count of its own — a player who jumps straight to a 30-hand
+  // streak unlocks all four in the same game, same "no prerequisite order"
+  // shape as the games-played/games-won ladders elsewhere in this file.
+  // The first three tiers also unlock a Game Music track (see gameTracks
+  // in public/script.js) — 30 doesn't, there are only 3 bonus tracks to
+  // hand out.
+  { id: 'safe_player_5', label: 'Go 5 hands in a row without dealing in', unlocksTitle: 'Safe Player', unlocksTrack: 'elegy', target: 5, progress: s => Math.min(noDealInStreak(s), 5), check: s => noDealInStreak(s) >= 5 },
+  { id: 'safe_player_10', label: 'Go 10 hands in a row without dealing in', unlocksTitle: 'Disciplined Safe Player', unlocksTrack: 'city_lights', target: 10, progress: s => Math.min(noDealInStreak(s), 10), check: s => noDealInStreak(s) >= 10 },
+  { id: 'safe_player_20', label: 'Go 20 hands in a row without dealing in', unlocksTitle: 'Elite Safe Player', unlocksTrack: 'groovy_tea', target: 20, progress: s => Math.min(noDealInStreak(s), 20), check: s => noDealInStreak(s) >= 20 },
+  { id: 'safe_player_30', label: 'Go 30 hands in a row without dealing in', unlocksTitle: 'Legendary Safe Player', target: 30, progress: s => Math.min(noDealInStreak(s), 30), check: s => noDealInStreak(s) >= 30 },
   { id: 'sanma_specialist', label: 'Win your first sanma game', unlocksTitle: 'Sanma Specialist', target: 1, progress: s => Math.min(s.sanma.gamesWon, 1), check: s => s.sanma.gamesWon >= 1 },
   { id: 'tsumo_specialist', label: 'Win 30 hands by tsumo', unlocksTitle: 'Tsumo Specialist', target: 30, progress: tsumoWon, check: s => tsumoWon(s) >= 30 },
   { id: 'ron_specialist', label: 'Win 30 hands by ron', unlocksTitle: 'Ron Specialist', target: 30, progress: ronWon, check: s => ronWon(s) >= 30 },
@@ -154,14 +164,8 @@ const ACHIEVEMENTS = [
   { id: 'tsumo_master', label: 'Win 100 hands by tsumo', unlocksTitle: 'Tsumo Master', target: 100, progress: tsumoWon, check: s => tsumoWon(s) >= 100 },
   { id: 'ron_master', label: 'Win 100 hands by ron', unlocksTitle: 'Ron Master', target: 100, progress: ronWon, check: s => ronWon(s) >= 100 },
   { id: 'dora_addict', label: 'Win 100 hands with dora', unlocksTitle: 'Dora Addict', target: 100, progress: s => yakuCount(s, 'Dora'), check: s => yakuCount(s, 'Dora') >= 100 },
-  { id: 'podium_veteran', label: 'Finish 1st, 2nd, or 3rd 100 times', unlocksTitle: 'Podium Veteran', target: 100, progress: podiumFinishes, check: s => podiumFinishes(s) >= 100 },
-  // Stricter win-rate/deal-in-rate versions of 'ace'/'safe_player' above —
-  // same "progress tracks the game/hand prerequisite only" caveat applies,
-  // check() is still the sole source of truth for the real (percentage)
-  // condition.
-  { id: 'ace_plus', label: 'Win 60%+ of at least 50 games', unlocksTitle: 'Sharpshooter', target: 50, progress: s => Math.min(gamesPlayed(s), 50), check: s => gamesPlayed(s) >= 50 && (gamesWon(s) / gamesPlayed(s)) >= 0.6 },
-  // Top of the win-rate ladder, above 'ace_plus' — same "progress tracks
-  // the game-count prerequisite only" caveat.
+  // Top of the win-rate ladder, above 'ace' — same "progress tracks the
+  // game-count prerequisite only" caveat.
   { id: 'undisputed', label: 'Win 70%+ of at least 100 games', unlocksTitle: 'The Last Emperor', target: 100, progress: s => Math.min(gamesPlayed(s), 100), check: s => gamesPlayed(s) >= 100 && (gamesWon(s) / gamesPlayed(s)) >= 0.7 },
   // Above 'renaissance_plus' (20 different yaku).
   { id: 'yaku_grandmaster', label: 'Achieve 30 different yaku', unlocksTitle: 'Mighty Mouse', target: 30, progress: distinctYakuCount, check: s => distinctYakuCount(s) >= 30 },
@@ -169,17 +173,8 @@ const ACHIEVEMENTS = [
   // across 30+ sanma games permanently flips to unearnable the moment a
   // single non-top-2 finish is recorded, same "can't un-happen" shape.
   // Sanma-only by design (see sanmaTop2Finishes above) — not a yonma
-  // equivalent of 'podium_regular'/'podium_veteran'.
+  // equivalent of 'podium_regular'.
   { id: 'flawless_record', label: 'Finish 1st or 2nd in every one of at least 30 sanma games', unlocksTitle: 'The Eagle', target: 30, progress: s => sanmaTop2Finishes(s) === s.sanma.gamesPlayed ? Math.min(s.sanma.gamesPlayed, 30) : 0, check: s => s.sanma.gamesPlayed >= 30 && sanmaTop2Finishes(s) === s.sanma.gamesPlayed },
-  {
-    id: 'safe_player_plus', label: 'Keep a deal-in rate under 5% over 100+ hands', unlocksTitle: 'Untouchable',
-    target: 100, progress: s => Math.min(dealInHands(s), 100),
-    check: s => {
-      const dealIns = s.yonma.dealIns + s.sanma.dealIns;
-      const hands = dealInHands(s);
-      return hands >= 100 && (dealIns / hands) < 0.05;
-    },
-  },
   // Any combination of yakuman-tier wins, not "at least one of a specific
   // kind" like 'yakuman_hunter' or the per-yakuman batch below — three
   // Suu Ankou wins counts same as one Suu Ankou + one Chiihou + one Kazoe
@@ -263,6 +258,9 @@ function applyUnlocks(s) {
       if (a.unlocksTitle && !s.unlockedTitles.includes(a.unlocksTitle)) {
         s.unlockedTitles.push(a.unlocksTitle);
       }
+      if (a.unlocksTrack && !s.unlockedTracks.includes(a.unlocksTrack)) {
+        s.unlockedTracks.push(a.unlocksTrack);
+      }
     }
   }
 }
@@ -279,6 +277,7 @@ function getProgressList(s) {
     label: a.label,
     unlocksTitle: a.unlocksTitle || null,
     unlocksTheme: a.unlocksTheme || null,
+    unlocksTrack: a.unlocksTrack || null,
     target: a.target,
     current: Math.min(a.progress(s), a.target),
     earned: !!s.achievements[a.id],

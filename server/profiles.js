@@ -32,7 +32,10 @@ const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
 const TITLES = [
   'Beginner', 'Regular', 'Veteran', 'Century Club', 'Ace',
   'Yakuman Hunter', 'Riichi Machine', 'Renaissance Player',
-  'Big Hand', 'High Roller', 'Safe Player', 'Sanma Specialist',
+  'Big Hand', 'High Roller',
+  // Safe Player ladder (see server/achievements.js's safe_player_5/10/20/30)
+  'Safe Player', 'Disciplined Safe Player', 'Elite Safe Player', 'Legendary Safe Player',
+  'Sanma Specialist',
   'Tsumo Specialist', 'Ron Specialist', 'Hand Collector', 'Podium Regular',
   'Lightning Reflexes', 'Quick Draw', 'All Triplets',
   'Pure Runner', 'Dora Rich', 'The Diamond',
@@ -44,7 +47,7 @@ const TITLES = [
   // comment on this batch) — a second, tougher rung above several of the
   // titles above, plus new stricter/compound conditions.
   'Legend', 'Living Legend', 'Riichi Addict', 'Hand Hoarder', 'Tsumo Master',
-  'Ron Master', 'Dora Addict', 'Podium Veteran', 'Sharpshooter', 'Untouchable',
+  'Ron Master', 'Dora Addict',
   'Yakuman Collector', 'Yakuman Legend', 'Master of Forms', 'Survivor',
   'The Last Emperor', 'Mighty Mouse', 'The Eagle',
   // Per-yaku titles (see server/achievements.js's *_win achievements)
