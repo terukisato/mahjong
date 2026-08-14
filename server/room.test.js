@@ -97,6 +97,39 @@ test('Tsumo: non-dealer win — dealer pays double, other non-dealers pay single
   assert.strictEqual(gained, dealerPaid + otherNonDealerPaid + (prevScores[3] - g.scores[3]), 'winner gain must equal sum of all payments');
 });
 
+// ══════════════════════════════════════════════════════════════════════════
+// Furiten must never block tsumo — it's a ron-only restriction. _tsumo used
+// to unconditionally bail out on _isFuriten(seat), silently no-opping a
+// legitimate self-drawn win for any player in permanent OR temporary
+// furiten (e.g. simply having passed a ron a turn earlier).
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Tsumo: succeeds even while in permanent furiten', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  g.hands[1] = pinfuTenpai13();
+  g.drawTile = winTile();
+  g.hands[1].push(g.drawTile);
+  g.turn = 1;
+  g.furiten[1] = true;
+  const prevScores = [...g.scores];
+  room._tsumo(1);
+  assert.ok(g.scores[1] > prevScores[1], 'permanent furiten must not block a tsumo win');
+});
+
+test('Tsumo: succeeds even while in temporary furiten (passed a ron this turn cycle)', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  g.hands[1] = pinfuTenpai13();
+  g.drawTile = winTile();
+  g.hands[1].push(g.drawTile);
+  g.turn = 1;
+  g.tempFuriten[1] = true;
+  const prevScores = [...g.scores];
+  room._tsumo(1);
+  assert.ok(g.scores[1] > prevScores[1], 'temporary furiten must not block a tsumo win');
+});
+
 test('Tsumo: dealer win — every opponent pays the same (double) amount', () => {
   const room = freshRoom(0); // seat 0 is dealer
   const g = room.game;

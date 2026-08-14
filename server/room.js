@@ -406,8 +406,9 @@ class Room {
       const ankanTile=this._findAnkan(seat);
       if(ankanTile){this._ankan(seat,ankanTile);return;}
     }
-    // Only tsumo if hand wins AND has valid yaku
-    if(isWin(hand,g.melds[seat])&&!this._isFuriten(seat)){
+    // Only tsumo if hand wins AND has valid yaku — furiten is NOT checked
+    // here, same reasoning as _tsumo/canTsumo: it only ever blocks ron.
+    if(isWin(hand,g.melds[seat])){
       const sw=this._seatWindOf(seat);
       const isHaitei=g.haiteiNext&&!g.isRinshan;
       const winKey=g.drawTile?key(g.drawTile):null;
@@ -1256,7 +1257,10 @@ class Room {
       if(this.rules.chonbo) this._chonboPenalty(seat);
       return;
     }
-    if(this._isFuriten(seat)) return;
+    // Furiten only ever blocks RON, never tsumo — a self-drawn winning hand
+    // is always a legal win regardless of furiten state (permanent or
+    // temporary). There used to be a stray _isFuriten(seat) check here that
+    // silently no-opped a legitimate tsumo declaration; removed.
     const sw=this._seatWindOf(seat);
     const isHaitei=g.haiteiNext&&!g.isRinshan;
     // Tenhou: dealer tsumo on very first draw (no discards yet from anyone).
@@ -1978,7 +1982,9 @@ class Room {
       }
       const sw=this._seatWindOf(seat);
       const canTsumo=(()=>{
-        if(g.turn!==seat||!isWin(hand,g.melds[seat])||this._isFuriten(seat)) return false;
+        // Furiten deliberately NOT checked here — it only blocks ron, never
+        // tsumo (see _tsumo's own comment on this same point).
+        if(g.turn!==seat||!isWin(hand,g.melds[seat])) return false;
         const isDblRiichi=g.doubleRiichi[seat];
         const winKey=g.drawTile?key(g.drawTile):null;
         const {han}=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),
