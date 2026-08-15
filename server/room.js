@@ -1416,6 +1416,21 @@ class Room {
     // yakuman_hunter and stats.js's own copy, alongside (not instead of)
     // the real itemized yaku already counted just above.
     if(isKazoeYakuman) st.yaku['Kazoe Yakuman']=(st.yaku['Kazoe Yakuman']||0)+1;
+    // Same pseudo-yaku-name pattern as 'Kazoe Yakuman' above — a hand where
+    // 2+ different yakuman-tier entries genuinely stacked (see mahjong.js's
+    // detectYaku, which now collects every yakuman condition a hand
+    // satisfies instead of returning on the first, e.g. Suu Ankou +
+    // Chinroutou: four concealed triplets that all happen to be
+    // terminals). yakuList here is the display-augmented list (dora/ura
+    // dora/aka dora/kita rows appended by _buildYakuList) — those rows are
+    // excluded by name since an unusually large dora count could in
+    // principle reach han:13+ on its own without representing a second
+    // real yakuman. Used by achievements.js's 'yakuman_stack'.
+    if(yakuList){
+      const AUGMENT_NAMES=new Set(['Dora','Ura Dora','Aka Dora','Kita']);
+      const yakumanEntries=yakuList.filter(y=>y.han>=13&&!AUGMENT_NAMES.has(y.name)).length;
+      if(yakumanEntries>=2) st.yaku['Yakuman Stack']=(st.yaku['Yakuman Stack']||0)+1;
+    }
   }
 
   // Ranks seats by final score, descending; ties keep seat order (stable

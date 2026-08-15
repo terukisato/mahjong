@@ -920,6 +920,42 @@ test('Tsumo: a hand that only reaches 13+ han via dora scores as yakuman, keeps 
   assert.strictEqual(g.stats[1].yaku['Dora'], 1, 'the real itemized Dora line is still counted, not replaced');
 });
 
+test('A hand with 2 genuinely stacked yakuman (Suu Ankou + Chinroutou) is tagged "Yakuman Stack" and pays the double-yakuman base', () => {
+  const room = freshRoom(0); // seat 0 dealer, seat 1 non-dealer wins below
+  const g = room.game;
+  g.firstRound = false; // see the Kazoe Yakuman test above for why
+  // Shanpon tsumo: 1m/9m/1p closed triplets + 9p pair completed via tsumo
+  // (closed) + 1s pair — 4 closed triplets, all terminals.
+  g.hands[1] = [...tri(1, 'm'), ...tri(9, 'm'), ...tri(1, 'p'), ...pairT(9, 'p'), ...pairT(1, 's')];
+  g.drawTile = T(9, 'p');
+  g.hands[1].push(g.drawTile);
+  g.turn = 1;
+  const prevScores = [...g.scores];
+  room._tsumo(1);
+  const nonDealerPaid = prevScores[2] - g.scores[2];
+  const dealerPaid = prevScores[0] - g.scores[0];
+  // Double yakuman base = 16000: non-dealer payers pay 16000, dealer 32000.
+  assert.strictEqual(nonDealerPaid, 16000, 'a genuine 26-han double yakuman pays the double-yakuman base, not the single (8000) one');
+  assert.strictEqual(dealerPaid, 32000);
+  assert.strictEqual(g.stats[1].yaku['Suu Ankou'], 1);
+  assert.strictEqual(g.stats[1].yaku['Chinroutou'], 1);
+  assert.strictEqual(g.stats[1].yaku['Yakuman Stack'], 1, 'tagged for achievements.js\'s yakuman_stack');
+});
+
+test('A single (non-stacked) yakuman win is NOT tagged "Yakuman Stack"', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  g.firstRound = false;
+  // Tanki tsumo on the pair: pre-hand holds only ONE 4z, the draw completes it.
+  g.hands[1] = [...tri(1, 'z'), ...tri(2, 'z'), ...tri(3, 'z'), T(4, 'z'), ...seq(2, 'm')];
+  g.drawTile = T(4, 'z');
+  g.hands[1].push(g.drawTile);
+  g.turn = 1;
+  room._tsumo(1);
+  assert.strictEqual(g.stats[1].yaku['Shousuushii'], 1);
+  assert.strictEqual(g.stats[1].yaku['Yakuman Stack'], undefined);
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // Summary
 // ══════════════════════════════════════════════════════════════════════════

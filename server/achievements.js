@@ -83,6 +83,20 @@ const doubleBustWins = s => s.sanma.doubleBustWins;
 // 'survivor' below.
 const totalYakumanCount = s => YAKUMAN_NAMES.reduce((n, name) => n + yakuCount(s, name), 0);
 const totalBusts = s => s.yonma.busts + s.sanma.busts;
+// The 4 yaku that score as a DOUBLE yakuman (han:26) in mahjong.js's ym()
+// calls, as opposed to every other entry in YAKUMAN_NAMES above (single,
+// han:13). detectYaku returns on the first matching yakuman condition and
+// never sums two different yakuman together (confirmed directly in
+// mahjong.js — every yakuman branch is an early `return`, and the
+// decomposition loop `break`s the instant it finds one), so a hand that
+// happens to qualify for two different SINGLE yakumans at once still only
+// ever scores as one of them, never as a double — the only ways to
+// actually reach 26 han are these 4 named hands, or a Kazoe Yakuman
+// (stacking ordinary yaku + dora) that happens to cross 26 on its own,
+// which isn't tracked separately from an under-26 Kazoe Yakuman and so
+// isn't counted here.
+const DOUBLE_YAKUMAN_NAMES = ['Kokushi Juusanmen', 'Daisuushii', 'Suu Ankou Tanki', 'Junsei Chuuren'];
+const distinctDoubleYakumanCount = s => DOUBLE_YAKUMAN_NAMES.filter(n => yakuCount(s, n) > 0).length;
 // Longest-ever run of consecutive hands without dealing in — top-level on
 // the record (combined across both variants), not derived from yonma/sanma
 // sub-objects like everything above; see currentNoDealInStreak/
@@ -181,6 +195,27 @@ const ACHIEVEMENTS = [
   // Yakuman.
   { id: 'yakuman_collector', label: 'Achieve 3 yakuman-tier hands (any combination)', unlocksTitle: 'Yakuman Collector', target: 3, progress: totalYakumanCount, check: s => totalYakumanCount(s) >= 3 },
   { id: 'yakuman_legend', label: 'Achieve 10 yakuman-tier hands (any combination)', unlocksTitle: 'Yakuman Legend', target: 10, progress: totalYakumanCount, check: s => totalYakumanCount(s) >= 10 },
+  // 'Yakuman Stack' is a pseudo-yaku-name tagged server-side (see
+  // room.js's _recordHandWin) whenever a SINGLE hand's yakuList genuinely
+  // contains 2+ different yakuman-tier entries at once (e.g. Suu Ankou +
+  // Chinroutou — four concealed triplets that all happen to be terminals;
+  // see mahjong.js's detectYaku, which now collects every yakuman
+  // condition a hand satisfies instead of stopping at the first). This is
+  // NOT the same thing as 'yakuman_collector' above (3 yakuman-tier wins
+  // total, across any number of separate hands) — this specifically
+  // requires two different yakuman to coincide in ONE hand.
+  { id: 'yakuman_stack', label: 'Achieve 2 different yakuman in the same hand', unlocksTitle: 'Twin Fortune', target: 1, progress: s => Math.min(yakuCount(s, 'Yakuman Stack'), 1), check: s => yakuCount(s, 'Yakuman Stack') > 0 },
+  // Double-yakuman ladder (see DOUBLE_YAKUMAN_NAMES/distinctDoubleYakumanCount
+  // above) — a harder aggregate tier on top of the 4 individual double-
+  // yakuman achievements further down (kokushi_juusanmen_win/daisuushii_win/
+  // suuankou_tanki_win/junsei_chuuren_win), same "earning the easier one
+  // first isn't required" shape as every other ladder in this file: landing
+  // all 4 different kinds in one game unlocks all three of these at once.
+  // Counts DISTINCT kinds, not total wins — 3 Kokushi Juusanmen wins still
+  // only counts as 1 toward double_yakuman_collector/_legend.
+  { id: 'double_yakuman_hunter', label: 'Achieve a double yakuman (any kind)', unlocksTitle: 'Double Crown', target: 1, progress: s => Math.min(distinctDoubleYakumanCount(s), 1), check: s => distinctDoubleYakumanCount(s) >= 1 },
+  { id: 'double_yakuman_collector', label: 'Achieve 2 different kinds of double yakuman', unlocksTitle: 'Twin Ascendant', target: 2, progress: s => Math.min(distinctDoubleYakumanCount(s), 2), check: s => distinctDoubleYakumanCount(s) >= 2 },
+  { id: 'double_yakuman_legend', label: 'Achieve all 4 kinds of double yakuman', unlocksTitle: 'Grand Ascendant', target: 4, progress: s => Math.min(distinctDoubleYakumanCount(s), 4), check: s => distinctDoubleYakumanCount(s) >= 4 },
   { id: 'renaissance_plus', label: 'Achieve 20 different yaku', unlocksTitle: 'Master of Forms', target: 20, progress: distinctYakuCount, check: s => distinctYakuCount(s) >= 20 },
   // Lifetime-cumulative, not a "current streak" (this whole stats system
   // has no session/streak state — see stats.js's own top comment) — one

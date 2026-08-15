@@ -361,11 +361,33 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
   const menzen=isMenzen(melds);
   const allKeys=[...hand14.map(key),...melds.flatMap(m=>m.tiles.map(key))];
 
-  // ── Tenhou / Chiihou (Yakuman, before anything else) ─────────────────────
-  if(isTenhou) return ym('Tenhou','天和',13);
-  if(isChiihou) return ym('Chiihou','地和',13);
+  // ── Yakuman checks — collected, not early-returned ──────────────────────
+  // Every condition below is checked independently (no early `return`), so
+  // a hand that genuinely satisfies 2+ of them at once (e.g. Suu Ankou +
+  // Chinroutou: four concealed triplets that all happen to be terminals;
+  // or Tenhou + any shape-based yakuman, since Tenhou only constrains WHEN
+  // the win happened, not the hand's shape) stacks them into a real double
+  // (or higher) yakuman — summed han, every matched yaku listed — same as
+  // standard riichi scoring. The overwhelmingly common case (exactly one
+  // condition true) reduces to exactly the old single-yakuman behavior.
+  // `matches` holds every condition true independent of hand GROUPING
+  // (Tenhou/Chiihou/Kokushi/Daisuushii/Ryuuiisou/Tsuuiisou/Chinroutou/
+  // Chuuren all check hand14/allKeys directly); group-dependent ones (Suu
+  // Kantsu, Suu Ankou/Tanki, Daisangen, Shousuushii) are collected
+  // separately below once decompose() has run, then combined with these.
+  const matches=[];
 
-  // ── Kokushi Musou ────────────────────────────────────────────────────────
+  // Tenhou / Chiihou
+  if(isTenhou) matches.push({name:'Tenhou',jp:'天和',han:13});
+  if(isChiihou) matches.push({name:'Chiihou',jp:'地和',han:13});
+
+  // Kokushi Musou / Juusanmen — mutually exclusive with each other (one
+  // 13-orphans hand is either a 13-sided wait or it isn't) AND, by shape,
+  // with everything else here (kokushi's 13-singles-+1-pair composition
+  // always includes non-honor terminals, so it can never also be
+  // Tsuuiisou/Ryuuiisou/Chinroutou/Chuuren, and decompose() can't group it
+  // into triplets/sequences at all, so it can't also match a group-based
+  // yakuman below either) — safe to just push whichever ONE variant applies.
   if(menzen && isKokushi(hand14)){
     if(isKokushi13(hand14)){
       // Juusanmen: pre-win hand already held all 13 types singly (tenpai on
@@ -377,38 +399,65 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
       for(const t of hand14){ const k=`${t.v}${t.s}`; c[k]=(c[k]||0)+1; }
       const pairKey=Object.keys(c).find(k=>c[k]===2);
       if(winTileKey && pairKey && winTileKey===pairKey)
-        return ym('Kokushi Juusanmen','国士無双十三面待ち',26);
-      return ym('Kokushi Musou','国士無双',13);
-    }
-    return ym('Kokushi Musou','国士無双',13);
+        matches.push({name:'Kokushi Juusanmen',jp:'国士無双十三面待ち',han:26});
+      else matches.push({name:'Kokushi Musou',jp:'国士無双',han:13});
+    } else matches.push({name:'Kokushi Musou',jp:'国士無双',han:13});
   }
 
-  // ── Daisuushii / Shousuushii (must check before Tsuuiisou since all winds = all honours) ──
-  if(menzen||true){ // open hands can also have Daisuushii/Shousuushii
-    const allK=allKeys;
+  // Daisuushii — decomposition-independent (any hand with 4 different wind
+  // types at 3+ copies each must be groupable as those 4 triplets, since
+  // winds can't form sequences), so unlike Suu Ankou/Daisangen/Shousuushii
+  // below this doesn't need to wait for decompose(). Genuinely CAN stack
+  // with Tsuuiisou below when the leftover pair is a dragon (not a wind —
+  // all 4 wind types are already fully committed to their triplets) rather
+  // than a number tile, since that makes the whole 14 tiles honors too.
+  {
     const windCounts={};
-    for(const k of allK) if(WINDS.has(k)){windCounts[k]=(windCounts[k]||0)+1;}
+    for(const k of allKeys) if(WINDS.has(k)){windCounts[k]=(windCounts[k]||0)+1;}
     const windKeys=Object.keys(windCounts);
     if(windKeys.length===4&&windKeys.every(k=>windCounts[k]>=3))
-      return ym('Daisuushii','大四喜',26);
+      matches.push({name:'Daisuushii',jp:'大四喜',han:26});
   }
 
-  // ── Ryuuiisou (All Green) ────────────────────────────────────────────────
-  if(allKeys.every(k=>GREEN_TILES.has(k))) return ym('Ryuuiisou','緑一色',13);
+  // Ryuuiisou (All Green)
+  if(allKeys.every(k=>GREEN_TILES.has(k))) matches.push({name:'Ryuuiisou',jp:'緑一色',han:13});
 
-  // ── Tsuuiisou (All Honors) ───────────────────────────────────────────────
-  if(allKeys.every(k=>HONORS.has(k))) return ym('Tsuuiisou','字一色',13);
+  // Tsuuiisou (All Honors)
+  if(allKeys.every(k=>HONORS.has(k))) matches.push({name:'Tsuuiisou',jp:'字一色',han:13});
 
-  // ── Chinroutou (All Terminals) ───────────────────────────────────────────
-  if(allKeys.every(k=>TERMINALS.has(k))) return ym('Chinroutou','清老頭',13);
+  // Chinroutou (All Terminals)
+  if(allKeys.every(k=>TERMINALS.has(k))) matches.push({name:'Chinroutou',jp:'清老頭',han:13});
 
-  // ── Chuuren Poutou ───────────────────────────────────────────────────────
+  // Chuuren Poutou / Junsei Chuuren — single-suit, numbered-tile-only shape
+  // (1112345678999 + 1 extra), so like Kokushi this can never coexist with
+  // Tsuuiisou/Ryuuiisou/Chinroutou/Daisuushii (all honors/green/terminals-
+  // only), and its specific tile distribution (only the 1s and 9s stack to
+  // 3+ copies) can't also decompose into 4 triplets for Suu Ankou either.
   if(menzen && isChuuren(hand14)){
-    if(isChuuren9(hand14,winTileKey)) return ym('Junsei Chuuren','純正九蓮宝燈',26); // double
-    return ym('Chuuren Poutou','九蓮宝燈',13);
+    if(isChuuren9(hand14,winTileKey)) matches.push({name:'Junsei Chuuren',jp:'純正九蓮宝燈',han:26});
+    else matches.push({name:'Chuuren Poutou',jp:'九蓮宝燈',han:13});
   }
 
   const decomps=decompose(hand14);
+
+  // Group-based yakuman (need a valid triplet/sequence/pair grouping,
+  // unlike everything above) — checked across EVERY decomposition of this
+  // hand and deduplicated by name, since the same condition can potentially
+  // show up via more than one valid grouping of the same 14 tiles. Kept as
+  // a small standalone check (_groupYakumanMatches below) rather than
+  // reusing evalDecomp's own copy of this logic, specifically so
+  // evalDecomp itself — extensively covered by mahjong.test.js already —
+  // never has to change at all.
+  const groupNames=new Set(matches.map(m=>m.name));
+  for(const groups of decomps){
+    for(const m of _groupYakumanMatches(groups,melds,menzen,winTileKey,isTsumo)){
+      if(!groupNames.has(m.name)){ groupNames.add(m.name); matches.push(m); }
+    }
+  }
+
+  if(matches.length){
+    return {han:matches.reduce((sum,m)=>sum+m.han,0), yakuList:matches, yakuman:true};
+  }
 
   // ── Chiitoitsu ───────────────────────────────────────────────────────────
   // Only award if no regular decomp exists, or if chiitoi scores higher
@@ -463,6 +512,59 @@ function detectYaku(hand14, melds, isTsumo, seatWind, roundWind, isRiichi, isIpp
 // Shorthand for building a single-yaku yakuman result (han is 13 for a
 // single yakuman, 26 for a double yakuman like Kokushi Juusanmen).
 function ym(name,jp,han){ return {han,yakuList:[{name,jp,han}],yakuman:true}; }
+
+// Group-based yakuman for ONE decomposition — mirrors evalDecomp's own
+// Suu Kantsu/Suu Ankou(Tanki)/Daisangen/Shousuushii checks below exactly,
+// but returns every condition that matches instead of returning on the
+// first one, since detectYaku's own upfront pass (see its own comment)
+// needs to know about ALL of them to detect real yakuman stacking (e.g.
+// Suu Ankou + Chinroutou: four concealed triplets that all happen to be
+// terminals). Deliberately duplicated here rather than having evalDecomp
+// call this too — evalDecomp is the extensively-tested regular-scoring
+// path (mahjong.test.js), and this keeps that path completely untouched;
+// once detectYaku's upfront pass finds any yakuman at all it returns
+// before evalDecomp's own loop ever runs, so evalDecomp's copies of these
+// same checks become unreachable in practice rather than conflicting with
+// this one. Daisuushii is intentionally NOT duplicated here — detectYaku's
+// own decomposition-independent check already covers it, and 4 wind
+// triplets can never coexist with a 3-dragon-triplet Daisangen or a
+// 3-wind+pair Shousuushii in the same 4-group hand anyway (not enough
+// groups to fit both), so there's nothing here it could combine with.
+function _groupYakumanMatches(groups,melds,menzen,winTileKey,isTsumo){
+  const matches=[];
+  const allGroups=[...groups,...melds.map(m=>({t:m.type==='chi'?'seq':'tri',k:m.tiles.map(key)}))];
+  const tris=allGroups.filter(g=>g.t==='tri');
+  const pairs=groups.filter(g=>g.t==='pair');
+  const pairKey=pairs[0]?.k[0];
+
+  const kanMelds=melds.filter(m=>m.type==='kan');
+  if(kanMelds.length===4) matches.push({name:'Suu Kantsu',jp:'四槓子',han:13});
+
+  const ankanTris=melds.filter(m=>m.type==='kan'&&m.kanType==='ankan').map(m=>({t:'tri',k:m.tiles.map(key)}));
+  const closedTris=[...groups.filter(g=>g.t==='tri'&&!(!isTsumo&&g.k[0]===winTileKey)),...ankanTris];
+  // Suppressed when all 4 closed triplets are winds — that's exactly
+  // Daisuushii's own condition (already added separately above, in
+  // detectYaku), and unlike Daisangen (3 dragon triplets, with the 4th
+  // group left free/independent — the well-known Daisangen+Suu Ankou
+  // combo is a genuine, legitimate stack when that free group ALSO
+  // happens to be a closed triplet), Daisuushii's "4 wind triplets" is a
+  // strict SUBSET of "4 closed triplets, any tiles" — there's no
+  // independent fact left for Suu Ankou to be contributing on top of it,
+  // so counting both here would double-count the exact same 4 groups.
+  const allWindTris=closedTris.length===4&&closedTris.every(g=>WINDS.has(g.k[0]));
+  if(menzen&&closedTris.length===4&&!allWindTris){
+    const isTanki=winTileKey&&pairKey&&winTileKey===pairKey;
+    if(isTanki) matches.push({name:'Suu Ankou Tanki',jp:'四暗刻単騎',han:26});
+    else matches.push({name:'Suu Ankou',jp:'四暗刻',han:13});
+  }
+
+  if(tris.filter(g=>DRAGONS.has(g.k[0])).length===3) matches.push({name:'Daisangen',jp:'大三元',han:13});
+
+  const windTris=tris.filter(g=>WINDS.has(g.k[0]));
+  if(windTris.length===3&&pairKey&&WINDS.has(pairKey)) matches.push({name:'Shousuushii',jp:'小四喜',han:13});
+
+  return matches;
+}
 
 // Scores ONE specific way of grouping the concealed hand (`groups`, from
 // decompose(hand14)) combined with the player's melds. detectYaku calls this

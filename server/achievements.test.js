@@ -117,6 +117,48 @@ test('Yakuman Collector/Legend: sums ANY combination of yakuman-tier wins, not o
   assert.strictEqual(s.achievements['yakuman_hunter'], true, 'the "any yakuman at all" tier is also satisfied');
 });
 
+test('Yakuman Stack: unlocked by the "Yakuman Stack" pseudo-yaku tag (see room.js), independent of Yakuman Collector', () => {
+  const s = mkStats({
+    yonma: { yaku: { 'Suu Ankou': 1, 'Chinroutou': 1, 'Yakuman Stack': 1 } },
+  });
+  applyUnlocks(s);
+  assert.strictEqual(s.achievements['yakuman_stack'], true);
+
+  // 2 SEPARATE yakuman-tier wins across different hands (no stacking tag)
+  // must NOT satisfy yakuman_stack, even though it satisfies yakuman_hunter.
+  const s2 = mkStats({
+    yonma: { yaku: { 'Suu Ankou': 1, 'Chinroutou': 1 } },
+  });
+  applyUnlocks(s2);
+  assert.strictEqual(s2.achievements['yakuman_stack'], undefined, 'two yakuman in DIFFERENT hands is not the same as stacking them in one');
+  assert.strictEqual(s2.achievements['yakuman_hunter'], true);
+});
+
+test('Double Yakuman ladder: counts DISTINCT kinds, not total wins, and 2 single yakumans stacked never counts as one', () => {
+  // 3 wins of the same double-yakuman kind, plus 2 SINGLE yakumans (which
+  // must never count toward a double-yakuman achievement even combined).
+  const s = mkStats({
+    yonma: { yaku: { 'Kokushi Juusanmen': 3, 'Suu Ankou': 1, 'Chiihou': 1 } },
+  });
+  applyUnlocks(s);
+  assert.strictEqual(s.achievements['double_yakuman_hunter'], true, '1 distinct kind is enough for the "any kind" tier');
+  assert.strictEqual(s.achievements['double_yakuman_collector'], undefined, 'still only 1 distinct kind, not 2');
+  assert.strictEqual(s.achievements['double_yakuman_legend'], undefined);
+
+  const s2 = mkStats({
+    yonma: { yaku: { 'Kokushi Juusanmen': 1, 'Daisuushii': 1 } },
+  });
+  applyUnlocks(s2);
+  assert.strictEqual(s2.achievements['double_yakuman_collector'], true, '2 distinct kinds clears the collector tier');
+  assert.strictEqual(s2.achievements['double_yakuman_legend'], undefined, 'only 2 of the 4 kinds, not all 4');
+
+  const s3 = mkStats({
+    yonma: { yaku: { 'Kokushi Juusanmen': 1, 'Daisuushii': 1, 'Suu Ankou Tanki': 1, 'Junsei Chuuren': 1 } },
+  });
+  applyUnlocks(s3);
+  assert.strictEqual(s3.achievements['double_yakuman_legend'], true, 'all 4 distinct kinds unlocks the top tier');
+});
+
 test('Master of Forms: 20 distinct yaku required, not just 20 total wins of the same yaku', () => {
   const yaku = {};
   for (let i = 0; i < 20; i++) yaku['Yaku' + i] = 1; // 20 distinct names, 1 win each

@@ -49,6 +49,10 @@ const TITLES = [
   'Legend', 'Living Legend', 'Riichi Addict', 'Hand Hoarder', 'Tsumo Master',
   'Ron Master', 'Dora Addict',
   'Yakuman Collector', 'Yakuman Legend', 'Master of Forms', 'Survivor',
+  // 2-different-yakuman-in-one-hand (see server/achievements.js's yakuman_stack)
+  'Twin Fortune',
+  // Double-yakuman ladder (see server/achievements.js's double_yakuman_*)
+  'Double Crown', 'Twin Ascendant', 'Grand Ascendant',
   'The Last Emperor', 'Mighty Mouse', 'The Eagle',
   // Per-yaku titles (see server/achievements.js's *_win achievements)
   'Robbing Kan', 'Dead Wall Diver', 'Last Tile Standing', "River's End",

@@ -1355,11 +1355,28 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    var with a static 7.2px fallback for when they're used with no such
    ancestor) scales together with viewport size instead of every dialog
    rendering at one fixed pixel size regardless of a 320px phone or a 4K
-   display. width is clamp()-driven the same way (50 * the 6–10px clamp
-   range = 300–500px) instead of a flat 360px, still bounded by max-width
-   so it can never overflow a narrow phone screen. Border/border-radius/
-   box-shadow stay plain px on purpose — hairline chrome like that doesn't
-   need to track viewport size, only content/spacing does. */
+   display. width is clamp()-driven the same way (50 * the 6–18px clamp
+   range = 300–900px) instead of a flat 360px, still bounded by max-width
+   so it can never overflow a narrow phone screen.
+   Driven by 1vw, not 1vmin — vmin resolves off whichever dimension is
+   SMALLER, which on any ordinary landscape desktop window is the height,
+   so a vmin-based panel completely ignores how wide the window actually
+   is: a 1870×950 window and a 950×950 window produced the exact same
+   (small) panel, which read as "a small box floating in a lot of empty
+   background" on a normal wide monitor even though there was plenty of
+   width to use. vw fixes that directly (a wider window now genuinely
+   grows the panel), and behaves IDENTICALLY to the old vmin value on a
+   portrait phone, where width already IS the smaller dimension (vw==vmin
+   there) — so this only changes landscape/desktop behavior. A short
+   LANDSCAPE window (a phone rotated sideways) can in principle push the
+   vw-driven height past what's visible, but max-height/overflow-y below
+   already exist to catch exactly that (scrolls, doesn't overflow).
+   Content inside scales by the exact same factor as the panel (font-size/
+   padding are all driven by this same --ui-vmin), so growing the panel
+   reads as "the same design, bigger" rather than the box outgrowing its
+   own contents. Border/border-radius/box-shadow stay plain px on purpose
+   — hairline chrome like that doesn't need to track viewport size, only
+   content/spacing does. */
 /* height is fixed (not content-driven) so every panel in this family is
    the same box, whether it's a short hub list or a long stats readout —
    without this, switching between e.g. Voice Theme (short) and My Stats
@@ -1374,7 +1391,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    (the in-game "Leave Game?" confirm) opts back out to height:auto below —
    it's a standalone 2-button confirm, not a panel in this hub/child
    navigation, so forcing it to the same tall box would just look broken. */
-.about-modal{--ui-vmin:clamp(6px,1vmin,10px);
+.about-modal{--ui-vmin:clamp(6px,1vw,18px);
   display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
   width:calc(var(--ui-vmin) * 50);height:calc(var(--ui-vmin) * 48);
   max-width:calc(100vw - 24px);max-height:calc(100vh - 48px);overflow-y:auto;
@@ -1382,6 +1399,25 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   border-radius:8px;padding:calc(var(--ui-vmin) * 3.333);z-index:301;box-shadow:0 12px 48px rgba(0,0,0,.8);}
 .about-backdrop.visible,.about-modal.visible{display:block;}
 .leave-modal{height:auto;}
+/* Portrait phones (and phone-sized/portrait tablets) have far more spare
+   vertical room than --ui-vmin's width-driven (1vw) value assumes — the
+   height formula above never sees how tall the viewport actually is, only
+   how wide. Add real vh-based room on top of it here so tall content (My
+   Stats, Rankings, a long Play History) needs less internal scrolling — content
+   sizing (font/padding) is untouched, still driven by the same --ui-vmin
+   as everywhere else, so this only gives the BOX more room, it doesn't
+   make anything inside it bigger (per the "keep content proportions"
+   requirement this was built to). min(...) with the existing max-height
+   still wins on a short/squat viewport, same safety net as before. */
+@media (orientation:portrait) and (max-width:820px){
+  .about-modal{height:min(calc(var(--ui-vmin) * 48 + 26vh),calc(100vh - 48px));}
+  /* Re-assert .leave-modal's own height:auto opt-out (see its rule above) —
+     without this, the same-specificity .about-modal rule right above wins
+     on a portrait phone purely because it comes later in the file, quietly
+     un-opting-out the one panel that deliberately isn't part of this tall
+     fixed-box family. */
+  .leave-modal{height:auto;}
+}
 .about-close{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.389);right:calc(var(--ui-vmin, 7.2px) * 1.667);background:none;border:none;
   color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.222);cursor:pointer;}
 /* Mirrors .about-close exactly (same top offset AND font-size, so the two
@@ -1557,7 +1593,30 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    (which both use +90deg since text orientation doesn't mirror). ── */
 .kita-strip{position:absolute;display:flex;flex-direction:row-reverse;gap:0;align-items:flex-end;z-index:20;}
 .kita-strip:empty{display:none;}
-.kita-b{bottom:calc(var(--tlg-h) + 3vmin);right:15%;}
+/* Own (bottom) seat reads left-to-right like everything else on this row —
+   opposite of the other three seats, which is why it needs its own
+   flex-direction override: stability requires the FIXED anchor edge to be
+   whichever side the OLDEST tile renders on (see .kita-strip's shared
+   row-reverse comment above), and for a left-to-right reading order the
+   oldest tile is the LEFTMOST one, so the anchor has to be `left`, not
+   `right` like the other three.
+   Anchored at the felt's horizontal CENTER (left:50%) rather than some
+   percentage tucked close to the nameplate — the nameplate (.pname) has no
+   max-width of its own (grows freely with the player's name, up to the
+   20-char limit the profile name input enforces), so any fixed anchor close
+   to it risks the two overlapping on a narrow screen with a long name. 50%
+   needs the nameplate to reach clear across half the felt's width to reach
+   it, which no realistic name does, while still leaving the whole right
+   half of the row for tiles to grow into before the corner shared with the
+   right player's nameplate (see the max-width note below). */
+.kita-b{bottom:calc(var(--tlg-h) + 3vmin);left:50%;flex-direction:row;
+  /* Hard-caps growth before it reaches the right player's nameplate corner
+     regardless of tile count or screen size — 4 tiles is the realistic
+     case this was sized for (see conversation), but this also protects
+     against a rarer 5th+ tile in one game rather than just assuming 4 is a
+     hard limit. overflow-x auto (not hidden) so an actual overflow is
+     still reachable by scrolling rather than silently clipped/invisible. */
+  max-width:38%;overflow-x:auto;overflow-y:hidden;}
 .kita-t{top:calc(var(--tsm-h) + 3vmin);left:15%;transform:rotate(180deg);}
 .kita-l{bottom:15%;left:calc(var(--tsm-h) + 3vmin);transform:rotate(90deg) translateX(-100%);transform-origin:bottom left;}
 .kita-r{top:15%;right:calc(var(--tsm-h) + 3vmin);transform:rotate(-90deg) translateY(-100%);transform-origin:top right;}

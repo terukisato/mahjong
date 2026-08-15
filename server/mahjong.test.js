@@ -568,6 +568,64 @@ test('Daisuushii (4 wind triplets, double yakuman)', () => {
   const hand = [...tri(1, 'z'), ...tri(2, 'z'), ...tri(3, 'z'), ...tri(4, 'z'), ...pairT(5, 'p')];
   const r = Y(hand, [], { winTileKey: '5p' });
   assertHas(r, 'Daisuushii');
+  assert.strictEqual(r.han, 26, 'Daisuushii alone is 26 — must NOT also separately count Suu Ankou for the same 4 triplets (regression: used to double to 52)');
+  assertNotHas(r, 'Suu Ankou');
+  assertNotHas(r, 'Suu Ankou Tanki');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Yakuman stacking — a hand that genuinely satisfies 2+ INDEPENDENT yakuman
+// conditions at once (as opposed to Daisuushii/Suu Ankou above, where the
+// second condition is purely implied by the first, not independent) stacks
+// into a real double yakuman: every matched yaku listed, han summed. See
+// detectYaku's own "collected, not early-returned" comment for the full
+// reasoning on which combos are genuine stacks vs. implied subsumption.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Yakuman stacking: Suu Ankou + Chinroutou (4 closed triplets that all happen to be terminals)', () => {
+  // Shanpon tsumo, same pattern as the plain Suu Ankou test above — 1m/9m/1p
+  // triplets + 9p completed via tsumo (closed) + 1s pair, all terminals.
+  const pre = [...tri(1, 'm'), ...tri(9, 'm'), ...tri(1, 'p'), ...pairT(9, 'p'), ...pairT(1, 's')];
+  const r = Y([...pre, T(9, 'p')], [], { isTsumo: true, winTileKey: '9p' });
+  assertHas(r, 'Suu Ankou');
+  assertHas(r, 'Chinroutou');
+  assert.strictEqual(r.han, 26);
+});
+
+test('Yakuman stacking: Suu Ankou + Tsuuiisou (4 closed honor triplets, not all winds so Daisuushii does not also fire)', () => {
+  // 2 dragon triplets + 2 wind triplets (mixed, so windTris.length===2, not
+  // 4 — Daisuushii's own check correctly stays silent) + a 3rd wind as the
+  // pair — every tile is an honor, so this is also Tsuuiisou.
+  const pre = [...tri(5, 'z'), ...tri(6, 'z'), ...tri(1, 'z'), ...pairT(2, 'z'), ...pairT(3, 'z')];
+  const r = Y([...pre, T(2, 'z')], [], { isTsumo: true, winTileKey: '2z' });
+  assertHas(r, 'Suu Ankou');
+  assertHas(r, 'Tsuuiisou');
+  assertNotHas(r, 'Daisuushii', 'only 2 of the 4 triplets are winds, so this must not also read as Daisuushii');
+  assert.strictEqual(r.han, 26);
+});
+
+test('Yakuman stacking: Tenhou + Ryuuiisou (Tenhou only constrains WHEN the win happened, not the hand shape)', () => {
+  // Two identical 2s-3s-4s runs + a green-dragon triplet + an 8s triplet +
+  // a 6s pair — only 2 triplets, so Suu Ankou (needs 4) stays out of it;
+  // isolates the Tenhou+Ryuuiisou combination specifically.
+  const hand = [...seq(2, 's'), ...seq(2, 's'), ...tri(6, 'z'), ...tri(8, 's'), ...pairT(6, 's')];
+  const r = Y(hand, [], { isTsumo: true, isTenhou: true, winTileKey: '8s' });
+  assertHas(r, 'Tenhou');
+  assertHas(r, 'Ryuuiisou');
+  assertNotHas(r, 'Suu Ankou');
+  assert.strictEqual(r.han, 26);
+});
+
+test('Yakuman stacking: Daisangen + Suu Ankou (the 4th, non-dragon group also happens to be a closed triplet)', () => {
+  // 3 dragon triplets (Daisangen only needs these 3) + a 4th, independent
+  // closed triplet (9m) + pair — unlike Daisuushii above, Daisangen's
+  // definition leaves that 4th group completely unconstrained, so a closed
+  // triplet there is a genuinely separate, additional fact worth stacking,
+  // not something Daisangen's own condition already implied.
+  const pre = [...tri(5, 'z'), ...tri(6, 'z'), ...tri(7, 'z'), ...pairT(9, 'm'), ...pairT(2, 'p')];
+  const r = Y([...pre, T(2, 'p')], [], { isTsumo: true, winTileKey: '2p' });
+  assertHas(r, 'Daisangen');
+  assertHas(r, 'Suu Ankou');
   assert.strictEqual(r.han, 26);
 });
 
