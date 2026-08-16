@@ -1375,11 +1375,11 @@ function renderStats(m){
     return;
   }
   body.innerHTML=`
-    <div class="about-section-title">四人麻雀 YONMA</div>
-    ${renderStatsBlock(yk,'yonma')}
+    <div class="about-section-title">三人麻雀 SANMA</div>
+    ${renderStatsBlock(sk,'sanma')}
     <div class="about-section" style="margin-top:18px;">
-      <div class="about-section-title">三人麻雀 SANMA</div>
-      ${renderStatsBlock(sk,'sanma')}
+      <div class="about-section-title">四人麻雀 YONMA</div>
+      ${renderStatsBlock(yk,'yonma')}
     </div>
   `;
 }
@@ -1625,11 +1625,11 @@ function renderPlayerCard(m){
         <span class="pnp-title">${escHtml(m.title||'Beginner')}</span>
       </span>
     </div>
-    <div class="about-section-title">四人麻雀 YONMA</div>
-    ${renderRankSummary(m.yonma)}
+    <div class="about-section-title">三人麻雀 SANMA</div>
+    ${renderRankSummary(m.sanma)}
     <div class="about-section" style="margin-top:18px;">
-      <div class="about-section-title">三人麻雀 SANMA</div>
-      ${renderRankSummary(m.sanma)}
+      <div class="about-section-title">四人麻雀 YONMA</div>
+      ${renderRankSummary(m.yonma)}
     </div>
   `;
 }
@@ -2371,12 +2371,12 @@ function renderTitles(){
 // so these are drawn directly rather than being uploaded/illustrated art.
 // None are unlock-gated (unlike voice themes) — free personalization.
 const playerIcons=[
-  {id:'default', label:'Janshin', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="27" font-size="18" text-anchor="middle" fill="var(--gold)" font-family="\'Noto Serif JP\',serif">心</text></svg>'},
-  {id:'man', label:'Character', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="27" font-size="18" text-anchor="middle" fill="#e04040" font-family="\'Noto Serif JP\',serif">萬</text></svg>'},
+  {id:'default', label:'Janshin', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="20" dominant-baseline="central" font-size="18" text-anchor="middle" fill="var(--gold)" font-family="\'Noto Serif JP\',serif">心</text></svg>'},
+  {id:'man', label:'Character', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="20" dominant-baseline="central" font-size="18" text-anchor="middle" fill="#e04040" font-family="\'Noto Serif JP\',serif">萬</text></svg>'},
   {id:'pin', label:'Circle', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><circle cx="20" cy="20" r="3.5" fill="#3aa0d0"/><circle cx="13" cy="13" r="3" fill="#3aa0d0"/><circle cx="27" cy="13" r="3" fill="#3aa0d0"/><circle cx="13" cy="27" r="3" fill="#3aa0d0"/><circle cx="27" cy="27" r="3" fill="#3aa0d0"/></svg>'},
   {id:'sou', label:'Bamboo', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><rect x="17" y="8" width="6" height="24" rx="2" fill="#4caf60"/><line x1="17" y1="14" x2="23" y2="14" stroke="#0a160c" stroke-width="1.5"/><line x1="17" y1="20" x2="23" y2="20" stroke="#0a160c" stroke-width="1.5"/><line x1="17" y1="26" x2="23" y2="26" stroke="#0a160c" stroke-width="1.5"/></svg>'},
-  {id:'chun', label:'Red Dragon', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="27" font-size="18" text-anchor="middle" fill="#e04040" font-family="\'Noto Serif JP\',serif">中</text></svg>'},
-  {id:'hatsu', label:'Green Dragon', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="27" font-size="18" text-anchor="middle" fill="#4caf60" font-family="\'Noto Serif JP\',serif">發</text></svg>'},
+  {id:'chun', label:'Red Dragon', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="20" dominant-baseline="central" font-size="18" text-anchor="middle" fill="#e04040" font-family="\'Noto Serif JP\',serif">中</text></svg>'},
+  {id:'hatsu', label:'Green Dragon', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="20" dominant-baseline="central" font-size="18" text-anchor="middle" fill="#4caf60" font-family="\'Noto Serif JP\',serif">發</text></svg>'},
 ];
 let currentPlayerIcon='default';
 
@@ -2386,7 +2386,16 @@ let currentPlayerIcon='default';
 // which uses this directly instead of going through iconSvg/
 // currentPlayerIcon). Same visual language as the other icons (gold-framed
 // square, centered glyph) just with a plain "G" instead of a mahjong mark.
-const guestIconSvg='<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="27" font-size="18" text-anchor="middle" fill="var(--gold)" font-family="\'Cinzel Decorative\',serif">G</text></svg>';
+// x=17.2 (not 20) + dominant-baseline="central": text-anchor="middle" only
+// centers by advance width, and Cinzel Decorative's "G" has asymmetric
+// side-bearings — at x=20 the glyph's actual ink sits ~2.8 units right of
+// center (measured via getBBox). The CJK glyphs above don't need this
+// nudge, their ink is already centered within their advance width; "G" is
+// the one letter icon where advance-width centering and visual centering
+// diverge. dominant-baseline="central" (replacing the old eyeballed y="27")
+// fixes vertical centering for both the CJK glyphs and "G" in one go,
+// regardless of each font's baseline metrics.
+const guestIconSvg='<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="6" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="17.2" y="20" dominant-baseline="central" font-size="18" text-anchor="middle" fill="var(--gold)" font-family="\'Cinzel Decorative\',serif">G</text></svg>';
 
 // Looks up any icon's SVG by id (falls back to Default for an unknown/
 // missing id) — used for the player's own icon grid, the picker's profile
@@ -3075,7 +3084,24 @@ function pressReady(){
   wss({type:'ready'});
 }
 
+// Leaving mid-round can catch a call banner (riichi/pon/kan/chi) or the
+// round-start card still mid-animation — both live in page-level fixed
+// overlays (.cb-layer/.rs-layer, see index.html), NOT scoped inside
+// #s-game, so show()'s screen-swapping back to the lobby doesn't hide them
+// on its own; they'd otherwise just sit there until their own setTimeout
+// happens to fire. The round-start card is the more serious case: while
+// showing, .rs-layer gains .blocking (pointer-events:auto) to stop early
+// taps on the board underneath it — left in place after leaving, it
+// silently eats every click on the LOBBY screen too until that timer fires.
+function clearActiveBanners(){
+  const cb=$('cb-layer'); if(cb) cb.querySelectorAll('.call-banner').forEach(el=>el.remove());
+  const rs=$('rs-layer'); if(rs){ rs.innerHTML=''; rs.classList.remove('blocking'); }
+  roundStartBannerActive=false;
+  pendingBannerGameState=null;
+}
+
 function resetLobby(){
+  clearActiveBanners();
   mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;discarding=false;
   currentRoomRules=null;currentRoomMode=null;currentRoomNumPlayers=null;
   isPrivateRoomGame=false;isRoomHost=false;playAgainSeats=[];lastGameOverNames=null;

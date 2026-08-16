@@ -425,27 +425,40 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
 /* Nameplates */
 .np{background:#1a1a1a;border-radius:1px;
-  padding:0.8vmin 2vmin 0.8vmin 0.8vmin;display:flex;align-items:center;gap:9px;
+  padding:clamp(6px,0.8vmin,13px) clamp(14px,2vmin,32px) clamp(6px,0.8vmin,13px) clamp(6px,0.8vmin,13px);display:flex;align-items:center;gap:9px;
   z-index:20;transition:all .25s;flex-shrink:0;white-space:nowrap;
   box-shadow:0 0 0 1px #222,inset 0 1px 0 rgba(255,255,255,.04);}
 .np.active{background:#222;border-color:#ffdd44;
   box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 16px rgba(255,221,68,.5);animation:glow 1.6s ease-in-out infinite;}
 @keyframes glow{0%,100%{box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 14px rgba(255,221,68,.4);}50%{box-shadow:0 0 0 2px rgba(255,221,68,.55),0 0 28px rgba(255,221,68,.7);}}
-.wb{font-family:'Noto Serif JP',serif;font-size:3vmin;font-weight:900;width:4vmin;height:4vmin;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;}
-.pname{font-size:1.8vmin;font-weight:700;color:#fff;max-width:none;overflow:hidden;text-overflow:ellipsis;}
+/* wb/pname/ptitle/btag/tenpai/furiten-badge below: floor+ceiling clamps
+   added on every font-size/width/height that was plain unclamped `vmin` —
+   at a 375px phone (vmin≈3.75px) that math put .ba's 1.6vmin label text at
+   ~6px and this row's 1.2vmin badges at ~4.5px, well under anything
+   legible; at 4K (vmin≈21.6px) the same numbers put .wb's wind badge at
+   ~86x86px, far larger than any dialog/panel elsewhere in the app (all of
+   which are capped via --ui-vmin — see .about-modal/#settings-panel).
+   Floor/ceiling chosen from the vmin range ordinary desktop windows
+   actually produce (~7px at 1366-wide, ~16px at 2560-wide) so nothing
+   changes at any typical desktop size — only the phone/4K extremes are
+   caught, same "protect the edges, leave the middle alone" approach as
+   #cw-wind/.ci/.cwl's existing clamp()s just above in this file. */
+.wb{font-family:'Noto Serif JP',serif;font-weight:900;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;
+  font-size:clamp(21px,3vmin,48px);width:clamp(28px,4vmin,64px);height:clamp(28px,4vmin,64px);}
+.pname{font-size:clamp(13px,1.8vmin,29px);font-weight:700;color:#fff;max-width:none;overflow:hidden;text-overflow:ellipsis;}
 /* Title under the in-game nameplate's name (see startGame in script.js,
    title in room.js's _seatInfo) — empty/collapses to nothing for
    guests/bots, which have no profile to hold one. vmin-scaled like .pname
    above rather than a fixed px, so it stays proportional at any window size. */
-.ptitle{font-size:1.2vmin;color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;
+.ptitle{font-size:clamp(9px,1.2vmin,19px);color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;
   overflow:hidden;text-overflow:ellipsis;}
 /* vmin-scaled like .pname/.ptitle above (was a fixed 10px) — this sits
    directly beside both in a bot's nameplate, so a flat size here stood out
    more and more as the window shrank instead of shrinking with them. */
-.btag{font-size:1.2vmin;color:rgba(201,168,76,.5);}
-.tenpai{padding:0.4vmin 0.4vmin;border-radius:0.5vmin;background:linear-gradient(135deg,#6a0f0f,#c02020);color:#fff;font-size:1.2vmin;letter-spacing:1px;font-family:'Cinzel Decorative',serif;
+.btag{font-size:clamp(9px,1.2vmin,19px);color:rgba(201,168,76,.5);}
+.tenpai{padding:clamp(3px,0.4vmin,6px);border-radius:clamp(4px,0.5vmin,8px);background:linear-gradient(135deg,#6a0f0f,#c02020);color:#fff;font-size:clamp(9px,1.2vmin,19px);letter-spacing:1px;font-family:'Cinzel Decorative',serif;
   position:absolute;bottom:calc(var(--tlg-h) + 8vmin);left:15vmin;z-index:30;}
-.furiten-badge{padding:0.4vmin 0.4vmin;border-radius:0.5vmin;background:linear-gradient(135deg,#444,#222);color:#f88;font-size:1.2vmin;letter-spacing:1px;font-family:'Cinzel Decorative',serif;
+.furiten-badge{padding:clamp(3px,0.4vmin,6px);border-radius:clamp(4px,0.5vmin,8px);background:linear-gradient(135deg,#444,#222);color:#f88;font-size:clamp(9px,1.2vmin,19px);letter-spacing:1px;font-family:'Cinzel Decorative',serif;
   position:absolute;bottom:calc(var(--tlg-h) + 8vmin);left:calc(21vmin);z-index:31;}
 
 /* ════════════════════════════════════════════════════════════
@@ -517,7 +530,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .chi-picker{position:fixed;left:50%;bottom:18vh;transform:translateX(-50%);
   display:flex;gap:1.4vmin;align-items:center;z-index:60;
   background:rgba(8,18,12,.92);border:1px solid rgba(201,168,76,.35);
-  border-radius:10px;padding:10px 14px;box-shadow:0 8px 28px rgba(0,0,0,.7);}
+  border-radius:clamp(7px,0.8vmin,12px);padding:clamp(8px,1vmin,14px) clamp(10px,1.4vmin,18px);box-shadow:0 8px 28px rgba(0,0,0,.7);}
 .chi-picker-opt{display:flex;gap:2px;align-items:flex-end;background:none;
   border:1px solid transparent;border-radius:8px;padding:4px;cursor:pointer;
   transition:all .15s;}
@@ -530,10 +543,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    row of tile options. */
 .declare-picker{flex-direction:column;align-items:stretch;gap:10px;
   max-width:min(90vw,360px);border-color:rgba(255,128,64,.5);}
-.declare-picker-msg{font-size:12px;line-height:1.5;color:rgba(245,237,216,.85);text-align:center;}
+.declare-picker-msg{font-size:clamp(11px,1.4vmin,15px);line-height:1.5;color:rgba(245,237,216,.85);text-align:center;}
 .declare-picker-confirm{width:100%;}
-.ba{padding:0 clamp(10px,1vmin,20px);height:4vmin;border:none;border-radius:0.6vmin;
-  font-family:'Cinzel Decorative',serif;font-size:1.6vmin;
+.ba{padding:0 clamp(10px,1vmin,20px);height:clamp(28px,4vmin,64px);border:none;border-radius:clamp(4px,0.6vmin,10px);
+  font-family:'Cinzel Decorative',serif;font-size:clamp(11px,1.6vmin,26px);
   letter-spacing:0.1vmin;cursor:pointer;transition:all .15s;font-weight:700;white-space:nowrap;
   flex-shrink:0;box-shadow:0 0.4vmin 1.4vmin rgba(0,0,0,.6);}
 .ba:hover{filter:brightness(1.2);transform:translateY(--0.3vmin);box-shadow:0 0.6vmin 2vmin rgba(0,0,0,.7);}
@@ -1029,7 +1042,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    fallback (i.e. never actually scaling) regardless of screen size —
    which read as "too small" specifically on very large/4K displays. */
 #settings-panel{--ui-vmin:clamp(6px,1vmin,10px);position:fixed;top:0;right:0;bottom:0;
-  width:calc(var(--ui-vmin) * 33.33);
+  width:calc(var(--ui-vmin) * 33.33);max-width:calc(100vw - 24px);
   background:rgba(6,12,7,.97);border-left:1px solid rgba(201,168,76,.2);
   z-index:200;transform:translateX(100%);transition:transform .25s ease;
   display:flex;flex-direction:column;padding:calc(var(--ui-vmin) * 2.778) calc(var(--ui-vmin) * 2.222);
@@ -1648,6 +1661,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   background:rgba(8,25,12,.97);border:2px solid rgba(201,168,76,.5);border-radius:12px;
   padding:calc(var(--ui-vmin) * 1.944) calc(var(--ui-vmin) * 2.222) calc(var(--ui-vmin) * 2.222);
   display:none;flex-direction:column;
+  max-height:calc(100vh - 54px);overflow-y:auto;
   box-shadow:0 4px 24px rgba(0,0,0,.8),inset 0 1px 0 rgba(201,168,76,.2);}
 .dora-slots{display:flex;gap:6px;align-items:flex-end;}
 /* Live riichi-stick/honba pot, shown alongside the dora indicators for the
