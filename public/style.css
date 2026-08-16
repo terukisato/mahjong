@@ -1355,8 +1355,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    var with a static 7.2px fallback for when they're used with no such
    ancestor) scales together with viewport size instead of every dialog
    rendering at one fixed pixel size regardless of a 320px phone or a 4K
-   display. width is clamp()-driven the same way (50 * the 6–18px clamp
-   range = 300–900px) instead of a flat 360px, still bounded by max-width
+   display. width is clamp()-driven the same way (50 * the 6–12px clamp
+   range = 300–600px) instead of a flat 360px, still bounded by max-width
    so it can never overflow a narrow phone screen.
    Driven by 1vw, not 1vmin — vmin resolves off whichever dimension is
    SMALLER, which on any ordinary landscape desktop window is the height,
@@ -1391,7 +1391,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    (the in-game "Leave Game?" confirm) opts back out to height:auto below —
    it's a standalone 2-button confirm, not a panel in this hub/child
    navigation, so forcing it to the same tall box would just look broken. */
-.about-modal{--ui-vmin:clamp(6px,1vw,18px);
+/* Ceiling lowered from 18px to 12px — the old ceiling was reached by any
+   window ≥1800px wide, which includes ordinary 1920×1080 (FHD) displays,
+   not just 4K/ultrawide ones. At 18px the box hit 900×864px — on a FHD
+   screen that's ~80% of the viewport height, reading as "the panel takes
+   over the whole screen" instead of a centered dialog. 12px caps it at a
+   more normal 600×576px on every desktop-class window from ~1200px wide
+   up, while narrower/portrait viewports are unaffected (still driven down
+   to the same 6px floor as before). */
+.about-modal{--ui-vmin:clamp(6px,1vw,12px);
   display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
   width:calc(var(--ui-vmin) * 50);height:calc(var(--ui-vmin) * 48);
   max-width:calc(100vw - 24px);max-height:calc(100vh - 48px);overflow-y:auto;
