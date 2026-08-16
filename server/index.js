@@ -795,3 +795,18 @@ function shutdown(){
 }
 process.on('SIGTERM',shutdown);
 process.on('SIGINT',shutdown);
+
+// Every per-connection code path above is already wrapped in its own
+// try/catch (the ws 'message' handler, Room.action()), but the ~dozen
+// setTimeout callbacks that drive bot turns/reactions inside room.js are
+// NOT — they run outside any of those try blocks, on the raw event loop.
+// Without a handler here, an exception thrown inside one of those (a bad
+// hand shape reaching a rules function, for instance) is unhandled at the
+// top level and crashes this ENTIRE process by default, taking down every
+// concurrent room — quick-match and room-match alike — not just the one
+// that hit the bug, which would look like "the game just stopped" to
+// everyone else too. Logging and carrying on isn't a full fix for whatever
+// the underlying bug was (that one room's game may still be stuck), but it
+// stops a single room's edge case from being a whole-server outage.
+process.on('uncaughtException',(err)=>{ console.error('[uncaughtException]',err.message,'\n',err.stack); });
+process.on('unhandledRejection',(err)=>{ console.error('[unhandledRejection]',err); });

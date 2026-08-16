@@ -151,6 +151,44 @@ class Room {
     // matches fillBots()/addHuman() always keeping every seat occupied.
     this.seats[seat]=this._makeBot(seat);
     this._broadcastRoomUpdate();
+    // The turn/reaction state machine never re-evaluates itself on its own
+    // (see _resumeAfterBotSwap's own comment) — without this, a human who
+    // disconnects mid-turn or while sitting on a ron/pon/chi/kan decision
+    // would strand the whole table forever, since nothing else was ever
+    // going to prompt this now-bot seat to act.
+    this._resumeAfterBotSwap(seat);
+  }
+
+  // Pokes the turn/reaction state machine forward for a seat that just got
+  // swapped from human to bot mid-game (removeHuman above). Two situations
+  // leave the game waiting specifically on THIS seat with no other timer
+  // ever going to fire for it:
+  //  1. g.pending (a ron/pon/chi/kan reaction window) is open and this seat
+  //     is one of the reactors who hasn't answered yet. Bot seats normally
+  //     either get an immediate setTimeout(BOT_DELAY) response scheduled in
+  //     _discard(), or — if the window has ANY human reactor — no bot timer
+  //     at all, since resolution was expected to come from that human's
+  //     response. If THIS seat was that human, nothing else will ever call
+  //     _resolveReactions(). Chankan windows are excluded — _kakan already
+  //     gives those their own unconditional watchdog timer (g.pending.timer)
+  //     that completes the kan regardless of who's still outstanding.
+  //  2. g.pending is clear and it's this seat's own turn (mid-draw, waiting
+  //     on a discard/riichi/kan/tsumo decision) — _draw() only scheduled a
+  //     bot timer if the seat was ALREADY a bot at the moment it drew, so a
+  //     human who drew and then disconnected leaves nothing pending.
+  _resumeAfterBotSwap(seat){
+    const g=this.game;
+    if(!g||this.phase!=='playing') return;
+    if(g.pending&&!g.pending.isChankan&&g.pending.seats.includes(seat)&&!g.pending.responses[seat]){
+      const tile=g.pending.tile;
+      const opts=g.pending.options.find(r=>r.seat===seat)?.options||[];
+      g.pending.responses[seat]=botReact(g.hands[seat],tile,opts,g.melds[seat],this.seats[seat].difficulty);
+      if(g.pending.seats.every(s=>g.pending.responses[s])) this._resolveReactions();
+      return;
+    }
+    if(!g.pending&&g.turn===seat){
+      setTimeout(()=>this._botAct(seat),BOT_DELAY);
+    }
   }
 
   humanCount(){ return this.seats.filter(p=>p&&!p.isBot).length; }
