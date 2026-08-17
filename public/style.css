@@ -434,7 +434,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
      vmin, which let this padding stay near its floor on short/wide windows
      while the felt (sized off --table-size) kept shrinking, oversizing the
      plate relative to the felt. */
-  padding:clamp(6px,calc(var(--table-size) * 0.007273),13px) clamp(14px,calc(var(--table-size) * 0.018182),32px) clamp(6px,calc(var(--table-size) * 0.007273),13px) clamp(6px,calc(var(--table-size) * 0.007273),13px);display:flex;align-items:center;gap:9px;
+  /* Floors lowered from 6px/14px (padding) and a flat 9px (gap) — those
+     were still the OLD vmin-clamp floors, tuned only so text stayed
+     legible, not with the icon/padding/gap "chrome" around it in mind. On
+     an actual phone (not just a short/wide desktop window, which is what
+     the table-size switch above targeted) those floors were the binding
+     constraint — the plate stopped shrinking well before the felt did,
+     reading as oversized. Padding/gap have no legibility floor of their
+     own the way font-size does, so they can shrink further. */
+  padding:clamp(4px,calc(var(--table-size) * 0.007273),13px) clamp(10px,calc(var(--table-size) * 0.018182),32px) clamp(4px,calc(var(--table-size) * 0.007273),13px) clamp(4px,calc(var(--table-size) * 0.007273),13px);display:flex;align-items:center;gap:clamp(5px,calc(var(--table-size) * 0.01455),12px);
   z-index:20;transition:all .25s;flex-shrink:0;white-space:nowrap;
   box-shadow:0 0 0 1px #222,inset 0 1px 0 rgba(255,255,255,.04);}
 .np.active{background:#222;border-color:#ffdd44;
@@ -464,16 +472,39 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    110 (--table-size ≈ 110vmin on typical desktop aspect ratios), so normal
    windows render identically to before; only extreme aspect ratios differ,
    and now they differ in step with the felt instead of against it. */
+/* Icon floor lowered 28px→22px — same "chrome, not text" reasoning as
+   .np's padding/gap floors above; a circular seat-wind icon stays perfectly
+   readable well below the old floor, unlike a floor on actual text. */
 .wb{font-family:'Noto Serif JP',serif;font-weight:900;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;
-  font-size:clamp(21px,calc(var(--table-size) * 0.02727),48px);width:clamp(28px,calc(var(--table-size) * 0.03636),64px);height:clamp(28px,calc(var(--table-size) * 0.03636),64px);}
-.pname{font-size:clamp(13px,calc(var(--table-size) * 0.016364),29px);font-weight:700;color:#fff;max-width:none;overflow:hidden;text-overflow:ellipsis;}
+  font-size:clamp(17px,calc(var(--table-size) * 0.02727),48px);width:clamp(22px,calc(var(--table-size) * 0.03636),64px);height:clamp(22px,calc(var(--table-size) * 0.03636),64px);}
+/* max-width used to be `none` — the nameplate grew freely with the
+   player's name (see the kita-strip's own comment on .kita-b, which
+   anchors at the felt's horizontal center specifically BECAUSE "no
+   realistic name" was assumed to reach halfway). That held for names alone,
+   but an unlocked achievement TITLE (.ptitle below) can run much longer —
+   e.g. "YAKUMAN COLLECTOR" — and on a narrow phone-portrait felt the
+   nameplate's un-capped width reached far enough right to sit underneath
+   the bottom seat's own kita-strip tiles instead of stopping short of them.
+   Capped to a fraction of --felt-size (with white-space:nowrap so
+   overflow/ellipsis actually has something to truncate against, rather than
+   just wrapping to a second line) restores that safety margin for every
+   screen size, not just the ones a human happened to test with a short
+   name. */
+/* Font floor lowered 13px→11px — still comfortably legible (this is a
+   short name/label, read at a glance, not body copy) and was the single
+   biggest remaining contributor to the plate staying oversized on an
+   actual phone even after the padding/icon floors above came down. */
+.pname{font-size:clamp(11px,calc(var(--table-size) * 0.016364),29px);font-weight:700;color:#fff;
+  max-width:calc(var(--felt-size) * 0.17);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* Title under the in-game nameplate's name (see startGame in script.js,
    title in room.js's _seatInfo) — empty/collapses to nothing for
    guests/bots, which have no profile to hold one. table-size-scaled like
    .pname above rather than a fixed px, so it stays proportional at any
-   window size. */
+   window size. Same max-width cap as .pname above and for the same reason
+   — this is the field that actually triggered the overlap (see comment
+   there), since titles routinely run longer than names. */
 .ptitle{font-size:clamp(9px,calc(var(--table-size) * 0.010909),19px);color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;
-  overflow:hidden;text-overflow:ellipsis;}
+  max-width:calc(var(--felt-size) * 0.17);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* table-size-scaled like .pname/.ptitle above (was a fixed 10px) — this sits
    directly beside both in a bot's nameplate, so a flat size here stood out
    more and more as the window shrank instead of shrinking with them. */
