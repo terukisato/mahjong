@@ -92,7 +92,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.21</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.22</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -857,7 +857,7 @@
       <!-- ── Nameplate ── -->
         <div class="np-wrap-b">
           <div class="np-inner">
-            <div class="np" id="npb"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div><div class="ptitle" id="ptb"></div></div></div>
+            <div class="np" id="npb" onclick="openPlayerCardInGame('b',this)"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div><div class="ptitle" id="ptb"></div></div></div>
           </div>
           <div class="act-overlay actbar" id="actbar"></div>
         </div>
@@ -870,7 +870,7 @@
         <div class="hr" id="hdt"></div>
       </div>
         <div class="np-wrap-t">
-          <div class="np" id="npt"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="ptitle" id="ptt"></div><div class="btag" id="btt"></div></div></div>
+          <div class="np" id="npt" onclick="openPlayerCardInGame('t',this)"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="ptitle" id="ptt"></div><div class="btag" id="btt"></div></div></div>
         </div>
       <div class="mr ml-t" id="mlt"></div>
       <div class="kita-strip kita-t" id="kt"></div>
@@ -880,7 +880,7 @@
         <div class="hr" id="hdl"></div>
       </div>
         <div class="np-wrap-l">
-          <div class="np" id="npl"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="ptitle" id="ptl"></div><div class="btag" id="btl"></div></div></div>
+          <div class="np" id="npl" onclick="openPlayerCardInGame('l',this)"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="ptitle" id="ptl"></div><div class="btag" id="btl"></div></div></div>
         </div>
       <div class="mr ml-l" id="mll"></div>
       <div class="kita-strip kita-l" id="kl"></div>
@@ -891,7 +891,7 @@
       </div>
         <div class="np-wrap-r">
           <div class="np-flip">
-            <div class="np" id="npr"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="ptitle" id="ptr"></div><div class="btag" id="btr"></div></div></div>
+            <div class="np" id="npr" onclick="openPlayerCardInGame('r',this)"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="ptitle" id="ptr"></div><div class="btag" id="btr"></div></div></div>
           </div>
         </div>
       <div class="mr ml-r" id="mlr"></div>
@@ -928,6 +928,18 @@
       <button class="chat-close" id="chat-close">✕</button>
     </div>
     <div class="chat-history" id="chat-history"></div>
+  </div>
+
+  <!-- In-game nameplate click — a small anchored popover (NOT the Rankings
+       player-card modal/backdrop, deliberately: mid-hand the board must
+       stay visible/interactive, see openPlayerCardInGame in script.js). No
+       backdrop element — dismissed by an outside click/Escape or clicking
+       the same nameplate again (see closePlayerPopover). Positioned via
+       inline left/top set at open time (see positionPlayerPopover), so no
+       CSS position values are set here beyond position:fixed itself. -->
+  <div class="player-popover" id="player-popover" style="display:none;">
+    <div class="player-popover-nameplate" id="pp-nameplate"></div>
+    <div class="player-popover-stats" id="pp-stats"></div>
   </div>
 
 </div>

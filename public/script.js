@@ -612,7 +612,11 @@ function onMsg(m){
   if(m.type==='game_history_detail'){onGameHistoryDetail(m);return;}
   if(m.type==='leaderboard'){renderLeaderboard(m);return;}
   if(m.type==='period_leaderboard'){renderLeaderboard(m);return;}
-  if(m.type==='player_stats'){renderPlayerCard(m);return;}
+  if(m.type==='player_stats'){
+    if(pendingPlayerCardKind==='popover') renderPlayerPopover(m);
+    else renderPlayerCard(m);
+    return;
+  }
   if(m.type==='room_list'){renderRoomList(m);return;}
   if(m.type==='join_room_result'){if(!m.ok) toast(m.error||'Could not join that room.');return;}
   // Reply to the shared Invite Players window's fetch (see
@@ -1571,11 +1575,21 @@ function formatRankingPrimary(e,sortBy){
 // tab (see renderPlayerCard). Tracks the currently-requested name so a
 // slow response can't clobber a LATER click's result if the player clicks
 // a second name (or closes the modal) before the first response arrives.
+// pendingPlayerCardKind tells the 'player_stats' handler in onMsg which UI
+// asked for it ('modal' for Rankings' full card, 'popover' for the in-game
+// nameplate glance below) — both share the one get_player_stats round trip
+// and message type, so this is the only way the response knows which
+// renderer to hand off to.
 let pendingPlayerCardName=null;
+let pendingPlayerCardKind=null;
 function openPlayerCard(labelEl){
   const row=labelEl.closest('.sp-row');
-  const name=row.dataset.playerName;
+  openPlayerCardByName(row.dataset.playerName);
+}
+
+function openPlayerCardByName(name){
   pendingPlayerCardName=name;
+  pendingPlayerCardKind='modal';
   $('player-card-body').innerHTML=`<p class="player-card-loading">Loading…</p>`;
   $('player-card-modal').classList.add('visible');
   $('player-card-backdrop').classList.add('visible');
@@ -1583,9 +1597,116 @@ function openPlayerCard(labelEl){
 }
 
 function closePlayerCard(){
-  pendingPlayerCardName=null;
+  if(pendingPlayerCardKind==='modal') pendingPlayerCardName=null;
   $('player-card-modal').classList.remove('visible');
   $('player-card-backdrop').classList.remove('visible');
+}
+
+// In-game nameplate click (see the onclick on #npb/#npt/#npl/#npr in
+// index.html) — a small popover anchored next to the nameplate, deliberately
+// NOT the Rankings player-card modal above: that one has a full-screen
+// backdrop, which mid-hand would block the board the player is actively
+// reading. posId is the seat's DOM suffix ('b'/'t'/'l'/'r'), used to look up
+// the name/bot-status startGame stashed in inGameSeatInfo. Bots have no
+// profile/stats to show (get_player_stats would just come back all zeroes
+// for whatever id their display name happens to hash to), so their
+// nameplate is a no-op rather than opening a popover that reads "0 games
+// played" for something that was never a real player. Clicking the SAME
+// nameplate again toggles the popover closed instead of re-requesting.
+let inGameSeatInfo={};
+// Last-clicked nameplate element — kept so renderPlayerPopover can
+// re-measure/reposition once real content replaces the "Loading…"
+// placeholder (its height changes, so the initial position can go stale).
+let popoverAnchorEl=null;
+function openPlayerCardInGame(posId,anchorEl){
+  const info=inGameSeatInfo[posId];
+  if(!info||info.isBot||!info.name) return;
+  const pop=$('player-popover');
+  if(pop.style.display!=='none'&&pendingPlayerCardName===info.name&&pendingPlayerCardKind==='popover'){
+    closePlayerPopover();
+    return;
+  }
+  pendingPlayerCardName=info.name;
+  pendingPlayerCardKind='popover';
+  popoverAnchorEl=anchorEl;
+  positionPlayerPopover(anchorEl);
+  $('pp-nameplate').innerHTML='';
+  $('pp-stats').innerHTML=`<p class="player-card-loading">Loading…</p>`;
+  pop.style.display='';
+  wss({type:'get_player_stats',name:info.name});
+}
+
+function closePlayerPopover(){
+  if(pendingPlayerCardKind==='popover') pendingPlayerCardName=null;
+  pendingPlayerCardKind=null;
+  popoverAnchorEl=null;
+  $('player-popover').style.display='none';
+}
+
+// Anchors the popover just below-and-centered on whichever nameplate was
+// clicked, clamped to stay fully on-screen (an opponent nameplate near a
+// screen edge would otherwise push the popover half off it). Uses
+// position:fixed + getBoundingClientRect (viewport coordinates) rather than
+// the anchor's offsetParent, since nameplates sit inside the felt's
+// rotated/translated ancestors (see .np-wrap-t/l/r) — an offset-based
+// position would inherit that rotation instead of just placing a small
+// upright card near the click.
+function positionPlayerPopover(anchorEl){
+  const pop=$('player-popover');
+  const r=anchorEl.getBoundingClientRect();
+  pop.style.display=''; // must be visible to measure its own size below
+  const pw=pop.offsetWidth||220, ph=pop.offsetHeight||120;
+  let left=r.left+r.width/2-pw/2;
+  let top=r.bottom+8;
+  const margin=8;
+  left=Math.max(margin,Math.min(left,window.innerWidth-pw-margin));
+  if(top+ph>window.innerHeight-margin) top=r.top-ph-8; // flip above if it'd overflow the bottom
+  top=Math.max(margin,top);
+  pop.style.left=left+'px';
+  pop.style.top=top+'px';
+}
+
+// Dismiss on any click outside the popover itself and outside every
+// nameplate (nameplates handle their own open/toggle-close via
+// openPlayerCardInGame — excluding them here stops this same click from
+// immediately closing what that just opened) or on Escape.
+document.addEventListener('click',e=>{
+  if(pendingPlayerCardKind!=='popover') return;
+  if(e.target.closest('#player-popover')||e.target.closest('.np')) return;
+  closePlayerPopover();
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&pendingPlayerCardKind==='popover') closePlayerPopover();
+});
+
+// Combined-across-both-variants glance (see the `combined` field in
+// server/index.js's 'get_player_stats' handler) — deliberately just these
+// three numbers plus the nameplate, no Sanma/Yonma split and no ranking
+// categories, unlike renderPlayerCard's full modal. m.name is checked
+// against pendingPlayerCardName the same way renderPlayerCard does, so a
+// slow response can't clobber a later click (or paint into a popover the
+// player already dismissed).
+function renderPlayerPopover(m){
+  if(m.name!==pendingPlayerCardName||pendingPlayerCardKind!=='popover') return;
+  const tierCls=nameplateTierClass(m.wins||0);
+  $('pp-nameplate').innerHTML=`
+    <div class="up-nameplate player-card-nameplate${tierCls?' '+tierCls:''}">
+      <span class="pnp-icon">${iconSvg(m.icon)}</span>
+      <span class="pnp-info">
+        <span class="pnp-name">${escHtml(m.name)}</span>
+        <span class="pnp-title">${escHtml(m.title||'Beginner')}</span>
+      </span>
+    </div>`;
+  const c=m.combined||{gamesPlayed:0,gamesWon:0,dealInRate:null,bestHan:0};
+  const dealIn=c.dealInRate!=null?`${c.dealInRate.toFixed(1)}%`:'—';
+  const bestHan=c.bestHan>0?`${c.bestHan} han`:'—';
+  $('pp-stats').innerHTML=`
+    <div class="sp-row"><span class="sp-label">Games Played</span><span>${c.gamesPlayed}</span></div>
+    <div class="sp-row"><span class="sp-label">Games Won</span><span>${c.gamesWon}</span></div>
+    <div class="sp-row"><span class="sp-label">Deal-In Rate</span><span>${dealIn}</span></div>
+    <div class="sp-row"><span class="sp-label">Best Han</span><span>${bestHan}</span></div>
+  `;
+  if(popoverAnchorEl) positionPlayerPopover(popoverAnchorEl);
 }
 
 // Renders one variant's worth of category rows (see server's `summarize`
@@ -1599,6 +1720,22 @@ function renderRankSummary(list){
     `<div class="sp-row"><span class="sp-label">${escHtml(RANK_SORT_LABELS[r.sortBy]||'Points')}</span><span>#${r.rank} · ${formatRankingPrimary(r.entry,r.sortBy)}</span></div>`
   ).join('');
   return rows||`<p>Not ranked yet — not enough games/hands recorded in this mode.</p>`;
+}
+
+// Games Played/Wins/Best Hand headline row — unlike renderRankSummary above,
+// these are plain lifetime totals (see the headline() helper in
+// server/index.js's 'get_player_stats' handler), always shown even for a
+// player with too few games to qualify for any ranking category. Best Hand
+// shown as "N han (S pts)" when the player has actually won a hand in this
+// variant (bestScore>0), otherwise "—" — a bare "0 han" reads as a real
+// (terrible) hand rather than "hasn't won one yet".
+function renderHeadlineSummary(h){
+  const bestHand=h.bestScore>0?`${h.bestHan} han (${h.bestScore.toLocaleString()} pts)`:'—';
+  return `
+    <div class="sp-row"><span class="sp-label">Games Played</span><span>${h.gamesPlayed}</span></div>
+    <div class="sp-row"><span class="sp-label">Wins</span><span>${h.gamesWon}</span></div>
+    <div class="sp-row"><span class="sp-label">Best Hand</span><span>${bestHand}</span></div>
+  `;
 }
 
 // Response handler for openPlayerCard's request — see onMsg's
@@ -1626,9 +1763,11 @@ function renderPlayerCard(m){
       </span>
     </div>
     <div class="about-section-title">三人麻雀 SANMA</div>
+    ${renderHeadlineSummary(m.sanmaHeadline)}
     ${renderRankSummary(m.sanma)}
     <div class="about-section" style="margin-top:18px;">
       <div class="about-section-title">四人麻雀 YONMA</div>
+      ${renderHeadlineSummary(m.yonmaHeadline)}
       ${renderRankSummary(m.yonma)}
     </div>
   `;
@@ -2540,7 +2679,11 @@ function playSfx(id, seat=null){
   // Determine theme: if seat provided use that seat's theme, else Default
   const theme=seat!==null?getSeatVoiceTheme(seat):'Default';
   const ext=fxExts[capName]||'mp3';
-  el.src=`/audio/Voice/${theme}/${capName}.${ext}`;
+  const path=`/audio/Voice/${theme}/${capName}.${ext}`;
+  // Reassigning .src (even to the same URL) re-triggers the browser's media
+  // load algorithm and resets readyState, delaying playback start — skip it
+  // when this element is already pointed at the right file.
+  if(!el.src.endsWith(path)) el.src=path;
   try{
     const ctx=getFxAudioCtx().ctx;
     if(!_fxConnectedEls.has(el)){
@@ -3191,9 +3334,17 @@ function startGame(m){
   P=numSeats===3?['b','r','l']:['b','r','t','l'];
   document.querySelector('.table')?.classList.toggle('sanma',numSeats===3);
   const seats=m.seats;
+  inGameSeatInfo={};
   for(let i=0;i<numSeats;i++){
     const abs=(mySeat+i)%numSeats,id=P[i],p=seats[abs];
-    $('pn'+id).textContent=i===0?($('iname').value.trim()||'Player'):(p?.name||'—');
+    const selfName=$('iname').value.trim()||'Player';
+    $('pn'+id).textContent=i===0?selfName:(p?.name||'—');
+    // Stashed for openPlayerCardInGame (nameplate click) — self is never a
+    // bot, and always has a name (falls back to 'Player' same as the
+    // nameplate text itself above); an opponent seat can be null (empty
+    // seat) mid-game in theory, hence the p?.name guard leaving it
+    // undefined rather than the literal '—' placeholder shown on-screen.
+    inGameSeatInfo[id]=i===0?{name:selfName,isBot:false}:{name:p?.name,isBot:!!p?.isBot};
     // Title under the name — self shows currentPlayerTitle (kept live by
     // applyPlayerTitle, so this never goes stale even if changed moments
     // before starting) UNLESS playing as Guest, who has no profile to hold

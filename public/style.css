@@ -424,8 +424,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .pa-r{position:absolute;bottom:calc(10vmin - var(--tsm-h,22px));right:1vmin;transform-origin:right top;transform:rotate(90deg);}
 
 /* Nameplates */
-.np{background:#1a1a1a;border-radius:1px;
-  padding:clamp(6px,0.8vmin,13px) clamp(14px,2vmin,32px) clamp(6px,0.8vmin,13px) clamp(6px,0.8vmin,13px);display:flex;align-items:center;gap:9px;
+/* cursor:pointer applies even to bot seats (openPlayerCardInGame no-ops for
+   them rather than the cursor silently lying) — CSS has no way to know
+   which seat is a bot at load time, only inGameSeatInfo (script.js) does,
+   and gating the cursor per-seat via JS for a purely cosmetic hint isn't
+   worth the extra DOM churn on every game start. */
+.np{background:#1a1a1a;border-radius:1px;cursor:pointer;
+  /* table-size-scaled, same reasoning as .wb/.pname/etc below — was raw
+     vmin, which let this padding stay near its floor on short/wide windows
+     while the felt (sized off --table-size) kept shrinking, oversizing the
+     plate relative to the felt. */
+  padding:clamp(6px,calc(var(--table-size) * 0.007273),13px) clamp(14px,calc(var(--table-size) * 0.018182),32px) clamp(6px,calc(var(--table-size) * 0.007273),13px) clamp(6px,calc(var(--table-size) * 0.007273),13px);display:flex;align-items:center;gap:9px;
   z-index:20;transition:all .25s;flex-shrink:0;white-space:nowrap;
   box-shadow:0 0 0 1px #222,inset 0 1px 0 rgba(255,255,255,.04);}
 .np.active{background:#222;border-color:#ffdd44;
@@ -443,22 +452,35 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    changes at any typical desktop size — only the phone/4K extremes are
    caught, same "protect the edges, leave the middle alone" approach as
    #cw-wind/.ci/.cwl's existing clamp()s just above in this file. */
+/* wb/pname/ptitle/btag/tenpai/furiten-badge sizing below is expressed as a
+   fraction of --table-size (same value the felt/tiles derive from — see
+   --felt-size and updateTileSizes()'s feltSize read), not raw vmin. Raw vmin
+   reads the viewport's min(width,height) directly, which ignores the top
+   bar's fixed height and the 110%/86% factors baked into --table-size/
+   --felt-size; on a short, wide window that mismatch let the nameplate stay
+   near its px floor while the felt (sized off --table-size) kept shrinking
+   faster, so the plate ended up oversized relative to the felt and covered
+   the discard row. Each coefficient here is the old vmin value divided by
+   110 (--table-size ≈ 110vmin on typical desktop aspect ratios), so normal
+   windows render identically to before; only extreme aspect ratios differ,
+   and now they differ in step with the felt instead of against it. */
 .wb{font-family:'Noto Serif JP',serif;font-weight:900;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;
-  font-size:clamp(21px,3vmin,48px);width:clamp(28px,4vmin,64px);height:clamp(28px,4vmin,64px);}
-.pname{font-size:clamp(13px,1.8vmin,29px);font-weight:700;color:#fff;max-width:none;overflow:hidden;text-overflow:ellipsis;}
+  font-size:clamp(21px,calc(var(--table-size) * 0.02727),48px);width:clamp(28px,calc(var(--table-size) * 0.03636),64px);height:clamp(28px,calc(var(--table-size) * 0.03636),64px);}
+.pname{font-size:clamp(13px,calc(var(--table-size) * 0.016364),29px);font-weight:700;color:#fff;max-width:none;overflow:hidden;text-overflow:ellipsis;}
 /* Title under the in-game nameplate's name (see startGame in script.js,
    title in room.js's _seatInfo) — empty/collapses to nothing for
-   guests/bots, which have no profile to hold one. vmin-scaled like .pname
-   above rather than a fixed px, so it stays proportional at any window size. */
-.ptitle{font-size:clamp(9px,1.2vmin,19px);color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;
+   guests/bots, which have no profile to hold one. table-size-scaled like
+   .pname above rather than a fixed px, so it stays proportional at any
+   window size. */
+.ptitle{font-size:clamp(9px,calc(var(--table-size) * 0.010909),19px);color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;
   overflow:hidden;text-overflow:ellipsis;}
-/* vmin-scaled like .pname/.ptitle above (was a fixed 10px) — this sits
+/* table-size-scaled like .pname/.ptitle above (was a fixed 10px) — this sits
    directly beside both in a bot's nameplate, so a flat size here stood out
    more and more as the window shrank instead of shrinking with them. */
-.btag{font-size:clamp(9px,1.2vmin,19px);color:rgba(201,168,76,.5);}
-.tenpai{padding:clamp(3px,0.4vmin,6px);border-radius:clamp(4px,0.5vmin,8px);background:linear-gradient(135deg,#6a0f0f,#c02020);color:#fff;font-size:clamp(9px,1.2vmin,19px);letter-spacing:1px;font-family:'Cinzel Decorative',serif;
+.btag{font-size:clamp(9px,calc(var(--table-size) * 0.010909),19px);color:rgba(201,168,76,.5);}
+.tenpai{padding:clamp(3px,calc(var(--table-size) * 0.003636),6px);border-radius:clamp(4px,calc(var(--table-size) * 0.004545),8px);background:linear-gradient(135deg,#6a0f0f,#c02020);color:#fff;font-size:clamp(9px,calc(var(--table-size) * 0.010909),19px);letter-spacing:1px;font-family:'Cinzel Decorative',serif;
   position:absolute;bottom:calc(var(--tlg-h) + 8vmin);left:15vmin;z-index:30;}
-.furiten-badge{padding:clamp(3px,0.4vmin,6px);border-radius:clamp(4px,0.5vmin,8px);background:linear-gradient(135deg,#444,#222);color:#f88;font-size:clamp(9px,1.2vmin,19px);letter-spacing:1px;font-family:'Cinzel Decorative',serif;
+.furiten-badge{padding:clamp(3px,calc(var(--table-size) * 0.003636),6px);border-radius:clamp(4px,calc(var(--table-size) * 0.004545),8px);background:linear-gradient(135deg,#444,#222);color:#f88;font-size:clamp(9px,calc(var(--table-size) * 0.010909),19px);letter-spacing:1px;font-family:'Cinzel Decorative',serif;
   position:absolute;bottom:calc(var(--tlg-h) + 8vmin);left:calc(21vmin);z-index:31;}
 
 /* ════════════════════════════════════════════════════════════
@@ -1070,6 +1092,34 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    — just cancels .about-title's fixed modal-header spacing/centring, which
    would otherwise fight the nameplate's own flex layout and margins. */
 .player-card-nameplate{margin:0 0 calc(var(--ui-vmin, 7.2px) * 1.111) 0;text-align:left;}
+
+/* In-game nameplate click popover (see openPlayerCardInGame/
+   renderPlayerPopover in script.js) — a small anchored card, NOT a modal:
+   no backdrop, no dimming, positioned via inline left/top next to whichever
+   nameplate was clicked so the rest of the board stays visible/interactive
+   mid-hand. Own --ui-vmin (same clamp() pattern as #settings-panel/
+   .about-modal above) so .up-nameplate/.player-card-nameplate/.sp-row
+   inside it — all of which read var(--ui-vmin, 7.2px) — scale down to fit a
+   card this small rather than inheriting some ancestor's larger value. */
+/* Glassy but restrained: a translucent tinted background + blur (the actual
+   "glass" read) plus one soft inset highlight along the top edge only (a
+   frosted pane catching light from above, not an all-over shine). No
+   diagonal specular sweep like .up-nameplate::before uses elsewhere in this
+   file — that's the "too much gloss" look this was asked to avoid, fine for
+   a static profile-hub header but too busy for a small popover that pops
+   in/out constantly mid-game. backdrop-filter falls back to the flat
+   background alone on browsers without support (still fully readable). */
+.player-popover{--ui-vmin:clamp(6px,1vmin,10px);position:fixed;
+  width:calc(var(--ui-vmin) * 30.5);max-width:calc(100vw - 16px);
+  background:linear-gradient(180deg,rgba(20,32,22,.72),rgba(10,22,12,.72));
+  -webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%);
+  border:1px solid rgba(201,168,76,.32);border-radius:2px;
+  padding:calc(var(--ui-vmin) * 2) calc(var(--ui-vmin) * 1.8);
+  box-shadow:0 8px 28px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);
+  z-index:180;display:flex;flex-direction:column;gap:calc(var(--ui-vmin) * 1.4);}
+.player-popover-stats{display:flex;flex-direction:column;gap:calc(var(--ui-vmin) * 0.8);
+  font-size:calc(var(--ui-vmin) * 1.25);}
+.player-popover-stats .sp-label{color:rgba(245,237,216,.6);}
 /* Rankings' sort-stat picker (Points/Wins/Avg Place/etc. — see
    setLeaderboardSort in script.js) — a real tab strip (shared bottom
    border, active tab picked out by an underline) rather than a row of

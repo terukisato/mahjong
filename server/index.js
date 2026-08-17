@@ -526,9 +526,42 @@ wss.on('connection',(ws)=>{
       // so it's pulled straight from their stats record instead.
       const st=getStats(id);
       const wins=(st.yonma.gamesWon||0)+(st.sanma.gamesWon||0);
+      // Lifetime headline numbers (games played/won, best single-hand
+      // score/han) — shown unconditionally in the card regardless of
+      // ranking-category eligibility, unlike the per-category rows above
+      // (which are gated behind each category's own minimum-sample rule and
+      // simply omitted for a low-sample player). Pulled straight off
+      // getStats()'s per-variant view rather than through summarize()/
+      // getLeaderboard(), since these are plain lifetime totals, not ranked
+      // comparisons.
+      const headline=v=>({gamesPlayed:v.gamesPlayed||0,gamesWon:v.gamesWon||0,bestHan:v.bestHan||0,bestScore:v.bestScore||0});
+      // Combined-across-both-variants summary for the lightweight in-game
+      // nameplate popover (see openPlayerCardInGame/renderPlayerPopover in
+      // script.js) — that one deliberately shows a single set of numbers
+      // rather than a Sanma/Yonma breakdown, unlike the full Rankings player
+      // card above. Deal-in rate computed from summed LIFETIME dealIns/
+      // handsWon (not the windowed/"recent form" rate getLeaderboard's rows
+      // use) — a quick mid-game glance at an opponent should read as "how
+      // careful is this player overall", not their last-100-hands form.
+      const dealInHands=(st.yonma.handsWon||0)+(st.yonma.dealIns||0)+(st.sanma.handsWon||0)+(st.sanma.dealIns||0);
+      const dealIns=(st.yonma.dealIns||0)+(st.sanma.dealIns||0);
+      const combined={
+        gamesPlayed:(st.yonma.gamesPlayed||0)+(st.sanma.gamesPlayed||0),
+        gamesWon:wins,
+        dealInRate:dealInHands>0?(dealIns/dealInHands)*100:null,
+        // Best HAN, not best score — the two variants' scores aren't
+        // directly comparable (different starting points/seat counts, see
+        // stats.js's own comment on why they're kept in separate buckets),
+        // but han is scale-free, so the higher of the two variants' bests
+        // is a meaningful single number here, unlike a combined bestScore
+        // would be.
+        bestHan:Math.max(st.yonma.bestHan||0,st.sanma.bestHan||0),
+      };
       ws.send(JSON.stringify({
         type:'player_stats',name,icon:getIcon(name),title:getTitle(name),wins,
         yonma:summarize('yonma'),sanma:summarize('sanma'),
+        yonmaHeadline:headline(st.yonma),sanmaHeadline:headline(st.sanma),
+        combined,
       }));
     }
 
