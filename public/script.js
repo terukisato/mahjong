@@ -5158,16 +5158,36 @@ setTimeout(updateTileSizes,100);
 // keyboard on their own — this reads the keyboard's own height via the
 // VirtualKeyboard API (Chromium/Android only) and feeds it into --kb-height
 // (see .chat-bar's bottom offset in style.css) so the chat bar floats just
-// above the keyboard instead of being covered by it. Safari/iOS has no
-// VirtualKeyboard API — --kb-height simply stays at its 0px default there,
-// same as before this change, matching iOS's own native (pan, not resize)
-// keyboard behavior which was never affected by the bug this targets.
+// above the keyboard instead of being covered by it.
 if('virtualKeyboard' in navigator){
   navigator.virtualKeyboard.overlaysContent=true;
   navigator.virtualKeyboard.addEventListener('geometrychange',()=>{
     const h=navigator.virtualKeyboard.boundingRect.height;
     document.documentElement.style.setProperty('--kb-height',h+'px');
   });
+// iOS Safari fallback — no VirtualKeyboard API and no interactive-widget
+// support, so the meta tag above does nothing there. iOS instead PANS the
+// visual viewport to keep the focused chat-input clear of the keyboard,
+// without resizing 100vh or scrolling the DOM (blocked by html/body's
+// overflow:hidden) — so nothing else in this file reacts to it, and every
+// position:fixed .screen visibly shifts as that pan happens. The
+// VisualViewport API IS supported on iOS Safari, so it's used here for two
+// things: (1) same --kb-height math as the VirtualKeyboard branch above, so
+// .chat-bar still floats above the keyboard, and (2) feeding
+// visualViewport.offsetTop (how far the pan has moved) into --ios-vv-offset,
+// which .screen's own transform (style.css) uses to counter-translate by
+// the same amount and cancel the visual shift. Untested on a real device —
+// iOS's exact keyboard-pan behavior has shifted across versions, so this
+// may need adjustment after checking on an actual iPhone.
+}else if(window.visualViewport){
+  const vv=window.visualViewport;
+  const onVVChange=()=>{
+    const root=document.documentElement;
+    root.style.setProperty('--kb-height',Math.max(0,window.innerHeight-vv.height)+'px');
+    root.style.setProperty('--ios-vv-offset',vv.offsetTop+'px');
+  };
+  vv.addEventListener('resize',onVVChange);
+  vv.addEventListener('scroll',onVVChange);
 }
 
 

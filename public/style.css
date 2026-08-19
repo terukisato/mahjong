@@ -29,7 +29,22 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 *::-webkit-scrollbar-thumb:hover{background:var(--gold);}
 /* ════ BACKGROUND LAYERS ════ */
 .bg{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse at 20% 85%,rgba(26,107,69,.3),transparent 55%),radial-gradient(ellipse at 80% 15%,rgba(201,168,76,.14),transparent 55%),radial-gradient(ellipse at 50% 50%,rgba(12,35,20,.85),#040a05 100%);}
-.screen{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;}
+/* --ios-vv-offset (see script.js's visualViewport listener, the iOS
+   fallback for browsers without the VirtualKeyboard API used elsewhere in
+   this file) counters iOS Safari's own keyboard-avoidance behavior: opening
+   the keyboard pans the VISUAL viewport to keep the focused input clear of
+   it, without moving the DOM (blocked by html/body's overflow:hidden above)
+   or resizing the LAYOUT viewport 100vh is based on — so nothing here would
+   normally react to it at all. Every position:fixed screen (inset:0, i.e.
+   pinned to the layout viewport) then visually shifts as the "camera" pans
+   past it, which is the "table shifts up" symptom this whole feature is
+   about, on the one platform the overlays-content viewport meta tag
+   (index.html) and VirtualKeyboard API can't reach. Translating by the same
+   offset in the opposite direction keeps every screen visually stationary;
+   defaults to 0px (keyboard closed, or a platform that already handles this
+   itself) so nothing changes anywhere else. */
+.screen{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;
+  transform:translateY(var(--ios-vv-offset,0px));}
 .screen.hidden{display:none!important;}
 #s-end.hidden{display:none!important;}
 
