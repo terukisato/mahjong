@@ -2,7 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- interactive-widget=overlays-content (Chromium/Android) keeps the layout
+     viewport — and therefore every 100vh-derived size in style.css, chiefly
+     --table-size — fixed when the on-screen keyboard opens, instead of
+     shrinking it. Without this, opening the chat keyboard shrank 100vh,
+     which shrank the felt/tiles and re-triggered script.js's resize-driven
+     tile redraw (see scheduleTileRedraw), reading as the whole table
+     jumping/resizing. Safari on iOS doesn't support this descriptor (or the
+     VirtualKeyboard API used below to keep the chat bar above the
+     keyboard) — it falls back to its own native behavior, which pans the
+     visual viewport rather than shrinking the layout one, so it isn't
+     affected by the same bug this targets. -->
+<meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=overlays-content">
 <title>雀心 - Janshin</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Cinzel+Decorative:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&family=Yuji+Syuku&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">

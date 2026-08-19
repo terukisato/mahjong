@@ -635,7 +635,16 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    #dora-panel — everything below multiplies this one variable so it
    scales together instead of drifting apart across resolutions. */
 .chat-bar{--ui-vmin:clamp(6px,1vmin,10px);
-  position:fixed;bottom:20px;right:20px;
+  /* --kb-height (set in script.js via the VirtualKeyboard API, only where
+     supported) is the on-screen keyboard's own height — added on top of
+     the normal 20px so this bar sits just above the keyboard instead of
+     being covered by it. Needed BECAUSE of the overlays-content viewport
+     meta tag above (see index.html) — that keeps the layout viewport (and
+     this fixed position) full-height even with the keyboard open, so
+     without this offset the bar would render underneath the keyboard
+     rather than above it. Defaults to 0px (keyboard closed, or the API
+     unsupported), same as the old flat 20px. */
+  position:fixed;bottom:calc(20px + var(--kb-height, 0px));right:20px;
   display:none;flex-direction:row;align-items:center;gap:5px;
   background:rgba(3,12,6,.95);border:1px solid rgba(201,168,76,.25);
   border-radius:10px;padding:calc(var(--ui-vmin) * .694) calc(var(--ui-vmin) * 1.111);z-index:65;

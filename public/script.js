@@ -5149,6 +5149,27 @@ window.addEventListener('resize',scheduleTileRedraw);
 updateTileSizes();
 setTimeout(updateTileSizes,100);
 
+// Pairs with index.html's interactive-widget=overlays-content viewport
+// meta tag — that keeps the on-screen keyboard from resizing the layout
+// viewport (which is what was shrinking --table-size and re-triggering
+// scheduleTileRedraw above, reading as the whole table jumping when the
+// chat keyboard opened). With the layout viewport now staying full-height,
+// fixed-position elements like .chat-bar no longer get pushed up by the
+// keyboard on their own — this reads the keyboard's own height via the
+// VirtualKeyboard API (Chromium/Android only) and feeds it into --kb-height
+// (see .chat-bar's bottom offset in style.css) so the chat bar floats just
+// above the keyboard instead of being covered by it. Safari/iOS has no
+// VirtualKeyboard API — --kb-height simply stays at its 0px default there,
+// same as before this change, matching iOS's own native (pan, not resize)
+// keyboard behavior which was never affected by the bug this targets.
+if('virtualKeyboard' in navigator){
+  navigator.virtualKeyboard.overlaysContent=true;
+  navigator.virtualKeyboard.addEventListener('geometrychange',()=>{
+    const h=navigator.virtualKeyboard.boundingRect.height;
+    document.documentElement.style.setProperty('--kb-height',h+'px');
+  });
+}
+
 
 // BOOT — initialise on page load
 // Restore music & volume preferences
