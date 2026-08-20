@@ -3334,7 +3334,7 @@ function fitNameplateText(el){
   // Absolute floor, not a fraction of `base` — .ptitle's own CSS floor is
   // already just 9px (see style.css), so 60% of THAT collapsed to ~5px,
   // unreadable. 7px is the real "still legible at a glance" floor this app
-  // uses elsewhere (see .btag/.tenpai's own font floors) regardless of
+  // uses elsewhere (see .btag's own font floor) regardless of
   // which element's base size started the shrink.
   const floor=Math.min(base,7);
   let size=base,guard=0;
@@ -3342,6 +3342,27 @@ function fitNameplateText(el){
     size-=1; el.style.fontSize=size+'px'; guard++;
   }
 }
+
+// Re-fits every currently-rendered nameplate's name+title (see
+// fitNameplateText above). Needed because startGame calls fitNameplateText
+// exactly once, right when it sets each name/title — but 'Cinzel
+// Decorative' (.ptitle's font, see style.css) is a webfont loaded via a
+// Google Fonts <link>, and while it's still loading, WebKit/Chromium render
+// the text with a near-zero-width fallback metric during the font-block
+// period rather than the eventual real glyphs. A fit computed against THOSE
+// bogus dimensions can under-shrink (or not shrink at all), and nothing
+// re-checks it once the real font swaps in and the text re-flows wider —
+// which is exactly the "long titles still get clipped" symptom despite
+// fitNameplateText supposedly already handling it. document.fonts.ready
+// (below) fires once every requested font has actually finished loading,
+// so re-running the fit then closes that gap.
+function refitAllNameplates(){
+  for(const id of ['b','t','l','r']){
+    fitNameplateText($('pn'+id));
+    fitNameplateText($('pt'+id));
+  }
+}
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refitAllNameplates);
 
 // Each discard zone (.dzb/.dzt/.dzl/.dzr) grows straight toward its own
 // seat's nameplate as more tiles get discarded (6 per row) — on a narrow
@@ -3777,16 +3798,16 @@ function renderState(m, prev){
   // introduce. Suppressed outright rather than left accurate, since
   // chonbo is meant to make the player track their own hand the way a
   // real physical game would require.
-  $('tpb').style.display=(!m.chonbo&&m.waits?.length>0&&!m.riichi?.[mySeat]&&!m.furiten)?'':'none';
-  let furitenEl=$('furiten-badge');
-  if(!furitenEl){
-    furitenEl=document.createElement('span');
-    furitenEl.id='furiten-badge';
-    furitenEl.className='furiten-badge';
-    furitenEl.textContent='Furiten';
-    document.querySelector('.felt').appendChild(furitenEl);
-  }
-  furitenEl.style.display=(!m.chonbo&&m.furiten)?'block':'none';
+  // Furiten in this ruleset only ever happens WHILE tenpai (see
+  // .status-dot's own comment in style.css) — checked first so it takes
+  // priority over the plain tenpai state rather than the two competing.
+  // Riichi still suppresses the plain-tenpai case (redundant once you're
+  // locked into a declared wait) but NOT furiten — that's still critical
+  // to know mid-riichi, same as the old furiten-badge never suppressed it.
+  const dot=$('statusdot-b');
+  if(!m.chonbo&&m.furiten) dot.className='status-dot furiten';
+  else if(!m.chonbo&&m.waits?.length>0&&!m.riichi?.[mySeat]) dot.className='status-dot tenpai';
+  else dot.className='status-dot';
   drawActions(m);
 }
 
@@ -4050,12 +4071,28 @@ function fitActionBarWidth(bar){
   const npWrap=document.querySelector('.np-wrap-b');
   const npInner=npWrap?.querySelector('.np-inner');
   let budget=natural;
+  const margin=8; // small buffer so a wrapped row's own edge isn't flush against whichever boundary binds
   if(npWrap&&npInner){
     const wrapLeft=npWrap.getBoundingClientRect().left;
     const npWidth=npInner.getBoundingClientRect().width;
     const wrapGap=parseFloat(getComputedStyle(npWrap).gap)||0;
-    const margin=8; // small buffer so a wrapped row's own edge isn't flush against the viewport edge
     budget=window.innerWidth-wrapLeft-npWidth-wrapGap-margin;
+    // The viewport edge isn't the only thing this can run into — on a
+    // tall/narrow phone the felt (and everything on it) can end up nearly
+    // as wide as the viewport itself, meaning the right seat's own
+    // nameplate (.np-wrap-r) sits well before window.innerWidth, not at
+    // it. Measured: a long self-name/title (which shifts where this bar
+    // STARTS, see the width-budget math above) combined with a full
+    // 5-button reaction came within ~11px of overlapping it — close enough
+    // that ordinary label/font variance could tip it over, the same
+    // "technically fits, but only barely" issue the drawn-tile fix above
+    // ran into. Cap the budget at whichever boundary is actually closer.
+    const npWrapR=document.querySelector('.np-wrap-r');
+    if(npWrapR){
+      const barLeft=bar.getBoundingClientRect().left;
+      const rBudget=npWrapR.getBoundingClientRect().left-barLeft-margin;
+      budget=Math.min(budget,rBudget);
+    }
   }
   // Floor at roughly one button's width — a budget smaller than a single
   // button would force-wrap every button onto its own row, which is worse
@@ -5200,8 +5237,16 @@ function updateTileSizes(){
   const feltSize=felt?felt.getBoundingClientRect().width:
     parseFloat(feltSizeStr)||Math.min(window.innerWidth,window.innerHeight)*0.86;
   const base=feltSize>0?feltSize:Math.min(window.innerWidth,window.innerHeight)*0.86;
-  // Max 14 tiles must fit in ~74% of felt width (remaining for melds/padding)
-  const maxByFit=Math.floor((base*0.74)/14);
+  // Max 14 tiles must fit in ~70% of felt width (was 74% — measured on a
+  // tall/narrow phone where this term, not the 6%-of-base term below, was
+  // the binding constraint: a full 14-tile hand's own draw tile came within
+  // ~12px of the right seat's nameplate (.np-wrap-r), close enough that
+  // ordinary device/font rendering variance could tip it into actually
+  // overlapping. Only affects sizing on screens where THIS term already
+  // wins over the 6%-of-base cap below — i.e. exactly the narrow/tall
+  // screens where the collision risk exists; wider screens (where the 6%
+  // term binds instead) render identically to before.
+  const maxByFit=Math.floor((base*0.70)/14);
   // Cap at 6% of base for aesthetics
   const lgW=Math.round(Math.min(base*0.060,maxByFit));
   const lgH=Math.round(lgW*1.38);
@@ -5249,47 +5294,6 @@ function scheduleTileRedraw(){
 window.addEventListener('resize',scheduleTileRedraw);
 updateTileSizes();
 setTimeout(updateTileSizes,100);
-
-// Pairs with index.html's interactive-widget=overlays-content viewport
-// meta tag — that keeps the on-screen keyboard from resizing the layout
-// viewport (which is what was shrinking --table-size and re-triggering
-// scheduleTileRedraw above, reading as the whole table jumping when the
-// chat keyboard opened). With the layout viewport now staying full-height,
-// fixed-position elements like .chat-bar no longer get pushed up by the
-// keyboard on their own — this reads the keyboard's own height via the
-// VirtualKeyboard API (Chromium/Android only) and feeds it into --kb-height
-// (see .chat-bar's bottom offset in style.css) so the chat bar floats just
-// above the keyboard instead of being covered by it.
-if('virtualKeyboard' in navigator){
-  navigator.virtualKeyboard.overlaysContent=true;
-  navigator.virtualKeyboard.addEventListener('geometrychange',()=>{
-    const h=navigator.virtualKeyboard.boundingRect.height;
-    document.documentElement.style.setProperty('--kb-height',h+'px');
-  });
-// iOS Safari fallback — no VirtualKeyboard API and no interactive-widget
-// support, so the meta tag above does nothing there. iOS instead PANS the
-// visual viewport to keep the focused chat-input clear of the keyboard,
-// without resizing 100vh or scrolling the DOM (blocked by html/body's
-// overflow:hidden) — so nothing else in this file reacts to it, and every
-// position:fixed .screen visibly shifts as that pan happens. The
-// VisualViewport API IS supported on iOS Safari, so it's used here for two
-// things: (1) same --kb-height math as the VirtualKeyboard branch above, so
-// .chat-bar still floats above the keyboard, and (2) feeding
-// visualViewport.offsetTop (how far the pan has moved) into --ios-vv-offset,
-// which .screen's own transform (style.css) uses to counter-translate by
-// the same amount and cancel the visual shift. Untested on a real device —
-// iOS's exact keyboard-pan behavior has shifted across versions, so this
-// may need adjustment after checking on an actual iPhone.
-}else if(window.visualViewport){
-  const vv=window.visualViewport;
-  const onVVChange=()=>{
-    const root=document.documentElement;
-    root.style.setProperty('--kb-height',Math.max(0,window.innerHeight-vv.height)+'px');
-    root.style.setProperty('--ios-vv-offset',vv.offsetTop+'px');
-  };
-  vv.addEventListener('resize',onVVChange);
-  vv.addEventListener('scroll',onVVChange);
-}
 
 
 // BOOT — initialise on page load
