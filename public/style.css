@@ -378,7 +378,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* ════════════════════════════════════════════════════════════
    DISCARD ZONES
    ════════════════════════════════════════════════════════════ */
-.dz{position:absolute;display:flex;flex-direction:column;;pointer-events:none;}
+/* transform-origin:left top set here (not just on .dzt/.dzl/.dzr below,
+   which redundantly restate it) so .dzb — which has no rotation, and so no
+   origin override of its own — also anchors there instead of defaulting to
+   center. Matters for fitDiscardZone (script.js): it scales a deep pile
+   down toward its own anchor corner rather than letting it slide when it
+   would otherwise overlap that seat's nameplate — scaling from a center
+   origin would shift the pile's visible anchor point instead of shrinking
+   it in place. */
+.dz{position:absolute;display:flex;flex-direction:column;;pointer-events:none;transform-origin:left top;}
 .dz-row{display:flex;flex-direction:row;}
 
 /* H = min(13vmin,105px) = panel half-size */
@@ -510,7 +518,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    biggest remaining contributor to the plate staying oversized on an
    actual phone even after the padding/icon floors above came down. */
 .pname{font-size:clamp(11px,calc(var(--table-size) * 0.016364),29px);font-weight:700;color:#fff;
-  max-width:calc(var(--felt-size) * 0.17);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  /* 0.21, not 0.17 — the icon/padding/gap floor cuts (see .wb/.np's own
+     comments above) freed up extra margin before the kita-strip's 50%
+     anchor beyond what 0.17 assumed, and fitNameplateText (script.js) needs
+     real room to shrink a long title's FONT into rather than clipping it —
+     0.17 left so little width that even a full-strength shrink still
+     didn't fit "Disciplined Safe Player" (the longest title) at a readable
+     size. Re-verified against the same kita-strip math the original 0.17
+     was tuned from — still a ~7px buffer on a 375px phone. */
+  max-width:calc(var(--felt-size) * 0.22);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* Title under the in-game nameplate's name (see startGame in script.js,
    title in room.js's _seatInfo) — empty/collapses to nothing for
    guests/bots, which have no profile to hold one. table-size-scaled like
@@ -519,7 +535,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    — this is the field that actually triggered the overlap (see comment
    there), since titles routinely run longer than names. */
 .ptitle{font-size:clamp(9px,calc(var(--table-size) * 0.010909),19px);color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;
-  max-width:calc(var(--felt-size) * 0.17);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  /* 0.21, not 0.17 — the icon/padding/gap floor cuts (see .wb/.np's own
+     comments above) freed up extra margin before the kita-strip's 50%
+     anchor beyond what 0.17 assumed, and fitNameplateText (script.js) needs
+     real room to shrink a long title's FONT into rather than clipping it —
+     0.17 left so little width that even a full-strength shrink still
+     didn't fit "Disciplined Safe Player" (the longest title) at a readable
+     size. Re-verified against the same kita-strip math the original 0.17
+     was tuned from — still a ~7px buffer on a 375px phone. */
+  max-width:calc(var(--felt-size) * 0.22);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* table-size-scaled like .pname/.ptitle above (was a fixed 10px) — this sits
    directly beside both in a bot's nameplate, so a flat size here stood out
    more and more as the window shrank instead of shrinking with them. */
@@ -591,9 +615,29 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    ACTION BAR & BUTTONS
    ════════════════════════════════════════════════════════════ */
 .actbar{display:flex;align-items:center;}
-/* Floating action overlay — appears above the hand */
-.act-overlay{display:flex;gap:1vmin;align-items:center;
-  z-index:40;pointer-events:none;flex-wrap:nowrap;flex-shrink:0;}
+/* Floating action overlay — appears above the hand. flex-wrap:wrap (was
+   nowrap) — up to 5 buttons can appear at once (RON+PON+KAN+CHI+SKIP, see
+   drawActions in script.js), and on a narrow phone that row can run wider
+   than the space actually left beside the nameplate; nowrap+flex-shrink:0
+   just let it run off the felt/viewport edge instead, pushing the last
+   button(s) out of reach. Now it wraps onto a second row instead.
+   No width/max-width set here on purpose — drawActions (script.js) sets an
+   explicit inline width every render, capped at whatever room is actually
+   left beside the nameplate (which isn't fixed: see .pname/.ptitle's own
+   max-width comments — a longer name or title widens the plate up to ITS
+   cap). That has to happen in JS, not CSS: max-width alone left the actual
+   used width up to the browser's ambiguous sizing pass for a wrapping flex
+   item inside a shrink-to-fit ancestor (.np-wrap-b is position:absolute
+   with no explicit width), wrapping buttons that fit comfortably under the
+   intended budget. drawActions also caps that inline width at whatever the
+   buttons ACTUALLY need (not always the full budget) — .act-overlay.visible
+   below makes the whole box pointer-events:auto, so forcing it wider than
+   its content for a 1-2 button turn would leave an invisible tap-blocking
+   dead zone over the felt/hand tiles beneath it. row-gap slightly tighter
+   than the button gap itself so two stacked rows read as one group, not
+   two separate ones. */
+.act-overlay{display:flex;gap:1vmin;row-gap:0.6vmin;align-items:center;
+  z-index:40;pointer-events:none;flex-wrap:wrap;}
 .act-overlay.visible{pointer-events:auto;}
 .chi-picker{position:fixed;left:50%;bottom:18vh;transform:translateX(-50%);
   display:flex;gap:1.4vmin;align-items:center;z-index:60;
@@ -613,8 +657,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   max-width:min(90vw,360px);border-color:rgba(255,128,64,.5);}
 .declare-picker-msg{font-size:clamp(11px,1.4vmin,15px);line-height:1.5;color:rgba(245,237,216,.85);text-align:center;}
 .declare-picker-confirm{width:100%;}
-.ba{padding:0 clamp(10px,1vmin,20px);height:clamp(28px,4vmin,64px);border:none;border-radius:clamp(4px,0.6vmin,10px);
-  font-family:'Cinzel Decorative',serif;font-size:clamp(11px,1.6vmin,26px);
+/* table-size-scaled (not raw vmin) with lowered floors — same fix, same
+   reasoning, as .wb/.pname/.np's own comments above: raw vmin ignores the
+   top bar/--table-size's 110%/86% factors, so on a short/wide window (or
+   just a small phone, where these floors bind more often than intended)
+   the buttons stayed near their old floor while the felt kept shrinking
+   around them, reading as oversized. Floors lowered the same amount as
+   .wb's icon (28px→22px) for height, proportionally for padding/font — a
+   button label is short, all-caps text (TSUMO/RIICHI/PON/...), which stays
+   legible well below the old floor, same as .wb's icon did. */
+.ba{padding:0 clamp(7px,calc(var(--table-size) * 0.009091),20px);height:clamp(22px,calc(var(--table-size) * 0.03636),64px);border:none;border-radius:clamp(4px,calc(var(--table-size) * 0.005455),10px);
+  font-family:'Cinzel Decorative',serif;font-size:clamp(9px,calc(var(--table-size) * 0.014545),26px);
   letter-spacing:0.1vmin;cursor:pointer;transition:all .15s;font-weight:700;white-space:nowrap;
   flex-shrink:0;box-shadow:0 0.4vmin 1.4vmin rgba(0,0,0,.6);}
 .ba:hover{filter:brightness(1.2);transform:translateY(--0.3vmin);box-shadow:0 0.6vmin 2vmin rgba(0,0,0,.7);}

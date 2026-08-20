@@ -1708,11 +1708,11 @@ function renderPlayerPopover(m){
   const dealIn=c.dealInRate!=null?`${c.dealInRate.toFixed(1)}%`:'—';
   const bestHan=c.bestHan>0?`${c.bestHan} han`:'—';
   $('pp-stats').innerHTML=`
+    <div class="sp-row"><span class="sp-label">Win Streak</span><span>${c.currentWinStreak||0}</span></div>
     <div class="sp-row"><span class="sp-label">Games Played</span><span>${c.gamesPlayed}</span></div>
     <div class="sp-row"><span class="sp-label">Games Won</span><span>${c.gamesWon}</span></div>
     <div class="sp-row"><span class="sp-label">Deal-In Rate</span><span>${dealIn}</span></div>
     <div class="sp-row"><span class="sp-label">Best Han</span><span>${bestHan}</span></div>
-    <div class="sp-row"><span class="sp-label">Win Streak</span><span>${c.currentWinStreak||0}</span></div>
   `;
   if(popoverAnchorEl) positionPlayerPopover(popoverAnchorEl);
 }
@@ -3317,6 +3317,66 @@ function _leaveGame(){
 }
 
 
+// Shrinks .pname/.ptitle's font-size (in 1px steps) until the text fits
+// within its CSS max-width without triggering the ellipsis clip (see those
+// classes in style.css) — used instead of just letting a long name/title
+// get clipped, so the actual achievement title (e.g. "Disciplined Safe
+// Player", the longest one — see server/achievements.js) always reads in
+// full, without the nameplate box itself growing to fit it (that's what
+// the max-width cap is there to prevent — see its own comment on .pname).
+// Floored at 60% of the CSS-intended size so an even longer future title
+// still degrades to ellipsis rather than shrinking to unreadable — el's own
+// overflow:hidden;text-overflow:ellipsis stays in place as that fallback.
+function fitNameplateText(el){
+  if(!el||!el.textContent) return;
+  el.style.fontSize='';
+  const base=parseFloat(getComputedStyle(el).fontSize);
+  // Absolute floor, not a fraction of `base` — .ptitle's own CSS floor is
+  // already just 9px (see style.css), so 60% of THAT collapsed to ~5px,
+  // unreadable. 7px is the real "still legible at a glance" floor this app
+  // uses elsewhere (see .btag/.tenpai's own font floors) regardless of
+  // which element's base size started the shrink.
+  const floor=Math.min(base,7);
+  let size=base,guard=0;
+  while(el.scrollWidth>el.clientWidth+1&&size>floor&&guard<20){
+    size-=1; el.style.fontSize=size+'px'; guard++;
+  }
+}
+
+// Each discard zone (.dzb/.dzt/.dzl/.dzr) grows straight toward its own
+// seat's nameplate as more tiles get discarded (6 per row) — on a narrow
+// screen a deep pile (4+ rows, i.e. 24+ discards from one seat — happens
+// when a hand runs long with several kans) reaches far enough to visually
+// sit UNDER the nameplate (.np's z-index:20 beats the discard zone's own
+// auto stacking), hiding those tiles rather than just crowding them. Rather
+// than touch the shared 26%-of-felt anchor every discard zone/the round-info
+// panel are positioned off of (risking the whole felt's balance for a rare
+// edge case), this only ever engages once an actual overlap is detected,
+// scaling the WHOLE pile down toward its own anchor corner (transform-
+// origin:left top — already set in CSS for dzt/dzl/dzr, a no-op for dzb
+// which has no rotation) so it shrinks in place rather than sliding.
+// ROT mirrors each dz's own base CSS transform (style.css) — inline
+// transform overrides the CSS one entirely, so this has to restate it (a
+// scale() appended on top) rather than layer on top of it.
+const DZ_ROTATION={b:'',t:'rotate(180deg)',l:'rotate(90deg)',r:'rotate(-90deg)'};
+function fitDiscardZone(dz,id){
+  const base=DZ_ROTATION[id]||'';
+  dz.style.transform=base; // reset before measuring — a PRIOR render may have scaled this down, which would corrupt this render's measurement if left in place
+  const npWrap=document.querySelector('.np-wrap-'+id);
+  if(!npWrap) return;
+  const overlaps=()=>{
+    const a=dz.getBoundingClientRect(),b=npWrap.getBoundingClientRect();
+    return !(a.right<b.left||a.left>b.right||a.bottom<b.top||a.top>b.bottom);
+  };
+  if(!overlaps()) return;
+  let scale=1,guard=0;
+  while(scale>0.5&&guard<20&&overlaps()){
+    scale-=0.05;
+    dz.style.transform=`${base} scale(${scale})`.trim();
+    guard++;
+  }
+}
+
 // GAME START
 function startGame(m){
   stopLobbyMusic();
@@ -3346,7 +3406,8 @@ function startGame(m){
   for(let i=0;i<numSeats;i++){
     const abs=(mySeat+i)%numSeats,id=P[i],p=seats[abs];
     const selfName=$('iname').value.trim()||'Player';
-    $('pn'+id).textContent=i===0?selfName:(p?.name||'—');
+    const pn=$('pn'+id); pn.textContent=i===0?selfName:(p?.name||'—');
+    fitNameplateText(pn);
     // Stashed for openPlayerCardInGame (nameplate click) — self is never a
     // bot, and always has a name (falls back to 'Player' same as the
     // nameplate text itself above); an opponent seat can be null (empty
@@ -3365,7 +3426,7 @@ function startGame(m){
     // room.js's _seatInfo — blank for guests/bots, which have no profile
     // to hold one).
     const isSelfGuest=$('iname').value==='Guest';
-    const pt=$('pt'+id); if(pt) pt.textContent=i===0?(isSelfGuest?'':currentPlayerTitle):(p?.title||'');
+    const pt=$('pt'+id); if(pt){ pt.textContent=i===0?(isSelfGuest?'':currentPlayerTitle):(p?.title||''); fitNameplateText(pt); }
     if(i>0){const bt=$('bt'+id);if(bt)bt.textContent=p?.isBot?'CPU':'';}
     $('rs'+id).style.display='none';
   }
@@ -3661,6 +3722,7 @@ function renderState(m, prev){
       }
       row.appendChild(el);
     });
+    fitDiscardZone(dz,id);
   }
 
   // My melds (bottom) — anchor bottom-right, first meld rightmost, grows leftward
@@ -3968,6 +4030,37 @@ function drawActions(m){
     if(bar.children.length>0) bar.classList.add('visible');
   }
   if(!bar.classList.contains('visible')) bar.classList.remove('visible');
+  fitActionBarWidth(bar);
+}
+
+// Sizes the action bar to exactly what its own buttons need, capped at
+// whatever room is actually left beside the nameplate — see .act-overlay's
+// own comment in style.css for why this has to be inline JS rather than a
+// CSS max-width (shrink-to-fit ancestor ambiguity), and why it's capped at
+// the SMALLER of the two rather than always the full budget (avoiding an
+// invisible pointer-events:auto dead zone over the felt for a short,
+// non-wrapping button set). Runs on every drawActions call — i.e. every
+// turn/reaction — so it's always measuring the CURRENT nameplate width,
+// with no separate resize hook needed.
+function fitActionBarWidth(bar){
+  if(!bar.children.length){ bar.style.width=''; return; }
+  const gapPx=parseFloat(getComputedStyle(bar).columnGap)||0;
+  let natural=0;
+  [...bar.children].forEach((b,i)=>{ natural+=b.getBoundingClientRect().width; if(i>0) natural+=gapPx; });
+  const npWrap=document.querySelector('.np-wrap-b');
+  const npInner=npWrap?.querySelector('.np-inner');
+  let budget=natural;
+  if(npWrap&&npInner){
+    const wrapLeft=npWrap.getBoundingClientRect().left;
+    const npWidth=npInner.getBoundingClientRect().width;
+    const wrapGap=parseFloat(getComputedStyle(npWrap).gap)||0;
+    const margin=8; // small buffer so a wrapped row's own edge isn't flush against the viewport edge
+    budget=window.innerWidth-wrapLeft-npWidth-wrapGap-margin;
+  }
+  // Floor at roughly one button's width — a budget smaller than a single
+  // button would force-wrap every button onto its own row, which is worse
+  // than just letting one row run slightly tight.
+  bar.style.width=Math.min(natural,Math.max(budget,70))+'px';
 }
 
 // Builds a short readable label for a chi sequence button, e.g. "3-4-5m"
