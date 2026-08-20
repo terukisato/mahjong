@@ -1378,7 +1378,13 @@ function renderStats(m){
     body.innerHTML=`<p>No ${modeLabel} games recorded yet for <strong>${escHtml(m.name)}</strong>. Play a full match to start building stats.</p>`;
     return;
   }
+  // Win streak is account-wide (see currentWinStreak on server/stats.js's
+  // _emptyStats) — combined across Sanma/Yonma and unaffected by the
+  // quick/room match-kind tabs below (yk/sk are ONE matchKind's bucket;
+  // win streak isn't split that way at all), so it gets its own row here
+  // rather than being duplicated inside renderStatsBlock's per-variant output.
   body.innerHTML=`
+    <div class="sp-row"><span class="sp-label">Win Streak</span><span>${s.currentWinStreak||0} current · ${s.bestWinStreak||0} best</span></div>
     <div class="about-section-title">三人麻雀 SANMA</div>
     ${renderStatsBlock(sk,'sanma')}
     <div class="about-section" style="margin-top:18px;">
@@ -1421,7 +1427,7 @@ let currentLeaderboardPeriod='all';
 const RANK_SORT_LABELS={
   totalFinalScore:'Points', gamesWon:'Wins', avgPlacement:'Average Placement',
   bestScore:'Best Hand', bestHan:'Highest Han', handsWon:'Hands Won', yakumanCount:'Yakuman Count',
-  dealInRate:'Deal-In Rate',
+  dealInRate:'Deal-In Rate', bestWinStreak:'Win Streak',
 };
 function updateRankSortHeader(sortBy){
   const el=$('rank-sort-header'); if(el) el.textContent=RANK_SORT_LABELS[sortBy]||'';
@@ -1562,6 +1568,7 @@ function formatRankingPrimary(e,sortBy){
     case 'handsWon': return `${e.handsWon} hands won`;
     case 'yakumanCount': return `${e.yakumanCount} yakuman`;
     case 'dealInRate': return `${e.dealInRate.toFixed(1)}% deal-in`;
+    case 'bestWinStreak': return `${e.bestWinStreak} game streak`;
     default: return `${e.totalFinalScore.toLocaleString()} pts`;
   }
 }
@@ -1697,7 +1704,7 @@ function renderPlayerPopover(m){
         <span class="pnp-title">${escHtml(m.title||'Beginner')}</span>
       </span>
     </div>`;
-  const c=m.combined||{gamesPlayed:0,gamesWon:0,dealInRate:null,bestHan:0};
+  const c=m.combined||{gamesPlayed:0,gamesWon:0,dealInRate:null,bestHan:0,currentWinStreak:0};
   const dealIn=c.dealInRate!=null?`${c.dealInRate.toFixed(1)}%`:'—';
   const bestHan=c.bestHan>0?`${c.bestHan} han`:'—';
   $('pp-stats').innerHTML=`
@@ -1705,6 +1712,7 @@ function renderPlayerPopover(m){
     <div class="sp-row"><span class="sp-label">Games Won</span><span>${c.gamesWon}</span></div>
     <div class="sp-row"><span class="sp-label">Deal-In Rate</span><span>${dealIn}</span></div>
     <div class="sp-row"><span class="sp-label">Best Han</span><span>${bestHan}</span></div>
+    <div class="sp-row"><span class="sp-label">Win Streak</span><span>${c.currentWinStreak||0}</span></div>
   `;
   if(popoverAnchorEl) positionPlayerPopover(popoverAnchorEl);
 }

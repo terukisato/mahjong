@@ -144,6 +144,18 @@ function _emptyStats() {
     // shrinks" shape achievements.js's other lifetime counters rely on.
     currentNoDealInStreak: 0,
     bestNoDealInStreak: 0,
+    // Consecutive 1st-place GAME finishes — same account-wide shape/
+    // reasoning as currentNoDealInStreak/bestNoDealInStreak just above
+    // (winning in yonma then switching to sanma still extends the streak),
+    // but unlike that pair, THIS one IS surfaced in the UI: My Stats (see
+    // renderStats in script.js), Rankings (bestWinStreak is one of
+    // VALID_LEADERBOARD_SORTS in server/index.js), and the in-game
+    // nameplate popover (currentWinStreak, via get_player_stats' `combined`
+    // field). Updated once per GAME (on `place`), not per hand — see
+    // recordGameResult below — unlike the no-deal-in streak, which is
+    // walked per hand.
+    currentWinStreak: 0,
+    bestWinStreak: 0,
   };
 }
 
@@ -249,6 +261,8 @@ function _normalize(s) {
   if (!s.achievements) s.achievements = {};
   if (s.currentNoDealInStreak === undefined) s.currentNoDealInStreak = 0;
   if (s.bestNoDealInStreak === undefined) s.bestNoDealInStreak = 0;
+  if (s.currentWinStreak === undefined) s.currentWinStreak = 0;
+  if (s.bestWinStreak === undefined) s.bestWinStreak = 0;
   return s;
 }
 
@@ -395,6 +409,10 @@ function getStats(id) {
     unlockedTitles: [...s.unlockedTitles],
     unlockedTracks: [...s.unlockedTracks],
     achievements: { ...s.achievements },
+    // Account-wide, not per-variant — see the field's own comment on
+    // _emptyStats for why. Surfaced in My Stats (renderStats, script.js).
+    currentWinStreak: s.currentWinStreak,
+    bestWinStreak: s.bestWinStreak,
     // One row per achievement (label/reward/current progress/earned) —
     // powers the Achievements panel (see renderAchievements in
     // public/script.js). Computed fresh from this profile's own stats
@@ -435,6 +453,18 @@ function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placeme
     const s = rec[variant];
     const place = placements[seat];
     const hs = handStats[seat] || {};
+    // Win streak (see currentWinStreak/bestWinStreak on _emptyStats) —
+    // once per GAME, unlike the no-deal-in streak's per-hand walk further
+    // below, since a "win" here means the whole match, not a single hand.
+    if (place === 1) {
+      rec.currentWinStreak++;
+      if (rec.currentWinStreak > rec.bestWinStreak) rec.bestWinStreak = rec.currentWinStreak;
+    } else if (place >= 1 && place <= 4) {
+      // Only a real, known placement (1-4) ends the streak — an aborted/
+      // unscored game (place falling outside that range) shouldn't zero out
+      // a streak the player didn't actually lose.
+      rec.currentWinStreak = 0;
+    }
     // Every counter below is accumulated twice — once into the top-level
     // aggregate (both match kinds combined, what getLeaderboard reads) and
     // once into this game's matching byMatchKind sub-bucket (what the My
@@ -582,7 +612,15 @@ const MIN_HANDS_FOR_DEAL_IN_RATE = 5;
 // getPeriodLeaderboard passes the SAME summed period totals for both — a
 // week/month ranking has no separate "lifetime" number to contrast against,
 // the whole row already IS scoped to that period.
-function _rankingRow(id, s, w) {
+// bestWinStreak is passed in separately (not read off `s`/`w` like
+// everything else here) — it's account-wide (see _emptyStats), not
+// per-variant, so it doesn't live in either the variant bucket `s` reads
+// from or the windowed/period stats `w` reads from. getLeaderboard passes
+// the profile's real lifetime bestWinStreak; getPeriodLeaderboard computes
+// a period-scoped one instead (see _periodBestWinStreak below) — a lifetime
+// streak leaking into a week/month board would rank someone by a streak
+// that mostly didn't happen within that period.
+function _rankingRow(id, s, w, bestWinStreak = 0) {
   const yakumanCount = Object.entries(s.yaku)
     .reduce((n, [name, count]) => n + (YAKUMAN_NAMES.has(name) ? count : 0), 0);
   // Every game increments exactly one placements[] slot, so a genuine
@@ -616,6 +654,7 @@ function _rankingRow(id, s, w) {
     avgPlacementGames: w.gamesPlayed,
     dealInHands,
     dealInRate,
+    bestWinStreak,
   };
 }
 
@@ -659,9 +698,10 @@ function getLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma') {
   const all = _load();
   const key = variant === 'sanma' ? 'sanma' : 'yonma';
   const rows = Object.entries(all).map(([id, raw]) => {
-    const s = _normalize(raw)[key];
+    const rec = _normalize(raw);
+    const s = rec[key];
     const w = _deriveWindowStats(s.recentRounds);
-    return _rankingRow(id, s, w);
+    return _rankingRow(id, s, w, rec.bestWinStreak);
   });
   return _sortLeaderboardRows(rows, sortBy);
 }
@@ -693,6 +733,22 @@ function _sumGameDeltas(entries) {
     for (const [k, v] of Object.entries(e.yaku)) out.yaku[k] = (out.yaku[k] || 0) + v;
   }
   return out;
+}
+
+// Longest run of consecutive 1st-place games WITHIN this filtered set —
+// deliberately NOT the profile's lifetime bestWinStreak (that could easily
+// have been built up mostly outside the period, or even entirely before it
+// started). `entries` must already be in chronological order — true here
+// since periodGames is only ever appended to and pruned from the front (see
+// recordGameResult/_prunePeriodGames), and the date filter above preserves
+// that order.
+function _periodBestWinStreak(entries) {
+  let best = 0, current = 0;
+  for (const e of entries) {
+    current = e.gamesWon ? current + 1 : 0;
+    if (current > best) best = current;
+  }
+  return best;
 }
 
 // Calendar period boundaries, both computed in SERVER LOCAL TIME (plain
@@ -727,7 +783,7 @@ function getPeriodLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma', per
       const v = _normalize(raw)[key];
       const entries = (v.periodGames || []).filter(g => g.date >= start && g.date < end);
       const w = _sumGameDeltas(entries);
-      return _rankingRow(id, w, w);
+      return _rankingRow(id, w, w, _periodBestWinStreak(entries));
     })
     .filter(r => r.gamesPlayed > 0);
   return _sortLeaderboardRows(rows, sortBy);

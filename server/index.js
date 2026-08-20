@@ -25,7 +25,7 @@ const wss=new WebSocket.Server({server});
 // Rankings UI actually offers tabs for. Shared by 'get_leaderboard' and
 // 'get_player_stats' below — the latter looks up one player's row out of
 // the exact same getLeaderboard() call, so it needs the same gate.
-const VALID_LEADERBOARD_SORTS=['totalFinalScore','gamesWon','avgPlacement','bestScore','bestHan','handsWon','yakumanCount','dealInRate'];
+const VALID_LEADERBOARD_SORTS=['totalFinalScore','gamesWon','avgPlacement','bestScore','bestHan','handsWon','yakumanCount','dealInRate','bestWinStreak'];
 
 // Whitelisted against stats.js's getPeriodLeaderboard the same reason
 // VALID_LEADERBOARD_SORTS gates sortBy above — 'get_period_leaderboard'
@@ -556,6 +556,10 @@ wss.on('connection',(ws)=>{
         // is a meaningful single number here, unlike a combined bestScore
         // would be.
         bestHan:Math.max(st.yonma.bestHan||0,st.sanma.bestHan||0),
+        // Already account-wide (see currentWinStreak on stats.js's
+        // _emptyStats) — no summing/maxing across variants needed, unlike
+        // the fields above.
+        currentWinStreak:st.currentWinStreak||0,
       };
       ws.send(JSON.stringify({
         type:'player_stats',name,icon:getIcon(name),title:getTitle(name),wins,
