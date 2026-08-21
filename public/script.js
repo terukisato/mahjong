@@ -3316,6 +3316,27 @@ function _leaveGame(){
   playLobbyMusic();
 }
 
+// Traps the phone/browser back button so it can't silently exit a game in
+// progress — a stray back gesture (very easy to hit by accident on mobile,
+// where it's a thin edge swipe rather than a deliberate button) used to pop
+// this SPA's only history entry and close/exit the app outright, with no
+// chance to reconsider. Pairs with the existing leave-confirmation flow
+// above instead of adding a second one: works by keeping one extra "guard"
+// history entry pushed ahead of the page's real load — a back press pops
+// it (firing popstate) and, while a game is in progress, this immediately
+// re-pushes a fresh guard in its place, so the SPA never actually
+// navigates anywhere and the back press instead surfaces the same
+// confirmation the top-bar Leave button uses. Once the player isn't in a
+// game, popstate is left alone (no guard re-pushed), so back behaves
+// normally again — e.g. actually exiting to the home screen/closing the
+// tab, which is the outcome a back press should have outside a game.
+history.pushState({janshinGuard:true},'');
+window.addEventListener('popstate',()=>{
+  if(!inGame) return;
+  history.pushState({janshinGuard:true},'');
+  showLeaveConfirm();
+});
+
 
 // Shrinks .pname/.ptitle's font-size (in 1px steps) until the text fits
 // within its CSS max-width without triggering the ellipsis clip (see those

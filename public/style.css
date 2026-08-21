@@ -454,7 +454,12 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
      equalized to match briefly, then restored: with the plate's contents
      now bigger (13px name, 36px icon), the extra breathing room on the
      right reads as intentional again rather than an unexplained gap. */
-  padding:clamp(4px,calc(var(--table-size) * 0.007273),13px) clamp(10px,calc(var(--table-size) * 0.018182),32px) clamp(4px,calc(var(--table-size) * 0.007273),13px) clamp(4px,calc(var(--table-size) * 0.007273),13px);display:flex;align-items:center;gap:clamp(5px,calc(var(--table-size) * 0.01455),12px);
+  /* Whole plate — this padding/gap plus every wb/pname/ptitle size below —
+     scaled to 60% of its prior value in one pass, keeping every floor,
+     coefficient and ceiling in the same proportion to each other so the
+     nameplate just gets uniformly smaller rather than any one part (icon
+     vs text vs breathing room) changing shape relative to the rest. */
+  padding:clamp(2px,calc(var(--table-size) * 0.004364),8px) clamp(6px,calc(var(--table-size) * 0.010909),19px) clamp(2px,calc(var(--table-size) * 0.004364),8px) clamp(2px,calc(var(--table-size) * 0.004364),8px);display:flex;align-items:center;gap:clamp(3px,calc(var(--table-size) * 0.00873),7px);
   position:relative;
   z-index:20;transition:all .25s;flex-shrink:0;white-space:nowrap;
   box-shadow:0 0 0 1px #222,inset 0 1px 0 rgba(255,255,255,.04);}
@@ -497,7 +502,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
      412px phone (see fitNameplateText/textColHeight math this was checked
      against) — any bigger and the icon itself would start forcing the
      plate taller instead of just filling it. */
-  font-size:clamp(27px,calc(var(--table-size) * 0.04331),77px);width:clamp(36px,calc(var(--table-size) * 0.05952),105px);height:clamp(36px,calc(var(--table-size) * 0.05952),105px);}
+  font-size:clamp(16px,calc(var(--table-size) * 0.02599),46px);width:clamp(22px,calc(var(--table-size) * 0.03571),63px);height:clamp(22px,calc(var(--table-size) * 0.03571),63px);}
 /* max-width used to be `none` — the nameplate grew freely with the
    player's name (see the kita-strip's own comment on .kita-b, which
    anchors at the felt's horizontal center specifically BECAUSE "no
@@ -517,8 +522,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    where that room came from) the name got the larger share and .ptitle's
    own floor came back down to compensate (see its own comment) rather than
    both growing in lockstep. */
-.pname{font-size:clamp(13px,calc(var(--table-size) * 0.01938),35px);font-weight:700;color:#fff;
-  max-width:calc(var(--felt-size) * 0.22);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pname{font-size:clamp(8px,calc(var(--table-size) * 0.01163),21px);font-weight:700;color:#fff;
+  max-width:calc(var(--felt-size) * 0.132);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* Title under the in-game nameplate's name (see startGame in script.js,
    title in room.js's _seatInfo) — empty/collapses to nothing for
    guests/bots, which have no profile to hold one. table-size-scaled like
@@ -551,24 +556,24 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    the max-width — so a short title reads bigger instead of always paying
    the small size reserved for the longest one. */
 .ptitle{color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;
-  max-width:calc(var(--felt-size) * 0.22);overflow:hidden;line-height:1.15;
+  max-width:calc(var(--felt-size) * 0.132);overflow:hidden;line-height:1.15;
   word-break:break-word;text-align:left;
   /* Separates it from .pname above — with no gap the name and the first
      title line read as one crowded block. table-size-scaled like every
      other measurement here (checked at 3px on a 412px phone) rather than a
      flat px, so it stays proportional at any window size. */
-  margin-top:clamp(2px,calc(var(--table-size) * 0.006623),6px);}
+  margin-top:clamp(1px,calc(var(--table-size) * 0.003974),4px);}
 /* Matches .pname's own scale (see its comment above) — a short title at
    this size sits comfortably next to a same-tier name instead of looking
    like an afterthought. */
-.ptitle.one-line{font-size:clamp(10px,calc(var(--table-size) * 0.01212),21px);
+.ptitle.one-line{font-size:clamp(6px,calc(var(--table-size) * 0.007272),13px);
   white-space:nowrap;text-overflow:ellipsis;}
 /* Floor 8px — compensates for .one-line above being bigger than the old
    single flat size (name is still the primary identity, title secondary),
    and stays readable specifically because it wraps to 2 lines instead of
    needing to fit "Disciplined Safe Player" on one. Re-checked at 8px on a
    412px phone: still 2 lines, well under the max-width cap. */
-.ptitle.two-line{font-size:clamp(8px,calc(var(--table-size) * 0.0097),17px);
+.ptitle.two-line{font-size:clamp(5px,calc(var(--table-size) * 0.00582),10px);
   white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
 /* table-size-scaled like .pname/.ptitle above (was a fixed 10px) — this sits
    directly beside both in a bot's nameplate, so a flat size here stood out
