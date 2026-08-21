@@ -450,6 +450,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
      constraint — the plate stopped shrinking well before the felt did,
      reading as oversized. Padding/gap have no legibility floor of their
      own the way font-size does, so they can shrink further. */
+  /* Right padding larger than the other 3 sides (~10-32px vs 4-13px) — was
+     equalized to match briefly, then restored: with the plate's contents
+     now bigger (13px name, 36px icon), the extra breathing room on the
+     right reads as intentional again rather than an unexplained gap. */
   padding:clamp(4px,calc(var(--table-size) * 0.007273),13px) clamp(10px,calc(var(--table-size) * 0.018182),32px) clamp(4px,calc(var(--table-size) * 0.007273),13px) clamp(4px,calc(var(--table-size) * 0.007273),13px);display:flex;align-items:center;gap:clamp(5px,calc(var(--table-size) * 0.01455),12px);
   position:relative;
   z-index:20;transition:all .25s;flex-shrink:0;white-space:nowrap;
@@ -485,7 +489,15 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    .np's padding/gap floors above; a circular seat-wind icon stays perfectly
    readable well below the old floor, unlike a floor on actual text. */
 .wb{font-family:'Noto Serif JP',serif;font-weight:900;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(201,168,76,.18);color:var(--gl);border:1px solid rgba(201,168,76,.45);flex-shrink:0;
-  font-size:clamp(17px,calc(var(--table-size) * 0.02727),48px);width:clamp(22px,calc(var(--table-size) * 0.03636),64px);height:clamp(22px,calc(var(--table-size) * 0.03636),64px);}
+  /* Floor/coefficient/ceiling scaled up again (22→25→36, font 17→19→27) —
+     the plate's height is driven by the name+2-line-title text column next
+     to it (see .ptitle below), not by this icon, so there was still room
+     to grow the icon well past 25px without the plate growing any taller;
+     36px (icon width/height) is that column's actual measured height on a
+     412px phone (see fitNameplateText/textColHeight math this was checked
+     against) — any bigger and the icon itself would start forcing the
+     plate taller instead of just filling it. */
+  font-size:clamp(27px,calc(var(--table-size) * 0.04331),77px);width:clamp(36px,calc(var(--table-size) * 0.05952),105px);height:clamp(36px,calc(var(--table-size) * 0.05952),105px);}
 /* max-width used to be `none` — the nameplate grew freely with the
    player's name (see the kita-strip's own comment on .kita-b, which
    anchors at the felt's horizontal center specifically BECAUSE "no
@@ -499,19 +511,13 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    just wrapping to a second line) restores that safety margin for every
    screen size, not just the ones a human happened to test with a short
    name. */
-/* Font floor lowered 13px→11px — still comfortably legible (this is a
-   short name/label, read at a glance, not body copy) and was the single
-   biggest remaining contributor to the plate staying oversized on an
-   actual phone even after the padding/icon floors above came down. */
-.pname{font-size:clamp(11px,calc(var(--table-size) * 0.016364),29px);font-weight:700;color:#fff;
-  /* 0.21, not 0.17 — the icon/padding/gap floor cuts (see .wb/.np's own
-     comments above) freed up extra margin before the kita-strip's 50%
-     anchor beyond what 0.17 assumed, and fitNameplateText (script.js) needs
-     real room to shrink a long title's FONT into rather than clipping it —
-     0.17 left so little width that even a full-strength shrink still
-     didn't fit "Disciplined Safe Player" (the longest title) at a readable
-     size. Re-verified against the same kita-strip math the original 0.17
-     was tuned from — still a ~7px buffer on a 375px phone. */
+/* Font floor 13px→11px→9px→13px — the name is the identity people
+   actually recognize a seat by at a glance; the title below is secondary
+   flavour text, so once both had room to grow (see .wb's comment above on
+   where that room came from) the name got the larger share and .ptitle's
+   own floor came back down to compensate (see its own comment) rather than
+   both growing in lockstep. */
+.pname{font-size:clamp(13px,calc(var(--table-size) * 0.01938),35px);font-weight:700;color:#fff;
   max-width:calc(var(--felt-size) * 0.22);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 /* Title under the in-game nameplate's name (see startGame in script.js,
    title in room.js's _seatInfo) — empty/collapses to nothing for
@@ -520,16 +526,50 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    window size. Same max-width cap as .pname above and for the same reason
    — this is the field that actually triggered the overlap (see comment
    there), since titles routinely run longer than names. */
-.ptitle{font-size:clamp(9px,calc(var(--table-size) * 0.010909),19px);color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;
-  /* 0.21, not 0.17 — the icon/padding/gap floor cuts (see .wb/.np's own
-     comments above) freed up extra margin before the kita-strip's 50%
-     anchor beyond what 0.17 assumed, and fitNameplateText (script.js) needs
-     real room to shrink a long title's FONT into rather than clipping it —
-     0.17 left so little width that even a full-strength shrink still
-     didn't fit "Disciplined Safe Player" (the longest title) at a readable
-     size. Re-verified against the same kita-strip math the original 0.17
-     was tuned from — still a ~7px buffer on a 375px phone. */
-  max-width:calc(var(--felt-size) * 0.22);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Wraps to up to 2 lines instead of clipping to 1 — even at
+   fitNameplateText's (script.js) 7px shrink floor, the longest title
+   ("Disciplined Safe Player") still measured wider than this max-width on
+   an actual phone (412px-wide viewport, checked directly against
+   scrollWidth/clientWidth), so a single-line layout could never show it in
+   full no matter how far the font shrank. Two lines gives it roughly
+   double the effective width to lay out in, which is enough for every
+   title in server/achievements.js/profiles.js at a size still readable —
+   -webkit-line-clamp:2 (supported unprefixed as `line-clamp` in newer
+   engines too, but the -webkit- form has the broadest support and doesn't
+   need a fallback here) caps it at 2 visual lines and adds its own
+   trailing ellipsis if some future title is still too long even wrapped,
+   so fitNameplateText's shrink-then-clip fallback still applies past that
+   point. word-break — a title is a curated string from achievements.js,
+   not user input, but this keeps a single overlong word from overflowing
+   the max-width sideways instead of wrapping. */
+/* Most titles (server/achievements.js) are a single short word/phrase —
+   only a handful ("Disciplined/Elite/Legendary Safe Player",
+   "Thirteen-Sided Master") are long enough to actually need the 2-line
+   wrap below. fitTitleText (script.js) picks between .one-line/.two-line
+   per-title at render time: it first tries .one-line's larger size, and
+   only falls back to .two-line's smaller wrapped size if that overflows
+   the max-width — so a short title reads bigger instead of always paying
+   the small size reserved for the longest one. */
+.ptitle{color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;
+  max-width:calc(var(--felt-size) * 0.22);overflow:hidden;line-height:1.15;
+  word-break:break-word;text-align:left;
+  /* Separates it from .pname above — with no gap the name and the first
+     title line read as one crowded block. table-size-scaled like every
+     other measurement here (checked at 3px on a 412px phone) rather than a
+     flat px, so it stays proportional at any window size. */
+  margin-top:clamp(2px,calc(var(--table-size) * 0.006623),6px);}
+/* Matches .pname's own scale (see its comment above) — a short title at
+   this size sits comfortably next to a same-tier name instead of looking
+   like an afterthought. */
+.ptitle.one-line{font-size:clamp(10px,calc(var(--table-size) * 0.01212),21px);
+  white-space:nowrap;text-overflow:ellipsis;}
+/* Floor 8px — compensates for .one-line above being bigger than the old
+   single flat size (name is still the primary identity, title secondary),
+   and stays readable specifically because it wraps to 2 lines instead of
+   needing to fit "Disciplined Safe Player" on one. Re-checked at 8px on a
+   412px phone: still 2 lines, well under the max-width cap. */
+.ptitle.two-line{font-size:clamp(8px,calc(var(--table-size) * 0.0097),17px);
+  white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
 /* table-size-scaled like .pname/.ptitle above (was a fixed 10px) — this sits
    directly beside both in a bot's nameplate, so a flat size here stood out
    more and more as the window shrank instead of shrinking with them. */

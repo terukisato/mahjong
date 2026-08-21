@@ -3338,14 +3338,43 @@ function fitNameplateText(el){
   // which element's base size started the shrink.
   const floor=Math.min(base,7);
   let size=base,guard=0;
-  while(el.scrollWidth>el.clientWidth+1&&size>floor&&guard<20){
+  // Checks height as well as width — .pname stays single-line (nowrap), so
+  // only ever overflows sideways, but .ptitle now wraps to 2 lines
+  // (-webkit-line-clamp:2, see style.css), so a title too long even
+  // wrapped overflows DOWN instead, which the old width-only check never
+  // caught (it would report "fits" while line-clamp silently ellipsized a
+  // still-oversized title). scrollHeight reflects the full unclamped
+  // content height even though clientHeight is capped at 2 visual lines,
+  // so this still shrinks it toward the floor first before falling back to
+  // line-clamp's own ellipsis.
+  const overflowing=()=>el.scrollWidth>el.clientWidth+1||el.scrollHeight>el.clientHeight+1;
+  while(overflowing()&&size>floor&&guard<20){
     size-=1; el.style.fontSize=size+'px'; guard++;
   }
 }
 
+// Picks .ptitle's size per-title (see .one-line/.two-line in style.css):
+// tries the bigger single-line size first, and only falls back to the
+// smaller 2-line wrap (plus fitNameplateText's own shrink loop) if the
+// title doesn't fit at that size on one line. Most titles in
+// server/achievements.js are short enough to stay on .one-line — reserving
+// the small size for every title, even one-word ones, would make them all
+// pay for the few genuinely long titles.
+function fitTitleText(el){
+  if(!el) return;
+  el.classList.remove('one-line','two-line');
+  el.style.fontSize='';
+  if(!el.textContent) return;
+  el.classList.add('one-line');
+  if(el.scrollWidth<=el.clientWidth+1) return;
+  el.classList.remove('one-line');
+  el.classList.add('two-line');
+  fitNameplateText(el);
+}
+
 // Re-fits every currently-rendered nameplate's name+title (see
-// fitNameplateText above). Needed because startGame calls fitNameplateText
-// exactly once, right when it sets each name/title — but 'Cinzel
+// fitNameplateText/fitTitleText above). Needed because startGame calls
+// them exactly once, right when it sets each name/title — but 'Cinzel
 // Decorative' (.ptitle's font, see style.css) is a webfont loaded via a
 // Google Fonts <link>, and while it's still loading, WebKit/Chromium render
 // the text with a near-zero-width fallback metric during the font-block
@@ -3359,7 +3388,7 @@ function fitNameplateText(el){
 function refitAllNameplates(){
   for(const id of ['b','t','l','r']){
     fitNameplateText($('pn'+id));
-    fitNameplateText($('pt'+id));
+    fitTitleText($('pt'+id));
   }
 }
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refitAllNameplates);
@@ -3447,7 +3476,7 @@ function startGame(m){
     // room.js's _seatInfo — blank for guests/bots, which have no profile
     // to hold one).
     const isSelfGuest=$('iname').value==='Guest';
-    const pt=$('pt'+id); if(pt){ pt.textContent=i===0?(isSelfGuest?'':currentPlayerTitle):(p?.title||''); fitNameplateText(pt); }
+    const pt=$('pt'+id); if(pt){ pt.textContent=i===0?(isSelfGuest?'':currentPlayerTitle):(p?.title||''); fitTitleText(pt); }
     if(i>0){const bt=$('bt'+id);if(bt)bt.textContent=p?.isBot?'CPU':'';}
     $('rs'+id).style.display='none';
   }
