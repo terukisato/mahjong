@@ -3501,6 +3501,24 @@ function startGame(m){
     if(i>0){const bt=$('bt'+id);if(bt)bt.textContent=p?.isBot?'CPU':'';}
     $('rs'+id).style.display='none';
   }
+  // The fitNameplateText/fitTitleText calls above just measured against
+  // whatever font is ACTIVE right now — on the very first game after a
+  // fresh page load, 'Cinzel Decorative'/'Noto Sans JP' (see the <link> in
+  // index.html) can still be mid-download, so that measurement runs against
+  // the browser's temporary fallback-font metrics rather than the real
+  // glyphs. If a title's one-line-vs-two-line fit decision was made against
+  // those bogus (usually narrower) metrics, it can wrongly pick .one-line,
+  // which then visibly overflows once the real, wider font swaps in a
+  // moment later — read as "shows clipped, then fixes itself" rather than
+  // being wrong forever, since nothing re-checks it once the swap happens.
+  // refitAllNameplates (below document.fonts.ready's OTHER, page-load-time
+  // subscription) closes that gap once, globally, the very first time fonts
+  // finish — which only helps if this is that first game. Re-subscribing
+  // here too means every game start gets its own correction once fonts are
+  // actually ready, not just the first one; a no-op extra re-fit (already
+  // fonts.ready by now, as is true for every game after the first) costs
+  // nothing.
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refitAllNameplates);
   // Clear board (same as onRoundStart) — clears all 4 positions unconditionally
   // even in sanma (the 'top' ones are simply hidden via CSS, but stay clean
   // in case the tab later starts a 4-player game).
