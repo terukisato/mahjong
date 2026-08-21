@@ -145,8 +145,13 @@ class Room {
     // A pending play-again vote is keyed by seat number, not player id — if
     // this seat leaves mid-'done' phase, its vote must go with it, or a
     // seat it never actually cast (now holding a fresh bot below) would
-    // silently count as "wants to play again".
+    // silently count as "wants to play again". roundReady (the between-
+    // rounds "ready for next hand" vote — see _checkRoundReady) is keyed
+    // the same way for the same reason: a stale ready vote sitting under
+    // this seat number could otherwise silently count as consent from
+    // whichever bot (or later, a different human) ends up occupying it.
     this.playAgainVotes.delete(seat);
+    this.roundReady.delete(seat);
     // Always refill with a fresh bot (not null) so the table stays full —
     // matches fillBots()/addHuman() always keeping every seat occupied.
     this.seats[seat]=this._makeBot(seat);
@@ -157,6 +162,39 @@ class Room {
     // would strand the whole table forever, since nothing else was ever
     // going to prompt this now-bot seat to act.
     this._resumeAfterBotSwap(seat);
+    // Same gap, different screen: the round-result "Ready" gate (see
+    // _checkRoundReady) only ever re-evaluated itself from the
+    // round_ready action handler — a human leaving AFTER every OTHER
+    // human had already readied left this seat's now-bot occupant with
+    // nothing left to ever check the gate again, stranding the whole
+    // table on the results screen indefinitely (there's no timeout here
+    // at all — an AFK human already freezes this screen by design; this
+    // specifically closes the "they disconnected instead" case).
+    this._checkRoundReady();
+  }
+
+  // Shared by the round_ready action handler and removeHuman (a seat
+  // leaving can itself complete the "everyone's ready" condition, if it
+  // was the last human still not-ready) — releases this.pendingNextRound
+  // once every CURRENT human seat has voted ready. Bots never vote and are
+  // excluded from the requirement entirely, so a seat that just became a
+  // bot (removeHuman) is as good as an automatic "ready" from it.
+  // Gated on pendingNextRound existing at all — removeHuman calls this on
+  // EVERY disconnect, not just ones that happen to land on the round-end
+  // screen (unlike the round_ready handler, which can only ever fire from
+  // there), so without this guard a human disconnecting mid-gameplay would
+  // broadcast a stray, meaningless "X/Y ready" status left over from
+  // whatever roundReady last held.
+  _checkRoundReady(){
+    if(!this.pendingNextRound) return;
+    const humanSeats=this.seats.map((p,i)=>p&&!p.isBot?i:-1).filter(i=>i>=0);
+    this._broadcastAll({type:'ready_status',count:this.roundReady.size,total:humanSeats.length});
+    if(humanSeats.every(i=>this.roundReady.has(i))){
+      const fn=this.pendingNextRound;
+      this.pendingNextRound=null;
+      this.roundReady=new Set();
+      fn();
+    }
   }
 
   // Pokes the turn/reaction state machine forward for a seat that just got
@@ -168,10 +206,15 @@ class Room {
   //     either get an immediate setTimeout(BOT_DELAY) response scheduled in
   //     _discard(), or — if the window has ANY human reactor — no bot timer
   //     at all, since resolution was expected to come from that human's
-  //     response. If THIS seat was that human, nothing else will ever call
-  //     _resolveReactions(). Chankan windows are excluded — _kakan already
-  //     gives those their own unconditional watchdog timer (g.pending.timer)
-  //     that completes the kan regardless of who's still outstanding.
+  //     response. If THIS seat was that human, nothing else was ever going
+  //     to call _resolveReactions() — and critically, if OTHER seats in the
+  //     same window are ALSO bots that never got a timer for that same
+  //     reason, filling in only this one seat's response still leaves the
+  //     window stuck (every(...) never true). So this fills in every
+  //     still-unanswered BOT seat in the window, not just this one — see
+  //     the loop below. Chankan windows are excluded — _kakan already gives
+  //     those their own unconditional watchdog timer (g.pending.timer) that
+  //     completes the kan regardless of who's still outstanding.
   //  2. g.pending is clear and it's this seat's own turn (mid-draw, waiting
   //     on a discard/riichi/kan/tsumo decision) — _draw() only scheduled a
   //     bot timer if the seat was ALREADY a bot at the moment it drew, so a
@@ -180,9 +223,21 @@ class Room {
     const g=this.game;
     if(!g||this.phase!=='playing') return;
     if(g.pending&&!g.pending.isChankan&&g.pending.seats.includes(seat)&&!g.pending.responses[seat]){
-      const tile=g.pending.tile;
-      const opts=g.pending.options.find(r=>r.seat===seat)?.options||[];
-      g.pending.responses[seat]=botReact(g.hands[seat],tile,opts,g.melds[seat],this.seats[seat].difficulty);
+      // Fill in a bot response for EVERY seat in this window that's now a
+      // bot and hasn't answered yet — not just the seat that just swapped.
+      // A window opened with a human reactor never scheduled a BOT_DELAY
+      // timer for any OTHER bot seat in it either (see _discard's
+      // humanInReactions check above) — it trusted resolution to come from
+      // that human's own response. If THIS seat was that human, those other
+      // bot seats would otherwise never get a response and every(...) below
+      // would stay false forever, stranding the window even after this fix
+      // fills in the seat that actually triggered it.
+      for(const s of g.pending.seats){
+        if(g.pending.responses[s]) continue;
+        if(!this.seats[s]?.isBot) continue;
+        const opts=g.pending.options.find(r=>r.seat===s)?.options||[];
+        g.pending.responses[s]=this._safeBotReact(s,g.hands[s],g.pending.tile,opts,g.melds[s],this.seats[s].difficulty);
+      }
       if(g.pending.seats.every(s=>g.pending.responses[s])) this._resolveReactions();
       return;
     }
@@ -311,7 +366,13 @@ class Room {
     g.ippatsu=new Array(n).fill(false);
     g.furiten=new Array(n).fill(false);     // permanent furiten (discarded own wait)
     g.tempFuriten=new Array(n).fill(false); // temporary furiten (passed a ron opportunity)
-    g.pending=null;
+    // _clearPending, not a bare assignment — this.game is reused in place
+    // across rounds (this function mutates the SAME object, see its own
+    // top-of-function comment), so a chankan window that somehow survived
+    // to round-end still needs its 3s watchdog timer cancelled here, or it
+    // fires into the new round and corrupts it (see _clearPending's own
+    // comment for the exact mechanism).
+    this._clearPending();
     g.drawTile=null;
     g.riichiTile={};
     g.riichiTileCalled={};
@@ -413,6 +474,52 @@ class Room {
     }
   }
 
+  // Wraps botReact() (bot.js) so a bug in the bot AI's reaction logic can
+  // never leave a g.pending response permanently unfilled — every call site
+  // below stores this return value straight into g.pending.responses[seat],
+  // and that seat's slot is what every(...) waits on before resolving the
+  // window (see _resolveReactions/_checkChankanReacted). An uncaught throw
+  // here previously meant that seat's response was simply never written,
+  // stranding the whole reaction window (and everyone waiting on it)
+  // forever with nothing in the logs pointing at why. 'pass' is always a
+  // legal response to any reaction offer, so it's a safe universal fallback
+  // — worse than whatever the bot would have ideally chosen, but never
+  // worse than a permanent stall.
+  _safeBotReact(seat,hand,tile,options,melds,difficulty){
+    try{
+      return botReact(hand,tile,options,melds,difficulty);
+    }catch(e){
+      console.error(`[bot react error] seat=${seat} tile=${tile&&key(tile)}`,e.message,e.stack);
+      return {type:'pass'};
+    }
+  }
+
+  // Wraps bestDiscard() (bot.js) the same way, plus validates the result is
+  // actually a tile this seat is holding — _discard() silently no-ops on an
+  // unrecognized tileId (correct there: it's also the human-input validation
+  // guard, rejecting a malicious/buggy client's tileId), which for a BOT
+  // call means an invalid bestDiscard() result stalls that bot's turn
+  // forever with no error at all, not even a thrown one. Falls back to the
+  // just-drawn tile if present (river reasoning below), else the hand's own
+  // first tile — always a legal discard, so this can never fail to advance
+  // the turn.
+  _botDiscardTile(seat){
+    const g=this.game;
+    const hand=g.hands[seat];
+    try{
+      const id=bestDiscard(hand,g.melds[seat],this.seats[seat].difficulty,this._dangerSetsFor(seat));
+      if(hand.some(t=>t.id===id)) return id;
+      console.error(`[bot discard error] seat=${seat} bestDiscard returned a tileId not in hand`);
+    }catch(e){
+      console.error(`[bot discard error] seat=${seat}`,e.message,e.stack);
+    }
+    // Prefer the just-drawn tile — always legal, and the only legal choice
+    // at all for a riichi'd bot (see _botTurn's own forced-discard branch,
+    // which normally never even reaches bestDiscard for that case, but this
+    // fallback needs to hold even if THIS bot state is itself unusual).
+    return (g.drawTile&&hand.some(t=>t.id===g.drawTile.id)?g.drawTile.id:hand[0]?.id);
+  }
+
   // Unified bot action entry — called after draw or as watchdog
   _botAct(seat){
     const g=this.game;
@@ -440,35 +547,53 @@ class Room {
     if(!g||g.turn!==seat||this.phase!=='playing') return;
     if(g.pending) return;
     const hand=g.hands[seat];
-    if(!g.riichi[seat]){
-      const ankanTile=this._findAnkan(seat);
-      if(ankanTile){this._ankan(seat,ankanTile);return;}
+    // The whole decision chain (ankan/tsumo/kita/riichi checks, each
+    // calling into mahjong.js's win/yaku/wait logic) is wrapped here rather
+    // than relying on individual try/catches lower down — an uncaught throw
+    // ANYWHERE in this chain used to leave g.turn stuck on this bot forever
+    // (nothing else was ever going to re-invoke this seat's turn), stalling
+    // the whole table with nothing in the logs pointing at why. Falling
+    // back to a forced discard — g.drawTile if present (also the only
+    // legal choice for a riichi'd bot, same as the normal branch above),
+    // else the hand's own first tile — is always legal, so the turn can
+    // always still advance even when the "smart" decision path breaks.
+    try{
+      if(!g.riichi[seat]){
+        const ankanTile=this._findAnkan(seat);
+        if(ankanTile){this._ankan(seat,ankanTile);return;}
+      }
+      // Only tsumo if hand wins AND has valid yaku — furiten is NOT checked
+      // here, same reasoning as _tsumo/canTsumo: it only ever blocks ron.
+      if(isWin(hand,g.melds[seat])){
+        const sw=this._seatWindOf(seat);
+        const isHaitei=g.haiteiNext&&!g.isRinshan;
+        const winKey=g.drawTile?key(g.drawTile):null;
+        const {han}=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),
+          g.riichi[seat],g.ippatsu[seat],g.doubleRiichi[seat],g.isRinshan,false,isHaitei,false,false,false,winKey,
+          {kuitanAri:this.rules.kuitanAri});
+        if(han>0){this._tsumo(seat);return;}
+      }
+      if(this.rules.sanma){
+        const kitaTile=hand.find(t=>key(t)==='4z');
+        if(kitaTile){this._kita(seat,kitaTile.id);return;}
+      }
+      if(!g.riichi[seat]&&!g.melds[seat].length&&g.scores[seat]>=1000){
+        const tid=this._findRiichiTile(seat);
+        if(tid!==null){this._riichi(seat,tid);return;}
+      }
+      // In riichi: must discard the drawn tile
+      if(g.riichi[seat]&&g.drawTile){
+        this._discard(seat,g.drawTile.id);
+        return;
+      }
+      this._discard(seat,this._botDiscardTile(seat));
+    }catch(e){
+      console.error(`[bot turn error] seat=${seat}`,e.message,e.stack);
+      if(g.turn===seat&&!g.pending){
+        const fallbackId=(g.drawTile&&hand.some(t=>t.id===g.drawTile.id))?g.drawTile.id:hand[0]?.id;
+        if(fallbackId!=null) this._discard(seat,fallbackId);
+      }
     }
-    // Only tsumo if hand wins AND has valid yaku — furiten is NOT checked
-    // here, same reasoning as _tsumo/canTsumo: it only ever blocks ron.
-    if(isWin(hand,g.melds[seat])){
-      const sw=this._seatWindOf(seat);
-      const isHaitei=g.haiteiNext&&!g.isRinshan;
-      const winKey=g.drawTile?key(g.drawTile):null;
-      const {han}=detectYaku(hand,g.melds[seat],true,sw,this._roundWindValue(),
-        g.riichi[seat],g.ippatsu[seat],g.doubleRiichi[seat],g.isRinshan,false,isHaitei,false,false,false,winKey,
-        {kuitanAri:this.rules.kuitanAri});
-      if(han>0){this._tsumo(seat);return;}
-    }
-    if(this.rules.sanma){
-      const kitaTile=hand.find(t=>key(t)==='4z');
-      if(kitaTile){this._kita(seat,kitaTile.id);return;}
-    }
-    if(!g.riichi[seat]&&!g.melds[seat].length&&g.scores[seat]>=1000){
-      const tid=this._findRiichiTile(seat);
-      if(tid!==null){this._riichi(seat,tid);return;}
-    }
-    // In riichi: must discard the drawn tile
-    if(g.riichi[seat]&&g.drawTile){
-      this._discard(seat,g.drawTile.id);
-      return;
-    }
-    this._discard(seat,bestDiscard(hand,g.melds[seat],this.seats[seat].difficulty,this._dangerSetsFor(seat)));
   }
 
   _findRiichiTile(seat){
@@ -528,15 +653,7 @@ class Room {
     if(act.type==='round_ready'){
       if(this.phase==='done') return;
       this.roundReady.add(seat);
-      const humanSeats=this.seats.map((p,i)=>p&&!p.isBot?i:-1).filter(i=>i>=0);
-      // Broadcast how many are ready
-      this._broadcastAll({type:'ready_status',count:this.roundReady.size,total:humanSeats.length});
-      if(humanSeats.every(i=>this.roundReady.has(i))&&this.pendingNextRound){
-        const fn=this.pendingNextRound;
-        this.pendingNextRound=null;
-        this.roundReady=new Set();
-        fn();
-      }
+      this._checkRoundReady();
       return;
     }
     if(!g||this.phase!=='playing') return;
@@ -634,7 +751,7 @@ class Room {
       this._sendState();
       if(!humanInReactions){
         for(const r of reactions){
-          const dec=botReact(g.hands[r.seat],tile,r.options,g.melds[r.seat],this.seats[r.seat].difficulty);
+          const dec=this._safeBotReact(r.seat,g.hands[r.seat],tile,r.options,g.melds[r.seat],this.seats[r.seat].difficulty);
           setTimeout(()=>{
             if(!g.pending) return;
             g.pending.responses[r.seat]=dec;
@@ -710,6 +827,23 @@ class Room {
   _reactResponse(seat,resp){
     const g=this.game;
     if(!g.pending||!g.pending.seats.includes(seat)) return;
+    // Validate the declared type against what THIS seat was actually
+    // offered in the CURRENT window — g.pending.seats.includes(seat) above
+    // only proves this seat is a reactor in *some* window right now, not
+    // that this specific response type was ever legal in it. A stale
+    // response (delayed by lag, or queued behind an earlier window that
+    // already resolved before it arrived) could otherwise declare a type
+    // this window never offered this seat — e.g. a queued 'kan' tap
+    // arriving after the window that offered it closed, landing instead in
+    // a NEW window that only offers this seat pon/chi/ron. _daiminkan/_pon/
+    // _chi trust their caller and don't re-validate the call is legal
+    // against the current hand/window — for 'kan' specifically, _daiminkan
+    // early-returns on kanCount>=4 or <3 matching tiles, which (since this
+    // clears g.pending BEFORE calling it) left g.pending null, g.turn stuck
+    // on the discarder, and nothing left to ever resume the table: an
+    // unrecoverable freeze. 'pass' is always legal and needs no offer.
+    const myOpts=g.pending.options.find(r=>r.seat===seat)?.options||[];
+    if(resp.type!=='pass'&&!myOpts.some(o=>o.type===resp.type)) return;
     g.pending.responses[seat]=resp;
 
     // If player passes a valid ron, set temporary furiten. A chonbo-only
@@ -719,15 +853,12 @@ class Room {
     // seat's declare/ron option until your next draw resets it. Since your
     // own draw always precedes your shimocha's discard, that bug made the
     // option only ever reappear for that one seat.
-    if(resp.type==='pass'){
-      const myOpts=g.pending.options.find(r=>r.seat===seat);
-      if(myOpts&&myOpts.options.some(o=>o.type==='ron'&&o.valid!==false)){
-        g.tempFuriten[seat]=true;
-      }
+    if(resp.type==='pass'&&myOpts.some(o=>o.type==='ron'&&o.valid!==false)){
+      g.tempFuriten[seat]=true;
     }
 
     if(resp.type==='ron'){this._resolveReactions();return;}
-    if(resp.type==='kan'){const tile=g.pending.tile,fromSeat=g.pending.fromSeat;g.pending=null;this._daiminkan(seat,tile,fromSeat);return;}
+    if(resp.type==='kan'){const tile=g.pending.tile,fromSeat=g.pending.fromSeat;this._clearPending();this._daiminkan(seat,tile,fromSeat);return;}
 
     // A human just called pon/chi/pass — any other pending seat here is a bot
     // whose only role is to settle priority (a hidden ron always outranks a
@@ -738,7 +869,7 @@ class Room {
     for(const r of g.pending.options){
       const s=r.seat;
       if(this.seats[s]?.isBot&&!g.pending.responses[s]){
-        g.pending.responses[s]=botReact(g.hands[s],tile,r.options,g.melds[s],this.seats[s].difficulty);
+        g.pending.responses[s]=this._safeBotReact(s,g.hands[s],tile,r.options,g.melds[s],this.seats[s].difficulty);
       }
     }
     if(g.pending.seats.every(s=>g.pending.responses[s])) this._resolveReactions();
@@ -751,14 +882,31 @@ class Room {
   // otherwise pon/kan (checked together, first one found wins — in
   // practice at most one seat can pon/kan the same discard) beats chi;
   // if nobody called anything, play just continues to the next seat.
+  // Clears g.pending, and — critically — the watchdog timer that may be
+  // attached to it (see _kakan's 3s chankan timer, g.pending.timer). Every
+  // site that discards a g.pending object must go through this rather than
+  // a bare `g.pending=null`, or that timer keeps running and fires LATE
+  // against whatever g.pending/g.turn/etc. now represents — this.game is
+  // the SAME object reused for every round of the whole match (see
+  // _initRound, which mutates it in place rather than replacing it), so a
+  // leaked chankan timer from one round can fire deep into a LATER round
+  // and corrupt ITS hands/melds using the original round's stale seat/tile
+  // indices. clearTimeout(null) (every non-chankan g.pending sets
+  // timer:null) is a documented no-op, so this is always safe to call.
+  _clearPending(){
+    const g=this.game;
+    if(g.pending) clearTimeout(g.pending.timer);
+    g.pending=null;
+  }
+
   _resolveReactions(){
     const g=this.game;
     if(!g.pending) return;
-    const {tile,fromSeat,seats,options,responses,kita}=g.pending;
+    const {tile,fromSeat,seats,options,responses,kita,isChankan,ponIdx}=g.pending;
     const humanResponded=seats.filter(s=>!this.seats[s]?.isBot).every(s=>responses[s]);
     if(!humanResponded) return;
 
-    g.pending=null;
+    this._clearPending();
 
     // Collect all ron winners (multiple ron supported)
     const ronSeats=seats.filter(s=>(responses[s]||{type:'pass'}).type==='ron');
@@ -775,6 +923,21 @@ class Room {
     // has — NOT _nextTurn(), unlike an uncalled real discard.
     if(kita){
       this._completeKita(fromSeat,tile);
+      return;
+    }
+
+    // Chankan (rob-the-kan) reactions are ron-only too, same shape as kita
+    // above — nobody ronned means the kan completes normally (upgrade the
+    // pon, open new dora, draw rinshan), NOT _nextTurn(). This branch used
+    // to not exist at all: a human's 'pass' response reached this point via
+    // _reactResponse's generic fallthrough and fell all the way through to
+    // _nextTurn() below, silently dropping the kan while turn moved on —
+    // and left _kakan's separate 3s watchdog timer armed (see
+    // _clearPending's own comment) to fire later and retroactively
+    // "complete" that kan against whatever the game had moved on to by
+    // then, up to and including a later round.
+    if(isChankan){
+      this._completeChankan(fromSeat,tile,ponIdx);
       return;
     }
 
@@ -901,7 +1064,7 @@ class Room {
     g.ippatsu=g.ippatsu.map(()=>false);
     this._broadcastAll({type:'pon',seat,name:this.seats[seat]?.name});
     this._sendState();
-    if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat],g.melds[seat],this.seats[seat].difficulty,this._dangerSetsFor(seat))),BOT_DELAY);
+    if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,this._botDiscardTile(seat)),BOT_DELAY);
   }
 
   _chi(seat,tile,tileIds,fromSeat){
@@ -917,7 +1080,7 @@ class Room {
     g.ippatsu=g.ippatsu.map(()=>false);
     this._broadcastAll({type:'chi',seat,name:this.seats[seat]?.name});
     this._sendState();
-    if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,bestDiscard(g.hands[seat],g.melds[seat],this.seats[seat].difficulty,this._dangerSetsFor(seat))),BOT_DELAY);
+    if(this.seats[seat]?.isBot) setTimeout(()=>this._discard(seat,this._botDiscardTile(seat)),BOT_DELAY);
   }
 
   // ── Kan types ──────────────────────────────────────────────────────────────
@@ -985,12 +1148,12 @@ class Room {
     const reactions=this._checkChankan(seat,addTile);
     if(reactions.length){
       g.pending={tile:addTile,fromSeat:seat,seats:reactions.map(r=>r.seat),
-        options:reactions,responses:{},isChankan:true,
+        options:reactions,responses:{},isChankan:true,ponIdx,
         timer:setTimeout(()=>this._completeChankan(seat,addTile,ponIdx),3000)};
       this._sendState();
       for(const r of reactions){
         if(this.seats[r.seat]?.isBot){
-          const dec=botReact(g.hands[r.seat],addTile,r.options,g.melds[r.seat],this.seats[r.seat].difficulty);
+          const dec=this._safeBotReact(r.seat,g.hands[r.seat],addTile,r.options,g.melds[r.seat],this.seats[r.seat].difficulty);
           setTimeout(()=>{if(!g.pending)return;g.pending.responses[r.seat]=dec;this._checkChankanReacted(seat,addTile,ponIdx);},BOT_DELAY);
         }
       }
@@ -1058,7 +1221,7 @@ class Room {
       this._sendState();
       if(!humanInReactions){
         for(const r of reactions){
-          const dec=botReact(g.hands[r.seat],tile,r.options,g.melds[r.seat],this.seats[r.seat].difficulty);
+          const dec=this._safeBotReact(r.seat,g.hands[r.seat],tile,r.options,g.melds[r.seat],this.seats[r.seat].difficulty);
           setTimeout(()=>{
             if(!g.pending) return;
             g.pending.responses[r.seat]=dec;
@@ -1119,22 +1282,20 @@ class Room {
     const g=this.game;
     if(!g.pending) return;
     if(g.pending.seats.every(s=>g.pending.responses[s])){
-      clearTimeout(g.pending.timer);
       const r=g.pending.responses;
       const ronSeats=g.pending.seats.filter(s=>(r[s]||{type:'pass'}).type==='ron');
+      this._clearPending();
       if(ronSeats.length>0){
-        g.pending=null;
         this._multiRon(ronSeats,seat,addTile);
         return;
       }
-      g.pending=null;
       this._completeChankan(seat,addTile,ponIdx);
     }
   }
 
   _completeChankan(seat,addTile,ponIdx){
     const g=this.game;
-    if(g.pending){clearTimeout(g.pending.timer);g.pending=null;}
+    this._clearPending();
     g.hands[seat]=g.hands[seat].filter(t=>t.id!==addTile.id);
     const pon=g.melds[seat][ponIdx];
     pon.type='kan';pon.kanType='kakan';pon.tiles.push(addTile);

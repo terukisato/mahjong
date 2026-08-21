@@ -358,6 +358,223 @@ test('removeHuman: vacated seat is refilled with a fresh bot, not left null', ()
   assert.strictEqual(room.seats[1].isBot, true);
 });
 
+// Regression for a real reported stall: the round-ready gate (the
+// round-result "waiting for everyone to hit Ready" screen) only ever
+// re-checked itself from the round_ready action handler — a human
+// disconnecting instead of clicking Ready never re-evaluated whether
+// everyone REMAINING had already readied, stranding the results screen for
+// the whole table indefinitely (there's no timeout on this screen at all).
+test('Round-ready gate: a human disconnecting must re-check readiness, not strand the results screen forever', () => {
+  const room = freshRoom(0);
+  room.seats[0] = { id: 'h0', name: 'Human0', isBot: false };
+  room.seats[1] = { id: 'h1', name: 'Human1', isBot: false };
+  // seats 2/3 stay bots from freshRoom.
+
+  let released = false;
+  room.pendingNextRound = () => { released = true; };
+  room.roundReady = new Set([0]); // seat 0 already readied; seat 1 has not
+
+  room.removeHuman('h1'); // seat 1 disconnects before ever voting ready
+
+  assert.strictEqual(released, true, 'the gate must release once every REMAINING human has readied — a disconnect should not leave it stuck forever');
+  assert.strictEqual(room.pendingNextRound, null);
+});
+
+test('Round-ready gate: still waits on OTHER not-ready humans after one seat disconnects', () => {
+  const room = freshRoom(0);
+  room.seats[0] = { id: 'h0', name: 'Human0', isBot: false };
+  room.seats[1] = { id: 'h1', name: 'Human1', isBot: false };
+  room.seats[2] = { id: 'h2', name: 'Human2', isBot: false };
+
+  let released = false;
+  room.pendingNextRound = () => { released = true; };
+  room.roundReady = new Set(); // nobody has readied yet
+
+  room.removeHuman('h1'); // seat 1 disconnects; seats 0 and 2 remain human, neither has readied
+
+  assert.strictEqual(released, false, 'must not release while other real humans still have not readied');
+});
+
+// Regression for a real reported stall: a discard can open a reaction
+// window with BOTH a human and a bot reactor. _discard only schedules a
+// BOT_DELAY timer for bot reactors when NO human is in the window (see its
+// humanInReactions check) — with a human present, it expects that human's
+// own response to eventually trigger _resolveReactions(). If that human
+// disconnects before responding, the bot reactor sitting in the SAME window
+// never got a timer either, so simply filling in the departing human's own
+// seat (the old _resumeAfterBotSwap behaviour) still left the window
+// permanently open — every(...) could never become true. This drove the
+// whole table to a silent, permanent freeze with no error anywhere.
+test('Reaction window stall: human disconnecting must not strand a bot reactor that was never given a timer', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  room.seats[1] = { id: 'human1', name: 'Human', isBot: false, seat: 1 };
+  // Seat 1 (human) can PON the discarded 5s.
+  g.hands[1] = [T(5, 's'), T(5, 's'), ...seq(1, 'm'), ...seq(4, 'p'), T(2, 'm'), T(3, 'm')];
+  // Seat 2 (bot) is tenpai, tanki-waiting to RON the same discarded 5s —
+  // an all-simples shape (tanyao) so the ron actually carries a yaku and
+  // isn't silently withheld as a no-yaku hand.
+  g.hands[2] = [...seq(2, 'm'), ...seq(4, 'p'), ...seq(6, 's'), ...tri(3, 'p'), T(5, 's')];
+  // Seat 3 (bot) has no reaction available to this tile.
+  g.hands[3] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), T(7, 'm'), T(8, 'm')];
+  g.hands[0] = [...seq(1, 'p'), ...seq(4, 's'), ...seq(2, 'm'), T(7, 'm'), T(5, 's')];
+  g.turn = 0;
+
+  const tileId = g.hands[0].find(t => t.v === 5 && t.s === 's').id;
+  room._discard(0, tileId);
+
+  assert.ok(g.pending, 'discard should open a reaction window');
+  assert.ok(g.pending.seats.includes(1) && g.pending.seats.includes(2),
+    'both the human (pon) and the bot (ron) should be reactors in the same window');
+  assert.strictEqual(g.pending.responses[2], undefined,
+    'the bot reactor should have no response yet — a human is in the window, so no BOT_DELAY timer was scheduled for it');
+
+  // The human's connection drops before responding, mid-window.
+  room.removeHuman('human1');
+
+  assert.strictEqual(g.pending, null,
+    'the window must resolve once every remaining reactor is a bot, not hang forever waiting on one that was never given a timer');
+});
+
+// Regression for a second, deeper bug in the same reported stall: _kakan's
+// chankan (rob-the-kan) window is ron-only, same shape as a kita window —
+// but _resolveReactions had no isChankan branch, so a human's 'pass'
+// response (routed through _reactResponse's generic fallthrough) fell all
+// the way through to _nextTurn(), silently dropping the kan entirely while
+// turn moved on. Worse, _kakan's own 3s completion watchdog (g.pending.timer)
+// was never cancelled by that path, so ~3s later it fired anyway and
+// retroactively "completed" the kan against whatever the game had moved on
+// to by then — this.game is the SAME object reused for every round of the
+// match (see _initRound), so a leaked timer like this can corrupt a LATER
+// round's state, not just the current one.
+test('Chankan: a human passing on a valid rob-the-kan must complete the kan (not drop it via _nextTurn), and cancel the watchdog', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  room.seats[1] = { id: 'h1', name: 'Human1', isBot: false, seat: 1 };
+
+  // Seat 0 already has a pon of 5s and holds the 4th 5s to kakan.
+  g.melds[0] = [{ type: 'pon', tiles: [T(5, 's'), T(5, 's'), T(5, 's')], calledTileId: null, fromSeat: 1, open: true }];
+  const addTile = T(5, 's');
+  g.hands[0] = [addTile, ...seq(1, 'm'), ...seq(4, 'p'), T(7, 'm'), T(8, 'm'), T(9, 'm'), T(2, 'm'), T(3, 'm')];
+  // Seat 1 (human) genuinely wins on the robbed 5s — all-simples tanki wait.
+  g.hands[1] = [...seq(2, 'm'), ...seq(4, 'p'), ...seq(6, 's'), ...tri(3, 'p'), T(5, 's')];
+  // Seats 2/3 can't win on 5s — kept out of the window entirely.
+  g.hands[2] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), T(7, 'm'), T(8, 'm')];
+  g.hands[3] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), T(7, 'm'), T(8, 'm')];
+  g.turn = 0;
+
+  const kanCountBefore = g.kanCount;
+  room._kakan(0, addTile.id);
+
+  assert.ok(g.pending, 'kakan should open a chankan window (seat 1 can rob it)');
+  assert.strictEqual(g.pending.isChankan, true);
+  assert.ok(g.pending.seats.includes(1));
+  assert.ok(g.pending.timer, 'the 3s completion watchdog should be armed');
+
+  const armedTimer = g.pending.timer;
+  const realClearTimeout = global.clearTimeout;
+  const clearedIds = [];
+  global.clearTimeout = (id) => { clearedIds.push(id); return realClearTimeout(id); };
+  try {
+    room._reactResponse(1, { type: 'pass' }); // declines a valid ron
+  } finally {
+    global.clearTimeout = realClearTimeout;
+  }
+
+  assert.strictEqual(g.pending, null, 'the window should resolve');
+  assert.ok(clearedIds.includes(armedTimer), 'the 3s watchdog must be cancelled here, not left to fire later against a since-moved-on game state');
+  assert.strictEqual(g.melds[0][0].type, 'kan', 'the pon should have been upgraded to a kan, not silently dropped');
+  assert.strictEqual(g.kanCount, kanCountBefore + 1);
+  assert.ok(!g.hands[0].some(t => t.id === addTile.id), 'the added tile should have left seat 0\'s hand into the meld');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Bot decision error handling — every bot AI call (botReact/bestDiscard, in
+// bot.js) used to run either bare in a setTimeout or unwrapped inline, so
+// an uncaught exception anywhere in that decision logic left a reaction
+// window's response permanently unfilled, or a bot's own turn stuck on
+// g.turn forever — a silent, permanent stall with nothing in the logs
+// explaining why. _safeBotReact/_botDiscardTile (room.js) wrap every call
+// site so a thrown exception always degrades to a safe, legal fallback
+// instead of stranding the game.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('_safeBotReact: an exception thrown by botReact is caught and falls back to pass, not propagated', () => {
+  const room = freshRoom(0);
+  // botReact's very first line is `options.some(...)` — passing null options
+  // guarantees a real TypeError from inside bot.js itself, not a contrived
+  // mock, regardless of hand/tile/difficulty.
+  const result = room._safeBotReact(1, [T(1, 'm')], T(5, 's'), null, [], 'normal');
+  assert.deepStrictEqual(result, { type: 'pass' });
+});
+
+test('_botDiscardTile: an exception thrown by bestDiscard does not propagate (empty hand — a real internal throw, not a mock)', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  // bestDiscard('normal') → _shantenBestDiscard → _rankDiscards(hand)[0].id
+  // — _rankDiscards on an empty hand returns [], so [0].id genuinely throws
+  // TypeError inside bot.js. This is a pathological state (a bot should
+  // never legitimately hold zero tiles on its own turn) but it's exactly
+  // the shape of bug this wrapper exists to survive without crashing.
+  g.hands[0] = [];
+  assert.doesNotThrow(() => room._botDiscardTile(0), 'must never let a bot-AI exception propagate uncaught');
+});
+
+test('_botDiscardTile: on a normal hand, returns a tileId actually in that hand', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  g.hands[0] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), T(7, 'm'), T(8, 'm'), T(9, 'm')];
+  g.melds[0] = [];
+  const id = room._botDiscardTile(0);
+  assert.ok(g.hands[0].some(t => t.id === id), 'the returned tileId must be a real tile in this hand');
+});
+
+// Regression for a real reported stall: _reactResponse only checked that
+// this seat was A reactor in the CURRENT window (g.pending.seats.includes),
+// never that the declared response TYPE was actually offered to it. A stale
+// response (e.g. a queued tap delivered late, after the window that
+// offered it had already closed, landing in a later window that offers
+// this seat something else) could declare a type that window never had —
+// most dangerously 'kan', which clears g.pending before calling
+// _daiminkan(), whose own early-return guards (kanCount>=4, <3 matching
+// tiles) then left g.pending null, g.turn stuck on the original discarder,
+// and nothing left to ever resume the table.
+test('_reactResponse: a response type never offered to this seat in the CURRENT window is ignored, not trusted', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  room.seats[1] = { id: 'h1', name: 'Human1', isBot: false, seat: 1 };
+  // Seat 1 sits directly after seat 0 (numPlayers=4) and can CHI the
+  // discarded 5p (holds 4p+6p) — no pon (no other 5p in hand) and can't
+  // ron on it, so 'chi' is the ONLY option this window offers seat 1.
+  g.hands[1] = [T(4, 'p'), T(6, 'p'), ...seq(1, 'm'), ...seq(2, 's'), ...seq(7, 'm'), T(9, 'z'), T(9, 'z')];
+  g.hands[2] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), T(7, 'm'), T(8, 'm')];
+  g.hands[3] = [...seq(1, 'm'), ...seq(4, 'p'), ...seq(2, 's'), T(7, 'm'), T(8, 'm')];
+  g.hands[0] = [...seq(1, 'p'), ...seq(7, 's'), T(2, 'm'), T(3, 'm'), T(5, 'p')];
+  g.turn = 0;
+
+  const tileId = g.hands[0].find(t => t.v === 5 && t.s === 'p').id;
+  room._discard(0, tileId);
+
+  assert.ok(g.pending, 'discard should open a reaction window (seat 1 can chi)');
+  const myOpts = g.pending.options.find(r => r.seat === 1)?.options || [];
+  assert.ok(myOpts.some(o => o.type === 'chi'), 'seat 1 should be offered chi');
+  assert.ok(!myOpts.some(o => o.type === 'kan'), 'seat 1 must NOT be offered kan in this window');
+
+  const pendingBefore = g.pending;
+  room._reactResponse(1, { type: 'kan' }); // stale/forged — never offered to this seat here
+
+  assert.strictEqual(g.pending, pendingBefore, 'the window must be completely untouched by a response type this seat was never offered');
+  assert.strictEqual(g.pending.responses[1], undefined, 'no response should have been recorded for the mismatched type');
+  assert.strictEqual(g.turn, 0, 'turn must still be sitting on the original discarder, not corrupted');
+
+  // The real chi still works normally afterward — the fix only rejects the
+  // mismatched type, it doesn't break the legitimate response.
+  const chiSeq = myOpts.find(o => o.type === 'chi').sequences[0];
+  room._reactResponse(1, { type: 'chi', tileIds: chiSeq });
+  assert.strictEqual(g.pending, null, 'a legitimate chi response should still resolve the window normally');
+  assert.strictEqual(g.melds[1][0].type, 'chi');
+});
+
 function waitingRoomWithHuman() {
   const room = freshRoom(0);
   room.phase = 'waiting';
