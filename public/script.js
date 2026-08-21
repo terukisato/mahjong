@@ -5339,6 +5339,20 @@ function scheduleTileRedraw(){
     // via renderEndTiles alone (NOT onEnd(m) again — see its comment for
     // why replaying the whole thing would be wrong here).
     if(lastEndState&&!$('s-end').classList.contains('hidden')) renderEndTiles(lastEndState);
+    // Nameplate name/title have the exact same baked-in-size problem as the
+    // tiles above, but renderState never touches them (name/title don't
+    // change mid-game, so it has no reason to) — fitNameplateText/
+    // fitTitleText (see refitAllNameplates' own comment) only ever ran once,
+    // at startGame, against whatever viewport was active then. Resizing
+    // afterward (phone rotation, or a devtools mobile-emulation toggle)
+    // changes --table-size under it without re-running that decision, so a
+    // title that picked .one-line's bigger size for the old viewport stays
+    // stuck in .one-line at the new, smaller one — CSS still shrinks its
+    // font via the clamp() formula, but the one-line-vs-two-line CHOICE
+    // itself goes stale, and once the shrunk one-line text no longer fits,
+    // nothing but the plain nowrap+ellipsis fallback is left to catch it.
+    // Re-running the same fit used at game start closes that gap.
+    if(inGame) refitAllNameplates();
   },150);
 }
 window.addEventListener('resize',scheduleTileRedraw);
