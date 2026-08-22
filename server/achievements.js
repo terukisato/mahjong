@@ -76,6 +76,10 @@ const bestFinalScore = s => Math.max(bestFinalScoreYonma(s), bestFinalScoreSanma
 // only win type that pays from every opponent simultaneously, so it's the
 // only way to bankrupt more than one at once from a single win.
 const doubleBustWins = s => s.sanma.doubleBustWins;
+// Sanma-only by design (see room.js's _completeKita comment) — kita itself
+// is a sanma-only mechanic, and the whole round only ever has 4 kita-
+// rinshan slots to go around, shared across all 3 seats.
+const quadKita = s => s.sanma.quadKita;
 // Total yakuman-tier WINS across every kind combined (unlike yakumanProgress
 // above, which only checks "at least one, any kind" — see
 // 'yakuman_collector'/'yakuman_legend' below), and total bankruptcies
@@ -162,6 +166,12 @@ const ACHIEVEMENTS = [
 
   // ── Sanma double-bankruptcy — tsumo only, see doubleBustWins above.
   { id: 'double_knockout', label: 'Win a tsumo that bankrupts both opponents (sanma)', unlocksTitle: 'Double Knockout', target: 1, progress: s => Math.min(doubleBustWins(s), 1), check: s => doubleBustWins(s) >= 1 },
+
+  // ── Banking all 4 of a round's kita tiles single-handedly — see
+  // quadKita/room.js's _completeKita above. Doesn't require winning the
+  // hand, just the act itself; a hand can end in ron/draw and this still
+  // counts.
+  { id: 'quad_kita', label: "Bank all 4 of a round's kita tiles yourself (sanma)", unlocksTitle: 'The South Pole', target: 1, progress: s => Math.min(quadKita(s), 1), check: s => quadKita(s) >= 1 },
 
   // ── Higher-tier "harder" achievements — a second, tougher rung above
   // several of the cumulative counters earlier in this file (games

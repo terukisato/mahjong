@@ -584,6 +584,8 @@ function onMsg(m){
     return;
   }
   if(m.type==='ready_status'){onReadyStatus(m);return;}
+  if(m.type==='afk_status'){onAfkStatus(m);return;}
+  if(m.type==='typing_status'){onTypingStatus(m);return;}
   if(m.type==='play_again_status'){onPlayAgainStatus(m);return;}
   if(m.type==='play_again_left_behind'){onPlayAgainLeftBehind();return;}
   if(m.type==='stats'){
@@ -3479,6 +3481,13 @@ function startGame(m){
     const selfName=$('iname').value.trim()||'Player';
     const pn=$('pn'+id); pn.textContent=i===0?selfName:(p?.name||'—');
     fitNameplateText(pn);
+    // Defensive reset, not load-bearing — the AFK watchdog (room.js) always
+    // pairs an afk:true with a later afk:false once resolved, but this
+    // guards against a leftover badge surviving a reconnect/edge case where
+    // that pairing broke, onto a nameplate DOM node that's reused game to
+    // game rather than recreated. Same reasoning for 'typing' (room.js's
+    // typing()/TYPING_TIMEOUT_MS).
+    $('np'+id)?.classList.remove('afk','typing');
     // Stashed for openPlayerCardInGame (nameplate click) — self is never a
     // bot, and always has a name (falls back to 'Player' same as the
     // nameplate text itself above); an opponent seat can be null (empty
@@ -3586,6 +3595,36 @@ function startGame(m){
 // `abs=(mySeat+i)%numSeats` pattern used everywhere else — use this one when
 // you have an absolute seat number and need to know where on screen it lives.
 function pid(abs){return P[(abs-mySeat+numSeats)%numSeats];}
+
+// Toggles the "AFK" indicator on a seat's nameplate (see the room.js AFK
+// watchdog — a connected-but-unresponsive human's turn/reaction eventually
+// force-resolves itself, but everyone else at the table deserves to see
+// WHY nothing's moving before that happens, not just have the game
+// silently jump ahead a while later). Server sends an absolute seat index
+// (same convention as every other in-game broadcast — see pid() above);
+// toggling straight off the .np element (rather than a per-seat child like
+// .status-dot, which only bottom's markup has — see index.html) works
+// uniformly for all 4 seats without needing new DOM per seat.
+function onAfkStatus(m){
+  const np=$('np'+pid(m.seat));
+  if(np) np.classList.toggle('afk',!!m.afk);
+}
+
+// Toggles the chat "is typing…" indicator on a seat's nameplate — same
+// .np-class-toggle mechanism/seat-mapping as onAfkStatus above (see its own
+// comment), driven by room.js's typing()/TYPING_TIMEOUT_MS instead of the
+// AFK watchdog. .np.typing/.np.afk (style.css) render on the same anchor
+// point above the plate but as mutually-exclusive states via CSS cascade
+// order, not JS — the two are independent signals (this is purely "are
+// they engaging with chat", unrelated to whether their in-game turn/
+// reaction is overdue) and could in principle both be true for the same
+// seat at once (chatting instead of making their discard decision), so
+// letting one class silently clobber the other in JS would be the wrong
+// fix for a coincidence that's rare enough not to need one.
+function onTypingStatus(m){
+  const np=$('np'+pid(m.seat));
+  if(np) np.classList.toggle('typing',!!m.typing);
+}
 
 
 // RENDER STATE — called every time a game_state message arrives (`m` = new
@@ -4474,8 +4513,9 @@ function toggleColorPicker(force){
 // SEAT-EMOJI REACTIONS (pops up over your own play area, see
 // showEmojiPopup below) — distinct from MSG_REACTIONS further down, which
 // react to a specific chat message instead. Must match SEAT_EMOJI in
-// room.js.
-const SEAT_EMOJI=['😂','😢','😠','😱','👍','🔥','🏆','❤️'];
+// room.js. Faces grouped first, then non-face reactions (👍/🔥/🏆/❤️/🙏) —
+// keep new entries sorted into that same split rather than just appended.
+const SEAT_EMOJI=['😂','😢','😠','😱','😊','🤯','😏','👍','🔥','🏆','❤️','🙏'];
 let emojiPickerOpen=false;
 
 function initEmojiPicker(){
@@ -5498,6 +5538,17 @@ $('dev-secret').onkeydown=e=>{if(e.key==='Enter')submitDevKey();};
 $('profile-code').onkeydown=e=>{if(e.key==='Enter')unlockProfile();};
 $('chat-send').onclick=sendChat;
 $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};
+// Pings room.js's typing()/TYPING_TIMEOUT_MS on every keystroke — no
+// client-side throttling needed, the server already collapses a burst of
+// these into a single typing:true broadcast (see typing()'s own comment)
+// and self-clears after a few quiet seconds, so there's nothing extra to
+// debounce here. inGame-gated since the indicator only has anywhere to
+// render (a nameplate) once a game's actually showing; an empty field
+// (e.g. after clearing it without sending) doesn't need to keep the
+// indicator alive either.
+$('chat-input').oninput=()=>{
+  if(inGame&&$('chat-input').value.trim()) wss({type:'typing'});
+};
 $('chat-hist-btn').onclick=toggleChat;
 $('chat-close').onclick=toggleChat;
 if($('chat-color-btn')) $('chat-color-btn').onclick=()=>toggleColorPicker();

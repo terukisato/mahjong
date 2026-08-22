@@ -433,6 +433,8 @@ wss.on('connection',(ws)=>{
 
     if(msg.type==='chat'&&myRoom) myRoom.chat(myId,msg.text||'',msg.color);
 
+    if(msg.type==='typing'&&myRoom) myRoom.typing(myId);
+
     if(msg.type==='emoji_react'&&myRoom) myRoom.emojiReact(myId,msg.emoji);
 
     if(msg.type==='msg_react'&&myRoom) myRoom.reactToMessage(myId,msg.msgId,msg.emoji);

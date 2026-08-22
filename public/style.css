@@ -466,6 +466,42 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .np.active{background:#222;border-color:#ffdd44;
   box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 16px rgba(255,221,68,.5);animation:glow 1.6s ease-in-out infinite;}
 @keyframes glow{0%,100%{box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 14px rgba(255,221,68,.4);}50%{box-shadow:0 0 0 2px rgba(255,221,68,.55),0 0 28px rgba(255,221,68,.7);}}
+/* AFK indicator (see onAfkStatus in script.js, driven by room.js's
+   _afkTick) — a connected-but-unresponsive human's turn/reaction still
+   eventually force-resolves on its own, but the rest of the table deserves
+   to see WHY nothing's moving before that happens. Red, not gold, and its
+   own pulse (not .active's glow reused) — this seat is very likely also
+   .active at the same time (it's flagged specifically because it's their
+   outstanding turn/reaction), and the two need to read as distinct states
+   layered together, not one overriding the other. */
+.np.afk{border-color:#e24b4a;
+  animation:afkPulse 1.4s ease-in-out infinite;}
+@keyframes afkPulse{0%,100%{box-shadow:0 0 0 1px #222,inset 0 1px 0 rgba(255,255,255,.04),0 0 0 2px rgba(226,75,74,.35);}
+  50%{box-shadow:0 0 0 1px #222,inset 0 1px 0 rgba(255,255,255,.04),0 0 0 2px rgba(226,75,74,.75),0 0 12px rgba(226,75,74,.65);}}
+/* Floating tag rather than squeezed into the plate's own already-tight
+   layout (see .pname/.ptitle's own max-width comments) — anchored off
+   .np's position:relative (set above) so it tracks the plate at any seat's
+   position/rotation without needing its own per-seat placement math. */
+.np.afk::after{content:'AFK';position:absolute;top:calc(var(--table-size) * -0.0136);left:50%;
+  transform:translateX(-50%);background:#e24b4a;color:#fff;font-family:'Cinzel Decorative',serif;
+  font-weight:700;letter-spacing:.05em;font-size:clamp(6px,calc(var(--table-size) * 0.0075),13px);
+  padding:1px 5px;border-radius:3px;white-space:nowrap;z-index:26;box-shadow:0 1px 3px rgba(0,0,0,.5);}
+/* Chat "is typing…" indicator (see onTypingStatus in script.js, driven by
+   room.js's typing()) — same floating-tag anchor/mechanism as .np.afk
+   above, just its own colour (a cool blue, not AFK's red or .active's
+   gold — this isn't a problem state, just activity) and its own bouncing-
+   dots animation instead of static text. :not(.afk) rather than layering
+   both — the two are independent signals that could in principle both be
+   true for the same seat (chatting instead of making their turn decision),
+   but rendering two floating tags stacked/overlapping in the same anchor
+   spot would look broken rather than informative; AFK is the rarer, more
+   important-to-notice state, so it wins the shared anchor when both apply. */
+.np.typing:not(.afk)::after{content:'•••';position:absolute;top:calc(var(--table-size) * -0.0136);left:50%;
+  transform:translateX(-50%);background:#1a5c86;color:#8fd6ff;font-family:'Cinzel Decorative',serif;
+  font-weight:700;letter-spacing:.15em;font-size:clamp(7px,calc(var(--table-size) * 0.0091),16px);
+  padding:0 6px;border-radius:8px;white-space:nowrap;z-index:26;box-shadow:0 1px 3px rgba(0,0,0,.5);
+  animation:typingPulse 1s ease-in-out infinite;}
+@keyframes typingPulse{0%,100%{opacity:.45;}50%{opacity:1;}}
 /* wb/pname/ptitle/btag below: floor+ceiling clamps
    added on every font-size/width/height that was plain unclamped `vmin` —
    at a 375px phone (vmin≈3.75px) that math put .ba's 1.6vmin label text at

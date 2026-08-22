@@ -14,13 +14,32 @@ const BOT_DELAY=1200; // pause before a bot acts, so its move is readable on scr
 // keeps a bot from drawing/discarding/calling while the card is still on
 // screen, instead of just hiding the result until it clears.
 const ROUND_START_DELAY=3400;
+// Auto-resolves a human's outstanding turn/reaction decision if they go
+// quiet for too long — a human who's genuinely connected (so the
+// index.js ping/pong heartbeat sees nothing wrong) but never responds, AFK
+// or otherwise, previously froze the whole table with no recourse but
+// abandoning the room (see _afkTick's own comment for the full mechanism).
+// WARN fires first so every OTHER player gets a visible "waiting on X"
+// indicator well before ACT forces a decision — long enough that a player
+// who's just thinking hard never sees themselves flagged, short enough that
+// the rest of the table isn't left guessing for too long why nothing's
+// moving.
+const AFK_WARN_MS=15000;
+const AFK_ACT_MS=30000;
+const AFK_POLL_MS=2000;
+// How long the chat "is typing" nameplate indicator (see typing() below)
+// stays up after the player's last keystroke, absent a newer one or an
+// actually-sent message resetting/clearing it — long enough to survive a
+// normal thinking-pause mid-sentence, short enough that it doesn't linger
+// looking stale if they just abandoned the message unsent.
+const TYPING_TIMEOUT_MS=3000;
 // Chat message colour palette — must match CHAT_COLORS in public/script.js.
 // Validated server-side rather than trusting the client's `color` field
 // verbatim, since it gets echoed straight into another player's page.
 const CHAT_COLORS=new Set(['#ffffff','#f0d080','#ff6b6b','#6bff8f','#6bb6ff','#ff8fd6','#6bfff0','#ffb366']);
 // Seat-popup reaction set — must match SEAT_EMOJI in public/script.js.
 // Same "validate against a server-side copy" reasoning as CHAT_COLORS above.
-const SEAT_EMOJI=new Set(['😂','😢','😠','😱','👍','🔥','🏆','❤️']);
+const SEAT_EMOJI=new Set(['😂','😢','😠','😱','😊','🤯','😏','👍','🔥','🏆','❤️','🙏']);
 // Message-reaction set — must match MSG_REACTIONS in public/script.js.
 const MSG_REACTIONS=new Set(['👍','❤️','😂','😮','😢']);
 
@@ -108,6 +127,22 @@ class Room {
     // any actual chat history storage here (chat itself is never
     // persisted, purely relayed — see chat()'s own comment).
     this.chatSeq=0;
+    // AFK watchdog state (see _afkTick/AFK_WARN_MS/AFK_ACT_MS above) —
+    // _afkKey identifies WHICH decision is currently outstanding (so the
+    // clock resets whenever that changes, not just whenever anyone acts),
+    // _afkSince is when the current key first appeared, and _afkWarnedSeats
+    // tracks which seats are currently flagged so the WARN broadcast (and
+    // its matching afk:false clear) each fire exactly once per stall
+    // instead of every poll tick.
+    this._afkTimer=null;
+    this._afkKey=null;
+    this._afkSince=0;
+    this._afkWarnedSeats=new Set();
+    // Chat "is typing" indicator (see typing() below) — seat -> the timeout
+    // that clears it. A Map, not a Set, specifically so that timeout handle
+    // is reachable to clearTimeout/reschedule on every fresh keystroke
+    // rather than just tracking which seats are currently flagged.
+    this._typingTimers=new Map();
   }
 
   // Hands per wind round = number of dealers = numPlayers (3 for sanma, 4
@@ -152,6 +187,17 @@ class Room {
     // whichever bot (or later, a different human) ends up occupying it.
     this.playAgainVotes.delete(seat);
     this.roundReady.delete(seat);
+    // Same reasoning as playAgainVotes/roundReady above, for the typing
+    // indicator (see typing() below) — without this, a player who
+    // disconnects mid-keystroke leaves their nameplate stuck showing
+    // "typing…" forever (nothing else was ever going to send the
+    // clearing ping), and worse, that stale badge would now sit on
+    // whichever bot/human ends up in this seat next.
+    if(this._typingTimers.has(seat)){
+      clearTimeout(this._typingTimers.get(seat));
+      this._typingTimers.delete(seat);
+      this._broadcastAll({type:'typing_status',seat,typing:false});
+    }
     // Always refill with a fresh bot (not null) so the table stays full —
     // matches fillBots()/addHuman() always keeping every seat occupied.
     this.seats[seat]=this._makeBot(seat);
@@ -195,6 +241,98 @@ class Room {
       this.roundReady=new Set();
       fn();
     }
+  }
+
+  // Self-rescheduling poll (started once from start(), see its own call
+  // site) that catches the one case none of the other stall-recovery paths
+  // do: a human whose connection is genuinely fine — the index.js
+  // ping/pong heartbeat has nothing to detect, so removeHuman/
+  // _resumeAfterBotSwap never fire — but who just never responds, AFK or
+  // otherwise. With nothing else watching, that previously froze the whole
+  // table with no recourse but abandoning the room outright.
+  //
+  // Reads _afkKey/_afkSince/_afkWarnedSeats (see their own comments in the
+  // constructor) rather than hooking every single site that opens a
+  // reaction window or advances g.turn (there are half a dozen of them —
+  // see BOT_DELAY's own call sites) — same "don't rely on remembering to
+  // touch N call sites" lesson as _resumeAfterBotSwap above, just applied
+  // by polling current state instead of by broadcasting from every mutator.
+  _afkTick(){
+    if(this.phase!=='playing'||!this.game){
+      // Game ended (or somehow never started) — let this timer chain die
+      // here rather than rescheduling forever. start() (below) arms a
+      // fresh one if a new game begins later on this same Room.
+      this._afkTimer=null;
+      return;
+    }
+    const g=this.game;
+    // Chankan windows already have their own unconditional 3s watchdog
+    // (g.pending.timer, see _kakan) that completes the kan regardless of
+    // who's outstanding — piling a second, independent auto-resolution on
+    // top of that one would race it. Everything else funnels through here.
+    let waiting;
+    if(g.pending&&!g.pending.isChankan){
+      waiting=g.pending.seats.filter(s=>!g.pending.responses[s]&&this.seats[s]&&!this.seats[s].isBot);
+    }else if(!g.pending&&g.turn!=null&&this.seats[g.turn]&&!this.seats[g.turn].isBot){
+      waiting=[g.turn];
+    }else{
+      waiting=[];
+    }
+    // Identifies the SPECIFIC decision currently outstanding, not just
+    // "is anyone waiting" — a reaction window closing and a fresh one
+    // immediately opening on the very next tile (or the turn simply
+    // advancing to the next human) must reset the clock, or a player who's
+    // been fine all game gets force-acted the instant they're first the
+    // one being waited on, using a clock that had been quietly running
+    // against someone else's earlier turn.
+    const nowKey=waiting.length
+      ?(g.pending?'p:'+(g.pending.tile&&g.pending.tile.id)+':'+waiting.join(','):'t:'+g.turn+':'+(g.drawTile&&g.drawTile.id))
+      :null;
+    if(nowKey!==this._afkKey){
+      this._afkKey=nowKey;
+      this._afkSince=Date.now();
+      // Any seat flagged under the OLD key is no longer the one being
+      // waited on (it answered, or the window/turn moved on without
+      // needing to force it) — clear its indicator rather than leaving a
+      // stale "AFK" badge sitting on a seat that's already acted.
+      for(const s of this._afkWarnedSeats){
+        this._broadcastAll({type:'afk_status',seat:s,afk:false});
+      }
+      this._afkWarnedSeats=new Set();
+    }else if(waiting.length){
+      const elapsed=Date.now()-this._afkSince;
+      if(elapsed>=AFK_WARN_MS){
+        for(const s of waiting){
+          if(this._afkWarnedSeats.has(s)) continue;
+          this._afkWarnedSeats.add(s);
+          this._broadcastAll({type:'afk_status',seat:s,afk:true});
+        }
+      }
+      if(elapsed>=AFK_ACT_MS){
+        for(const s of waiting) this._afkWarnedSeats.delete(s);
+        // Force each still-outstanding seat's decision through the exact
+        // same entry points a real response from that seat would use —
+        // _reactResponse for a call window (always safe: 'pass' needs no
+        // offer, see its own comment), _botTurn for a stalled own-turn
+        // (the same discard/riichi/tsumo/kita decision tree bots use,
+        // never leaves g.turn stuck — see its own comment). Both broadcast
+        // whatever state changes they cause on their own; this only needs
+        // to clear the AFK indicator those force-actions make stale.
+        for(const s of waiting){
+          this._broadcastAll({type:'afk_status',seat:s,afk:false});
+          if(g.pending&&g.pending.seats.includes(s)) this._reactResponse(s,{type:'pass'});
+          else if(g.turn===s&&!g.pending) this._botTurn(s);
+        }
+        // The force-actions above already changed g.pending/g.turn, so the
+        // next tick computes a genuinely new key on its own — but resetting
+        // here too means a force-action that somehow left the SAME key in
+        // place (shouldn't happen, but this is a stall-recovery path,
+        // not a place to trust "shouldn't") can't immediately re-fire
+        // against a clock that's already past AFK_ACT_MS.
+        this._afkKey=null;
+      }
+    }
+    this._afkTimer=setTimeout(()=>this._afkTick(),AFK_POLL_MS);
   }
 
   // Pokes the turn/reaction state machine forward for a seat that just got
@@ -299,6 +437,39 @@ class Room {
     if(!msg) return;
     const safeColor=CHAT_COLORS.has(color)?color:'#ffffff';
     this._broadcastAll({type:'chat',seat:p.seat,name:p.name,text:msg,color:safeColor,id:++this.chatSeq});
+    // A message actually SENT (not just typed) ends the typing indicator
+    // immediately rather than leaving it hanging around for up to
+    // TYPING_TIMEOUT_MS after the chat bubble itself already appeared —
+    // sendChat() (script.js) clears the input on send, so no further
+    // 'typing' ping would arrive to keep it alive anyway; this just closes
+    // that visible gap instead of waiting for it to time out on its own.
+    if(this._typingTimers.has(p.seat)){
+      clearTimeout(this._typingTimers.get(p.seat));
+      this._typingTimers.delete(p.seat);
+      this._broadcastAll({type:'typing_status',seat:p.seat,typing:false});
+    }
+  }
+
+  // Client pings this on every keystroke in the chat input (see the
+  // chat-input 'input' listener in script.js) — throttling/debouncing
+  // lives entirely here rather than on the client: only the FIRST ping in
+  // a burst actually broadcasts typing:true, and every ping (first or not)
+  // reschedules the same auto-clear timer, so a player who keeps typing
+  // never flickers the indicator, and one who stops (without sending, or
+  // by disconnecting — see removeHuman) has it clear itself
+  // TYPING_TIMEOUT_MS after their last keystroke with no further action
+  // needed from the client.
+  typing(playerId){
+    const p=this.seats.find(p=>p&&!p.isBot&&p.id===playerId);
+    if(!p) return;
+    const seat=p.seat;
+    const alreadyTyping=this._typingTimers.has(seat);
+    clearTimeout(this._typingTimers.get(seat));
+    if(!alreadyTyping) this._broadcastAll({type:'typing_status',seat,typing:true});
+    this._typingTimers.set(seat,setTimeout(()=>{
+      this._typingTimers.delete(seat);
+      this._broadcastAll({type:'typing_status',seat,typing:false});
+    },TYPING_TIMEOUT_MS));
   }
 
   // Seat-popup emoji reaction (distinct from reactToMessage below, which
@@ -390,6 +561,17 @@ class Room {
   start(){
     if(this.phase!=='waiting'||this.totalCount()<this.numPlayers) return;
     this.phase='playing';
+    // Arms the AFK watchdog (see _afkTick's own comment) for this game.
+    // Guarded with a clear first since a same-room Play Again rematch calls
+    // start() again on this same Room instance without ever letting phase
+    // leave 'playing' for long — _afkTick's own self-reschedule already
+    // stops cleanly once phase!=='playing', but that only happens on the
+    // NEXT poll tick, so without this a rematch started fast enough could
+    // briefly have two independent timer chains ticking at once.
+    clearTimeout(this._afkTimer);
+    this._afkKey=null;
+    this._afkWarnedSeats=new Set();
+    this._afkTimer=setTimeout(()=>this._afkTick(),AFK_POLL_MS);
     // addHuman fills the lowest-numbered open seat purely for lobby-slot
     // display (join order, left to right) — actual table seating (who
     // ends up on whose right/left) is reshuffled fresh here every game, so
@@ -418,8 +600,11 @@ class Room {
       // each seat's melds right before they're wiped for the next hand.
       // `doubleBust` (tsumo wins that bankrupted 2+ opponents at once — see
       // _endRound) is bumped there, not here, since it needs prevScores vs.
-      // post-payment g.scores from that specific win.
-      stats:new Array(this.numPlayers).fill(0).map(()=>({riichi:0,wins:0,tsumo:0,ron:0,dealIn:0,huro:0,doubleBust:0,bestHan:0,bestScore:0,yaku:{}})),
+      // post-payment g.scores from that specific win. `quadKita` (banked all
+      // 4 of a round's kita tiles single-handedly, sanma only) is bumped in
+      // _completeKita, the instant it happens — unlike doubleBust it doesn't
+      // need any end-of-round context, just this seat's own g.kita length.
+      stats:new Array(this.numPlayers).fill(0).map(()=>({riichi:0,wins:0,tsumo:0,ron:0,dealIn:0,huro:0,doubleBust:0,quadKita:0,bestHan:0,bestScore:0,yaku:{}})),
       // One entry per round_end this game (see _recordRoundHistory below) —
       // exactly the same payload each round already broadcasts to clients,
       // plus that round's own number/wind/dealer/honba context. Fed into
@@ -1240,6 +1425,16 @@ class Room {
   _completeKita(seat,tile){
     const g=this.game;
     g.kita[seat].push(tile);
+    // "The South Pole" achievement (see achievements.js) — the whole
+    // table only ever has 4 kita-rinshan slots to draw from IN TOTAL this
+    // round (g.kitaCount above is capped at 4, shared across every seat),
+    // so one seat's g.kita reaching length 4 means every single one of
+    // them went to this player — nobody else at the table got so much as
+    // one. Checked here, the instant it happens, rather than at round/game
+    // end — no later point has an easy way to tell "all 4 came from one
+    // seat" apart from "4 were drawn, spread across everyone" without
+    // separately remembering this exact moment anyway.
+    if(g.kita[seat].length===4) g.stats[seat].quadKita++;
     // Draws from the dead wall's dedicated kita pool (deadWall[14-17]), not
     // the live wall — same "rinshan draws don't touch g.wall" convention
     // kan's own _draw(fromRinshan=true) branch already follows, so

@@ -43,6 +43,8 @@ const TITLES = [
   'Hoarder', 'Overlord', 'Plunderer', 'Conqueror',
   // Sanma double-bankruptcy (double_knockout)
   'Double Knockout',
+  // Banking all 4 of a round's kita tiles single-handedly (quad_kita)
+  'The South Pole',
   // Higher-tier "harder" achievements (see server/achievements.js's own
   // comment on this batch) — a second, tougher rung above several of the
   // titles above, plus new stricter/compound conditions.

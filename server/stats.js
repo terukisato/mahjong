@@ -77,6 +77,7 @@ function _emptyMatchKindStats() {
     bestScore: 0,        // largest single-HAND payout (tsumo/ron), not a game's final score
     bestFinalScore: 0,   // largest GAME-ENDING score — see the 100k/105k point-milestone achievements
     doubleBustWins: 0,   // tsumo wins that bankrupted 2+ opponents at once (sanma-only achievement)
+    quadKita: 0,         // banked all 4 of a round's kita tiles single-handedly (sanma-only achievement)
     yaku: {},
     // Rolling window of this bucket's most recent hands (see
     // ROUND_WINDOW_SIZE/_pushRound/recordGameResult below) — every OTHER
@@ -484,6 +485,7 @@ function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placeme
       bucket.huro += hs.huro || 0;
       if (seat === bustedSeat) bucket.busts++;
       bucket.doubleBustWins += hs.doubleBust || 0;
+      bucket.quadKita += hs.quadKita || 0;
       bucket.bestHan = Math.max(bucket.bestHan, hs.bestHan || 0);
       bucket.bestScore = Math.max(bucket.bestScore, hs.bestScore || 0);
       bucket.bestFinalScore = Math.max(bucket.bestFinalScore, finalScores[seat]);
@@ -541,6 +543,7 @@ function recordGameResult({ playerIds, isBot, isGuest = [], finalScores, placeme
       bestScore: hs.bestScore || 0,
       bestFinalScore: finalScores[seat],
       doubleBustWins: hs.doubleBust || 0,
+      quadKita: hs.quadKita || 0,
       yaku: { ...(hs.yaku || {}) },
     });
     _prunePeriodGames(s.periodGames);
