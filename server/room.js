@@ -14,19 +14,6 @@ const BOT_DELAY=1200; // pause before a bot acts, so its move is readable on scr
 // keeps a bot from drawing/discarding/calling while the card is still on
 // screen, instead of just hiding the result until it clears.
 const ROUND_START_DELAY=3400;
-// Auto-resolves a human's outstanding turn/reaction decision if they go
-// quiet for too long — a human who's genuinely connected (so the
-// index.js ping/pong heartbeat sees nothing wrong) but never responds, AFK
-// or otherwise, previously froze the whole table with no recourse but
-// abandoning the room (see _afkTick's own comment for the full mechanism).
-// WARN fires first so every OTHER player gets a visible "waiting on X"
-// indicator well before ACT forces a decision — long enough that a player
-// who's just thinking hard never sees themselves flagged, short enough that
-// the rest of the table isn't left guessing for too long why nothing's
-// moving.
-const AFK_WARN_MS=15000;
-const AFK_ACT_MS=30000;
-const AFK_POLL_MS=2000;
 // How long the chat "is typing" nameplate indicator (see typing() below)
 // stays up after the player's last keystroke, absent a newer one or an
 // actually-sent message resetting/clearing it — long enough to survive a
@@ -127,17 +114,6 @@ class Room {
     // any actual chat history storage here (chat itself is never
     // persisted, purely relayed — see chat()'s own comment).
     this.chatSeq=0;
-    // AFK watchdog state (see _afkTick/AFK_WARN_MS/AFK_ACT_MS above) —
-    // _afkKey identifies WHICH decision is currently outstanding (so the
-    // clock resets whenever that changes, not just whenever anyone acts),
-    // _afkSince is when the current key first appeared, and _afkWarnedSeats
-    // tracks which seats are currently flagged so the WARN broadcast (and
-    // its matching afk:false clear) each fire exactly once per stall
-    // instead of every poll tick.
-    this._afkTimer=null;
-    this._afkKey=null;
-    this._afkSince=0;
-    this._afkWarnedSeats=new Set();
     // Chat "is typing" indicator (see typing() below) — seat -> the timeout
     // that clears it. A Map, not a Set, specifically so that timeout handle
     // is reachable to clearTimeout/reschedule on every fresh keystroke
@@ -176,6 +152,12 @@ class Room {
   removeHuman(playerId){
     const seat=this.seats.findIndex(p=>p&&!p.isBot&&p.id===playerId);
     if(seat===-1) return;
+    // Captured before _makeBot below overwrites this.seats[seat] — this is
+    // the one place callers actually want to know a REAL player left (as
+    // opposed to a seat simply being a bot, which is also true of a seat
+    // that was never anything else), so the name has to be read now.
+    const leavingName=this.seats[seat]?.name||'A player';
+    this._broadcastAll({type:'player_left',seat,name:leavingName});
     this.ready.delete(playerId);
     // A pending play-again vote is keyed by seat number, not player id — if
     // this seat leaves mid-'done' phase, its vote must go with it, or a
@@ -241,98 +223,6 @@ class Room {
       this.roundReady=new Set();
       fn();
     }
-  }
-
-  // Self-rescheduling poll (started once from start(), see its own call
-  // site) that catches the one case none of the other stall-recovery paths
-  // do: a human whose connection is genuinely fine — the index.js
-  // ping/pong heartbeat has nothing to detect, so removeHuman/
-  // _resumeAfterBotSwap never fire — but who just never responds, AFK or
-  // otherwise. With nothing else watching, that previously froze the whole
-  // table with no recourse but abandoning the room outright.
-  //
-  // Reads _afkKey/_afkSince/_afkWarnedSeats (see their own comments in the
-  // constructor) rather than hooking every single site that opens a
-  // reaction window or advances g.turn (there are half a dozen of them —
-  // see BOT_DELAY's own call sites) — same "don't rely on remembering to
-  // touch N call sites" lesson as _resumeAfterBotSwap above, just applied
-  // by polling current state instead of by broadcasting from every mutator.
-  _afkTick(){
-    if(this.phase!=='playing'||!this.game){
-      // Game ended (or somehow never started) — let this timer chain die
-      // here rather than rescheduling forever. start() (below) arms a
-      // fresh one if a new game begins later on this same Room.
-      this._afkTimer=null;
-      return;
-    }
-    const g=this.game;
-    // Chankan windows already have their own unconditional 3s watchdog
-    // (g.pending.timer, see _kakan) that completes the kan regardless of
-    // who's outstanding — piling a second, independent auto-resolution on
-    // top of that one would race it. Everything else funnels through here.
-    let waiting;
-    if(g.pending&&!g.pending.isChankan){
-      waiting=g.pending.seats.filter(s=>!g.pending.responses[s]&&this.seats[s]&&!this.seats[s].isBot);
-    }else if(!g.pending&&g.turn!=null&&this.seats[g.turn]&&!this.seats[g.turn].isBot){
-      waiting=[g.turn];
-    }else{
-      waiting=[];
-    }
-    // Identifies the SPECIFIC decision currently outstanding, not just
-    // "is anyone waiting" — a reaction window closing and a fresh one
-    // immediately opening on the very next tile (or the turn simply
-    // advancing to the next human) must reset the clock, or a player who's
-    // been fine all game gets force-acted the instant they're first the
-    // one being waited on, using a clock that had been quietly running
-    // against someone else's earlier turn.
-    const nowKey=waiting.length
-      ?(g.pending?'p:'+(g.pending.tile&&g.pending.tile.id)+':'+waiting.join(','):'t:'+g.turn+':'+(g.drawTile&&g.drawTile.id))
-      :null;
-    if(nowKey!==this._afkKey){
-      this._afkKey=nowKey;
-      this._afkSince=Date.now();
-      // Any seat flagged under the OLD key is no longer the one being
-      // waited on (it answered, or the window/turn moved on without
-      // needing to force it) — clear its indicator rather than leaving a
-      // stale "AFK" badge sitting on a seat that's already acted.
-      for(const s of this._afkWarnedSeats){
-        this._broadcastAll({type:'afk_status',seat:s,afk:false});
-      }
-      this._afkWarnedSeats=new Set();
-    }else if(waiting.length){
-      const elapsed=Date.now()-this._afkSince;
-      if(elapsed>=AFK_WARN_MS){
-        for(const s of waiting){
-          if(this._afkWarnedSeats.has(s)) continue;
-          this._afkWarnedSeats.add(s);
-          this._broadcastAll({type:'afk_status',seat:s,afk:true});
-        }
-      }
-      if(elapsed>=AFK_ACT_MS){
-        for(const s of waiting) this._afkWarnedSeats.delete(s);
-        // Force each still-outstanding seat's decision through the exact
-        // same entry points a real response from that seat would use —
-        // _reactResponse for a call window (always safe: 'pass' needs no
-        // offer, see its own comment), _botTurn for a stalled own-turn
-        // (the same discard/riichi/tsumo/kita decision tree bots use,
-        // never leaves g.turn stuck — see its own comment). Both broadcast
-        // whatever state changes they cause on their own; this only needs
-        // to clear the AFK indicator those force-actions make stale.
-        for(const s of waiting){
-          this._broadcastAll({type:'afk_status',seat:s,afk:false});
-          if(g.pending&&g.pending.seats.includes(s)) this._reactResponse(s,{type:'pass'});
-          else if(g.turn===s&&!g.pending) this._botTurn(s);
-        }
-        // The force-actions above already changed g.pending/g.turn, so the
-        // next tick computes a genuinely new key on its own — but resetting
-        // here too means a force-action that somehow left the SAME key in
-        // place (shouldn't happen, but this is a stall-recovery path,
-        // not a place to trust "shouldn't") can't immediately re-fire
-        // against a clock that's already past AFK_ACT_MS.
-        this._afkKey=null;
-      }
-    }
-    this._afkTimer=setTimeout(()=>this._afkTick(),AFK_POLL_MS);
   }
 
   // Pokes the turn/reaction state machine forward for a seat that just got
@@ -561,17 +451,6 @@ class Room {
   start(){
     if(this.phase!=='waiting'||this.totalCount()<this.numPlayers) return;
     this.phase='playing';
-    // Arms the AFK watchdog (see _afkTick's own comment) for this game.
-    // Guarded with a clear first since a same-room Play Again rematch calls
-    // start() again on this same Room instance without ever letting phase
-    // leave 'playing' for long — _afkTick's own self-reschedule already
-    // stops cleanly once phase!=='playing', but that only happens on the
-    // NEXT poll tick, so without this a rematch started fast enough could
-    // briefly have two independent timer chains ticking at once.
-    clearTimeout(this._afkTimer);
-    this._afkKey=null;
-    this._afkWarnedSeats=new Set();
-    this._afkTimer=setTimeout(()=>this._afkTick(),AFK_POLL_MS);
     // addHuman fills the lowest-numbered open seat purely for lobby-slot
     // display (join order, left to right) — actual table seating (who
     // ends up on whose right/left) is reshuffled fresh here every game, so

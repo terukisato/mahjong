@@ -584,8 +584,8 @@ function onMsg(m){
     return;
   }
   if(m.type==='ready_status'){onReadyStatus(m);return;}
-  if(m.type==='afk_status'){onAfkStatus(m);return;}
   if(m.type==='typing_status'){onTypingStatus(m);return;}
+  if(m.type==='player_left'){onPlayerLeft(m);return;}
   if(m.type==='play_again_status'){onPlayAgainStatus(m);return;}
   if(m.type==='play_again_left_behind'){onPlayAgainLeftBehind();return;}
   if(m.type==='stats'){
@@ -3481,13 +3481,13 @@ function startGame(m){
     const selfName=$('iname').value.trim()||'Player';
     const pn=$('pn'+id); pn.textContent=i===0?selfName:(p?.name||'—');
     fitNameplateText(pn);
-    // Defensive reset, not load-bearing — the AFK watchdog (room.js) always
-    // pairs an afk:true with a later afk:false once resolved, but this
-    // guards against a leftover badge surviving a reconnect/edge case where
-    // that pairing broke, onto a nameplate DOM node that's reused game to
-    // game rather than recreated. Same reasoning for 'typing' (room.js's
-    // typing()/TYPING_TIMEOUT_MS).
-    $('np'+id)?.classList.remove('afk','typing');
+    // Defensive reset, not load-bearing — room.js's typing()/
+    // TYPING_TIMEOUT_MS always pairs a typing:true with a later
+    // typing:false once it clears, but this guards against a leftover
+    // .typing-dots surviving a reconnect/edge case where that pairing
+    // broke, onto a nameplate DOM node that's reused game to game rather
+    // than recreated.
+    $('np'+id)?.querySelector('.typing-dots')?.remove();
     // Stashed for openPlayerCardInGame (nameplate click) — self is never a
     // bot, and always has a name (falls back to 'Player' same as the
     // nameplate text itself above); an opponent seat can be null (empty
@@ -3596,34 +3596,37 @@ function startGame(m){
 // you have an absolute seat number and need to know where on screen it lives.
 function pid(abs){return P[(abs-mySeat+numSeats)%numSeats];}
 
-// Toggles the "AFK" indicator on a seat's nameplate (see the room.js AFK
-// watchdog — a connected-but-unresponsive human's turn/reaction eventually
-// force-resolves itself, but everyone else at the table deserves to see
-// WHY nothing's moving before that happens, not just have the game
-// silently jump ahead a while later). Server sends an absolute seat index
-// (same convention as every other in-game broadcast — see pid() above);
-// toggling straight off the .np element (rather than a per-seat child like
-// .status-dot, which only bottom's markup has — see index.html) works
-// uniformly for all 4 seats without needing new DOM per seat.
-function onAfkStatus(m){
-  const np=$('np'+pid(m.seat));
-  if(np) np.classList.toggle('afk',!!m.afk);
-}
-
-// Toggles the chat "is typing…" indicator on a seat's nameplate — same
-// .np-class-toggle mechanism/seat-mapping as onAfkStatus above (see its own
-// comment), driven by room.js's typing()/TYPING_TIMEOUT_MS instead of the
-// AFK watchdog. .np.typing/.np.afk (style.css) render on the same anchor
-// point above the plate but as mutually-exclusive states via CSS cascade
-// order, not JS — the two are independent signals (this is purely "are
-// they engaging with chat", unrelated to whether their in-game turn/
-// reaction is overdue) and could in principle both be true for the same
-// seat at once (chatting instead of making their discard decision), so
-// letting one class silently clobber the other in JS would be the wrong
-// fix for a coincidence that's rare enough not to need one.
+// Shows/hides the chat "is typing…" indicator on a seat's nameplate —
+// 3 real dot spans (.typing-dots, see style.css's own comment on why a
+// single CSS `content` string can't bounce each dot independently),
+// created/removed on demand rather than living permanently in index.html's
+// markup for all 4 seats, same "no extra DOM per seat unless actually
+// needed" reasoning .status-dot's own comment gives for why only bottom's
+// markup has one. Server sends an absolute seat index (same convention as
+// every other in-game broadcast — see pid() above).
 function onTypingStatus(m){
   const np=$('np'+pid(m.seat));
-  if(np) np.classList.toggle('typing',!!m.typing);
+  if(!np) return;
+  const existing=np.querySelector('.typing-dots');
+  if(m.typing){
+    if(existing) return; // already showing — nothing to do
+    const dots=document.createElement('span');
+    dots.className='typing-dots';
+    dots.innerHTML='<span></span><span></span><span></span>';
+    np.appendChild(dots);
+  }else if(existing){
+    existing.remove();
+  }
+}
+
+// A real human actually left the room (see removeHuman in room.js — fires
+// once, right when their seat gets swapped over to a bot) — surfaced as a
+// plain toast rather than a persistent nameplate badge, since unlike
+// typing this isn't a live state to keep displaying: the moment matters,
+// not an ongoing status (the seat just permanently reads as CPU from here
+// on, via the existing .btag bot tag — see startGame).
+function onPlayerLeft(m){
+  toast(`${m.name} left the room`);
 }
 
 
