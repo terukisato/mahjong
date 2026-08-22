@@ -1,9 +1,43 @@
 'use strict';
 const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
-       detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,isMenzen} = require('./mahjong');
+       detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,isMenzen,shanten} = require('./mahjong');
 const {botName,bestDiscard,botReact} = require('./bot');
 const {recordGameResult} = require('./stats');
 const {recordGame} = require('./history');
+
+// Cheap composition heuristics for "what's this hand shaping up toward" —
+// not a full search over every possible completion (overkill for a
+// beginner hint, and expensive to boot). Shared by getAdvice's own-hand
+// potential-yaku block and its per-call-option "if you call this, what
+// might it lead to" hint, so both read the same signal off a plain list of
+// tile keys (works equally for the concealed hand's own keys or a
+// what-if-I-called hand's keys, the caller decides which). `sw`/`rw` are
+// this seat's seat-wind/round-wind values (1-4/1-2), needed to know which
+// wind pair would count as yakuhai.
+function _potentialYakuHints(keys,sw,rw){
+  const potential=[];
+  if(!keys.length) return potential;
+  const isTermHon=k=>k.slice(-1)==='z'||k[0]==='1'||k[0]==='9';
+  if(keys.every(k=>!isTermHon(k)))
+    potential.push({name:'Tanyao',jp:'断么九',hint:'No terminal or honor tiles — stay all-simples for an easy 1 han.'});
+  const nonHonorSuits=new Set(keys.filter(k=>k.slice(-1)!=='z').map(k=>k.slice(-1)));
+  const hasHonor=keys.some(k=>k.slice(-1)==='z');
+  if(nonHonorSuits.size===1)
+    potential.push({name:hasHonor?'Honitsu':'Chinitsu',jp:hasHonor?'混一色':'清一色',
+      hint:`Limited to one suit${hasHonor?' plus honors':''} — worth ${hasHonor?3:6} han if it stays that way.`});
+  const counts={}; keys.forEach(k=>counts[k]=(counts[k]||0)+1);
+  const yakuhaiPair=Object.keys(counts).find(k=>counts[k]>=2&&(k==='5z'||k==='6z'||k==='7z'||k===`${sw}z`||k===`${rw}z`));
+  if(yakuhaiPair)
+    potential.push({name:'Yakuhai',jp:'役牌',hint:`The pair of ${yakuhaiPair} would be worth a han as a triplet.`});
+  // Toitoi potential: several tile types already sitting as pairs/triplets
+  // rather than spread into sequence-shaped runs — a rough "leaning toward
+  // all-triplets" signal, not a real shape check (that would need
+  // decompose()), but cheap and directionally useful for a beginner hint.
+  const pairPlusCount=Object.values(counts).filter(n=>n>=2).length;
+  if(pairPlusCount>=3)
+    potential.push({name:'Toitoi',jp:'対々和',hint:'Several pairs/triplets already — leaning toward an all-triplets hand.'});
+  return potential;
+}
 
 let _roomId=0;
 const BOT_DELAY=1200; // pause before a bot acts, so its move is readable on screen
@@ -360,6 +394,249 @@ class Room {
       this._typingTimers.delete(seat);
       this._broadcastAll({type:'typing_status',seat,typing:false});
     },TYPING_TIMEOUT_MS));
+  }
+
+  // Beginner-assist "Help" button — computed only on demand (never pushed
+  // automatically) so it stays pure advice, not an autopilot. Read-only:
+  // never touches game state, just re-runs the same shanten/yaku/score
+  // logic the server already uses to decide canTsumo/canRiichi/bot moves
+  // (see mahjong.js/bot.js) and reports the result back to the asker only.
+  getAdvice(playerId){
+    const p=this.seats.find(p=>p&&!p.isBot&&p.id===playerId);
+    if(!p||!this.game||this.phase!=='playing') return;
+    const seat=p.seat;
+    const g=this.game;
+    const hand=g.hands[seat];
+    const melds=g.melds[seat];
+    const sanma=this.rules.sanma;
+    const sw=this._seatWindOf(seat);
+    const rw=this._roundWindValue();
+    const isRiichi=g.riichi[seat];
+    const isDblRiichi=g.doubleRiichi[seat];
+    const isDealer=seat===g.dealer;
+    const kuitanAri=this.rules.kuitanAri;
+
+    const meldTileCount=melds.reduce((n,m)=>n+(m.type==='kan'?4:3),0);
+    const numKans=melds.filter(m=>m.type==='kan').length;
+    const fullHandSize=14-meldTileCount+numKans;
+    const canDiscardNow=g.turn===seat&&hand.length===fullHandSize&&!g.pending;
+
+    // Discard ranking (only meaningful once a discard is actually legal
+    // right now) — same shanten+wait-count ranking bot.js's _rankDiscards
+    // uses, just reported as advice text instead of auto-played. Each
+    // candidate also gets `lostYaku`: any potential yaku (per
+    // _potentialYakuHints) the CURRENT hand has that discarding THIS tile
+    // would give up — e.g. breaking a dragon pair you were holding toward
+    // Yakuhai. Efficiency (shanten/waits) alone can silently recommend a
+    // discard that throws away a developing yaku without ever saying so;
+    // this is the "what would this action cost me" half of that picture.
+    let discards=null;
+    if(canDiscardNow){
+      const beforeKeys=[...hand.map(key),...melds.flatMap(m=>m.tiles.map(key))];
+      const beforePotential=_potentialYakuHints(beforeKeys,sw,rw).map(p=>p.name);
+      const cands=hand.map(t=>{
+        const rem=hand.filter(x=>x.id!==t.id);
+        const sh=shanten(rem,melds);
+        const w=sh===0?waits(rem,melds,sanma):[];
+        const afterKeys=[...rem.map(key),...melds.flatMap(m=>m.tiles.map(key))];
+        const afterPotential=new Set(_potentialYakuHints(afterKeys,sw,rw).map(p=>p.name));
+        const lostYaku=beforePotential.filter(n=>!afterPotential.has(n));
+        return {tileId:t.id,key:key(t),shanten:sh,waitCount:w.length,waitTiles:w,lostYaku};
+      });
+      cands.sort((a,b)=>a.shanten-b.shanten||b.waitCount-a.waitCount);
+      discards=cands.slice(0,3);
+    }
+
+    // The 13-tile "base" hand to evaluate tenpai/yaku/score against: the
+    // hand after the recommended discard (if one is on offer right now),
+    // otherwise the hand as-is (already 13 tiles outside of your own turn).
+    let hand13=hand;
+    if(canDiscardNow&&discards&&discards.length) hand13=hand.filter(t=>t.id!==discards[0].tileId);
+    const curShanten=shanten(hand13,melds);
+
+    // Pending call decision (pon/chi/kan offered to this seat right now) —
+    // mirrors bot.js's _shantenBotReact reasoning (does taking the call
+    // actually reduce shanten?) but reported for a human to choose from,
+    // PLUS what calling would actually score — a shanten improvement that
+    // leaves the hand with no yaku at all (the classic beginner trap: an
+    // open hand needs its own yaku, unlike a closed one that can fall back
+    // on Riichi) is worse advice than it looks from shanten alone.
+    let callAdvice=null;
+    if(g.pending&&g.pending.seats.includes(seat)){
+      const myR=g.pending.options.find(r=>r.seat===seat);
+      const disc=g.pending.tile;
+      const before=shanten(hand,melds);
+      callAdvice=(myR?.options||[]).filter(o=>o.type!=='ron').map(o=>{
+        // Build the REAL meld (with actual tile objects, not a bare
+        // {type} placeholder) — detectYaku/waits both read melds[].tiles
+        // to know the open hand's full tile set, so a placeholder here
+        // would silently make every yaku check below ignore this meld.
+        let matchedTiles=[];
+        if(o.type==='pon') matchedTiles=hand.filter(t=>key(t)===key(disc)).slice(0,2);
+        else if(o.type==='chi') matchedTiles=o.sequences[0].map(id=>hand.find(t=>t.id===id));
+        else if(o.type==='kan') matchedTiles=hand.filter(t=>key(t)===key(disc)).slice(0,3);
+        const realMeld={type:o.type,tiles:[...matchedTiles,disc]};
+        const rem=hand.filter(t=>!matchedTiles.some(u=>u.id===t.id));
+        const afterMelds=[...melds,realMeld];
+        const after=shanten(rem,afterMelds);
+        const recommend=after<before;
+        const reason=recommend
+          ?`Calling ${o.type} brings you from ${before}-away to ${after}-away from tenpai.`
+          :`Calling ${o.type} wouldn't improve your shanten (still ${after}-away) and opens your hand — passing usually keeps more options.`;
+
+        // Calling always opens the hand, so Riichi-family/Menzen Tsumo
+        // never apply post-call regardless of this seat's CURRENT riichi
+        // state — hence the hardcoded false's below (isRiichi/isIppatsu/
+        // isDoubleRiichi), unlike the main waitInfo block which reads the
+        // seat's real current values for its still-closed hand.
+        let yaku=[],noYakuWarning=false,potential=[];
+        if(after===0){
+          // `rem` is still the pre-discard hand (calling pon/chi always
+          // leaves one extra tile to discard, same as any own-turn draw)
+          // — one tile oversized versus the concealed count detectYaku
+          // actually expects for this meld count. Reduce to the best
+          // (shanten-minimizing) discard first, same step the outer
+          // hand13/discards[0] derivation does for the main hand, or
+          // hand14 below ends up the wrong tile count and decompose()
+          // silently finds no grouping at all (every wait reads as 0 han,
+          // even a plain open dragon-triplet win).
+          const meldTileCount2=afterMelds.reduce((n,mm)=>n+(mm.type==='kan'?4:3),0);
+          const numKans2=afterMelds.filter(mm=>mm.type==='kan').length;
+          const base13_2=13-meldTileCount2+numKans2;
+          let remBase=rem;
+          if(rem.length>base13_2){
+            let bestId=null,bestSh=Infinity;
+            for(const t of rem){
+              const sh=shanten(rem.filter(x=>x.id!==t.id),afterMelds);
+              if(sh<bestSh){bestSh=sh;bestId=t.id;}
+            }
+            remBase=rem.filter(t=>t.id!==bestId);
+          }
+          const w=waits(remBase,afterMelds,sanma);
+          const yakuSet=new Set();
+          let anyHan=false;
+          for(const wk of w){
+            const v=parseInt(wk),s=wk.slice(-1);
+            const hand14=[...remBase,{s,v,id:999992}];
+            const rTsumo=detectYaku(hand14,afterMelds,true,sw,rw,false,false,false,false,false,false,false,false,false,wk,{kuitanAri});
+            const rRon=detectYaku(hand14,afterMelds,false,sw,rw,false,false,false,false,false,false,false,false,false,wk,{kuitanAri});
+            if(rTsumo.han>0){anyHan=true;rTsumo.yakuList.forEach(y=>yakuSet.add(y.name));}
+            if(rRon.han>0){anyHan=true;rRon.yakuList.forEach(y=>yakuSet.add(y.name));}
+          }
+          yaku=[...yakuSet];
+          noYakuWarning=w.length>0&&!anyHan;
+        } else if(after>0){
+          const keys=[...rem.map(key),...afterMelds.flatMap(m=>m.tiles.map(key))];
+          potential=_potentialYakuHints(keys,sw,rw);
+        }
+        return {type:o.type,beforeShanten:before,afterShanten:after,recommend,reason,yaku,noYakuWarning,potential};
+      });
+    }
+
+    // Current waits + achievable yaku/score, only meaningful once tenpai.
+    let waitInfo=null;
+    if(curShanten===0){
+      const w=waits(hand13,melds,sanma);
+      waitInfo=w.map(wk=>{
+        const v=parseInt(wk),s=wk.slice(-1);
+        const hand14=[...hand13,{s,v,id:999990}];
+        const rTsumo=detectYaku(hand14,melds,true,sw,rw,isRiichi,g.ippatsu[seat],isDblRiichi,false,false,false,false,false,false,wk,{kuitanAri});
+        const rRon=detectYaku(hand14,melds,false,sw,rw,isRiichi,g.ippatsu[seat],isDblRiichi,false,false,false,false,false,false,wk,{kuitanAri});
+        const dora=countDora(hand14,g.dora)+countAkaDora(hand14);
+        const useTsumo=rTsumo.han>0&&(rRon.han===0||rTsumo.han>=rRon.han);
+        const pick=useTsumo?rTsumo:rRon;
+        if(pick.han===0) return {tile:wk,han:0,yaku:[],points:null,label:null};
+        const totalHan=pick.han+dora;
+        const isPinfu=pick.yakuList.some(y=>y.name==='Pinfu');
+        const fu=pick.groups?calcFu(pick.groups,useTsumo,isMenzen(melds),wk,isPinfu):25;
+        const bp=basePoints(totalHan,fu);
+        const points=Math.ceil((isDealer?bp*6:bp*4)/100)*100;
+        const yakuNames=[...pick.yakuList.map(y=>y.name)];
+        if(dora>0) yakuNames.push(`Dora x${dora}`);
+        return {tile:wk,han:totalHan,fu,yaku:yakuNames,points,label:handLabel(totalHan),isTsumo:useTsumo};
+      }).filter(x=>x.han>0).sort((a,b)=>b.han-a.han);
+    }
+
+    // Not tenpai yet — cheap composition heuristics (see _potentialYakuHints)
+    // for "what's this hand shaping up toward", not a full search over
+    // every possible completion (overkill for a beginner hint).
+    const potential=curShanten!==0
+      ? _potentialYakuHints([...hand13.map(key),...melds.flatMap(m=>m.tiles.map(key))],sw,rw)
+      : [];
+
+    // Furiten — a beginner trap that isn't about hand shape at all: your
+    // wait tiles are genuinely correct, but a matching tile already sitting
+    // in your OWN discard pile (permanent) or a missed ron this go-around
+    // (temporary, g.tempFuriten) blocks every ron until it clears, tsumo
+    // only. Surfaced unconditionally (not just at tenpai) since it's easy
+    // to not even realize you're in it.
+    const furiten=!!(g.furiten[seat]||g.tempFuriten[seat]);
+
+    // Kita (sanma only) — a North tile sitting in hand is dead weight for
+    // every standard hand shape (winds can't form runs, and a lone 4z
+    // needs two more just to become a triplet), while calling Kita banks
+    // it for a free +1 han later AND draws a replacement — strictly better
+    // than either discarding it or holding it hoping to pair it up. Same
+    // gating as canKita in _sendState (this seat's own turn, full hand,
+    // the shared kita-rinshan pool not yet exhausted).
+    let kitaTip=null;
+    if(sanma&&g.turn===seat&&hand.length===fullHandSize&&g.kitaCount<4&&hand.some(t=>key(t)==='4z')){
+      kitaTip='You\'re holding North (北) — call Kita before discarding it. It banks a free bonus han and gives you a replacement draw, at no cost to your hand shape.';
+    }
+
+    // Riichi opportunity — only a nudge that it's AVAILABLE (not a "you
+    // should", since folding defensively can be the right call too), using
+    // the same eligibility gate _sendState's own canRiichi uses (own turn,
+    // full hand, closed, not already in riichi, can still afford the stick).
+    const riichiTip=(canDiscardNow&&curShanten===0&&isMenzen(melds)&&!isRiichi&&g.scores[seat]>=1000)
+      ? 'You can declare Riichi with this discard — it locks in a guaranteed yaku, plus a chance at ura dora.'
+      : null;
+
+    // Defense awareness — any opponent already in riichi is committed to
+    // their hand and will ron anything that completes it, so a beginner
+    // pushing their own hand without checking this is the single most
+    // common way to deal in. genbutsu (tiles already sitting in THAT
+    // opponent's own discard pile, or discarded by anyone AFTER their
+    // riichi) are provably safe against them; only the simpler
+    // "in their own pond" rule is applied here, same safe-tile source
+    // bot.js's hard-difficulty defense uses, not full multi-player suji/
+    // kabe reading (real but too deep for a beginner hint).
+    let dangerTip=null;
+    const riichiOpponents=[];
+    for(let s=0;s<this.numPlayers;s++){ if(s!==seat&&g.riichi[s]) riichiOpponents.push(s); }
+    if(riichiOpponents.length){
+      const names=riichiOpponents.map(s=>this.seats[s]?.name||`Seat ${s}`);
+      const dangerSets=riichiOpponents.map(s=>g.discards[s].map(key));
+      // Safe against EVERY riichi opponent at once, not just one of them —
+      // a tile safe against one but not another isn't safe (same
+      // convention bot.js's own hard-difficulty defense uses).
+      const safeKeys=[...new Set(hand.filter(t=>dangerSets.every(ds=>ds.includes(key(t)))).map(key))];
+      dangerTip={opponents:names,safeKeys};
+    }
+
+    // Dora count — easy to lose track of mid-hand since it never shows up
+    // anywhere else in this panel except folded into a per-wait score
+    // (waitInfo, only once tenpai). Counted against hand13 (the base hand
+    // this whole response evaluates against, post-recommended-discard when
+    // one's on offer) plus this seat's own melds, so it matches whatever
+    // hand the rest of the panel is describing.
+    const doraCount=countDora(hand13,g.dora)+countAkaDora(hand13)
+      +countDora(melds.flatMap(m=>m.tiles),g.dora)+countAkaDora(melds.flatMap(m=>m.tiles));
+
+    // Endgame awareness — a beginner will happily keep pushing a hand
+    // that's nowhere close to tenpai right up until the wall runs out,
+    // ending in an exhaustive draw (or worse, a deal-in on the way there)
+    // with nothing to show for it. Only fires late (wall genuinely running
+    // low) and only when still genuinely far off (2+ shanten) — a hand
+    // that's already tenpai or one away has every reason to keep pushing
+    // regardless of how little wall is left.
+    const wallLowTip=(g.wall.length<=20&&curShanten>=2)
+      ? `Only ${g.wall.length} tiles left in the wall and you're still ${curShanten} away from tenpai — this round may end in a draw. Consider folding to safe tiles instead of pushing.`
+      : null;
+
+    this._send(p,{type:'advice',seat,shanten:curShanten,isTenpai:curShanten===0,
+      canDiscardNow,discards,callAdvice,waits:waitInfo,potential,
+      furiten,kitaTip,riichiTip,dangerTip,doraCount,wallLowTip});
   }
 
   // Seat-popup emoji reaction (distinct from reactToMessage below, which

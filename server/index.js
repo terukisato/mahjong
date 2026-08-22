@@ -439,6 +439,8 @@ wss.on('connection',(ws)=>{
 
     if(msg.type==='msg_react'&&myRoom) myRoom.reactToMessage(myId,msg.msgId,msg.emoji);
 
+    if(msg.type==='get_advice'&&myRoom) myRoom.getAdvice(myId);
+
     if(msg.type==='get_stats'){
       // Uses this connection's own unlocked profile, never msg.name — same
       // reasoning as assignIdentity above, otherwise anyone could read any unlocked

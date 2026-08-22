@@ -92,7 +92,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.13.24</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.14.0</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -278,6 +278,62 @@
 <div id="player-card-modal" class="about-modal">
   <button class="about-close" onclick="closePlayerCard()">✕</button>
   <div class="about-body" id="player-card-body">Loading…</div>
+</div>
+
+<!-- Yaku Reference — static list of every yaku the scorer recognizes (see
+     YAKU_REFERENCE in script.js), for a beginner to browse any time, not
+     tied to the current hand at all. Same about-modal family as Rankings/
+     Player Card above. -->
+<div id="yakuref-backdrop" class="about-backdrop" onclick="toggleYakuRef()"></div>
+<div id="yakuref-modal" class="about-modal">
+  <button class="about-close" onclick="toggleYakuRef()">✕</button>
+  <div class="about-title">Yaku Reference</div>
+  <div class="about-body" id="yakuref-body"></div>
+</div>
+
+<!-- Help / Advice — computed on demand from the CURRENT hand (see
+     getAdvice in server/room.js, requested by wss({type:'get_advice'})),
+     only ever refreshed when the player clicks the help button — never
+     pushed automatically, so it stays advice rather than autopilot. -->
+<!-- Transparent click-catcher (not a dimming overlay — see .advice-backdrop-clear
+     in style.css) so clicking anywhere outside the panel still closes it,
+     without darkening the board the way the centered .about-modal family does. -->
+<div id="advice-backdrop" class="advice-backdrop-clear" onclick="toggleAdvice()"></div>
+<div id="advice-modal" class="advice-panel">
+  <button class="about-close" onclick="toggleAdvice()">✕</button>
+  <div class="about-title">Hand Advice</div>
+  <div class="about-body" id="advice-body">Loading…</div>
+</div>
+
+<!-- Magnifier — a dimmed full-screen overlay showing the player's own
+     hand at a much larger tile size (see openMagnify/renderMagnifyHand in
+     script.js). Tap-to-select/tap-again-to-discard on the enlarged tiles,
+     via the same clickTile() the compact in-table hand row uses — this is
+     a bigger view onto that same hand, not a separate discard path.
+     Clicking the dimmed background (not a tile) closes it; #magnify-hand
+     stops that click from bubbling so tapping a tile never closes the
+     overlay by itself. -->
+<div id="magnify-overlay" class="magnify-overlay" onclick="closeMagnify()">
+  <button class="magnify-close" onclick="event.stopPropagation();closeMagnify()">✕</button>
+  <div class="magnify-content" id="magnify-content" onclick="event.stopPropagation()">
+    <div class="magnify-hand" id="magnify-hand"></div>
+  </div>
+  <!-- Display-mode toggle — 壱 (ichi, "one") spreads every tile across one
+       row spanning the table's full width; 弐 (ni, "two") splits them into
+       two rows instead (see setMagnifyRows/renderMagnifyHand in script.js).
+       A SIBLING of #magnify-content (fixed to the bottom of the screen via
+       CSS), not a child of it — switching row counts changes #magnify-
+       content's own height, and it's vertically centered by the overlay,
+       so a toggle living inside it would visibly jump position every time
+       the content re-centers. Pinning it outside that flow keeps it dead
+       still regardless of how many rows the hand is currently showing.
+       Own stopPropagation (same reasoning as #magnify-content's) so
+       tapping a mode button doesn't close the overlay via the backdrop's
+       own onclick. -->
+  <div class="magnify-mode-toggle" onclick="event.stopPropagation()">
+    <button class="magnify-mode-btn active" id="magnify-mode-1" onclick="setMagnifyRows(1)" title="One row">壱</button>
+    <button class="magnify-mode-btn" id="magnify-mode-2" onclick="setMagnifyRows(2)" title="Two rows">弐</button>
+  </div>
 </div>
 
 <!-- Room List — an alternative to "Find Match" for playing with a
@@ -904,6 +960,25 @@
   </div><!-- end .table -->
   <!-- Always-visible chat input bar (shown during game) -->
   <div class="chat-bar" id="chat-bar">
+    <!-- Beginner-assist buttons — absolutely positioned within .chat-bar
+         itself (see .assist-bar in style.css), directly above the colour/
+         emoji buttons (its left:0 lines up with them, the first two
+         children here) rather than the input/send/history side. Bare
+         icons, no button chrome, so they read as a label row for the
+         picker buttons below rather than a third kind of button. Shown/
+         hidden automatically with #chat-bar since it's a child of it, no
+         separate toggle needed. -->
+    <div class="assist-bar" id="assist-bar">
+      <button class="assist-btn" id="bmagnify" onclick="openMagnify()" title="Magnify Hand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </button>
+      <button class="assist-btn" id="byakuref" onclick="toggleYakuRef()" title="Yaku Reference">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+      </button>
+      <button class="assist-btn" id="badvice" onclick="requestAdvice()" title="Help — analyze my hand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      </button>
+    </div>
     <button class="chat-color-btn" id="chat-color-btn" title="Message colour" aria-label="Choose message colour" aria-expanded="false"></button>
     <button class="chat-emoji-btn" id="chat-emoji-btn" title="React with an emoji" aria-label="React with an emoji" aria-expanded="false">😀</button>
     <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off" aria-label="Chat message">

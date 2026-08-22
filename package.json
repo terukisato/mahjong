@@ -1,6 +1,6 @@
 {
   "name": "janshin",
-  "version": "0.13.24",
+  "version": "0.14.0",
   "description": "Janshin (雀心) — riichi mahjong web game",
   "main": "server/index.js",
   "scripts": {

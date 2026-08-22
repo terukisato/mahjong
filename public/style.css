@@ -790,6 +790,23 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   background:rgba(3,12,6,.95);border:1px solid rgba(201,168,76,.25);
   border-radius:10px;padding:calc(var(--ui-vmin) * .694) calc(var(--ui-vmin) * 1.111);z-index:65;
   box-shadow:0 4px 16px rgba(0,0,0,.6);}
+/* Beginner-assist row — a child of .chat-bar (which is itself position:
+   fixed, so it's already a containing block for this), absolutely anchored
+   to sit directly above the bar's own left edge — left:0 here lines it up
+   exactly with .chat-color-btn/.chat-emoji-btn, the first two children of
+   .chat-bar right below it, rather than the input/send/history side.
+   Being a child means it shows/hides automatically with the bar itself, no
+   separate visibility toggle needed in script.js. Bare icons (no
+   border/background "button" chrome, unlike .chat-color-btn/
+   .chat-emoji-btn) — a drop-shadow instead keeps them legible over the
+   felt table without needing a frame. */
+.assist-bar{position:absolute;left:0;bottom:calc(100% + 8px);
+  display:flex;flex-direction:row;gap:calc(var(--ui-vmin) * 1.111);}
+.assist-btn{background:none;border:none;padding:0;color:rgba(245,237,216,.75);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:color .2s,transform .15s;}
+.assist-btn:hover{color:var(--gold);transform:scale(1.1);}
+.assist-btn svg{width:calc(var(--ui-vmin) * 2.778);height:calc(var(--ui-vmin) * 2.778);display:block;
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,.8));}
 .chat-input{width:calc(var(--ui-vmin) * 22.22);padding:calc(var(--ui-vmin) * .694) calc(var(--ui-vmin) * 1.111);background:rgba(0,0,0,.45);
   border:1px solid rgba(201,168,76,.2);border-radius:7px;
   color:var(--cream);font-size:calc(var(--ui-vmin) * 1.667);outline:none;font-family:'Noto Sans JP',sans-serif;}
@@ -1776,6 +1793,187 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    nowhere "back" from #s-start itself). */
 .back-icon-btn{flex-shrink:0;display:flex;align-items:center;justify-content:center;
   background:none;border:none;color:#888;font-size:calc(var(--ui-vmin, 7.2px) * 2.778);cursor:pointer;}
+
+/* ── Hand Advice ("Help") panel ── */
+/* Transparent click-catcher, not a dimming overlay — clicking anywhere
+   outside the panel closes it (same onclick wiring the .about-modal family
+   uses) without darkening the board behind it, since this panel doesn't
+   block the game the way a true modal does. */
+.advice-backdrop-clear{display:none;position:fixed;inset:0;background:transparent;z-index:300;}
+.advice-backdrop-clear.visible{display:block;}
+/* Anchored so its bottom-left corner sits just above the ❓ help icon that
+   opened it (see positionAdvicePanel in script.js, which sets left/top
+   inline from the button's own getBoundingClientRect — the left/bottom
+   here are only the pre-JS/fallback position) rather than screen-centered
+   like .about-modal — a glassy floating panel popping up from the button
+   that triggered it, same "frosted pane" language as .player-popover (the
+   nameplate-click profile card): translucent tinted gradient + blur for
+   the actual glass read, one soft inset highlight along the top edge only
+   (not an all-over shine), backdrop-filter degrades to the flat background
+   alone on browsers without support (still fully readable). Sized smaller
+   than .about-modal on purpose (36 units, capped further by vw/vh below)
+   — this is a compact popover next to the board, not a full panel. */
+.advice-panel{--ui-vmin:clamp(6px,1vw,9px);
+  display:none;position:fixed;left:20px;bottom:20px;
+  width:calc(var(--ui-vmin) * 36);max-width:min(340px,calc(100vw - 24px));
+  max-height:min(70vh,480px);overflow-y:auto;
+  background:linear-gradient(180deg,rgba(20,32,22,.72),rgba(10,22,12,.72));
+  -webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%);
+  border:1px solid rgba(201,168,76,.32);border-radius:8px;
+  padding:calc(var(--ui-vmin) * 2.778);
+  box-shadow:0 8px 28px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);
+  z-index:301;}
+.advice-panel.visible{display:block;}
+/* Rows/cards inside #advice-body — same --ui-vmin scale as the rest of the
+   .about-modal family (inherited from that ancestor), not raw px. */
+.advice-list{display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .556);}
+.advice-row{background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:6px;
+  padding:calc(var(--ui-vmin, 7.2px) * .833) calc(var(--ui-vmin, 7.2px) * 1.111);
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:rgba(245,237,216,.85);}
+.advice-row-best{border-color:rgba(78,255,154,.5);background:rgba(78,255,154,.08);}
+.advice-row-bad{border-color:rgba(255,120,120,.35);background:rgba(255,120,120,.06);opacity:.85;}
+/* Sub-lines inside a "Should You Call?" row (see renderAdvice in
+   script.js) — what taking that call would actually lead to, beneath the
+   shanten-based recommend/reason line above it. */
+.advice-call-yaku{display:flex;flex-wrap:wrap;align-items:center;gap:2px;
+  margin-top:calc(var(--ui-vmin, 7.2px) * .417);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);}
+.advice-call-warning{margin-top:calc(var(--ui-vmin, 7.2px) * .417);color:#ff9a9a;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.25);}
+.advice-call-potential{margin-top:calc(var(--ui-vmin, 7.2px) * .417);display:flex;flex-direction:column;gap:2px;}
+.advice-call-potential-item{font-size:calc(var(--ui-vmin, 7.2px) * 1.2);color:rgba(245,237,216,.65);}
+/* "Gives up potential: X" line under a discard candidate row (see
+   renderAdvice in script.js) — amber, same "be careful" language as
+   .advice-row-warn, just scoped to inside a single row instead of its own. */
+.advice-lost-yaku{margin-top:calc(var(--ui-vmin, 7.2px) * .417);font-size:calc(var(--ui-vmin, 7.2px) * 1.2);color:#ffcf80;}
+.advice-wait{background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:6px;
+  padding:calc(var(--ui-vmin, 7.2px) * .833) calc(var(--ui-vmin, 7.2px) * 1.111);margin-bottom:calc(var(--ui-vmin, 7.2px) * .556);}
+.advice-wait-tile{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .556);
+  font-family:'Cinzel Decorative',serif;color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.528);}
+.advice-wait-score{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:rgba(245,237,216,.7);margin-top:2px;}
+.advice-wait-yaku{display:flex;flex-wrap:wrap;margin-top:calc(var(--ui-vmin, 7.2px) * .417);}
+/* Mini tile icon inline within a text row — used by Yaku Reference's
+   tile-art cards (renderYakuRefCard/miniTileHTML in script.js). Vertical-
+   align keeps it level with the surrounding text baseline instead of
+   sitting high/low like a bare inline SVG normally does. */
+.advice-mini-tile{display:inline-flex;vertical-align:middle;margin-right:calc(var(--ui-vmin, 7.2px) * .556);}
+/* Beginner traps/opportunities row (furiten/kita/riichi/danger — see
+   renderAdvice in script.js), amber for "be careful" — distinct from
+   .advice-row-best's green "do this" and .advice-row-bad's red "don't". */
+.advice-row-warn{border-color:rgba(255,200,100,.4);background:rgba(255,200,100,.08);}
+
+/* ── Magnifier (see openMagnify/renderMagnifyHand in script.js) ── */
+/* A genuinely DIMMING full-screen overlay (unlike .advice-panel's
+   transparent click-catcher) — this one's meant to draw full attention
+   onto the enlarged hand, not sit alongside the board like a popover.
+   Centers its content both ways so the hand reads as the sole focus
+   regardless of how many tiles it has to lay out. */
+.magnify-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);
+  z-index:400;align-items:center;justify-content:center;cursor:pointer;}
+.magnify-overlay.visible{display:flex;}
+/* Own cursor:default (overriding the overlay's pointer-shows-it's-clickable
+   cursor above) since this specific area either does nothing on click
+   (stopPropagation, see index.html) or discards a tile — neither reads as
+   "click to dismiss" the way the dimmed background around it does.
+   max-width here is a pre-JS/no-JS fallback only — renderMagnifyHand sets
+   it inline to the table's actual pixel width every render, which is the
+   real constraint ("only the width of the table", not just the viewport).
+   transform-origin:center (not the box default) so the pan-out/zoom-in
+   open/close animation (openMagnify/closeMagnify in script.js) scales
+   from the content's own center, matching how the translate offset in
+   that animation is computed (center-to-center against #hdb). */
+.magnify-content{display:flex;flex-direction:column;align-items:center;
+  max-width:96vw;cursor:default;transform-origin:center;}
+/* 壱/弐 row-count toggle — pinned next to the ✕ close button, top-right
+   (a sibling of #magnify-content, not a child — see index.html's comment)
+   rather than flowing right below the tiles, specifically so it stays put
+   when switching modes: #magnify-content is vertically centered by
+   .magnify-overlay, and its height changes between 1 row and 2 rows of
+   tiles, which used to visibly shift the toggle along with it every time
+   it was part of that flow. Boxed in its own small panel now that it's
+   floating independently over the dimmed backdrop rather than sitting
+   directly under the tile group — a bare row of text there would've read
+   as a stray floating label with nothing to anchor it. right:70px lines
+   its right edge up just left of .magnify-close's own right:20px (20px
+   button + ~30px clearance). Each button still picks itself out with its
+   own underline when active, same tab-strip language as elsewhere. 壱/弐
+   (the formal/"daiji" forms of 一/二, read "ichi"/"ni") fit the game's
+   existing Japanese-first labeling (see .about-title, tile glyphs, etc). */
+.magnify-mode-toggle{position:fixed;top:16px;right:70px;
+  z-index:401;display:flex;gap:2px;cursor:default;
+  background:rgba(20,32,22,.85);border:1px solid rgba(201,168,76,.3);
+  border-radius:6px;padding:3px;box-shadow:0 4px 16px rgba(0,0,0,.5);}
+.magnify-mode-btn{padding:4px 14px;background:none;border:none;border-radius:4px;
+  border-bottom:2px solid transparent;font-family:'Cinzel Decorative',serif;
+  font-size:15px;letter-spacing:1px;color:rgba(245,237,216,.45);cursor:pointer;transition:all .2s;}
+.magnify-mode-btn:hover{color:var(--gl);}
+.magnify-mode-btn.active{color:var(--gold);border-bottom-color:var(--gold);background:rgba(201,168,76,.12);}
+/* Rows stack vertically in .magnify-hand (1 child row in 壱 mode, 2 in
+   弐); each .magnify-row is its own horizontal strip — tile SIZE is
+   computed in script.js from the table's actual width divided across
+   however many tiles the widest row holds, so both modes fill the table
+   edge-to-edge rather than shrinking to fit an arbitrary flex-wrap. Both
+   the row and column gap below are only a pre-JS fallback — script.js
+   sets the real gap inline (as an exact px value that its own tile-width
+   budget math already accounts for), since a mismatch between the two was
+   exactly what pushed the outermost tiles past the table's edge before. */
+/* padding-top reserves room for a selected tile's own lift (.tlg.sel's
+   translateY(-1vmin)) — transforms don't affect layout/box size, so
+   without this the lifted tile pokes above .magnify-hand's own top edge
+   and overflow-y:auto (needed as a safety net for tall content) clips it,
+   since a scrollport's static bounds sit exactly at the container's own
+   padding-box, not wherever a transformed child visually ends up. */
+/* overflow-x:hidden is NOT decorative — leaving it unset (default
+   'visible') while overflow-y is 'auto' hits a CSS spec quirk where the
+   'visible' axis silently computes to 'auto' too whenever the other axis
+   isn't 'visible', which was producing an unwanted HORIZONTAL scrollbar
+   the instant tile sizing rounded even 1px over. Tile width is already
+   computed in script.js to fit with no overflow at all, so this is a hard
+   guarantee, not a fallback. */
+.magnify-hand{display:flex;flex-direction:column;gap:30px;padding-top:16px;
+  max-width:96vw;max-height:78vh;overflow-y:auto;overflow-x:hidden;}
+.magnify-row{display:flex;gap:3px;justify-content:center;align-items:flex-end;}
+.magnify-close{position:fixed;top:20px;right:20px;background:none;border:none;
+  color:rgba(245,237,216,.85);font-size:28px;line-height:1;cursor:pointer;z-index:401;
+  transition:color .2s;}
+.magnify-close:hover{color:var(--gold);}
+
+/* ── Yaku Reference cards (see renderYakuRefCard in script.js) ── */
+/* Each yaku gets its own card with real tile art showing the shape, not
+   just a name/han pill — a beginner can see what the pattern actually
+   looks like instead of having to picture it from the Japanese term. */
+.yakuref-list{display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .833);}
+.yakuref-card{background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:8px;
+  padding:calc(var(--ui-vmin, 7.2px) * .972) calc(var(--ui-vmin, 7.2px) * 1.111);}
+.yakuref-card-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:calc(var(--ui-vmin, 7.2px) * .417);
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:var(--cream);margin-bottom:calc(var(--ui-vmin, 7.2px) * .694);}
+/* nowrap (not wrap) — script.js's fitYakuRefTiles sizes every tile to
+   actually fit the card's rendered width in one line, so wrapping should
+   never be needed; nowrap+hidden here is a hard guarantee of that (a
+   backstop against a stray rounding pixel), not a fallback layout. */
+.yakuref-tiles{display:flex;flex-wrap:nowrap;overflow:hidden;gap:2px;margin-bottom:calc(var(--ui-vmin, 7.2px) * .694);}
+/* The tiles that specifically MAKE the yaku (see `highlight` in
+   YAKU_REFERENCE) render at full brightness; everything else dims/
+   desaturates instead — that contrast alone reads as "this subset is the
+   yaku, everything else is just filling out a legal 14-tile hand around
+   it", with no extra outline/frame needed on the highlighted tiles
+   themselves. Whole-hand yaku highlight every tile, so nothing dims. */
+.yakuref-tile-dim{opacity:.4;filter:saturate(.5);}
+/* Menzen (closed-hand) requirement badge — pushed to the row's right edge
+   via margin-left:auto so it doesn't crowd the name/han/jp on the left.
+   Three colors matching how much the open/closed distinction actually
+   matters for that yaku (see YAKU_MENZEN_BADGE in script.js): red for a
+   hard requirement, amber for "scores less open", green for "no penalty
+   either way". */
+.yakuref-menzen-badge{margin-left:auto;padding:calc(var(--ui-vmin, 7.2px) * .278) calc(var(--ui-vmin, 7.2px) * .694);
+  border-radius:999px;font-size:calc(var(--ui-vmin, 7.2px) * 1.111);white-space:nowrap;}
+.yakuref-menzen-required{background:rgba(255,120,120,.15);border:1px solid rgba(255,120,120,.4);color:#ff9a9a;}
+.yakuref-menzen-bonus{background:rgba(255,200,100,.15);border:1px solid rgba(255,200,100,.4);color:#ffcf80;}
+.yakuref-menzen-any{background:rgba(120,255,154,.15);border:1px solid rgba(120,255,154,.4);color:#8fffb0;}
+/* Situational yaku (Riichi, Ippatsu, Tenhou, ...) have no tile shape at
+   all — the description below stands in for the tile row entirely, so the
+   card still tells you why there's nothing to draw rather than looking
+   broken/empty. */
+.yakuref-desc{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:rgba(245,237,216,.65);line-height:1.5;}
 
 /* ── Topbar inline elements ── */
 .tb-right .settings-icon-btn{position:static;z-index:auto;}

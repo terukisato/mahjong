@@ -668,6 +668,7 @@ function onMsg(m){
   if(m.type==='clear_all_history_result'){onClearAllHistoryResult(m);return;}
   if(m.type==='change_username_result'){onChangeUsernameResult(m);return;}
   if(m.type==='change_code_result'){onChangeCodeResult(m);return;}
+  if(m.type==='advice'){renderAdvice(m);return;}
   if(!inGame) return;
   // While the round-start card ("東2局") is up, the board underneath is
   // already click-blocked (see .rs-layer.blocking / roundStartBanner), but
@@ -1480,6 +1481,382 @@ function toggleRankings(){
   fetchLeaderboard();
   modal.classList.add('visible');
   backdrop.classList.add('visible');
+}
+
+// ── Yaku Reference ──────────────────────────────────────────────────────────
+// Static — every yaku the scorer (server/mahjong.js detectYaku) recognizes,
+// with its han value(s). Purely informational, not tied to the current
+// hand, so this never needs a server round-trip. `tab` buckets each entry
+// under its CLOSED-hand han value (the number most players think of it by)
+// for the tab strip below — display `han` still spells out the full closed/
+// open split where it differs. Yakuman all share the 'yakuman' tab instead
+// of being split across the 13/26 double-yakuman line, since that's a
+// meaningfully different category from ordinary han counting, not just a
+// bigger number.
+// `example` is a full sample WINNING HAND (14 "<v><suit>" tile keys) that
+// satisfies the yaku, so a beginner sees the whole hand it actually takes
+// rather than just an isolated group floating with no context. `highlight`
+// lists which indices into `example` are the tiles that specifically MAKE
+// it that yaku — those render emphasized (glowing outline), the rest
+// render dimmed as "just filling out the hand" (see renderYakuRefCard).
+// Yaku defined by a property of the WHOLE hand (Tanyao's "no terminals",
+// Honitsu's "one suit", Toitoi's "all triplets", Chiitoitsu's 7-pairs
+// shape, ...) highlight every index, since every tile is part of what
+// qualifies. Yaku defined by one embedded group (a triplet, a same-suit
+// straight, two duplicate sequences, ...) highlight only that subset, with
+// the remaining tiles as a plausible but otherwise-irrelevant filler
+// group+pair. Purely SITUATIONAL yaku (no tile shape at all — Riichi,
+// Ippatsu, Menzen Tsumo, Rinshan/Chankan/Haitei/Houtei, Tenhou/Chiihou)
+// have neither `example` nor `highlight`: showing an arbitrary hand for
+// those would suggest a shape requirement that doesn't exist. Every entry
+// has `desc`, a plain-English explanation shown under the tiles (or in
+// place of them, for the situational ones).
+// `menzen` mirrors exactly what server/mahjong.js's detectYaku actually
+// gates on `isMenzen(melds)` for that yaku (not guesswork — cross-checked
+// against every `menzen &&` / `menzen?` condition there):
+//   'required' — only scores on a fully closed hand (any call, even one
+//                pon, kills it entirely): Riichi family, Menzen Tsumo,
+//                Pinfu, Iipeiko, Ryanpeiko, Chiitoitsu, both Kokushi
+//                variants, both Suu Ankou variants, both Chuuren variants,
+//                Tenhou/Chiihou (closed by definition — no call is even
+//                possible before the win).
+//   'bonus'    — scores either way, but LESS when open (the han value
+//                already spells out both numbers): Sanshoku Doujun, Ittsu,
+//                Chanta, Junchan, Honitsu, Chinitsu.
+//   'any'      — identical han whether the hand is open or closed: every
+//                other entry (Tanyao, Yakuhai, Toitoi, San Ankou/Kantsu,
+//                Daisangen, Suu Kantsu, the timing yaku, ...).
+const YAKU_REFERENCE=[
+  {name:'Riichi',jp:'立直',han:'1',tab:1,menzen:'required',desc:'Declared when your closed hand reaches tenpai — any winning shape qualifies, there\'s no tile pattern to show.'},
+  {name:'Ippatsu',jp:'一発',han:'1',tab:1,menzen:'required',desc:'Winning within one go-around of declaring riichi, before calling anything — timing, not a tile shape.'},
+  {name:'Menzen Tsumo',jp:'門前清自摸和',han:'1',tab:1,menzen:'required',desc:'Any closed hand won by drawing the winning tile yourself, rather than off someone\'s discard.'},
+  {name:'Pinfu',jp:'平和',han:'1',tab:1,menzen:'required',
+    example:['2m','3m','4m','5p','6p','7p','3s','4s','5s','6s','7s','8s','3p','3p'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'All four groups are sequences, the pair isn\'t a yakuhai tile, and you win on a two-sided (ryanmen) wait.'},
+  {name:'Iipeiko',jp:'一盃口',han:'1',tab:1,menzen:'required',
+    example:['2m','3m','4m','2m','3m','4m','4p','5p','6p','7s','8s','9s','8s','8s'],highlight:[0,1,2,3,4,5],
+    desc:'Two identical sequences (same suit, same numbers) inside one closed hand.'},
+  {name:'Tanyao',jp:'断么九',han:'1',tab:1,menzen:'any',
+    example:['2m','3m','4m','5p','6p','7p','3s','4s','5s','6s','7s','8s','2p','2p'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'Every tile in the hand is a simple (2-8) — no terminals (1/9) and no honor tiles at all.'},
+  {name:'Yakuhai',jp:'役牌',han:'1 per triplet',tab:1,menzen:'any',
+    example:['5z','5z','5z','2m','3m','4m','5p','6p','7p','3s','4s','5s','9s','9s'],highlight:[0,1,2],
+    desc:'A triplet of a dragon tile, or of your seat/round wind, is worth 1 han on its own — stack multiple for more.'},
+  {name:'Rinshan Kaihou',jp:'嶺上開花',han:'1',tab:1,menzen:'any',desc:'Winning on the replacement tile drawn immediately after calling a kan — timing, not a tile shape.'},
+  {name:'Chankan',jp:'槍槓',han:'1',tab:1,menzen:'any',desc:'Winning by ron on a tile someone else just added to an existing pon (kakan) — timing, not a tile shape.'},
+  {name:'Haitei',jp:'海底摸月',han:'1',tab:1,menzen:'any',desc:'Self-drawing the very last tile in the wall for the win — timing, not a tile shape.'},
+  {name:'Houtei',jp:'河底撈魚',han:'1',tab:1,menzen:'any',desc:'Winning by ron on the very last discard of the round — timing, not a tile shape.'},
+  {name:'Double Riichi',jp:'ダブルリーチ',han:'2',tab:2,menzen:'required',desc:'Riichi declared on your very first discard, before anyone has called anything — timing, not a tile shape.'},
+  {name:'Shousangen',jp:'小三元',han:'2',tab:2,menzen:'any',
+    example:['5z','5z','5z','6z','6z','6z','7z','7z','2m','3m','4m','5p','6p','7p'],highlight:[0,1,2,3,4,5,6,7],
+    desc:'Two dragon triplets plus a pair of the third dragon — one triplet short of Daisangen.'},
+  {name:'Sanshoku Doujun',jp:'三色同順',han:'2 closed / 1 open',tab:2,menzen:'bonus',
+    example:['2m','3m','4m','2p','3p','4p','2s','3s','4s','7s','8s','9s','6m','6m'],highlight:[0,1,2,3,4,5,6,7,8],
+    desc:'The same sequence (same three numbers) appears in all three suits — man, pin, and sou.'},
+  {name:'Sanshoku Doukou',jp:'三色同刻',han:'2',tab:2,menzen:'any',
+    example:['5m','5m','5m','5p','5p','5p','5s','5s','5s','2m','3m','4m','9p','9p'],highlight:[0,1,2,3,4,5,6,7,8],
+    desc:'The same triplet (same number) appears in all three suits.'},
+  {name:'Ittsu',jp:'一気通貫',han:'2 closed / 1 open',tab:2,menzen:'bonus',
+    example:['1m','2m','3m','4m','5m','6m','7m','8m','9m','2s','3s','4s','5p','5p'],highlight:[0,1,2,3,4,5,6,7,8],
+    desc:'1-2-3, 4-5-6, and 7-8-9 of the same suit, all in one hand.'},
+  {name:'Chanta',jp:'混全帯么九',han:'2 closed / 1 open',tab:2,menzen:'bonus',
+    example:['1m','2m','3m','7p','8p','9p','1s','2s','3s','7z','7z','7z','9p','9p'],highlight:[0,5,6,9,10,11,12,13],
+    desc:'Every group (including the pair) contains at least one terminal or honor tile.'},
+  {name:'Toitoi',jp:'対々和',han:'2',tab:2,menzen:'any',
+    example:['2m','2m','2m','5p','5p','5p','8s','8s','8s','1z','1z','1z','9p','9p'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'All four groups are triplets (or kans) instead of sequences — no sequences anywhere.'},
+  {name:'San Ankou',jp:'三暗刻',han:'2',tab:2,menzen:'any',
+    example:['2m','2m','2m','5p','5p','5p','8s','8s','8s','4s','5s','6s','9p','9p'],highlight:[0,1,2,3,4,5,6,7,8],
+    desc:'Three concealed triplets somewhere in the hand — the 4th group and the pair can be anything.'},
+  {name:'San Kantsu',jp:'三槓子',han:'2',tab:2,menzen:'any',
+    example:['2m','2m','2m','2m','5p','5p','5p','5p','8s','8s','8s','8s','9p','9p'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11],
+    desc:'Three kans (declared quads) anywhere in the hand.'},
+  {name:'Honroutou',jp:'混老頭',han:'2',tab:2,menzen:'any',
+    example:['1m','1m','1m','9p','9p','9p','7z','7z','7z','1s','1s','1s','9s','9s'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'Every tile is a terminal (1/9) or an honor — a genuine mix of both, with no simples at all.'},
+  {name:'Chiitoitsu',jp:'七対子',han:'2',tab:2,menzen:'required',
+    example:['1m','1m','3p','3p','5s','5s','7m','7m','2z','2z','6z','6z','9s','9s'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'Seven distinct pairs — a completely different hand shape from the usual four groups plus a pair.'},
+  {name:'Ryanpeiko',jp:'二盃口',han:'3',tab:3,menzen:'required',
+    example:['2m','3m','4m','2m','3m','4m','5p','6p','7p','5p','6p','7p','9s','9s'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11],
+    desc:'Two separate pairs of identical sequences — like Iipeiko twice over in one hand.'},
+  {name:'Junchan',jp:'純全帯么九',han:'3 closed / 2 open',tab:3,menzen:'bonus',
+    example:['1m','2m','3m','7p','8p','9p','1s','2s','3s','1p','1p','1p','9m','9m'],highlight:[0,5,6,9,10,11,12,13],
+    desc:'Like Chanta, but every group must touch a terminal specifically — no honor tiles allowed anywhere.'},
+  {name:'Honitsu',jp:'混一色',han:'3 closed / 2 open',tab:3,menzen:'bonus',
+    example:['1p','2p','3p','4p','5p','6p','7p','8p','9p','1z','1z','1z','5p','5p'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'The entire hand is one suit, plus any honor tiles — no second or third suit mixed in.'},
+  {name:'Chinitsu',jp:'清一色',han:'6 closed / 5 open',tab:6,menzen:'bonus',
+    example:['1p','2p','3p','4p','5p','6p','7p','8p','9p','2p','3p','4p','5p','5p'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'The entire hand is a single suit — no honors, no other suits at all.'},
+  {name:'Kokushi Musou',jp:'国士無双',han:'13',tab:'yakuman',menzen:'required',
+    // The duplicated tile sits right next to its twin (not split across
+    // the two ends of the row) so the pair reads as "these two together",
+    // not as a 13-wide spread that could be mistaken for the Juusanmen
+    // (13-sided wait) variant's tenpai shape.
+    example:['1m','1m','9m','1p','9p','1s','9s','1z','2z','3z','4z','5z','6z','7z'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'All 13 terminal/honor types, plus one more copy of any of them as the pair.'},
+  {name:'Kokushi Juusanmen',jp:'国士無双十三面待ち',han:'26 (double)',tab:'yakuman',menzen:'required',desc:'Kokushi Musou, but already holding all 13 types singly before the win — tenpai on any of the 13 (a 13-sided wait).'},
+  {name:'Suu Ankou',jp:'四暗刻',han:'13',tab:'yakuman',menzen:'required',
+    example:['1m','1m','1m','4p','4p','4p','7s','7s','7s','2z','2z','2z','9s','9s'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11],
+    desc:'Four concealed triplets — the rarest structural yakuman.'},
+  {name:'Suu Ankou Tanki',jp:'四暗刻単騎',han:'26 (double)',tab:'yakuman',menzen:'required',desc:'Suu Ankou, but the winning tile completes the pair (a single-tile "tanki" wait) rather than a triplet.'},
+  {name:'Daisangen',jp:'大三元',han:'13',tab:'yakuman',menzen:'any',
+    example:['5z','5z','5z','6z','6z','6z','7z','7z','7z','2m','3m','4m','9p','9p'],highlight:[0,1,2,3,4,5,6,7,8],
+    desc:'All three dragon triplets in one hand.'},
+  {name:'Shousuushii',jp:'小四喜',han:'13',tab:'yakuman',menzen:'any',
+    example:['1z','1z','1z','2z','2z','2z','3z','3z','3z','4z','4z','5p','6p','7p'],highlight:[0,1,2,3,4,5,6,7,8,9,10],
+    desc:'Three wind triplets plus a pair of the fourth wind.'},
+  {name:'Daisuushii',jp:'大四喜',han:'26 (double)',tab:'yakuman',menzen:'any',
+    example:['1z','1z','1z','2z','2z','2z','3z','3z','3z','4z','4z','4z','9m','9m'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11],
+    desc:'All four wind triplets in one hand — the rarer, higher-value sibling of Shousuushii.'},
+  {name:'Tsuuiisou',jp:'字一色',han:'13',tab:'yakuman',menzen:'any',
+    example:['1z','1z','1z','2z','2z','2z','3z','3z','3z','4z','4z','4z','5z','5z'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'Every tile is an honor — no numbered tiles at all.'},
+  {name:'Chinroutou',jp:'清老頭',han:'13',tab:'yakuman',menzen:'any',
+    example:['1m','1m','1m','9m','9m','9m','9p','9p','9p','1s','1s','1s','9s','9s'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'Every tile is a terminal (1 or 9) — no honors, no simples.'},
+  {name:'Ryuuiisou',jp:'緑一色',han:'13',tab:'yakuman',menzen:'any',
+    example:['2s','3s','4s','2s','3s','4s','8s','8s','8s','6z','6z','6z','6s','6s'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'Every tile is green — only 2/3/4/6/8 sou and the Green Dragon qualify.'},
+  {name:'Chuuren Poutou',jp:'九蓮宝燈',han:'13',tab:'yakuman',menzen:'required',
+    example:['1m','1m','1m','2m','3m','4m','5m','6m','7m','8m','9m','9m','9m','5m'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
+    desc:'1-1-1-2-3-4-5-6-7-8-9-9-9 of one suit, plus one more copy of any tile in that suit.'},
+  {name:'Junsei Chuuren',jp:'純正九蓮宝燈',han:'26 (double)',tab:'yakuman',menzen:'required',desc:'Chuuren Poutou, but tenpai on the pure 13-tile shape (1112345678999) — any of the 9 tile ranks completes it (a 9-sided wait).'},
+  {name:'Suu Kantsu',jp:'四槓子',han:'13',tab:'yakuman',menzen:'any',
+    example:['1m','1m','1m','1m','5p','5p','5p','5p','8s','8s','8s','8s','2z','2z'],highlight:[0,1,2,3,4,5,6,7,8,9,10,11],
+    desc:'Four kans (declared quads) in one hand — extremely rare.'},
+  {name:'Tenhou',jp:'天和',han:'13',tab:'yakuman',menzen:'required',desc:'The dealer\'s starting hand is already complete before anyone has acted — timing, not a tile shape.'},
+  {name:'Chiihou',jp:'地和',han:'13',tab:'yakuman',menzen:'required',desc:'A non-dealer wins on their very first draw, before calling or discarding anything — timing, not a tile shape.'},
+];
+const YAKU_REF_TABS=[
+  {id:1,label:'1 Han'},{id:2,label:'2 Han'},{id:3,label:'3 Han'},{id:6,label:'6 Han'},{id:'yakuman',label:'Yakuman'},
+];
+let currentYakuRefTab=1;
+const YAKU_MENZEN_BADGE={
+  required:{text:'Closed Hand Only',cls:'yakuref-menzen-required'},
+  bonus:{text:'Open OK (less han)',cls:'yakuref-menzen-bonus'},
+  any:{text:'Open Hand OK',cls:'yakuref-menzen-any'},
+};
+function renderYakuRefCard(y){
+  const tilesHtml=y.example
+    // Non-highlighted tiles dim to fade into the background — that
+    // contrast alone is enough to read "these are the ones that matter",
+    // so the highlighted tiles themselves get no extra frame/outline.
+    ? `<div class="yakuref-tiles">${y.example.map((k,i)=>
+        miniTileHTML(k,24,34,y.highlight.includes(i)?null:'yakuref-tile-dim')
+      ).join('')}</div>`
+    : '';
+  const badge=YAKU_MENZEN_BADGE[y.menzen];
+  const badgeHtml=badge?`<span class="yakuref-menzen-badge ${badge.cls}">${escHtml(badge.text)}</span>`:'';
+  const descHtml=y.desc?`<div class="yakuref-desc">${escHtml(y.desc)}</div>`:'';
+  return `<div class="yakuref-card"><div class="yakuref-card-head">${escHtml(y.name)}<span class="yh">${escHtml(y.han)}</span><span class="yj">${escHtml(y.jp)}</span>${badgeHtml}</div>${tilesHtml}${descHtml}</div>`;
+}
+function renderYakuRefSection(list){
+  return list.map(renderYakuRefCard).join('');
+}
+function renderYakuRefBody(){
+  const tabsHtml=YAKU_REF_TABS.map(t=>
+    `<button class="rank-period-tab${t.id===currentYakuRefTab?' active':''}" onclick='setYakuRefTab(${JSON.stringify(t.id)})'>${escHtml(t.label)}</button>`
+  ).join('');
+  const list=YAKU_REFERENCE.filter(y=>y.tab===currentYakuRefTab);
+  $('yakuref-body').innerHTML=
+    `<div class="rank-period-tabs">${tabsHtml}</div><div class="yakuref-list">${renderYakuRefSection(list)}</div>`;
+  fitYakuRefTiles(list);
+}
+// Shrinks each card's tile row to whatever size actually fits its own
+// rendered width in one line, instead of the fixed 24px letting a
+// many-tile card (up to 14) wrap to a second row on a narrow screen — same
+// "measure the real container, size to fit" approach fitEndTileSize uses
+// for the round-end winning-hand display elsewhere in this file. Needs an
+// actual DOM measurement pass (can't be precomputed), since a card's
+// available width depends on the modal's rendered size, which varies with
+// viewport/--ui-vmin scaling. `list` is the same array renderYakuRefBody
+// just rendered, in the same order as the cards now in the DOM, so each
+// card can be matched back to its `example`/`highlight` data by index
+// without re-parsing anything from the page.
+function fitYakuRefTiles(list){
+  const cards=[...document.querySelectorAll('#yakuref-body .yakuref-card')];
+  cards.forEach((card,i)=>{
+    const y=list[i];
+    const tilesEl=card.querySelector('.yakuref-tiles');
+    if(!y||!tilesEl||!y.example||!y.example.length) return;
+    const count=y.example.length;
+    const gap=2; // matches .yakuref-tiles' own CSS gap
+    const availWidth=tilesEl.clientWidth;
+    if(!availWidth) return;
+    let w=Math.floor((availWidth-(count-1)*gap)/count);
+    w=Math.max(12,Math.min(w,34)); // 34 keeps a low-count card (e.g. Yakuhai's 3 tiles) from ballooning
+    const h=Math.round(w*1.4);
+    tilesEl.innerHTML=y.example.map((k,idx)=>
+      miniTileHTML(k,w,h,y.highlight.includes(idx)?null:'yakuref-tile-dim')
+    ).join('');
+  });
+}
+function setYakuRefTab(id){
+  currentYakuRefTab=id;
+  renderYakuRefBody();
+}
+function toggleYakuRef(){
+  const modal=$('yakuref-modal');
+  const backdrop=$('yakuref-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  currentYakuRefTab=1;
+  // Modal made visible BEFORE rendering, not after — fitYakuRefTiles (run
+  // at the end of renderYakuRefBody) measures each card's real
+  // clientWidth to size tiles, which reads 0 on a display:none element.
+  // Rendering first (as this used to) left the very first open's tiles
+  // stuck at their unadjusted default size — a later tab switch "fixed"
+  // itself only because the modal was already visible by then.
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+  renderYakuRefBody();
+}
+
+// ── Hand Advice ("Help") ─────────────────────────────────────────────────────
+// Beginner-assist: on click, ask the server to analyze THIS player's actual
+// current hand/situation (see get_advice/'advice' in server/room.js) and
+// render its response. Deliberately request-driven, never auto-refreshed —
+// the point is a player-initiated hint, not a running autopilot overlay.
+const TILE_SUIT_NAMES={m:'Man',p:'Pin',s:'Sou'};
+const HONOR_NAMES={'1z':'East','2z':'South','3z':'West','4z':'North','5z':'White Dragon','6z':'Green Dragon','7z':'Red Dragon'};
+function tileKeyLabel(k){
+  if(HONOR_NAMES[k]) return HONOR_NAMES[k];
+  const v=k.slice(0,-1),s=k.slice(-1);
+  return `${v} ${TILE_SUIT_NAMES[s]||s}`;
+}
+// Anchors the panel's bottom-left corner just above the ❓ help button that
+// opened it (same getBoundingClientRect + inline left/top approach as
+// positionPlayerPopover, just anchored by the trigger button instead of a
+// clicked nameplate) — clamped to stay fully on-screen, since the button
+// sits close to the right edge and a naive left-aligned placement would
+// push part of the panel off it. Re-run after renderAdvice() replaces the
+// placeholder with real content too, since the panel's height (and so
+// where its top edge needs to land to keep the bottom-left corner anchored
+// in place) changes once actual advice text/tiles replace "Analyzing…".
+function positionAdvicePanel(){
+  const panel=$('advice-modal');
+  const btn=$('badvice');
+  if(!panel||!btn) return;
+  const r=btn.getBoundingClientRect();
+  const pw=panel.offsetWidth, ph=panel.offsetHeight;
+  const margin=8, gap=10;
+  let left=r.left;
+  let top=r.top-gap-ph;
+  left=Math.max(margin,Math.min(left,window.innerWidth-pw-margin));
+  top=Math.max(margin,Math.min(top,window.innerHeight-ph-margin));
+  panel.style.left=left+'px';
+  panel.style.top=top+'px';
+  panel.style.bottom='auto';
+}
+function requestAdvice(){
+  if(!inGame) return;
+  wss({type:'get_advice'});
+  $('advice-body').innerHTML='<div class="about-body" style="text-align:center;">Analyzing your hand…</div>';
+  $('advice-modal').classList.add('visible');
+  $('advice-backdrop').classList.add('visible');
+  positionAdvicePanel();
+}
+function toggleAdvice(){
+  $('advice-modal').classList.remove('visible');
+  $('advice-backdrop').classList.remove('visible');
+}
+// Small inline SVG for a single tile from its "<v><suit>" key — used inline
+// inside text rows (discard/wait lists) where a DOM element would be
+// awkward to splice into a template string. Reuses the same tsvg() renderer
+// as the in-game hand/discard tiles, just at a smaller fixed size.
+function miniTileHTML(k,w=20,h=28,extraClass){
+  // Routed through mkEl (not a bare tsvg() string) specifically for its
+  // '.tile.tmd' wrapper — that's what supplies the ivory tile-face
+  // background/gold border every other tile in the game has. A raw tsvg()
+  // string here previously left these mini tiles as bare glyphs floating
+  // on the modal's dark background, with no tile shape behind them at all.
+  const el=mkEl(keyToTile(k),'tmd',w,h);
+  if(extraClass) el.classList.add(extraClass);
+  return `<span class="advice-mini-tile">${el.outerHTML}</span>`;
+}
+function renderAdvice(m){
+  const parts=[];
+  const doraTxt=m.doraCount>0?` You're holding ${m.doraCount} dora.`:'';
+  parts.push(`<div class="about-section-title">Shanten</div><div class="about-body">${
+    (m.isTenpai?'You\'re in tenpai — one tile away from a winning hand!':`You're ${m.shanten} tile${m.shanten===1?'':'s'} away from tenpai.`)
+  }${escHtml(doraTxt)}</div>`);
+
+  // Beginner traps/opportunities — surfaced right under the shanten line,
+  // above the shape-specific sections below, since these matter regardless
+  // of whether the hand is even close to tenpai.
+  if(m.furiten){
+    parts.push(`<div class="advice-row advice-row-bad">⚠ You're in furiten — you can't win by ron right now (tsumo only) until it clears.</div>`);
+  }
+  if(m.wallLowTip){
+    parts.push(`<div class="advice-row advice-row-warn">⏳ ${escHtml(m.wallLowTip)}</div>`);
+  }
+  if(m.kitaTip){
+    parts.push(`<div class="advice-row advice-row-best">🀄 ${escHtml(m.kitaTip)}</div>`);
+  }
+  if(m.riichiTip){
+    parts.push(`<div class="advice-row advice-row-best">${escHtml(m.riichiTip)}</div>`);
+  }
+  if(m.dangerTip){
+    const oppList=m.dangerTip.opponents.join(', ');
+    const safeTxt=m.dangerTip.safeKeys.length
+      ? `Safe tiles in your hand right now: ${m.dangerTip.safeKeys.map(tileKeyLabel).join(', ')}.`
+      : `None of your current tiles are confirmed safe against them yet.`;
+    parts.push(`<div class="advice-row advice-row-warn">🛡 ${escHtml(oppList)} ${m.dangerTip.opponents.length===1?'is':'are'} in riichi — pushing risks dealing in. ${safeTxt}</div>`);
+  }
+
+  if(m.discards&&m.discards.length){
+    const top=m.discards[0];
+    const rows=m.discards.map((d,i)=>{
+      const waitTxt=d.shanten===0?` — waits on ${d.waitTiles.map(tileKeyLabel).join(', ')||'nothing yet'} (${d.waitCount} tile type${d.waitCount===1?'':'s'})`:'';
+      // Flags when THIS specific discard would give up a yaku another
+      // candidate wouldn't (e.g. breaking a dragon pair you were holding
+      // toward Yakuhai) — efficiency (shanten/waits) alone stays silent
+      // about that trade-off otherwise.
+      const lostTxt=d.lostYaku&&d.lostYaku.length
+        ? `<div class="advice-lost-yaku">⚠ Gives up potential: ${d.lostYaku.map(escHtml).join(', ')}</div>` : '';
+      return `<div class="advice-row${i===0?' advice-row-best':''}">${escHtml(tileKeyLabel(d.key))}${i===0?' (best)':''} → ${d.shanten===0?'tenpai':d.shanten+'-away'}${waitTxt}${lostTxt}</div>`;
+    }).join('');
+    parts.push(`<div class="about-section"><div class="about-section-title">Suggested Discard</div><div class="about-body">Discard <b>${escHtml(tileKeyLabel(top.key))}</b> — it keeps your hand closest to tenpai.</div><div class="advice-list">${rows}</div></div>`);
+  }
+
+  if(m.callAdvice&&m.callAdvice.length){
+    const rows=m.callAdvice.map(c=>{
+      // Three mutually exclusive outcomes for "what would calling lead
+      // to": already-tenpai-with-a-yaku (show what you could win with),
+      // already-tenpai-but-NO-yaku (the classic open-hand trap — reaching
+      // tenpai means nothing if there's nothing to declare a win on), or
+      // not tenpai yet (show the same composition hints the main
+      // Potential Yaku section uses, just for the post-call hand).
+      let extra='';
+      if(c.noYakuWarning){
+        extra=`<div class="advice-call-warning">⚠ Reaches tenpai, but with no yaku — you wouldn\'t be able to win on it as-is.</div>`;
+      } else if(c.yaku&&c.yaku.length){
+        const pills=c.yaku.map(y=>`<span class="yc" style="margin:2px;">${escHtml(y)}</span>`).join('');
+        extra=`<div class="advice-call-yaku">Could win with: ${pills}</div>`;
+      } else if(c.potential&&c.potential.length){
+        const hints=c.potential.map(p=>`<div class="advice-call-potential-item">${escHtml(p.name)} <span class="yj">${escHtml(p.jp)}</span> — ${escHtml(p.hint)}</div>`).join('');
+        extra=`<div class="advice-call-potential">${hints}</div>`;
+      }
+      return `<div class="advice-row${c.recommend?' advice-row-best':' advice-row-bad'}">${c.recommend?'✓':'✗'} ${escHtml(c.type.toUpperCase())} — ${escHtml(c.reason)}${extra}</div>`;
+    }).join('');
+    parts.push(`<div class="about-section"><div class="about-section-title">Should You Call?</div><div class="advice-list">${rows}</div></div>`);
+  }
+
+  if(m.waits&&m.waits.length){
+    const rows=m.waits.map(w=>{
+      const yakuPills=w.yaku.map(y=>`<span class="yc" style="margin:2px;">${escHtml(y)}</span>`).join('');
+      return `<div class="advice-wait"><div class="advice-wait-tile">${escHtml(tileKeyLabel(w.tile))}</div><div class="advice-wait-score">${w.han} Han${w.fu?', '+w.fu+' Fu':''} · ${escHtml(w.label)} · ${w.points.toLocaleString()} pts</div><div class="advice-wait-yaku">${yakuPills}</div></div>`;
+    }).join('');
+    parts.push(`<div class="about-section"><div class="about-section-title">Waits &amp; Potential Score</div>${rows}</div>`);
+  } else if(m.potential&&m.potential.length){
+    const rows=m.potential.map(p=>`<div class="advice-row">${escHtml(p.name)} <span class="yj">${escHtml(p.jp)}</span> — ${escHtml(p.hint)}</div>`).join('');
+    parts.push(`<div class="about-section"><div class="about-section-title">Potential Yaku</div><div class="advice-list">${rows}</div></div>`);
+  }
+
+  $('advice-body').innerHTML=parts.join('');
+  positionAdvicePanel();
 }
 
 // Sanma/yonma leaderboards are scored on different scales (see
@@ -3754,6 +4131,12 @@ function renderState(m, prev){
     }
   }
 
+  // Keep the magnifier (if open) showing the same hand/selection as the
+  // compact row above — a new game_state (a draw, an opponent's discard,
+  // riichi's auto-select) would otherwise leave it showing a stale hand
+  // until the player closes and reopens it.
+  if($('magnify-overlay')?.classList.contains('visible')) renderMagnifyHand();
+
   // Opponent hands — back tiles
   // top: rot180. left/right: now column-layout rotated in CSS, tiles horizontal
   // (sanma has no 'top'/toimen opponent — P.slice(1) is just ['r','l'] there)
@@ -3939,6 +4322,183 @@ function clickTile(id){
     });
     drawActions(lastState);
   }
+}
+
+// ── Magnifier ────────────────────────────────────────────────────────────────
+// A full-screen, dimmed-backdrop view of the player's own hand at a much
+// larger tile size — for reading fine detail (a red 5's dot, a 6 vs 8 pin
+// pattern) that the compact in-table hand row is too small for on a
+// crowded board. Same tap-to-select/tap-again-to-discard interaction as
+// the compact row (both ultimately call clickTile — this isn't a separate
+// discard path, just a bigger view onto the same one), so selecting here
+// stays in sync with the compact row and vice versa.
+// 1 = every tile in a single row spanning the table's full width (壱),
+// 2 = split evenly into two rows instead (弐) — see setMagnifyRows below.
+// Persists across opens within the session (not saved/synced anywhere),
+// same as any other pure display preference.
+let magnifyRows=1;
+function setMagnifyRows(n){
+  magnifyRows=n;
+  $('magnify-mode-1').classList.toggle('active',n===1);
+  $('magnify-mode-2').classList.toggle('active',n===2);
+  renderMagnifyHand();
+}
+// Pan-out/zoom-in open, matching zoom-back-in close — the enlarged hand
+// visually grows out of (and shrinks back into) wherever the compact hand
+// row (#hdb) currently sits, rather than just appearing/disappearing.
+// Implemented as a single transform+opacity transition on #magnify-content
+// (computed fresh each time from the two elements' actual
+// getBoundingClientRect()s, not a canned animation), since the compact
+// row's on-screen position varies by seat layout/window size and the
+// enlarged content's own size varies by tile count and row mode.
+const MAGNIFY_ANIM_MS=280;
+// Transform that would shrink #magnify-content down onto #hdb's current
+// footprint — shared by both open (animate FROM this) and close (animate
+// TO this) so the two directions are exact mirrors of each other.
+function _magnifyShrinkTransform(content){
+  const src=$('hdb');
+  if(!src) return 'scale(0.4)';
+  const srcRect=src.getBoundingClientRect();
+  const dstRect=content.getBoundingClientRect();
+  if(!srcRect.width||!dstRect.width) return 'scale(0.4)';
+  const scale=Math.min(1,srcRect.width/dstRect.width,srcRect.height/dstRect.height);
+  const dx=(srcRect.left+srcRect.width/2)-(dstRect.left+dstRect.width/2);
+  const dy=(srcRect.top+srcRect.height/2)-(dstRect.top+dstRect.height/2);
+  return `translate(${dx}px,${dy}px) scale(${scale})`;
+}
+function openMagnify(){
+  if(!inGame||!lastState) return;
+  const overlay=$('magnify-overlay'),content=$('magnify-content');
+  renderMagnifyHand();
+  overlay.style.display='flex';
+  overlay.classList.add('visible');
+  overlay.style.transition='none';overlay.style.opacity='0';
+  content.style.transition='none';
+  // Clear any shrink transform left over from a previous close BEFORE
+  // measuring — _magnifyShrinkTransform reads content's current
+  // getBoundingClientRect(), which would otherwise still reflect that old
+  // transform's shrunk physical size rather than the content's true
+  // natural size, corrupting every scale/offset computed from it.
+  content.style.transform='none';
+  content.style.opacity='1';
+  void content.offsetHeight;
+  content.style.transform=_magnifyShrinkTransform(content);
+  content.style.opacity='0';
+  void content.offsetHeight; // force the above starting state to apply before animating away from it
+  overlay.style.transition=`opacity ${MAGNIFY_ANIM_MS}ms ease`;
+  content.style.transition=`transform ${MAGNIFY_ANIM_MS}ms cubic-bezier(.2,.8,.2,1),opacity ${MAGNIFY_ANIM_MS}ms ease`;
+  requestAnimationFrame(()=>{
+    overlay.style.opacity='1';
+    content.style.transform='translate(0,0) scale(1)';
+    content.style.opacity='1';
+  });
+}
+function closeMagnify(){
+  const overlay=$('magnify-overlay'),content=$('magnify-content');
+  if(!overlay.classList.contains('visible')) return;
+  overlay.classList.remove('visible');
+  overlay.style.transition=`opacity ${MAGNIFY_ANIM_MS}ms ease`;
+  content.style.transition=`transform ${MAGNIFY_ANIM_MS}ms cubic-bezier(.4,0,.6,1),opacity ${MAGNIFY_ANIM_MS}ms ease`;
+  overlay.style.opacity='0';
+  content.style.transform=_magnifyShrinkTransform(content);
+  content.style.opacity='0';
+  setTimeout(()=>{ if(!overlay.classList.contains('visible')) overlay.style.display='none'; },MAGNIFY_ANIM_MS);
+}
+function renderMagnifyHand(){
+  const m=lastState;
+  const content=$('magnify-content');
+  const hc=$('magnify-hand');
+  if(!m||!hc) return;
+  hc.innerHTML='';
+  const mainHand=m.myHand||[];
+  const drawTile=m.drawTile||null;
+  const allTiles=[...mainHand,...(drawTile?[drawTile]:[])];
+  if(!allTiles.length) return;
+  // Only clickable-to-discard under the exact same conditions the compact
+  // hand row uses (your turn, not mid-riichi where the draw auto-selects/
+  // auto-discards instead) — otherwise this is a read-only zoomed view.
+  const clickable=m.turn===mySeat && !m.riichi?.[mySeat];
+
+  // "The whole width of the table" means the visible green felt (.felt) —
+  // NOT .table, which is a full-viewport wrapper (left:0;right:0) that
+  // .felt sits centered inside and is usually much NARROWER than on a
+  // wide/landscape window (.felt is a square sized off the smaller of
+  // vw/vh — see --felt-size). Sizing off .table was silently sizing off
+  // the raw window instead, letting tiles span edge-to-edge past the
+  // table's actual visible boundary (and, wide enough, past the window
+  // itself). maxWidth is set on #magnify-content itself (a hard px cap,
+  // not a vw guess) so the row genuinely cannot exceed the felt's own
+  // footprint regardless of rounding below.
+  const tableEl=document.querySelector('.felt');
+  const tableWidth=tableEl?tableEl.clientWidth:window.innerWidth;
+  if(content) content.style.maxWidth=tableWidth+'px';
+  // Magnify exists mainly to make tiles more readable on a SMALL screen —
+  // every px spent on margin/gap there is a px NOT going toward tile size,
+  // and matters far more on a narrow phone felt than on a spacious desktop
+  // one. sidePad/hGap tighten on a narrow felt (phone-width territory)
+  // instead of using the same fixed breathing room everywhere.
+  const isNarrow=tableWidth<480;
+  const sidePad=isNarrow?6:16; // breathing room so tiles don't touch the felt's own edges
+  // hGap (within a row, between tiles) — single source of truth, applied
+  // as the ACTUAL gap below too so the budget math and the rendered gap
+  // can never drift apart (a mismatch there is what pushed tiles past the
+  // felt's edge before).
+  const hGap=isNarrow?1:3;
+  // vGap (between the two rows in 弐 mode) is deliberately much bigger —
+  // a selected tile lifts via .tlg.sel's translateY(-1vmin), and with two
+  // rows packed close together that lift can visually overlap the row
+  // above it. Scaled off the viewport's own vmin (matching the CSS lift
+  // exactly) plus a fixed margin, so the clearance stays enough on any
+  // screen size rather than a flat px guess that's too small on a large
+  // display where 1vmin itself is bigger.
+  const vGap=Math.min(window.innerWidth,window.innerHeight)*0.01+10;
+  const availWidth=Math.max(0,tableWidth-sidePad*2);
+
+  const rows=magnifyRows===1
+    ? [allTiles]
+    : [allTiles.slice(0,Math.ceil(allTiles.length/2)),allTiles.slice(Math.ceil(allTiles.length/2))];
+  // Both rows share one tile size (computed off the WIDER row) rather than
+  // each row sizing independently — otherwise a 7/6 split in 弐 mode would
+  // render two visibly different tile sizes, reading as a mistake rather
+  // than a deliberate two-row layout.
+  const widestRow=Math.max(...rows.map(r=>r.length));
+  let tw=widestRow>0?Math.floor((availWidth-(widestRow-1)*hGap)/widestRow):48;
+  // Capped above (raised from 150 — a tighter hGap already frees up more
+  // room per tile, so the ceiling needed raising too or it'd just cap out
+  // at the same size as before on tables with few tiles) so a handful of
+  // tiles on a huge table don't balloon absurdly large, but deliberately
+  // NOT floored below — a floor here was exactly what pushed tiles past
+  // the table's edges on a narrow screen with many tiles (the fit-inside-
+  // the-table budget above already gives the correct size; overriding it
+  // upward with a minimum broke that guarantee). A crowded narrow screen
+  // just gets small tiles instead.
+  tw=Math.max(1,Math.min(tw,190));
+  const th=Math.round(tw*1.4);
+
+  hc.style.gap=vGap+'px';
+  rows.forEach(rowTiles=>{
+    if(!rowTiles.length) return;
+    const rowEl=document.createElement('div');rowEl.className='magnify-row';rowEl.style.gap=hGap+'px';
+    rowTiles.forEach(t=>{
+      const el=mkEl(t,'tlg',tw,th);
+      if(drawTile&&t.id===drawTile.id) el.classList.add('drw');
+      if(clickable) el.classList.add('play');
+      if(t.id===selId) el.classList.add('sel');
+      el.dataset.tid=t.id;
+      if(clickable) el.onclick=e=>{e.stopPropagation();magnifyTileClick(t.id);};
+      rowEl.appendChild(el);
+    });
+    hc.appendChild(rowEl);
+  });
+}
+function magnifyTileClick(id){
+  const wasSelected=selId===id;
+  clickTile(id);
+  // A discard was just sent (clickTile's own guard already applied) —
+  // close rather than leave the magnifier sitting over a hand that's
+  // about to change underneath it once the server confirms.
+  if(wasSelected) closeMagnify();
+  else renderMagnifyHand();
 }
 
 
