@@ -4657,7 +4657,7 @@ function drawActions(m){
     if(canKakan.length===1){
       ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:canKakan[0]}}));
     } else if(canKakan.length>1){
-      const tid=(selId&&canKakan.includes(selId))?selId:canKakan[0];
+      const tid=(selId!=null&&canKakan.includes(selId))?selId:canKakan[0];
       ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:tid}}));
     }
 
@@ -4682,7 +4682,7 @@ function drawActions(m){
     }
 
     // RIGHT: DISCARD
-    if(selId)
+    if(selId!=null)
       ab(bar,'DISCARD','bdis',()=>{if(discarding)return;wss({type:'action',action:{type:'discard',tileId:selId}});discarding=true;selId=null;});
 
     // RIGHT: KYUUSHU

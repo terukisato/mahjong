@@ -1,7 +1,7 @@
 'use strict';
 const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
        detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,isMenzen,shanten} = require('./mahjong');
-const {botName,bestDiscard,botReact} = require('./bot');
+const {botName,bestDiscard,botReact,shouldRiichi} = require('./bot');
 const {recordGameResult} = require('./stats');
 const {recordGame} = require('./history');
 
@@ -191,7 +191,16 @@ class Room {
     // opposed to a seat simply being a bot, which is also true of a seat
     // that was never anything else), so the name has to be read now.
     const leavingName=this.seats[seat]?.name||'A player';
-    this._broadcastAll({type:'player_left',seat,name:leavingName});
+    // Excludes the leaving player's own connection — this.seats[seat] is
+    // still them at this point (not yet overwritten by _makeBot below), so
+    // a plain _broadcastAll would otherwise tell them their own name "left
+    // the room" right as they're leaving it, both pointless (they know) and
+    // confusing (it'd surface as a toast over the menu they just landed on,
+    // since 'leave' keeps the socket open — see leaveCurrentRoom in index.js).
+    for(const p of this.seats){
+      if(p&&!p.isBot&&p.id!==playerId&&p.ws?.readyState===1)
+        p.ws.send(JSON.stringify({type:'player_left',seat,name:leavingName}));
+    }
     this.ready.delete(playerId);
     // A pending play-again vote is keyed by seat number, not player id — if
     // this seat leaves mid-'done' phase, its vote must go with it, or a
@@ -793,7 +802,7 @@ class Room {
     _draw(fromRinshan=false){
     const g=this.game;
     if(!g||this.phase!=='playing') return;
-    if(g.wall.length===0&&!fromRinshan){this._endRound('draw');return;}
+    if(g.wall.length===0&&!fromRinshan){this._sendState();this._endRound('draw');return;}
     let t;
     if(fromRinshan){
       t=g.deadWall[g.kanCount-1];
@@ -920,7 +929,16 @@ class Room {
       }
       if(!g.riichi[seat]&&!g.melds[seat].length&&g.scores[seat]>=1000){
         const tid=this._findRiichiTile(seat);
-        if(tid!==null){this._riichi(seat,tid);return;}
+        // 'hard' bots weigh damaten against riichi here (see
+        // _shouldRiichiDecision/bot.js's shouldRiichi); every other
+        // difficulty keeps the original always-riichi-when-legal behavior.
+        if(tid!==null&&(this.seats[seat]?.difficulty!=='hard'||this._shouldRiichiDecision(seat,tid))){
+          this._riichi(seat,tid);return;
+        }
+        // Damaten: falls through to the normal discard branches below,
+        // which independently pick the best (widest-wait, hard-difficulty-
+        // defensive) tenpai-keeping discard — not necessarily the same
+        // tile _findRiichiTile happened to land on first.
       }
       // In riichi: must discard the drawn tile
       if(g.riichi[seat]&&g.drawTile){
@@ -941,6 +959,39 @@ class Room {
     const hand=this.game.hands[seat];
     for(const t of hand){if(waits(hand.filter(x=>x.id!==t.id),undefined,this.rules.sanma).length>0) return t.id;}
     return null;
+  }
+
+  // HARD bots only — builds the table context bot.js's shouldRiichi needs
+  // (it has no access to `this.game`) and asks it whether to riichi on
+  // candidateTid or stay damaten. See bot.js's _shouldRiichi for the actual
+  // decision logic; this is just the context bridge.
+  _shouldRiichiDecision(seat,candidateTid){
+    const g=this.game;
+    const hand13=g.hands[seat].filter(t=>t.id!==candidateTid);
+    return shouldRiichi(hand13,g.melds[seat],{
+      seatWind:this._seatWindOf(seat),
+      roundWind:this._roundWindValue(),
+      doraIndicators:g.dora,
+      kuitanAri:this.rules.kuitanAri,
+      sanma:this.rules.sanma,
+      placement:this._placementFor(seat),
+    });
+  }
+
+  // Coarse 'lead'|'behind'|'mid' read on this seat's table position, used
+  // only to break ties in shouldRiichi when hand value/wait width alone
+  // don't clearly favor either side. Margin scales with numPlayers since a
+  // 3-player game's points move in bigger per-hand swings than a 4-player
+  // one's (fewer opponents splitting payments) — the same 5000 gap means
+  // less in sanma than in yonma.
+  _placementFor(seat){
+    const g=this.game;
+    const scores=g.scores;
+    const others=scores.filter((_,i)=>i!==seat);
+    const margin=this.rules.sanma?6000:5000;
+    if(scores[seat]>=Math.max(...others)+margin) return 'lead';
+    if(scores[seat]<=Math.min(...others)-margin) return 'behind';
+    return 'mid';
   }
 
   // Discard-key piles of every OTHER seat currently in riichi — used by

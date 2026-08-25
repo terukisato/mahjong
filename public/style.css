@@ -664,11 +664,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   display:inline-flex;align-items:center;justify-content:center;}
 .tsm{
   display:inline-flex;
-  width:var(--tsm-w,16px);height:var(--tsm-h,22px);border-radius:0.4vmin;
+  width:var(--tsm-w,16px);height:var(--tsm-h,22px);border-radius:0.2vmin;
   background:linear-gradient(145deg,#1a5c70,#0e3a48);
   border:0.1vmin solid #3a90aa;
   flex-shrink:0;position:relative;}
-.tsm::before{content:'';position:absolute;inset:2px;border:0.1vmin solid rgba(255,255,255,.12);border-radius:0.3vmin;}
+.tsm::before{content:'';position:absolute;inset:2px;border:0.1vmin solid rgba(255,255,255,.12);border-radius:0.15vmin;}
 .tsm.rot{width:var(--tsm-h,22px);height:var(--tsm-w,16px);}
 .tdora{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:0.4vmin;
   background:linear-gradient(170deg,#fffdf4,#f8edd8);border:0.1vmin solid #c8a84a;border-bottom:0.3vmin solid #7a5c10;
@@ -1908,7 +1908,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .magnify-mode-btn:hover{color:var(--gl);}
 .magnify-mode-btn.active{color:var(--gold);border-bottom-color:var(--gold);background:rgba(201,168,76,.12);}
 /* Rows stack vertically in .magnify-hand (1 child row in 壱 mode, 2 in
-   弐); each .magnify-row is its own horizontal strip — tile SIZE is
+   弐); each .magnify-row is its own horizontal strip — `tile SIZE is
    computed in script.js from the table's actual width divided across
    however many tiles the widest row holds, so both modes fill the table
    edge-to-edge rather than shrinking to fit an arbitrary flex-wrap. Both

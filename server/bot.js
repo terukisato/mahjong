@@ -5,10 +5,13 @@
 // byte-for-byte as a legitimate weak-bot option. 'normal'/'hard' use a real
 // shanten (tiles-from-tenpai) calculation instead. 'hard' additionally adds
 // a minimal genbutsu-based defense when the bot's own hand isn't close and
-// an opponent is in riichi. None of the three difficulties change the
-// riichi-tile-choice or kan-reaction gaps documented in room.js's _botTurn —
-// those are a deliberate, separate simplicity tradeoff, out of scope here.
-const {key,isWin,waits,canPon,canChi,shanten} = require('./mahjong');
+// an opponent is in riichi, and is the only difficulty that ever chooses
+// damaten over riichi on reaching tenpai (see _shouldRiichi below) — 'easy'/
+// 'normal' still riichi unconditionally whenever legal. None of the three
+// difficulties change the riichi-tile-choice or kan-reaction gaps documented
+// in room.js's _botTurn — those are a deliberate, separate simplicity
+// tradeoff, out of scope here.
+const {key,isWin,waits,canPon,canChi,shanten,detectYaku,countDora,countAkaDora} = require('./mahjong');
 
 const BOT_NAMES=['Sakura AI','Yuki Bot','Hana CPU','Ryu AI','Kaze Bot','Tsuki AI','Hoshi CPU','Umi Bot'];
 let _bi=0;
@@ -140,6 +143,71 @@ function _shantenBotReact(hand, disc, options, melds){
   return {type:'pass'};
 }
 
+// HARD only: riichi vs damaten (silent tenpai). Real players don't riichi on
+// every tenpai — damaten is chosen when the hand already carries its own
+// yaku (so it can still legally win without declaring) and the situation
+// favors staying quiet: the hand's already big enough that announcing it
+// would just scare opponents into folding around it, or the wait's wide
+// enough that opponents will keep feeding it without riichi's pressure
+// doing any extra work. A cheap hand or a narrow wait gets the opposite
+// call — riichi's guaranteed +1 han (plus ippatsu/ura dora upside) is worth
+// more than the concealment. `hand13` is the hand AFTER the candidate
+// riichi discard (i.e. the tenpai shape itself); `ctx` carries the table
+// context bot.js otherwise has no access to (see room.js's _shouldRiichi).
+function _shouldRiichi(hand13, melds, ctx){
+  const {seatWind,roundWind,doraIndicators,kuitanAri,sanma,placement}=ctx;
+  const w=waits(hand13,melds,sanma);
+  if(!w.length) return true; // caller only calls this once already-tenpai; riichi is always a safe fallback
+
+  let bestHan=0, uncoveredRon=0;
+  for(const wk of w){
+    const v=parseInt(wk),s=wk.slice(-1);
+    const hand14=[...hand13,{s,v,id:999993}];
+    // isRiichi forced false — "what would this hand be worth won WITHOUT
+    // riichi", the same computation room.js's getAdvice uses for its
+    // waitInfo hint. Checked separately by win method: a closed hand always
+    // has Menzen Tsumo as a fallback on a self-draw, so tsumo is never the
+    // risk — it's RON specifically that has nothing to fall back on. That
+    // makes rRon (not the max of the two) the right gate for "can this tile
+    // even be called without riichi", while the max of the two is still the
+    // right read on potential VALUE (a self-draw could still land here).
+    const rTsumo=detectYaku(hand14,melds,true,seatWind,roundWind,false,false,false,false,false,false,false,false,false,wk,{kuitanAri});
+    const rRon=detectYaku(hand14,melds,false,seatWind,roundWind,false,false,false,false,false,false,false,false,false,wk,{kuitanAri});
+    if(rRon.han===0) uncoveredRon++;
+    const yakuHan=Math.max(rTsumo.han,rRon.han);
+    if(yakuHan===0) continue;
+    const dora=countDora(hand14,doraIndicators)+countAkaDora(hand14);
+    bestHan=Math.max(bestHan,yakuHan+dora);
+  }
+
+  // At least one wait tile can't legally be RON'd without riichi (Menzen
+  // Tsumo still covers drawing it yourself, but a discard landing on that
+  // tile would have to be passed on) — too big a hole in the wait to gamble
+  // on damaten. Riichi outright covers every tile in the wait either way.
+  if(uncoveredRon>0) return true;
+
+  const waitCount=w.length;
+  if(bestHan>=5) return false; // already mangan-class — don't scare opponents off a hand this big
+  if(bestHan<=2) return true;  // cheap hand — riichi's bump is worth more than staying hidden
+
+  // Middling hand (3-4 han): a wide, live wait keeps opponents feeding it
+  // on its own; a narrow one doesn't get that benefit, so take the
+  // guaranteed value instead. (Standard-shape waits rarely exceed ~5 live
+  // tile types outside chiitoitsu's always-1 tanki, so the wide/narrow
+  // bands are deliberately tight around that ceiling rather than mirrored.)
+  if(waitCount>=5) return false;
+  if(waitCount<=2) return true;
+
+  // Still genuinely on the fence (mid value, mid width) — table position
+  // breaks the tie: a comfortable lead has more to lose than gain from
+  // announcing tenpai (opponents fold AND riichi locks out defense for the
+  // rest of the hand), while trailing badly wants the pressure and the
+  // ura-dora upside more than it wants to stay hidden.
+  if(placement==='lead') return false;
+  if(placement==='behind') return true;
+  return true; // default matches the pre-damaten always-riichi behavior
+}
+
 // ── Public dispatch ──────────────────────────────────────────────────────────
 function bestDiscard(hand14, melds=[], difficulty='normal', dangerSets=[]){
   if(difficulty==='easy') return _legacyBestDiscard(hand14);
@@ -158,4 +226,4 @@ function botReact(hand, disc, options, melds=[], difficulty='normal'){
   return _shantenBotReact(hand, disc, options, melds);
 }
 
-module.exports={botName,bestDiscard,botReact};
+module.exports={botName,bestDiscard,botReact,shouldRiichi:_shouldRiichi};

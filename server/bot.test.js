@@ -5,7 +5,7 @@
 // — run with: node server/bot.test.js
 
 const assert = require('assert');
-const { bestDiscard, botReact } = require('./bot');
+const { bestDiscard, botReact, shouldRiichi } = require('./bot');
 const { shanten } = require('./mahjong');
 
 let pass = 0, fail = 0;
@@ -122,6 +122,67 @@ test("bestDiscard: 'hard' does NOT fold when own shanten is already close (<2), 
   const dangerSets = [['4z']]; // present in hand, distinct from the efficiency pick
   const hardId = bestDiscard(hand, [], 'hard', dangerSets);
   assert.strictEqual(hardId, normalId);
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// shouldRiichi: 'hard'-only damaten decision
+// ══════════════════════════════════════════════════════════════════════════
+// Every fixture below is a real 13-tile tenpai hand (verified via mahjong.js's
+// own waits/detectYaku/countDora, not hand-derived math) so each test exercises
+// the exact same computation _shouldRiichi runs, not a stand-in approximation.
+const baseCtx = { seatWind: 2, roundWind: 1, kuitanAri: true, sanma: false, placement: 'mid' };
+
+test('shouldRiichi: forces riichi when a wait tile has no RON yaku at all (damaten would mean passing on it)', () => {
+  // Kanchan wait on 5m; pair is 9s (terminal, breaks Tanyao); kanchan wait
+  // breaks Pinfu — on RON this hand has nothing. Menzen Tsumo still covers
+  // a self-draw, which is exactly why the check has to be RON-specific.
+  const hand13 = [...seq(1, 'm'), T(4, 'm'), T(6, 'm'), ...seq(7, 'p'), ...seq(3, 's'), ...pairT(9, 's')];
+  assert.strictEqual(shanten(hand13, []), 0);
+  assert.strictEqual(shouldRiichi(hand13, [], { ...baseCtx, doraIndicators: [] }), true);
+});
+
+test('shouldRiichi: riichis a cheap hand (<=2 han) even with full ron coverage — the bump is worth more than staying hidden', () => {
+  // Tanyao-only, no dora: 1 han ron / 2 han tsumo. Single kanchan wait.
+  const hand13 = [...seq(2, 'm'), ...seq(5, 'm'), ...seq(2, 'p'), T(4, 's'), T(6, 's'), ...pairT(3, 's')];
+  assert.strictEqual(shanten(hand13, []), 0);
+  assert.strictEqual(shouldRiichi(hand13, [], { ...baseCtx, doraIndicators: [] }), true);
+});
+
+test('shouldRiichi: stays damaten on an already mangan-class hand (>=5 han) rather than scaring opponents off it', () => {
+  // Tanyao + 3 dora (indicator 3m -> dora 4m, and the hand holds an ankou
+  // of 4m) = 4 han ron / 5 han tsumo -> bestHan 5.
+  const hand13 = [...tri(4, 'm'), ...seq(2, 'p'), ...seq(5, 'p'), T(4, 's'), T(6, 's'), ...pairT(3, 's')];
+  assert.strictEqual(shanten(hand13, []), 0);
+  const dora = [T(3, 'm')];
+  assert.strictEqual(shouldRiichi(hand13, [], { ...baseCtx, doraIndicators: dora }), false);
+});
+
+test('shouldRiichi: mid-value hand (3-4 han) with a wide wait (5+ tile types) stays damaten', () => {
+  // Tanyao + 1 dora (indicator 1p -> dora 2p): 2 han ron / 3 han tsumo per
+  // completion -> bestHan 3, across a 5-sided wait (2m/3m/4m/5m/6m).
+  const hand13 = [T(3, 'm'), T(3, 'm'), T(3, 'm'), T(4, 'm'), T(5, 'm'), T(5, 'm'), T(5, 'm'), ...seq(2, 'p'), ...seq(5, 's')];
+  assert.strictEqual(shanten(hand13, []), 0);
+  const dora = [T(1, 'p')];
+  assert.strictEqual(shouldRiichi(hand13, [], { ...baseCtx, doraIndicators: dora }), false);
+});
+
+test('shouldRiichi: mid-value hand (3-4 han) with a narrow wait (<=2 tile types) riichis instead', () => {
+  // Tanyao + 1 dora: 2 han ron / 3 han tsumo -> bestHan 4, but only a
+  // 2-sided ryanmen wait (4s/7s) — no width benefit to staying hidden for.
+  const hand13 = [...seq(2, 'm'), ...seq(5, 'm'), ...seq(2, 'p'), T(5, 's'), T(6, 's'), ...pairT(3, 's')];
+  assert.strictEqual(shanten(hand13, []), 0);
+  const dora = [T(1, 'p')];
+  assert.strictEqual(shouldRiichi(hand13, [], { ...baseCtx, doraIndicators: dora }), true);
+});
+
+test('shouldRiichi: mid-value + mid-width (3 tile types) breaks the tie on table placement — damaten while leading, riichi while behind', () => {
+  // Tanyao + 1 dora -> bestHan 3, 3-sided wait (2m/5m/3s) — genuinely
+  // ambiguous on value/width alone, so placement is what decides it.
+  const hand13 = [T(2, 'm'), T(2, 'm'), T(2, 'm'), T(3, 'm'), T(4, 'm'), ...seq(2, 'p'), ...seq(5, 'p'), ...pairT(3, 's')];
+  assert.strictEqual(shanten(hand13, []), 0);
+  const dora = [T(1, 'p')];
+  assert.strictEqual(shouldRiichi(hand13, [], { ...baseCtx, doraIndicators: dora, placement: 'lead' }), false);
+  assert.strictEqual(shouldRiichi(hand13, [], { ...baseCtx, doraIndicators: dora, placement: 'behind' }), true);
 });
 
 // ══════════════════════════════════════════════════════════════════════════
