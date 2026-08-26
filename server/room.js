@@ -50,12 +50,22 @@ const BOT_DELAY=1200; // pause before a bot acts, so its move is readable on scr
 const ROUND_START_DELAY=3400;
 // Pause between game_start and the dealer's first draw, purely so the
 // client's "配牌中/DEALING TILES" placeholder (#game-loading) is on screen
-// long enough to read as a real deal rather than a flash. Unlike
-// ROUND_START_DELAY above, this does NOT need to match anything client-side
-// — gameStartIntro()'s roll-call card in script.js only ever fires once the
-// first game_state this produces has actually arrived and rendered, so its
-// own animation timing is entirely decoupled from this value.
+// long enough to read as a real deal rather than a flash. This value itself
+// doesn't need to match anything client-side — gameStartIntro()'s roll-call
+// card only ever fires once the game_state this produces has actually
+// arrived and rendered. But see GAME_START_BOT_DELAY right below for what
+// happens on the client AFTER that.
 const GAME_START_DELAY=2000;
+// Same reasoning as ROUND_START_DELAY above, but for the roll-call card
+// instead of the round-start one: must match gameStartIntro()'s 5000ms
+// timer in public/script.js. If the dealer is a bot, _draw() (below) uses
+// this instead of the normal BOT_DELAY for ONLY that very first draw's
+// turn — otherwise the bot would draw/discard/call (and any resulting
+// riichi/pon/chi/kan would get silently dropped rather than shown, since
+// onMsg suppresses those outright while the roll call's up) while the
+// player is still looking at the roll call, well before they've actually
+// seen their own hand.
+const GAME_START_BOT_DELAY=5000;
 // How long the chat "is typing" nameplate indicator (see typing() below)
 // stays up after the player's last keystroke, absent a newer one or an
 // actually-sent message resetting/clearing it — long enough to survive a
@@ -803,6 +813,10 @@ class Room {
     for(let seat=0;seat<this.numPlayers;seat++){
       this._send(this.seats[seat],{type:'game_start',seat,seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,chonbo:this.rules.chonbo,scores:this.game.scores});
     }
+    // Consumed by _draw() below, exactly once — see its own comment on why
+    // only THIS first draw's bot-turn (if the dealer is a bot) gets the
+    // longer GAME_START_BOT_DELAY instead of the normal BOT_DELAY.
+    this._firstDrawOfGame=true;
     setTimeout(()=>this._draw(),GAME_START_DELAY);
   }
 
@@ -825,10 +839,15 @@ class Room {
     g.hands[g.turn]=sort(g.hands[g.turn]);
     g.tempFuriten[g.turn]=false;
     this._sendState();
+    // Read+clear unconditionally (not just inside the isBot branch below) —
+    // this must only ever apply to the SINGLE _draw() call start() schedules,
+    // regardless of whether that dealer happens to be a bot.
+    const isFirstDrawOfGame=this._firstDrawOfGame;
+    this._firstDrawOfGame=false;
     const seat=this.seats[g.turn];
     if(seat?.isBot){
       const botSeat=g.turn;
-      setTimeout(()=>this._botAct(botSeat), BOT_DELAY);
+      setTimeout(()=>this._botAct(botSeat), isFirstDrawOfGame?GAME_START_BOT_DELAY:BOT_DELAY);
     }
   }
 
