@@ -967,9 +967,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    finishes fading rather than cutting it off mid-animation. */
 /* z-index:150 — above every table/game element (nameplates/tiles/action
    bar top out around 60) but below the call banner (.cb-layer:205, pon/
-   chii/kan/riichi), round-start card (.rs-layer:210), toast (.tc:200),
-   loading overlay (#game-loading:200), and the end-game panel (#s-end:
-   250) — a reaction shouldn't ever cover any of those. */
+   chii/kan/riichi), round-start card (.rs-layer:210), game-start roll
+   call (.gs-layer:210), toast (.tc:200), loading overlay (#game-loading:
+   200), and the end-game panel (#s-end:250) — a reaction shouldn't ever
+   cover any of those. */
 .emoji-layer{position:fixed;inset:0;z-index:150;pointer-events:none;overflow:hidden;}
 /* Plain anchor point — left/top set inline (JS) to the seat's on-screen
    centre, no transform of its own. See showEmojiPopup's own comment in
@@ -1113,6 +1114,14 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .call-banner[data-type="chi"]{--accent:#c0ffc0;--accent-strong:#4d4;--accent-glow:rgba(68,221,68,.35);}
 .call-banner[data-type="riichi"]{--accent:#d0d0ff;--accent-strong:#77f;--accent-glow:rgba(119,119,255,.4);}
 .call-banner[data-type="kita"]{--accent:#b0f0ff;--accent-strong:#20b0c0;--accent-glow:rgba(32,176,192,.4);}
+/* Tsumo/Ron — the hand-ending win itself, shown via the same callBanner()
+   used for pon/kan/chi/riichi (see onEnd in script.js) rather than a
+   separate banner, so it gets the identical full-width slide-in treatment.
+   Warm gold for Tsumo (a self-draw, no "victim") vs a hotter red for Ron
+   (a direct hit off another player's discard) — same warm/aggressive split
+   as most riichi games use for these two. */
+.call-banner[data-type="tsumo"]{--accent:#ffe9b0;--accent-strong:#d4a017;--accent-glow:rgba(212,160,23,.5);}
+.call-banner[data-type="ron"]{--accent:#ffb8b0;--accent-strong:#c62828;--accent-glow:rgba(198,40,40,.5);}
 @keyframes cb-slide{
   0%{opacity:0;transform:translate(-58vw,42vh) scale(.55);}
   20%{opacity:.90;}
@@ -1172,6 +1181,59 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 @keyframes rs-scrim-hold{0%{opacity:0;}12%,78%{opacity:1;}100%{opacity:0;}}
 @media (prefers-reduced-motion:reduce){
   .rs-plate,.rs-wind,.rs-sub,.rs-start,.rs-scrim{animation:none;opacity:1;filter:none;transform:none;}
+}
+
+/* ── Game-start roll call — shown once per game, right after the FIRST real
+   game_state (i.e. once the board underneath is already fully dealt, not
+   during the "配牌中/DEALING TILES" placeholder — see gameStartIntro() and
+   the game_state branch of onMsg in script.js for why it waits). Same
+   z-index/gating pattern as .rs-layer, reusing roundStartBanner's own
+   roundStartBannerActive/pendingBannerGameState gate rather than a
+   parallel one — the two never actually overlap, since this only ever
+   plays once per game (right after its first state) and .rs-layer only
+   from round 2 onward. Rows clone .up-nameplate/.pnp-* — the SAME
+   icon+name+title plate used in the User Profile hub and in another
+   player's card (see index.html's #userprofile-modal and renderPlayerCard
+   in script.js) — rather than the in-game .np nameplate, so this reads as
+   each player's actual profile identity, not their at-the-table plate.
+   --ui-vmin here matches .about-modal's own value exactly (both scoped
+   locally, not on :root) so a cloned plate renders at the identical scale
+   it would inside that modal. */
+.gs-layer{--ui-vmin:clamp(6px,1vw,12px);position:fixed;inset:0;z-index:210;
+  pointer-events:none;display:flex;align-items:center;justify-content:center;}
+.gs-layer.blocking{pointer-events:auto;}
+.gs-scrim{position:absolute;inset:0;z-index:0;background:rgba(0,0,0,.85);
+  opacity:0;animation:rs-scrim-hold 5s ease forwards;}
+.gs-plate{position:relative;z-index:1;display:flex;flex-direction:column;
+  align-items:center;gap:calc(var(--ui-vmin) * 2);
+  padding:calc(var(--ui-vmin) * 5) calc(var(--ui-vmin) * 8);
+  max-height:calc(100vh - 48px);overflow-y:auto;
+  opacity:0;animation:rs-hold 5s ease forwards;}
+.gs-title{font-family:'Cinzel Decorative',serif;letter-spacing:.35em;text-transform:uppercase;
+  font-size:calc(var(--ui-vmin) * 2);color:var(--gold);
+  opacity:0;animation:rs-fade-up .5s ease forwards;animation-delay:.1s;}
+.gs-rows{display:flex;flex-direction:column;align-items:center;
+  gap:calc(var(--ui-vmin) * 1.6);margin-top:calc(var(--ui-vmin) * 1.5);}
+/* Wind badge sits OUTSIDE the cloned .up-nameplate, not inside it — the
+   seat wind is this game's seating, not part of a player's profile
+   identity, so it doesn't belong baked into their profile plate the way
+   the in-game .np nameplate bakes it in. */
+.gs-row{display:flex;align-items:center;gap:calc(var(--ui-vmin) * 1.6);
+  opacity:0;animation:rs-fade-up .5s ease forwards;}
+.gs-row .gs-wind{font-family:'Noto Serif JP',serif;font-weight:900;color:var(--gl);
+  font-size:calc(var(--ui-vmin) * 2.6);width:calc(var(--ui-vmin) * 3.2);
+  text-align:center;flex:none;
+  text-shadow:0 0 12px rgba(201,168,76,.5);}
+/* Fixed width (not just the plate's own natural content width) so all 3/4
+   seats line up as an even column regardless of name length — .pnp-name/
+   .pnp-title already come with white-space:nowrap+ellipsis from their
+   shared base rule, so a name too long for this just truncates instead of
+   growing the plate. Scoped to .gs-rows rather than touching .up-nameplate
+   itself, which also renders un-widthed (sized to its own content) in the
+   User Profile hub header and the Rankings player-card modal. */
+.gs-rows .up-nameplate{width:calc(var(--ui-vmin) * 26);}
+@media (prefers-reduced-motion:reduce){
+  .gs-plate,.gs-title,.gs-row,.gs-scrim{animation:none;opacity:1;}
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1243,6 +1305,20 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .st{width:100%;border-collapse:collapse;margin:10px 0;}.st td{padding:calc(var(--ui-vmin, 7.2px) * .75) calc(var(--ui-vmin, 7.2px) * 1.5);font-size:calc(var(--ui-vmin, 7.2px) * 1.5);border-bottom:1px solid rgba(201,168,76,.1);text-align:left;}
 .st td:last-child{text-align:right;font-weight:700;color:var(--gl);}.st tr.w td{color:var(--gl);font-size:calc(var(--ui-vmin, 7.2px) * 1.625);}
 .st tr.l td{color:#e07070;font-size:calc(var(--ui-vmin, 7.2px) * 1.625);}
+/* Game-over/bankruptcy final standings (see onGameOver in script.js) —
+   each placement cell pairs a medal-coloured ordinal with a cloned
+   .up-nameplate/.pnp-* plate instead of the plain "1. Name" text .st
+   normally renders. td.re-final-cell (not just .re-final-cell) matches
+   .st td's own specificity so this reliably overrides its padding/
+   text-align rather than losing the tie-break to source order. The
+   nameplate's own pnp-name/pnp-title colors are explicit, so .st tr.w/.l's
+   row-wide recolor (still applying to the plain-text score cell beside it)
+   doesn't bleed into them. */
+td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.2);
+  padding-top:calc(var(--ui-vmin, 7.2px) * .5);padding-bottom:calc(var(--ui-vmin, 7.2px) * .5);}
+.re-final-ordinal{font-family:'Cinzel Decorative',serif;font-weight:700;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.5);flex:none;width:calc(var(--ui-vmin, 7.2px) * 3);}
+.re-final-cell .up-nameplate{width:calc(var(--ui-vmin, 7.2px) * 24);}
 .wt{display:flex;flex-direction:column;align-items:center;gap:4px;margin:10px 0;}
 .re-tenpai{display:flex;flex-direction:column;gap:8px;margin:10px 0;}
 .re-tenpai-row{display:flex;flex-direction:column;align-items:center;gap:4px;}

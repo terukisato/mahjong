@@ -21,6 +21,11 @@
 <audio id="sfx-ron" src="/audio/Voice/Default/Ron.mp3" preload="auto" style="display:none;"></audio>
 <audio id="sfx-tsumo" src="/audio/Voice/Default/Tsumo.mp3" preload="auto" style="display:none;"></audio>
 <audio id="sfx-kita" src="/audio/Voice/Default/Kita.mp3" preload="auto" style="display:none;"></audio>
+<!-- Game-over/bankruptcy win line — Natsu-exclusive (see playWinSfx in
+     script.js), so unlike every sfx-* above there's no Default src to set
+     upfront; .src is only ever assigned right before playback, to one of
+     four Natsu-only files picked at random. -->
+<audio id="sfx-win" preload="auto" style="display:none;"></audio>
 
 <!-- Settings panel -->
 <div id="settings-panel">
@@ -92,7 +97,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.14.1</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.14.2</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -1049,6 +1054,7 @@
 <div class="tc" id="tc"></div>
 <div class="cb-layer" id="cb-layer"></div>
 <div class="rs-layer" id="rs-layer"></div>
+<div class="gs-layer" id="gs-layer"></div>
 <div class="chat-float" id="chat-float"></div>
 <!-- Seat-emoji popups land here (see showEmojiPopup in script.js) — a
      separate unrotated fixed layer rather than nesting inside .pa-t/.pa-l/

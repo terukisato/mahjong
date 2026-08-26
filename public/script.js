@@ -498,12 +498,26 @@ let lastEndState=null;
 // stats round-trip has happened.
 let unlockedThemes=['Default'];
 
-// True for exactly as long as the round-start card (.rs-layer.blocking) is
+// True for exactly as long as the round-start card (.rs-layer.blocking) OR
+// the game-start roll call (.gs-layer.blocking, see gameStartIntro) is
 // visible — see roundStartBanner and onMsg's deferred-game_state handling
-// just above it. pendingBannerGameState holds the latest game_state that
-// arrived during that window (only the latest matters — nothing in
-// between was ever shown), applied the instant the card clears.
+// just above it. Both cards share this one gate rather than each having
+// their own, since the deferral behavior they need is identical.
+// pendingBannerGameState holds the latest game_state that arrived during
+// that window (only the latest matters — nothing in between was ever
+// shown), applied the instant the card clears.
 let roundStartBannerActive=false, pendingBannerGameState=null;
+
+// game_start payload waiting for the game to actually finish loading (its
+// first real game_state) before gameStartIntro() fires — see startGame and
+// the game_state branch in onMsg. null whenever no roll call is pending.
+let pendingGameStartIntro=null;
+
+// Pending playNameplateSfx() timers, one per roll-call row (see
+// gameStartIntro) — tracked so clearActiveBanners can cancel any not yet
+// fired if the player leaves mid-animation, instead of a chime playing
+// into whatever screen they've navigated to since.
+let gsChimeTimers=[];
 
 // Showing 's-end' deliberately leaves 's-game' un-hidden underneath, so the
 // final board state shows through the darkened round-end/game-over overlay
@@ -682,7 +696,14 @@ function onMsg(m){
   // rendered once the card actually clears — see roundStartBanner's timer.
   if(roundStartBannerActive && m.type==='game_state'){ pendingBannerGameState=m; return; }
   if(roundStartBannerActive && (m.type==='riichi'||m.type==='kan'||m.type==='pon'||m.type==='chi'||m.type==='kita')) return;
-  if(m.type==='game_state'){const prev=lastState;lastState=m;discarding=false;renderState(m,prev);}
+  if(m.type==='game_state'){
+    const prev=lastState;lastState=m;discarding=false;renderState(m,prev);
+    // The game has now actually finished loading (this is the first real
+    // state of a fresh game) — show the roll call now, on top of the
+    // just-rendered (fully dealt) board, rather than back at game_start
+    // when the board was still a "dealing tiles" placeholder.
+    if(pendingGameStartIntro){const gm=pendingGameStartIntro;pendingGameStartIntro=null;gameStartIntro(gm);}
+  }
   else if(m.type==='riichi'){onRiichi(m);}
   else if(m.type==='kan'){callBanner('kan',m.name||'Player','カン');}
   else if(m.type==='pon'){callBanner('pon',m.name||'Player','ポン');}
@@ -3085,6 +3106,34 @@ function playSfx(id, seat=null){
   el.play().catch(()=>{});
 }
 
+// Winner's victory line on the game-over/bankruptcy panel (see onGameOver)
+// — Natsu-exclusive: Default has no equivalent lines at all (see
+// public/audio/Voice/Natsu/*.mp3 vs Default's smaller call-only set), so
+// this only ever plays when the WINNING seat has Natsu selected, picking
+// one of its four flavour lines at random each time rather than always the
+// same one. Shares fxGainNode/fxEnabled with playSfx (same "Voice" mute/
+// volume control) since this is a voice line too, just not a call.
+const natsuWinLines=['Yavai','Otoko','Suberu','Hantei'];
+function playWinSfx(winnerVoiceTheme){
+  if(winnerVoiceTheme!=='Natsu') return;
+  if(!fxEnabled) return;
+  const el=$('sfx-win'); if(!el) return;
+  const name=natsuWinLines[Math.floor(Math.random()*natsuWinLines.length)];
+  el.src=`/audio/Voice/Natsu/${name}.mp3`;
+  try{
+    const ctx=getFxAudioCtx().ctx;
+    if(!_fxConnectedEls.has(el)){
+      const src=ctx.createMediaElementSource(el);
+      src.connect(fxGainNode);
+      _fxConnectedEls.add(el);
+    }
+    if(ctx.state==='suspended') ctx.resume();
+  }catch(e){}
+  el.currentTime=0;
+  el.volume=1.0;
+  el.play().catch(()=>{});
+}
+
 function setFxVolume(val){
   fxVolume=(val/100)*4; // 0-100 slider maps to 0-4.0 gain
   if(fxGainNode) fxGainNode.gain.value=fxVolume;
@@ -3111,24 +3160,89 @@ function setDiscardVolume(val){
   try{ localStorage.setItem('mj-discard-vol',val); }catch(e){}
 }
 
+// Lazily creates the shared "FX" gain stage (Settings > FX — discardSfxEnabled/
+// discardSfxVolume) — factored out of playDiscardSfx so playNameplateSfx
+// below can feed its synthesized tone through the exact same volume/mute
+// control instead of the "Voice" one (fxGainNode/playSfx) that Pon/Riichi/
+// etc. use, since a reveal chime isn't a character voice line.
+function getDiscardGainNode(){
+  if(!discardGainNode){
+    const ctx=getFxAudioCtx().ctx;
+    discardGainNode=ctx.createGain();
+    discardGainNode.gain.value=discardSfxVolume;
+    discardGainNode.connect(ctx.destination);
+  }
+  return discardGainNode;
+}
+
 function playDiscardSfx(){
   if(!discardSfxEnabled) return;
   const el=$('sfx-discard');
   if(!el) return;
   try{
-    if(!discardGainNode){
-      const ctx=getFxAudioCtx().ctx;
-      discardGainNode=ctx.createGain();
-      discardGainNode.gain.value=discardSfxVolume;
-      discardGainNode.connect(ctx.destination);
-      const src=ctx.createMediaElementSource(el);
-      src.connect(discardGainNode);
+    const gainNode=getDiscardGainNode();
+    if(!_fxConnectedEls.has(el)){
+      const src=getFxAudioCtx().ctx.createMediaElementSource(el);
+      src.connect(gainNode);
+      _fxConnectedEls.add(el);
     }
     if(getFxAudioCtx().ctx.state==='suspended') getFxAudioCtx().ctx.resume();
   }catch(e){}
   el.currentTime=0;
   el.volume=1.0;
   el.play().catch(()=>{});
+}
+
+// Reveal chime for the game-start roll call (see gameStartIntro) — a
+// synthesized sword "shing" (Web Audio noise + oscillators, no bundled
+// audio file needed, since nothing already in public/audio fit: the
+// discard click is a tile clack, the Voice lines are Pon/Riichi/etc. call-
+// outs). Two layered parts: a short bright noise burst standing in for the
+// blade's air-cut/friction, then a handful of inharmonic high sines
+// (like a struck blade's overtones) ringing out together underneath it.
+// Shares the discard click's own FX gain stage/mute toggle rather than the
+// Voice one, since this isn't a character voice line either.
+function playNameplateSfx(){
+  if(!discardSfxEnabled) return;
+  try{
+    const ctx=getFxAudioCtx().ctx;
+    const gainNode=getDiscardGainNode();
+    if(ctx.state==='suspended') ctx.resume();
+    const now=ctx.currentTime;
+
+    // "Shhk" — a short highpassed noise burst, gone before the ring below
+    // really gets going.
+    const noiseDur=0.08;
+    const noiseBuf=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*noiseDur),ctx.sampleRate);
+    const data=noiseBuf.getChannelData(0);
+    for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1)*(1-i/data.length); // linear fade-out, not a hard cutoff
+    const noise=ctx.createBufferSource();
+    noise.buffer=noiseBuf;
+    const noiseFilter=ctx.createBiquadFilter();
+    noiseFilter.type='highpass';
+    noiseFilter.frequency.value=2500;
+    const noiseEnv=ctx.createGain();
+    noiseEnv.gain.setValueAtTime(0.4,now);
+    noiseEnv.gain.exponentialRampToValueAtTime(0.0001,now+noiseDur);
+    noise.connect(noiseFilter);noiseFilter.connect(noiseEnv);noiseEnv.connect(gainNode);
+    noise.start(now);noise.stop(now+noiseDur);
+
+    // Metallic ring — inharmonic (non-integer-multiple) high sines read as
+    // "struck metal" rather than a musical chord; each drifts slightly flat
+    // and decays together, like a blade's overtones settling.
+    [3200,4700,6100].forEach((freq,idx)=>{
+      const osc=ctx.createOscillator();
+      osc.type='sine';
+      osc.frequency.setValueAtTime(freq,now);
+      osc.frequency.exponentialRampToValueAtTime(freq*0.85,now+0.5);
+      const env=ctx.createGain();
+      env.gain.setValueAtTime(0,now);
+      env.gain.linearRampToValueAtTime(0.22/(idx+1),now+0.006+idx*0.004); // higher overtones quieter, staggered so the onset doesn't sound too synced
+      env.gain.exponentialRampToValueAtTime(0.0001,now+0.5);
+      osc.connect(env);env.connect(gainNode);
+      osc.start(now);osc.stop(now+0.55);
+    });
+  }catch(e){}
 }
 
 function toggleMusic(){
@@ -3626,8 +3740,11 @@ function pressReady(){
 function clearActiveBanners(){
   const cb=$('cb-layer'); if(cb) cb.querySelectorAll('.call-banner').forEach(el=>el.remove());
   const rs=$('rs-layer'); if(rs){ rs.innerHTML=''; rs.classList.remove('blocking'); }
+  const gs=$('gs-layer'); if(gs){ gs.innerHTML=''; gs.classList.remove('blocking'); }
   roundStartBannerActive=false;
   pendingBannerGameState=null;
+  pendingGameStartIntro=null;
+  gsChimeTimers.forEach(clearTimeout); gsChimeTimers.length=0;
 }
 
 function resetLobby(){
@@ -3827,10 +3944,98 @@ function fitDiscardZone(dz,id){
   }
 }
 
+// Roll-call card introducing every seated player. Fired once the game has
+// actually finished loading (the first real game_state has arrived and been
+// rendered — see the game_state branch in onMsg, which calls this right
+// after renderState) rather than at game_start itself, so the card never
+// covers a "still dealing" board — the table underneath is already fully
+// dealt, just hidden behind this card's opaque scrim until it clears.
+// Reuses roundStartBanner's own gate (roundStartBannerActive/
+// pendingBannerGameState, checked in onMsg) rather than a parallel one —
+// both need the identical "hold further game_state until this card clears"
+// behavior, just for a different card.
+// Rows clone .up-nameplate/.pnp-* — the same icon+name+title plate as the
+// User Profile hub header and the Rankings player-card modal (see
+// #userprofile-modal in index.html and renderPlayerCard above) — rather
+// than the in-game .np nameplate, so this introduces each player by their
+// actual profile identity, not their at-the-table plate. Self's tier class
+// (bronze/silver/gold/.../diamond — see nameplateTierClass) is copied
+// straight off the User Profile hub's own element since that's already
+// kept current all session (updateNameplateTier); opponents/bots have no
+// tier available synchronously here (that needs a get_player_stats
+// round-trip — see openPlayerCardInGame), so they render at the plain
+// default (bronze) look.
+function gameStartIntro(m){
+  const layer=$('gs-layer'); if(!layer) return;
+  layer.innerHTML='';
+  // Cancel any chime still queued from an interrupted previous call (see
+  // clearActiveBanners, which clears this same array on an early leave) —
+  // defensive, since gameStartIntro only ever fires once per game in
+  // practice, but a queued playNameplateSfx() firing into a NEW roll call
+  // would otherwise land on the wrong row's timing.
+  gsChimeTimers.forEach(clearTimeout); gsChimeTimers.length=0;
+  const scrim=document.createElement('div');scrim.className='gs-scrim';
+  const plate=document.createElement('div');plate.className='gs-plate';
+  const title=document.createElement('div');title.className='gs-title';title.textContent='対局開始';
+  const rows=document.createElement('div');rows.className='gs-rows';
+  const windLabels=['東','南','西','北'];
+  const dealer=m.dealer??0;
+  const seats=m.seats||[];
+  const seatCount=m.numPlayers||4;
+  const isSelfGuest=$('iname').value==='Guest';
+  const selfTierEl=document.querySelector('#userprofile-modal .up-nameplate');
+  const selfTierCls=selfTierEl&&['tier-silver','tier-gold','tier-platinum','tier-diamond'].find(c=>selfTierEl.classList.contains(c));
+  for(let i=0;i<seatCount;i++){
+    const abs=(mySeat+i)%seatCount, p=seats[abs], isMe=i===0;
+    const row=document.createElement('div');
+    row.className='gs-row';
+    const delayMs=300+i*180;
+    row.style.animationDelay=(delayMs/1000)+'s';
+    gsChimeTimers.push(setTimeout(playNameplateSfx,delayMs)); // lines the chime up with this row's own fade-in
+    const wind=document.createElement('div');wind.className='gs-wind';
+    wind.textContent=windLabels[(abs-dealer+seatCount)%seatCount];
+    const np=document.createElement('div');
+    np.className='up-nameplate'+(isMe&&selfTierCls?' '+selfTierCls:'');
+    const icon=document.createElement('span');icon.className='pnp-icon';
+    icon.innerHTML=isMe?(isSelfGuest?guestIconSvg:iconSvg(currentPlayerIcon)):iconSvg(p?.icon||'default');
+    const info=document.createElement('span');info.className='pnp-info';
+    const pname=document.createElement('span');pname.className='pnp-name';
+    pname.textContent=isMe?($('iname').value.trim()||'Player'):(p?.name||'—');
+    const ptitle=document.createElement('span');ptitle.className='pnp-title';
+    ptitle.textContent=isMe?(isSelfGuest?'':currentPlayerTitle):(p?.isBot?'CPU':(p?.title||''));
+    info.appendChild(pname);info.appendChild(ptitle);
+    np.appendChild(icon);np.appendChild(info);
+    row.appendChild(wind);row.appendChild(np);
+    rows.appendChild(row);
+  }
+  plate.appendChild(title);plate.appendChild(rows);
+  layer.appendChild(scrim);layer.appendChild(plate);
+  layer.classList.add('blocking');
+  roundStartBannerActive=true;
+  setTimeout(()=>{
+    scrim.remove();plate.remove();layer.classList.remove('blocking');
+    roundStartBannerActive=false;
+    // Game music starts right as the card clears, not back in startGame —
+    // see that function's own comment. Guarded on inGame since this timer
+    // isn't cancelled by an early leave (see clearActiveBanners, which only
+    // cancels the per-row chime timers) — without the guard, leaving during
+    // the roll call would still have this fire 5s later and cut in over
+    // whatever's playing on the lobby screen by then.
+    if(inGame) playGameMusic();
+    if(pendingBannerGameState){
+      const st=pendingBannerGameState; pendingBannerGameState=null;
+      const prev=lastState; lastState=st; discarding=false; renderState(st,prev);
+    }
+  },5000);
+}
+
 // GAME START
 function startGame(m){
   stopLobbyMusic();
-  playGameMusic();
+  // Game music itself is deferred to gameStartIntro()'s own completion —
+  // starting it here would have it playing underneath the "配牌中" loading
+  // screen and the whole roll call, instead of kicking in once the card
+  // actually clears.
   inGame=true;selId=null;lastState=null;
   declareWarningShown=false; // chonbo's declare-confirm message shows once per game, not once per browser session
   // Restore Ready button visibility for new game
@@ -3851,6 +4056,10 @@ function startGame(m){
   numSeats=m.numPlayers||4;
   P=numSeats===3?['b','r','l']:['b','r','t','l'];
   document.querySelector('.table')?.classList.toggle('sanma',numSeats===3);
+  // Consumed by onMsg's game_state handler the moment the game has actually
+  // finished loading (first real state rendered) — see gameStartIntro's own
+  // comment on why the roll call waits for that instead of firing here.
+  pendingGameStartIntro=m;
   const seats=m.seats;
   inGameSeatInfo={};
   for(let i=0;i<numSeats;i++){
@@ -3914,6 +4123,16 @@ function startGame(m){
   // only repopulates these when m.sanma is true, so a stale sanma game's banked
   // North tiles would otherwise stay on screen through a subsequent yonma game.
   ['kb','kt','kl','kr'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
+  // Action bar (Tsumo/Riichi/discard/pon/chi/kan buttons) and any open
+  // chi/riichi/ankan/declare picker are otherwise left showing whatever the
+  // PREVIOUS game's last turn put up — drawActions() (called from
+  // renderState) is the only thing that normally clears/rebuilds them, and
+  // that doesn't run until this new game's first game_state arrives, well
+  // after this loading screen/roll call are already on screen. Same
+  // stale-picker cleanup drawActions() itself does, since those are
+  // appended to document.body rather than inside #actbar.
+  const bar=$('actbar'); if(bar){bar.innerHTML='';bar.classList.remove('visible');}
+  ['chi-picker','riichi-picker','ankan-picker','declare-picker'].forEach(id=>{const el=$(id);if(el)el.remove();});
   // Set seat winds based on dealer
   const windLabels=['東','南','西','北'];
   const dealer=m.dealer??0;
@@ -5495,7 +5714,11 @@ function callBanner(type,name,label){
   if(label.length>4) lb.classList.add('cb-label-long');
   const nm=document.createElement('span');nm.className='cb-name';
   const who=document.createElement('b');who.textContent=name;
-  nm.appendChild(who);nm.appendChild(document.createTextNode(' called'));
+  nm.appendChild(who);
+  // "called" fits pon/kan/chi/riichi/kita — a win isn't a call, so tsumo/ron
+  // (see onEnd) get their own wording instead.
+  const isWin=type==='tsumo'||type==='ron';
+  nm.appendChild(document.createTextNode(isWin?' wins':' called'));
   content.appendChild(lb);content.appendChild(nm);
   b.appendChild(content);
   layer.appendChild(b);setTimeout(()=>b.remove(),1800);
@@ -5650,14 +5873,51 @@ function onGameOver(m){
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
   const sorted=[...((m.scores||[]).map((s,i)=>({s,i})))].sort((a,b)=>b.s-a.s);
-  let rows='';
-  sorted.forEach(({s,i},rank)=>{
-    const name=i===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[i]||`Seat ${i}`);
-    rows+=`<tr class="${rank===0?'w':''}"><td>${rank+1}. ${escHtml(name)}</td><td>${s}</td></tr>`;
-  });
   $('ret').textContent=m.reason==='tobi'?'飛び - Bankruptcy':'終局 - Game Over';
   $('rehn').textContent='';$('reyl').innerHTML='';$('rewt').innerHTML='';
-  $('rest').innerHTML=rows;
+  // Final standings — each row pairs a medal-coloured ordinal with the
+  // player's actual .up-nameplate/.pnp-* profile plate (same component the
+  // game-start roll call uses — see gameStartIntro) instead of a bare name
+  // string, so "who placed where" reads the same way "who's in this game"
+  // already does. Self's tier class is read straight off the User Profile
+  // hub's own element, same reasoning as gameStartIntro; opponents/bots
+  // render at the plain bronze default since m.seats (added alongside
+  // playerNames — see _finishGame in room.js) only carries icon/title/
+  // isBot, not tier/wins.
+  const ordinalLabels=['1st','2nd','3rd','4th'];
+  const rankColours=['#f0d080','#c0c0c0','#cd7f32','var(--cream)'];
+  const isSelfGuestFinal=$('iname').value==='Guest';
+  const selfTierElFinal=document.querySelector('#userprofile-modal .up-nameplate');
+  const selfTierClsFinal=selfTierElFinal&&['tier-silver','tier-gold','tier-platinum','tier-diamond'].find(c=>selfTierElFinal.classList.contains(c));
+  const tbl=$('rest'); tbl.innerHTML='';
+  sorted.forEach(({s,i},rank)=>{
+    const isMe=i===mySeat;
+    const p=m.seats?.[i];
+    const name=isMe?($('iname').value.trim()||'You'):(p?.name||m.playerNames?.[i]||`Seat ${i}`);
+    const row=document.createElement('tr');
+    row.className=rank===0?'w':'';
+    const cell=document.createElement('td');cell.className='re-final-cell';
+    const ord=document.createElement('span');ord.className='re-final-ordinal';
+    ord.style.color=rankColours[rank]||'var(--cream)';
+    ord.textContent=ordinalLabels[rank]||`${rank+1}th`;
+    const np=document.createElement('div');
+    np.className='up-nameplate'+(isMe&&selfTierClsFinal?' '+selfTierClsFinal:'');
+    const icon=document.createElement('span');icon.className='pnp-icon';
+    icon.innerHTML=isMe?(isSelfGuestFinal?guestIconSvg:iconSvg(currentPlayerIcon)):iconSvg(p?.icon||'default');
+    const info=document.createElement('span');info.className='pnp-info';
+    const pname=document.createElement('span');pname.className='pnp-name';pname.textContent=name;
+    const ptitle=document.createElement('span');ptitle.className='pnp-title';
+    ptitle.textContent=isMe?(isSelfGuestFinal?'':currentPlayerTitle):(p?.isBot?'CPU':(p?.title||''));
+    info.appendChild(pname);info.appendChild(ptitle);
+    np.appendChild(icon);np.appendChild(info);
+    cell.appendChild(ord);cell.appendChild(np);
+    const scoreCell=document.createElement('td');scoreCell.textContent=s.toLocaleString();
+    row.appendChild(cell);row.appendChild(scoreCell);
+    tbl.appendChild(row);
+  });
+  // sorted[0] is the winning seat (highest final score) — see playWinSfx's
+  // own comment for why this only ever makes a sound for a Natsu winner.
+  playWinSfx(m.seats?.[sorted[0]?.i]?.voiceTheme);
   show('s-end');
 }
 
@@ -5788,6 +6048,14 @@ function onEnd(m){
     if(m.reason==='ron') playSfx('sfx-ron', m.winner);
     if(m.reason==='tsumo') playSfx('sfx-tsumo', m.winner);
     const winnerName=m.winner===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[m.winner]||`Seat ${m.winner}`);
+    // Reuses the same call-banner (.cb-layer) pon/kan/chi/riichi already
+    // slide in across the felt, with two new accent-colour variants (see
+    // .call-banner[data-type="tsumo"/"ron"] in style.css) — the win itself
+    // gets the same dramatic full-width declaration those calls get, rather
+    // than jumping straight to the results panel. Reveal is deferred below
+    // (WIN_BANNER_DELAY) so the panel doesn't appear underneath/on top of
+    // this while it's still sliding/settling.
+    callBanner(m.reason,winnerName,m.reason==='tsumo'?'ツモ':'ロン');
     // FIX 1: strip han count from handLabel line — it's shown in the yaku pills below.
     // Only show fu here; total han is redundant.
     const limit=limitLabel(m.han||0,m.fu||0);
@@ -5812,6 +6080,13 @@ function onEnd(m){
     c.innerHTML=`${escHtml(y.name)}<span class="yh">${y.han}Han</span><span class="yj">${escHtml(y.jp||'')}</span>`;
     yl.appendChild(c);
   }
+  // Hand/dora/tenpai tile artwork, score table, and the panel reveal itself
+  // are grouped into this one closure so a tsumo/ron win can delay all of
+  // it uniformly behind the call-banner declaration above (WIN_BANNER_DELAY
+  // below) instead of the panel popping up underneath/on top of a banner
+  // that's still sliding in. Every other end reason (draw/chonbo/etc, no
+  // banner shown) just calls this immediately.
+  const reveal=()=>{
   // Hand/dora/tenpai tile artwork — split into its own function (below)
   // since a resize needs to redraw just this part (see scheduleTileRedraw)
   // without replaying onEnd's one-time side effects (win/tsumo sound, the
@@ -5870,6 +6145,19 @@ function onEnd(m){
     const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display=pendingGameOver?'':'none';
   }
   setTimeout(()=>{ inGame=true; },5500);
+  };
+  // WIN_BANNER_DELAY — long enough for the call-banner above to slide in,
+  // hold, and clear (it removes itself at 1800ms — see callBanner) before
+  // the results panel takes over. Only tsumo/ron actually showed a banner
+  // above, so every other reason reveals immediately as before.
+  const WIN_BANNER_DELAY=1800;
+  if(m.reason==='tsumo'||m.reason==='ron'){
+    // reveal() firing here is OUTSIDE this function's own try (the timeout
+    // callback runs long after this synchronous block has already
+    // returned), so the outer catch below can't reach it — needs its own,
+    // same show('s-end') fallback.
+    setTimeout(()=>{ try{ reveal(); }catch(e){ show('s-end'); } },WIN_BANNER_DELAY);
+  } else reveal();
   }catch(e){ show('s-end'); }
 }
 

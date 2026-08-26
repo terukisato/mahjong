@@ -48,6 +48,14 @@ const BOT_DELAY=1200; // pause before a bot acts, so its move is readable on scr
 // keeps a bot from drawing/discarding/calling while the card is still on
 // screen, instead of just hiding the result until it clears.
 const ROUND_START_DELAY=3400;
+// Pause between game_start and the dealer's first draw, purely so the
+// client's "配牌中/DEALING TILES" placeholder (#game-loading) is on screen
+// long enough to read as a real deal rather than a flash. Unlike
+// ROUND_START_DELAY above, this does NOT need to match anything client-side
+// — gameStartIntro()'s roll-call card in script.js only ever fires once the
+// first game_state this produces has actually arrived and rendered, so its
+// own animation timing is entirely decoupled from this value.
+const GAME_START_DELAY=2000;
 // How long the chat "is typing" nameplate indicator (see typing() below)
 // stays up after the player's last keystroke, absent a newer one or an
 // actually-sent message resetting/clearing it — long enough to survive a
@@ -795,7 +803,7 @@ class Room {
     for(let seat=0;seat<this.numPlayers;seat++){
       this._send(this.seats[seat],{type:'game_start',seat,seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,chonbo:this.rules.chonbo,scores:this.game.scores});
     }
-    setTimeout(()=>this._draw(),2000);
+    setTimeout(()=>this._draw(),GAME_START_DELAY);
   }
 
   // ── Turn flow ──────────────────────────────────────────────────────────────
@@ -2050,8 +2058,12 @@ class Room {
   _finishGame(reason,extra={}){
     const g=this.game;
     this.phase='done';
+    // seats (same _seatInfo() shape as game_start/round_start) added so the
+    // client's final results panel can show each player's actual profile
+    // nameplate (icon/title/isBot) — playerNames alone (kept for existing
+    // callers like lastGameOverNames) only ever carried bare name strings.
     this._broadcastAll({type:'game_over',reason,scores:g.scores,
-      playerNames:this.seats.map(p=>p?.name||'—'),...extra});
+      playerNames:this.seats.map(p=>p?.name||'—'),seats:this._seatInfo(),...extra});
     const unlocked=recordGameResult({
       playerIds:this.seats.map(p=>p?.profileId||null),
       isBot:this.seats.map(p=>!p||p.isBot),
