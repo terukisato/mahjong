@@ -1410,7 +1410,12 @@ class Room {
       const isWinnerDealer = winSeat === g.dealer;
       const bp=basePoints(totalHan,fu);
       const pay=Math.ceil((isWinnerDealer?bp*6:bp*4)/100)*100+g.honba*300;
-      results.push({winSeat,hand,yakuList,han:totalHan,rawHan:han,fu,pay,uraDora,dc,kitaCount});
+      // melds/riichi added so the client's results panel can render THIS
+      // winner's open melds and correctly gate their own ura dora display
+      // (see the unified `winners` array built in _endRound) — neither was
+      // needed back when only the primary winner was ever shown at all.
+      results.push({winSeat,hand,yakuList,han:totalHan,rawHan:han,fu,pay,uraDora,dc,kitaCount,
+        melds:g.melds[winSeat],riichi:!!g.riichi[winSeat]});
     }
     if(!results.length){
       // Every declarer turned out invalid. Scoped to the common case — a
@@ -2195,6 +2200,23 @@ class Room {
     // Tobi check (bankruptcy)
     const bust=g.scores.findIndex(s=>s<0);
 
+    // Unified per-winner list (primary + any extraWinners from a double/
+    // triple ron — see _multiRon) for the client's multi-winner results
+    // panel (renderWinnerTabs/renderWinnerInfo in script.js). The primary
+    // winner's own scattered params get packaged into the SAME shape as
+    // each extraWinners entry so the client can just iterate one array
+    // regardless of how many people won, instead of treating "the winner"
+    // and "everyone else who also won" as two different data shapes.
+    const winners=(reason==='tsumo'||reason==='ron')?[
+      {winSeat:winner,hand,melds:melds||[],yakuList,han,fu,pay:payment,riichi:!!g.riichi[winner]},
+      ...(extraWinners||[]).map(r=>({winSeat:r.winSeat,hand:r.hand,melds:r.melds||[],yakuList:r.yakuList,han:r.han,fu:r.fu,pay:r.pay,riichi:!!r.riichi})),
+    ]:null;
+    // Ura dora indicators reveal if ANY winner (not just the primary) was
+    // in riichi — gating on g.riichi[winner] alone used to hide them
+    // entirely whenever a SECOND simultaneous ron winner was the one who'd
+    // actually declared riichi and the primary hadn't.
+    const anyRiichiWinner=winners&&winners.some(w=>w.riichi);
+
     // Per-game hand-stats bookkeeping (feeds recordGameResult at game end).
     if(reason==='tsumo'||reason==='ron'){
       this._recordHandWin(winner,reason,han,fu,yakuList,payment,isKazoeYakuman);
@@ -2262,13 +2284,15 @@ class Room {
             scores:g.scores,handLabel:han?handLabel(han):'',
             playerNames:this.seats.map(p=>p?.name||'—'),
             extraWinners:extraWinners||null,
+            winners,
             // Ura dora indicators stay hidden unless the win actually used
-            // them — same gate _countUraDora scores against
-            // (g.riichi[winSeat]). Sending the real tiles here regardless of
-            // riichi used to leak them into the results screen even on a
-            // plain non-riichi win, where they're not part of the score at
-            // all (see the matching fix on roundEndPayload/drawPayload below).
-            uraDora:g.riichi[winner]?g.deadWall.slice(9,9+g.dora.length):[],
+            // them — gated on ANY winner's riichi (anyRiichiWinner, above),
+            // not just the primary's. Sending the real tiles here
+            // regardless of riichi used to leak them into the results
+            // screen even on a plain non-riichi win, where they're not
+            // part of the score at all (see the matching fix on
+            // roundEndPayload/drawPayload below).
+            uraDora:anyRiichiWinner?g.deadWall.slice(9,9+g.dora.length):[],
             dora:g.dora,
             prevScores:prevScores||null,
             melds:melds||[],
@@ -2303,11 +2327,12 @@ class Room {
       scores:g.scores,handLabel:han?handLabel(han):'',
       playerNames:this.seats.map(p=>p?.name||'—'),
       extraWinners:extraWinners||null,
+      winners,
       // See the matching comment on agariyamePayload above — only reveal
-      // the actual indicators when the win used them (g.riichi[winner]),
+      // the actual indicators when ANY winner used them (anyRiichiWinner),
       // otherwise an empty array so the client's results screen doesn't
       // show an "Ura Dora" section for a plain (non-riichi) win.
-      uraDora: g.riichi[winner]?g.deadWall.slice(9,9+g.dora.length):[],
+      uraDora: anyRiichiWinner?g.deadWall.slice(9,9+g.dora.length):[],
       dora: g.dora,
       prevScores:prevScores||null,
       melds:melds||[],

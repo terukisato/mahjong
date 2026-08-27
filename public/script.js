@@ -492,6 +492,12 @@ let isPrivateRoomGame=false, isRoomHost=false, playAgainSeats=[], lastGameOverNa
 // a stale reference just sits here unused rather than needing to be
 // cleared from every path that can dismiss that screen.
 let lastEndState=null;
+// Which entry of lastEndState.winners is currently showing on the results
+// panel (see renderWinnerNav/renderWinnerInfo) — only ever >0 when a
+// double/triple ron's prev/next arrows have stepped past the first winner.
+// Reset to 0 at the top of every onEnd(), same "stale reference is harmless, just
+// unused" reasoning as lastEndState above for everything in between.
+let currentEndWinnerIdx=0;
 // Theme ids unlocked for the currently-entered name, refreshed whenever a
 // 'stats' response arrives (see onMsg) — gates the locked/unlocked styling
 // in renderVoiceThemes. 'Default' is always available even before any
@@ -3137,6 +3143,320 @@ function playWinSfx(lineName){
   el.play().catch(()=>{});
 }
 
+// Yakuman/double-yakuman reveal — a synthesized "epic moment" sting (Web
+// Audio, no bundled file, same reasoning as playNameplateSfx's sword
+// sound). Parameterised by a preset (see YAKUMAN_SOUNDS) so each specific
+// yakuman can have its own timbre; called with no arg it plays 'classic'
+// (a low gong hit landing first, then a bright ascending sparkle arpeggio),
+// exactly the old shared sting. Shares the discard click's own FX gain
+// stage, same as playNameplateSfx — this is a sound effect, not a voice.
+//
+// A preset is {gong:[from,to,dur,gain,type], arp:[[freqs],type,step,gain]}
+// plus optional flags: drone (detuned sub-oscillator bed), noise:'sweep'|
+// 'crack' (filtered white-noise gust/crackle), metallic (square overtone
+// on each arp note), shimmer (high sine tail), swell (softer arp attack).
+const YAKUMAN_SOUNDS={
+  classic  :{gong:[180,70,1.2,.60,'sine'    ],arp:[[523.25,659.25,783.99,1046.5],'triangle',.09,.28]},
+  imperial :{gong:[240,90,1.0,.55,'sine'    ],arp:[[523.25,622.25,783.99,932.33,1244.51],'triangle',.08,.26],shimmer:true},
+  ominous  :{gong:[110,41,1.8,.70,'sawtooth'],arp:[[196,185,138.59,130.81],'sine',.13,.30],drone:true},
+  thunder  :{gong:[ 90,45,1.6,.80,'sine'    ],arp:[[392,523.25,659.25],'square',.06,.20],noise:'crack'},
+  airy     :{gong:[420,260,.8,.40,'sine'    ],arp:[[659.25,783.99,987.77,1174.66,1567.98],'sine',.07,.22],noise:'sweep',shimmer:true},
+  frostbell:{gong:[600,400,.7,.45,'triangle'],arp:[[1046.5,1318.5,1567.98,2093],'sine',.10,.24],shimmer:true},
+  earthdrum:{gong:[ 70,38,1.9,.85,'sine'    ],arp:[[98,110,73.42,65.41],'sine',.16,.32]},
+  zen      :{gong:[262,196,1.3,.40,'triangle'],arp:[[587.33,659.25,783.99,880,1174.66],'triangle',.12,.26]},
+  celestial:{gong:[330,220,1.0,.40,'sine'   ],arp:[[523.25,587.33,659.25,783.99,880,1046.5,1174.66,1318.5],'sine',.05,.20],shimmer:true},
+  forge    :{gong:[160,120,.5,.50,'square'  ],arp:[[880,880,880,880],'square',.14,.30],metallic:true},
+  divine   :{gong:[392,392,1.4,.50,'sine'   ],arp:[[392,523.25,659.25,783.99,1046.5],'sine',.09,.26],shimmer:true,swell:true},
+};
+function playYakumanSfx(preset){
+  if(!discardSfxEnabled) return;
+  const s=(typeof preset==='string'?YAKUMAN_SOUNDS[preset]:preset)||YAKUMAN_SOUNDS.classic;
+  try{
+    const ctx=getFxAudioCtx().ctx;
+    const out=getDiscardGainNode();
+    if(ctx.state==='suspended') ctx.resume();
+    const now=ctx.currentTime;
+
+    const [gf,gt,gd,gg,gtype]=s.gong;
+    const gong=ctx.createOscillator();
+    gong.type=gtype||'sine';
+    gong.frequency.setValueAtTime(gf,now);
+    gong.frequency.exponentialRampToValueAtTime(Math.max(20,gt),now+gd);
+    const gongEnv=ctx.createGain();
+    gongEnv.gain.setValueAtTime(0,now);
+    gongEnv.gain.linearRampToValueAtTime(gg,now+0.02);
+    gongEnv.gain.exponentialRampToValueAtTime(0.0001,now+gd+0.4);
+    gong.connect(gongEnv);gongEnv.connect(out);
+    gong.start(now);gong.stop(now+gd+0.5);
+
+    if(s.drone){
+      const d=ctx.createOscillator();d.type='sawtooth';
+      d.frequency.setValueAtTime(gf/2,now);
+      const de=ctx.createGain();
+      de.gain.setValueAtTime(0,now);
+      de.gain.linearRampToValueAtTime(0.12,now+0.1);
+      de.gain.exponentialRampToValueAtTime(0.0001,now+2.0);
+      d.connect(de);de.connect(out);d.start(now);d.stop(now+2.1);
+    }
+
+    if(s.noise){
+      const dur=s.noise==='crack'?0.5:1.1;
+      const buf=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*dur),ctx.sampleRate);
+      const dat=buf.getChannelData(0);
+      for(let i=0;i<dat.length;i++) dat[i]=(Math.random()*2-1)*(1-i/dat.length);
+      const src=ctx.createBufferSource();src.buffer=buf;
+      const bp=ctx.createBiquadFilter();bp.type='bandpass';
+      if(s.noise==='sweep'){
+        bp.frequency.setValueAtTime(400,now);
+        bp.frequency.exponentialRampToValueAtTime(6000,now+dur);bp.Q.value=0.7;
+      }else{
+        bp.frequency.setValueAtTime(3000,now);
+        bp.frequency.exponentialRampToValueAtTime(200,now+dur);bp.Q.value=1.2;
+      }
+      const ne=ctx.createGain();
+      ne.gain.setValueAtTime(s.noise==='crack'?0.5:0.25,now);
+      ne.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+      src.connect(bp);bp.connect(ne);ne.connect(out);
+      src.start(now);src.stop(now+dur);
+    }
+
+    const [notes,atype,step,again]=s.arp;
+    const base=now+(s.swell?0.25:0.15);
+    notes.forEach((freq,i)=>{
+      const t=base+i*step;
+      const osc=ctx.createOscillator();
+      osc.type=atype||'triangle';
+      osc.frequency.setValueAtTime(freq,t);
+      const env=ctx.createGain();
+      env.gain.setValueAtTime(0,t);
+      env.gain.linearRampToValueAtTime(again,t+(s.swell?0.08:0.01));
+      env.gain.exponentialRampToValueAtTime(0.0001,t+(s.metallic?0.6:0.4));
+      osc.connect(env);env.connect(out);
+      osc.start(t);osc.stop(t+0.65);
+      if(s.metallic){
+        const hi=ctx.createOscillator();hi.type='square';
+        hi.frequency.setValueAtTime(freq*2.01,t);
+        const he=ctx.createGain();
+        he.gain.setValueAtTime(again*0.3,t);
+        he.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
+        hi.connect(he);he.connect(out);hi.start(t);hi.stop(t+0.55);
+      }
+    });
+
+    if(s.shimmer){
+      const top=notes[notes.length-1]*2;
+      const t0=base+notes.length*step;
+      [top,top*1.5,top*2].forEach((f,i)=>{
+        const t=t0+i*0.04;
+        const o=ctx.createOscillator();o.type='sine';
+        o.frequency.setValueAtTime(f,t);
+        const e=ctx.createGain();
+        e.gain.setValueAtTime(0,t);
+        e.gain.linearRampToValueAtTime(0.06,t+0.05);
+        e.gain.exponentialRampToValueAtTime(0.0001,t+1.2);
+        o.connect(e);e.connect(out);o.start(t);o.stop(t+1.3);
+      });
+    }
+  }catch(e){}
+}
+
+// Per-yakuman visual+audio identity, keyed by the exact yaku `name` from
+// detectYaku (server/mahjong.js). Each theme sets the flash's palette
+// (--ym-* custom props on #yakuman-layer), the falling/rising/radiating
+// particle motif (shape + motion + tint list, see spawnYakumanMotif), the
+// headline kanji/romaji, and a YAKUMAN_SOUNDS preset. Anything not listed
+// here (e.g. Kazoe Yakuman, or a future yakuman) falls back to `_default`,
+// which reproduces the original gold flash + 'classic' sting exactly.
+//   glow/glow2/accent are "r,g,b" triples (consumed inside rgba(...)).
+//   double:true marks a theme as the one to prefer when the win is a
+//     double yakuman and several yaku names are in play.
+//   soundDouble overrides `sound` when isDouble (optional).
+const YAKUMAN_THEMES={
+  _default:{jp:'役満',romaji:'YAKUMAN',ink:'var(--gl,#ffe9a8)',
+    glow:'255,215,100',glow2:'255,180,40',accent:'255,140,0',
+    scrimA:'rgba(70,45,0,.6)',scrimB:'rgba(0,0,0,.93)',
+    shape:'star',motion:'ym-radiate',tints:['#ffd75a','#ffe9a8','#ffb54a'],sound:'classic'},
+
+  'Kokushi Musou':{jp:'国士無双',romaji:'THIRTEEN ORPHANS',ink:'#eef1ff',
+    glow:'180,195,255',glow2:'120,140,255',accent:'90,110,230',
+    scrimA:'rgba(18,22,60,.72)',scrimB:'rgba(2,3,16,.95)',
+    shape:'shard',motion:'ym-radiate',tints:['#eef1ff','#b9c4ff','#8aa0ff'],sound:'imperial'},
+  'Kokushi Juusanmen':{jp:'国士無双十三面待ち',romaji:'THIRTEEN-SIDED WAIT',ink:'#ffffff',
+    glow:'200,215,255',glow2:'150,175,255',accent:'120,255,240',
+    scrimA:'rgba(20,20,66,.8)',scrimB:'rgba(2,2,18,.96)',
+    shape:'crystal',motion:'ym-radiate',tints:['#ffffff','#bfe6ff','#c9b9ff','#a0ffe8'],
+    double:true,sound:'imperial',soundDouble:'imperial'},
+
+  'Suu Ankou':{jp:'四暗刻',romaji:'FOUR CONCEALED TRIPLETS',ink:'#ffdccb',
+    glow:'255,110,80',glow2:'220,40,40',accent:'150,10,20',
+    scrimA:'rgba(40,4,6,.8)',scrimB:'rgba(8,0,0,.97)',
+    shape:'ember',motion:'ym-rise',tints:['#ff7a4a','#ff4a3a','#d01f2a'],sound:'ominous'},
+  'Suu Ankou Tanki':{jp:'四暗刻単騎',romaji:'LONE TANKI WAIT',ink:'#ffd9e6',
+    glow:'255,90,150',glow2:'190,40,120',accent:'120,20,160',
+    scrimA:'rgba(40,4,30,.82)',scrimB:'rgba(8,0,8,.97)',
+    shape:'ember',motion:'ym-rise',tints:['#ff5a96','#c22890','#7a20b0'],
+    double:true,sound:'ominous',soundDouble:'ominous'},
+
+  'Daisangen':{jp:'大三元',romaji:'BIG THREE DRAGONS',ink:'#ffffff',
+    glow:'255,255,255',glow2:'120,240,140',accent:'230,50,50',
+    scrimA:'rgba(30,30,34,.78)',scrimB:'rgba(0,0,0,.96)',
+    shape:'bolt',motion:'ym-radiate',tints:['#ffffff','#5ce65c','#ff5a5a'],sound:'thunder'},
+  'Shousuushii':{jp:'小四喜',romaji:'LITTLE FOUR WINDS',ink:'#e2fbff',
+    glow:'120,230,255',glow2:'70,180,220',accent:'40,120,180',
+    scrimA:'rgba(6,30,38,.78)',scrimB:'rgba(0,6,10,.96)',
+    shape:'streak',motion:'ym-gale',tints:['#dffbff','#66e6ff','#3aa0d0'],sound:'airy'},
+  'Daisuushii':{jp:'大四喜',romaji:'BIG FOUR WINDS',ink:'#e6fff4',
+    glow:'110,255,210',glow2:'80,200,255',accent:'40,150,200',
+    scrimA:'rgba(4,32,30,.82)',scrimB:'rgba(0,8,8,.97)',
+    shape:'streak',motion:'ym-gale',tints:['#e6fff4','#6effd2','#50c8ff','#3aa0d0'],
+    double:true,sound:'airy',soundDouble:'airy'},
+
+  'Tsuuiisou':{jp:'字一色',romaji:'ALL HONORS',ink:'#f6f7ff',
+    glow:'205,215,240',glow2:'160,175,215',accent:'110,130,180',
+    scrimA:'rgba(20,22,32,.8)',scrimB:'rgba(2,2,6,.96)',
+    shape:'crystal',motion:'ym-fall',tints:['#ffffff','#cfd6f0','#9fb0d8'],sound:'frostbell'},
+  'Chinroutou':{jp:'清老頭',romaji:'ALL TERMINALS',ink:'#ffe6c0',
+    glow:'230,170,90',glow2:'180,120,60',accent:'120,70,30',
+    scrimA:'rgba(34,20,8,.82)',scrimB:'rgba(8,4,0,.96)',
+    shape:'ember',motion:'ym-rise',tints:['#e6aa5a','#c8863c','#8a5a28'],sound:'earthdrum'},
+  'Ryuuiisou':{jp:'緑一色',romaji:'ALL GREEN',ink:'#e9ffe2',
+    glow:'120,240,140',glow2:'60,200,90',accent:'20,140,60',
+    scrimA:'rgba(6,30,12,.8)',scrimB:'rgba(0,8,2,.96)',
+    shape:'leaf',motion:'ym-fall',tints:['#c8ffb8','#5ce65c','#2aa84a'],sound:'zen'},
+
+  'Chuuren Poutou':{jp:'九蓮宝燈',romaji:'NINE GATES',ink:'#fff0d0',
+    glow:'255,200,110',glow2:'255,150,60',accent:'200,90,180',
+    scrimA:'rgba(30,14,40,.8)',scrimB:'rgba(6,2,12,.96)',
+    shape:'orb',motion:'ym-rise',tints:['#fff0d0','#ffc86e','#ff9a4a','#e08adf'],sound:'celestial'},
+  'Junsei Chuuren':{jp:'純正九蓮宝燈',romaji:'PURE NINE GATES',ink:'#fffaf0',
+    glow:'255,235,180',glow2:'255,200,110',accent:'255,170,220',
+    scrimA:'rgba(34,20,44,.82)',scrimB:'rgba(8,4,14,.97)',
+    shape:'orb',motion:'ym-rise',tints:['#fffaf0','#ffe9a8','#ffc86e','#ffb0e0'],
+    double:true,sound:'celestial',soundDouble:'celestial'},
+
+  'Suu Kantsu':{jp:'四槓子',romaji:'FOUR KANS',ink:'#fff4c0',
+    glow:'255,215,90',glow2:'220,170,40',accent:'150,110,20',
+    scrimA:'rgba(30,22,4,.82)',scrimB:'rgba(6,4,0,.96)',
+    shape:'coin',motion:'ym-fall',tints:['#fff8d0','#ffd75a','#e0a828'],sound:'forge'},
+
+  'Tenhou':{jp:'天和',romaji:'HEAVENLY HAND',ink:'#fffdf0',
+    glow:'255,245,210',glow2:'255,220,150',accent:'150,200,255',
+    scrimA:'rgba(40,44,66,.7)',scrimB:'rgba(6,8,16,.95)',
+    shape:'orb',motion:'ym-fall',tints:['#ffffff','#fff2c8','#cfe4ff'],sound:'divine'},
+  'Chiihou':{jp:'地和',romaji:'EARTHLY HAND',ink:'#f2ffdf',
+    glow:'205,240,140',glow2:'150,200,90',accent:'230,200,120',
+    scrimA:'rgba(18,34,10,.76)',scrimB:'rgba(2,8,0,.96)',
+    shape:'leaf',motion:'ym-rise',tints:['#e6ffb8','#cdf08a','#ffe0a8'],sound:'divine'},
+};
+
+// Full manual override hook — takes total control of the flash for a yaku
+// name (called as fn(isDouble), builds its own #yakuman-layer content).
+// Empty by default: every yakuman goes through the themed path below.
+const YAKUMAN_ANIMATIONS={};
+
+// Scatter one motif's worth of particles across #yakuman-layer for the
+// hold duration. cfg is a YAKUMAN_THEMES entry (shape / motion / tints /
+// count). CSS (.ym-particle + @keyframes ym-fall/rise/radiate/gale) does
+// the animating; this only seeds randomised start positions, sizes,
+// durations and per-particle vectors via inline custom props.
+function spawnYakumanMotif(layer,cfg){
+  const wrap=document.createElement('div');wrap.className='yakuman-motif';
+  const shape=cfg.shape||'star';
+  const motion=cfg.motion||{star:'ym-radiate',shard:'ym-radiate',bolt:'ym-radiate',
+    crystal:'ym-fall',leaf:'ym-fall',coin:'ym-fall',ember:'ym-rise',orb:'ym-rise',
+    streak:'ym-gale'}[shape]||'ym-fall';
+  const tints=cfg.tints&&cfg.tints.length?cfg.tints:['#ffd75a'];
+  const count=cfg.count||26;
+  const rnd=(a,b)=>a+Math.random()*(b-a);
+  const sign=()=>Math.random()<.5?-1:1;
+  for(let i=0;i<count;i++){
+    const p=document.createElement('span');
+    p.className='ym-particle ym-s-'+shape;
+    const st=p.style;
+    st.setProperty('--motion',motion);
+    st.setProperty('--tint',tints[i%tints.length]);
+    st.setProperty('--dur',rnd(3.2,5.2).toFixed(2)+'s');
+    st.setProperty('--delay',rnd(0,1.6).toFixed(2)+'s');
+    st.setProperty('--rot',(sign()*rnd(180,720)).toFixed(0)+'deg');
+    if(motion==='ym-radiate'){
+      const ang=rnd(0,Math.PI*2),dist=rnd(26,62);
+      st.left='50%';st.top='50%';
+      st.setProperty('--sz',rnd(1.6,4.6).toFixed(2)+'vmin');
+      st.setProperty('--dx',(Math.cos(ang)*dist).toFixed(1)+'vmax');
+      st.setProperty('--dy',(Math.sin(ang)*dist).toFixed(1)+'vmax');
+    }else if(motion==='ym-gale'){
+      st.left='-14%';st.top=rnd(4,92).toFixed(1)+'%';
+      st.setProperty('--sz',rnd(10,24).toFixed(1)+'vmin');
+      st.setProperty('--dy',rnd(-6,6).toFixed(1)+'vh');
+      st.setProperty('--tilt',rnd(-15,-3).toFixed(1)+'deg');
+    }else{
+      st.left=rnd(1,99).toFixed(1)+'%';
+      st.top=(motion==='ym-rise'?rnd(78,112):rnd(-16,10)).toFixed(1)+'%';
+      st.setProperty('--sz',rnd(1.4,4.2).toFixed(2)+'vmin');
+      st.setProperty('--dx',(sign()*rnd(2,14)).toFixed(1)+'vw');
+    }
+    wrap.appendChild(p);
+  }
+  layer.appendChild(wrap);
+  return wrap;
+}
+
+// Yakuman/double-yakuman flash (see onEnd) — a bigger, more dramatic
+// moment than the normal call-banner win announcement, playing BEFORE it
+// rather than replacing it. yakuNames is every yaku name across every
+// qualifying winner (a double/triple ron could have more than one); the
+// most specific one that has a YAKUMAN_THEMES entry drives the palette,
+// motif and sound (preferring a `double`-flagged theme when isDouble).
+function playYakumanFx(isDouble,yakuNames){
+  const names=yakuNames||[];
+  const override=names.map(n=>YAKUMAN_ANIMATIONS[n]).find(Boolean);
+  if(override) return override(isDouble);
+  const layer=$('yakuman-layer'); if(!layer) return;
+  const themed=names.filter(n=>YAKUMAN_THEMES[n]);
+  const key=themed.find(n=>YAKUMAN_THEMES[n].double)||themed[0];
+  const theme=(key&&YAKUMAN_THEMES[key])||YAKUMAN_THEMES._default;
+  const named=theme!==YAKUMAN_THEMES._default;
+  layer.innerHTML='';
+  const st=layer.style;
+  st.setProperty('--ym-ink',theme.ink);
+  st.setProperty('--ym-glow',theme.glow);
+  st.setProperty('--ym-glow2',theme.glow2||theme.glow);
+  st.setProperty('--ym-accent',theme.accent||theme.glow2||theme.glow);
+  st.setProperty('--ym-scrim-a',theme.scrimA);
+  st.setProperty('--ym-scrim-b',theme.scrimB||'rgba(0,0,0,.93)');
+
+  const scrim=document.createElement('div');scrim.className='yakuman-scrim';
+  layer.appendChild(scrim);
+  spawnYakumanMotif(layer,{...theme,count:(theme.count||26)+(isDouble?12:0)});
+
+  const burst=document.createElement('div');burst.className='yakuman-burst';
+  if(named){
+    const eb=document.createElement('div');
+    eb.className='yakuman-eyebrow'+(isDouble?' double':'');
+    eb.textContent=isDouble?'ダブル役満':'役満';
+    burst.appendChild(eb);
+  }
+  const text=document.createElement('div');
+  const label=named?theme.jp:(isDouble?'ダブル役満':'役満');
+  text.className='yakuman-text'+((isDouble&&!named)?' double':'')
+    +(label.length>=7?' xlong':label.length>=4?' long':'');
+  text.textContent=label;
+  const sub=document.createElement('div');sub.className='yakuman-sub';
+  sub.textContent=named?theme.romaji:(isDouble?'DOUBLE YAKUMAN':'YAKUMAN');
+  burst.appendChild(text);burst.appendChild(sub);
+  layer.appendChild(burst);
+  layer.classList.add('blocking');
+
+  playYakumanSfx(isDouble&&theme.soundDouble?theme.soundDouble:theme.sound);
+  setTimeout(()=>{
+    layer.innerHTML='';layer.classList.remove('blocking');
+  },YAKUMAN_FX_HOLD);
+}
+// Held on screen before the normal win banner(s) get their turn — see
+// onEnd, which also folds this into WIN_BANNER_DELAY so the results panel
+// waits for the flash too, not just the banner(s) after it.
+const YAKUMAN_FX_HOLD=4400;
+
 function setFxVolume(val){
   fxVolume=(val/100)*4; // 0-100 slider maps to 0-4.0 gain
   if(fxGainNode) fxGainNode.gain.value=fxVolume;
@@ -5735,15 +6055,10 @@ function toast(msg){
   tc.appendChild(t);setTimeout(()=>t.remove(),3000);
 }
 
-// Call banner (pon/kan/chi/riichi) — slides in from the bottom-left and
-// settles across the felt; see .call-banner / @keyframes cb-slide.
-function callBanner(type,name,label){
-  const layer=$('cb-layer'); if(!layer) return;
-  // .cb-layer is a flex row container, so a second banner appended while the
-  // first is still fading out would sit beside it (split left/right) rather
-  // than replace it. Drop any banner still in flight immediately so only the
-  // newest call is ever shown.
-  layer.querySelectorAll('.call-banner').forEach(el=>el.remove());
+// Builds one call-banner DOM node — shared by callBanner's single-banner
+// path and ronBanners' multi-winner one below, so both produce identically
+// styled/worded banners without duplicating the label/name markup.
+function buildCallBannerEl(type,name,label){
   const b=document.createElement('div');
   b.className='call-banner';b.dataset.type=type;
   const content=document.createElement('div');content.className='cb-content';
@@ -5762,7 +6077,58 @@ function callBanner(type,name,label){
   nm.appendChild(document.createTextNode(isWin?' wins':' called'));
   content.appendChild(lb);content.appendChild(nm);
   b.appendChild(content);
+  return b;
+}
+
+// Call banner (pon/kan/chi/riichi/tsumo/single-winner ron) — slides in from
+// the bottom-left and settles across the felt; see .call-banner / @keyframes
+// cb-slide.
+function callBanner(type,name,label){
+  const layer=$('cb-layer'); if(!layer) return;
+  // .cb-layer is a flex row container, so a second banner appended while the
+  // first is still fading out would sit beside it (split left/right) rather
+  // than replace it. Drop any banner still in flight immediately so only the
+  // newest call is ever shown.
+  layer.querySelectorAll('.call-banner,.cb-stack').forEach(el=>el.remove());
+  const b=buildCallBannerEl(type,name,label);
   layer.appendChild(b);setTimeout(()=>b.remove(),1800);
+}
+
+// Double/triple ron (see m.extraWinners in onEnd, and _multiRon in
+// room.js) — every simultaneous winner gets their own full banner, in the
+// SAME spot a single-winner ron uses, one at a time rather than stacked or
+// overlapping. Layering two at once (an earlier version tried this, side
+// by side and also directly on top of each other) reads badly either way:
+// .call-banner's background isn't fully opaque, so whichever one is
+// underneath still shows through the one on top, and two names/labels
+// occupying the same space is hard to read regardless of opacity — it's a
+// legibility problem, not a positioning one, so no amount of z-index or
+// transparency tuning fixes it. Instead the previous winner's banner is
+// always fully removed (not just visually covered) before the next one
+// appears, so exactly one is ever on screen. Duration per winner matches
+// a normal single-winner callBanner exactly (RON_BANNER_HOLD, same 1800ms)
+// — see onEnd's WIN_BANNER_DELAY, which waits for the WHOLE sequence
+// rather than just one banner's worth of time. Falls back to a single
+// plain callBanner when there's only one name, so an ordinary (non-multi)
+// ron looks identical to before this existed.
+const RON_BANNER_HOLD=1800;
+function ronBanners(names){
+  const layer=$('cb-layer'); if(!layer) return;
+  if(names.length<=1){ callBanner('ron',names[0]||'Player','ロン'); return; }
+  layer.querySelectorAll('.call-banner,.cb-stack').forEach(el=>el.remove());
+  const showAt=idx=>{
+    if(idx>=names.length) return;
+    // Removing the CURRENT banner (if any) here, in the same tick as
+    // appending the next one, is what actually guarantees the "never both
+    // on screen at once" property — relying on each banner's own
+    // independent removal timer (as callBanner does solo) risks two timers
+    // firing in an order that briefly leaves both present.
+    layer.querySelectorAll('.call-banner').forEach(el=>el.remove());
+    const b=buildCallBannerEl('ron',names[idx],'ロン');
+    layer.appendChild(b);
+    setTimeout(()=>{ b.remove(); showAt(idx+1); },RON_BANNER_HOLD);
+  };
+  showAt(0);
 }
 
 // Round-start title card (wind + round + honba) — see .rs-plate / @keyframes
@@ -5944,6 +6310,13 @@ function onGameOver(m){
   const sorted=[...((m.scores||[]).map((s,i)=>({s,i})))].sort((a,b)=>b.s-a.s);
   $('ret').textContent=m.reason==='tobi'?'飛び - Bankruptcy':'終局 - Game Over';
   $('rehn').textContent='';$('reyl').innerHTML='';$('rewt').innerHTML='';
+  // Both left over from whatever the FINAL round's own onEnd() call put up
+  // (a tenpai reveal if that round was an exhaustive draw, or a double/
+  // triple-ron prev/next nav) — neither is redrawn by anything below, so
+  // without clearing them here they'd stay stuck on top of/around the
+  // final standings table instead of this panel starting clean.
+  $('re-tenpai').innerHTML='';
+  renderWinnerNav(null);
   // Final standings — each row pairs a medal-coloured ordinal with the
   // player's actual .up-nameplate/.pnp-* profile plate (same component the
   // game-start roll call uses — see gameStartIntro) instead of a bare name
@@ -6052,18 +6425,30 @@ function limitLabel(han,fu){
 // again on resize (using the last round_end message, see lastEndState)
 // WITHOUT going through the rest of onEnd, which has one-time side effects
 // (win/tsumo sound, the score count-up animation) that must not replay
-// just because the window resized.
-function renderEndTiles(m){
+// just because the window resized. winnerIdx selects which entry of
+// m.winners (double/triple ron — see renderWinnerNav) supplies the hand/
+// melds/ura-dora-eligibility; defaults to whichever tab is currently
+// showing so a plain renderEndTiles(m) call (resize, the initial reveal)
+// redraws the RIGHT winner rather than always reverting to the first.
+function renderEndTiles(m,winnerIdx=currentEndWinnerIdx){
   const wt=$('rewt'); if(!wt) return;
   wt.innerHTML='';
-  if((m.dora||[]).length||(m.uraDora||[]).length){
+  const w=m.winners?.[winnerIdx];
+  // Ura dora tiles are the same physical indicators for every winner (they
+  // come off the shared dead wall, not per-hand), but only actually apply
+  // to THIS winner's score if they personally were in riichi — m.uraDora
+  // being non-empty just means at least one of the (possibly several)
+  // simultaneous winners qualified (see anyRiichiWinner in room.js), not
+  // necessarily this one.
+  const showUra=(m.uraDora||[]).length>0&&(w?w.riichi:true);
+  if((m.dora||[]).length||showUra){
     const dr=document.createElement('div');dr.className='re-dora-row';
     if((m.dora||[]).length){
       const lbl=document.createElement('span');lbl.className='re-dora-lbl';lbl.textContent='Dora';
       dr.appendChild(lbl);
       for(const t of m.dora) dr.appendChild(mkElMd(t));
     }
-    if((m.uraDora||[]).length){
+    if(showUra){
       const lbl2=document.createElement('span');lbl2.className='re-dora-lbl re-ura-lbl';lbl2.textContent='Ura Dora';
       dr.appendChild(lbl2);
       for(const t of m.uraDora) dr.appendChild(mkElMd(t));
@@ -6071,12 +6456,13 @@ function renderEndTiles(m){
     wt.appendChild(dr);
   }
   const tileRow=document.createElement('div');tileRow.className='re-tile-row';
-  const handTiles=(m.hand||[]).filter(Boolean);
-  const meldTileCount=(m.melds||[]).reduce((n,meld)=>n+(meld.kanType==='ankan'?4:meld.tiles.length),0);
+  const handTiles=(w?w.hand:m.hand||[]).filter(Boolean);
+  const melds=w?w.melds:m.melds;
+  const meldTileCount=(melds||[]).reduce((n,meld)=>n+(meld.kanType==='ankan'?4:meld.tiles.length),0);
   const {w:hw,h:hh}=fitEndTileSize(wt,handTiles.length+meldTileCount);
   for(const t of handTiles) tileRow.appendChild(mkEl(t,'tmd',hw,hh));
   // Render melds right of closed hand, separated by a gap
-  for(const meld of(m.melds||[])) appendEndPanelMeld(tileRow,meld,hw,hh);
+  for(const meld of(melds||[])) appendEndPanelMeld(tileRow,meld,hw,hh);
   wt.appendChild(tileRow);
   // Tenpai reveal (exhaustive draw only) — name + hand for each tenpai
   // player; noten hands stay private (server sends null for those seats).
@@ -6100,6 +6486,74 @@ function renderEndTiles(m){
   }
 }
 
+// Populates #rehn (winner name + limit/han-fu) and #reyl (yaku pills) for
+// ONE entry of m.winners — the per-winner half of the results panel that
+// isn't the hand tile artwork (renderEndTiles handles that, keyed off the
+// same winnerIdx via currentEndWinnerIdx). Called once for the primary
+// winner right when onEnd first processes a tsumo/ron, and again by
+// stepWinnerNav for whichever winner the prev/next arrows just selected.
+function renderWinnerInfo(m,winnerIdx){
+  const w=m.winners?.[winnerIdx]; if(!w) return;
+  currentEndWinnerIdx=winnerIdx;
+  const name=w.winSeat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[w.winSeat]||`Seat ${w.winSeat}`);
+  // FIX 1: strip han count from handLabel line — it's shown in the yaku pills below.
+  // Only show fu here; total han is redundant.
+  const limit=limitLabel(w.han||0,w.fu||0);
+  const limitHtml=limit?`<span class="re-limit ${limit.cls}">${limit.en} · ${limit.label}</span>`:'';
+  const handInfo=w.fu?`<span class="re-hand"> · ${w.han} Han · ${w.fu} Fu</span>`:'';
+  $('rehn').innerHTML=`<span class="re-winner">${escHtml(name)}</span>${limitHtml}${handInfo}`;
+  // FIX 2: yaku pills only — dora tiles sit in renderEndTiles, directly above the winning hand tiles
+  const yl=$('reyl');yl.innerHTML='';
+  for(const y of(w.yakuList||[])){
+    const c=document.createElement('div');c.className='yc';
+    c.innerHTML=`${escHtml(y.name)}<span class="yh">${y.han}Han</span><span class="yj">${escHtml(y.jp||'')}</span>`;
+    yl.appendChild(c);
+  }
+}
+
+// Double/triple ron prev/next nav (see #re-winner-nav in index.html) —
+// shows/hides the whole arrows+indicator strip; hidden for a single winner
+// or no winners at all, so an ordinary tsumo/single ron/draw/chonbo looks
+// exactly as it did before this existed. Pass null (see onEnd's draw/
+// chonbo/other branches) to just hide a stale nav left over from a
+// PREVIOUS round's double ron.
+function renderWinnerNav(m){
+  const nav=$('re-winner-nav'); if(!nav) return;
+  if(!m||!m.winners||m.winners.length<=1){ nav.classList.remove('visible'); return; }
+  nav.classList.add('visible');
+  updateWinnerIndicator(m);
+}
+
+// "1 / 2" position readout between the arrows — separate from
+// renderWinnerNav (which only runs once per round_end) since stepWinnerNav
+// needs to refresh just this text on every click without re-deciding
+// whether the whole nav should be visible at all.
+function updateWinnerIndicator(m){
+  const ind=$('re-winner-indicator'); if(!ind||!m?.winners) return;
+  ind.textContent=`${currentEndWinnerIdx+1} / ${m.winners.length}`;
+}
+
+// Wired to #re-winner-prev/#re-winner-next's onclick in index.html. Reads
+// lastEndState directly (rather than a closure, the way the old per-tab
+// buttons captured `m`) since these two arrow buttons are static markup,
+// not created fresh per round_end. Wraps around at both ends (Math with
+// +length before %, so a negative dir never goes negative overall).
+function stepWinnerNav(dir){
+  const m=lastEndState;
+  if(!m||!m.winners||m.winners.length<=1) return;
+  const idx=(currentEndWinnerIdx+dir+m.winners.length)%m.winners.length;
+  renderWinnerInfo(m,idx);
+  renderEndTiles(m,idx);
+  updateWinnerIndicator(m);
+  // Restart the slide-in (see .re-win-content's own comment in style.css)
+  // — it's declared unconditionally on the element, so just having
+  // re-rendered its contents above doesn't replay it on its own; toggling
+  // to 'none' and forcing a reflow before clearing it back is the standard
+  // way to re-trigger an already-applied CSS animation.
+  const wrap=$('re-win-content');
+  if(wrap){ wrap.style.animation='none'; void wrap.offsetWidth; wrap.style.animation=''; }
+}
+
 // Round-end panel (win/draw/abortive-draw/nagashi) — purely presentational,
 // just formats whatever room.js already computed and sent in the round_end
 // message (yakuList, han/fu, dora, scores, ...). No scoring logic lives
@@ -6109,6 +6563,11 @@ function onEnd(m){
   try{
   inGame=false;
   lastEndState=m;
+  // Both set below (tsumo/ron branch), read again much further down by
+  // WIN_BANNER_DELAY — declared up here rather than nested inside that
+  // branch's own block scope, and rather than recomputing ronWinnerCount
+  // a second time down there.
+  let hasYakumanFx=false, winBannerHold=0;
   const loader=$('game-loading'); if(loader) loader.style.display='none';
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
@@ -6117,7 +6576,8 @@ function onEnd(m){
   if(m.reason==='tsumo'||m.reason==='ron'){
     if(m.reason==='ron') playSfx('sfx-ron', m.winner);
     if(m.reason==='tsumo') playSfx('sfx-tsumo', m.winner);
-    const winnerName=m.winner===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[m.winner]||`Seat ${m.winner}`);
+    const seatName=seat=>seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
+    const winnerName=seatName(m.winner);
     // Reuses the same call-banner (.cb-layer) pon/kan/chi/riichi already
     // slide in across the felt, with two new accent-colour variants (see
     // .call-banner[data-type="tsumo"/"ron"] in style.css) — the win itself
@@ -6125,16 +6585,46 @@ function onEnd(m){
     // than jumping straight to the results panel. Reveal is deferred below
     // (WIN_BANNER_DELAY) so the panel doesn't appear underneath/on top of
     // this while it's still sliding/settling.
-    callBanner(m.reason,winnerName,m.reason==='tsumo'?'ツモ':'ロン');
-    // FIX 1: strip han count from handLabel line — it's shown in the yaku pills below.
-    // Only show fu here; total han is redundant.
-    const limit=limitLabel(m.han||0,m.fu||0);
-    const limitHtml=limit?`<span class="re-limit ${limit.cls}">${limit.en} · ${limit.label}</span>`:'';
-    const handInfo=(m.fu&&!limit)?`<span class="re-hand"> · ${m.han} Han · ${m.fu} Fu</span>`
-      :(m.fu&&limit)?`<span class="re-hand"> · ${m.han} Han · ${m.fu} Fu</span>`:'';
-    $('rehn').innerHTML=`<span class="re-winner">${escHtml(winnerName)}</span>${limitHtml}${handInfo}`;
+    // Double/triple ron: m.extraWinners (see _multiRon in room.js) carries
+    // every OTHER simultaneous winner beyond the primary m.winner — each
+    // one gets their own banner via ronBanners rather than only the primary
+    // winner ever being shown, same reasoning callBanner's own single-
+    // winner path doesn't apply here. Tsumo can never have more than one
+    // winner, so it always stays on the plain single-banner path.
+    const ronWinnerCount=m.reason==='ron'?1+(m.extraWinners||[]).length:1;
+    winBannerHold=RON_BANNER_HOLD*ronWinnerCount; // matches ronBanners' own sequential-per-winner timing
+    if(m.reason==='tsumo') callBanner('tsumo',winnerName,'ツモ');
+    else ronBanners([winnerName,...(m.extraWinners||[]).map(r=>seatName(r.winSeat))]);
+    // Yakuman/double-yakuman flash (see playYakumanFx) — checked across
+    // EVERY winner in m.winners, not just the primary, since a double/
+    // triple ron could have more than one qualify. Plays once, AFTER the
+    // win banner(s) have had their own full run (tsumo/ron announced first,
+    // then the bigger "something huge just happened" moment on top of it)
+    // rather than once per qualifying winner. hasYakumanFx/bannerHold feed
+    // WIN_BANNER_DELAY below so the results panel waits for both, not just
+    // the banner(s).
+    const yakumanWinners=(m.winners||[]).filter(w=>{
+      const l=limitLabel(w.han||0,w.fu||0);
+      return l&&(l.cls==='lbl-yakuman'||l.cls==='lbl-double-yakuman');
+    });
+    hasYakumanFx=yakumanWinners.length>0;
+    if(hasYakumanFx){
+      const isDouble=yakumanWinners.some(w=>limitLabel(w.han,w.fu).cls==='lbl-double-yakuman');
+      setTimeout(()=>playYakumanFx(isDouble,yakumanWinners.flatMap(w=>(w.yakuList||[]).map(y=>y.name))),winBannerHold);
+    }
+    // Winner info (name/limit/han-fu/yaku pills/hand tiles) comes from
+    // m.winners (see _endRound in room.js — always populated for tsumo/ron,
+    // even a single winner) via renderWinnerNav/renderWinnerInfo below,
+    // rather than the old m.han/m.fu/m.yakuList/m.hand top-level fields
+    // directly — those only ever described the PRIMARY winner, silently
+    // dropping any simultaneous ron winner's own hand entirely.
+    currentEndWinnerIdx=0;
+    renderWinnerNav(m);
+    renderWinnerInfo(m,0);
   } else if(m.reason==='draw'){
     $('rehn').textContent='';
+    $('reyl').innerHTML='';
+    renderWinnerNav(null);
   } else if(m.reason==='chonbo'){
     // room.js's _chonboPenalty passes the offender as `winner` (reusing
     // the same field _endRound already broadcasts for tsumo/ron) — there's
@@ -6142,13 +6632,12 @@ function onEnd(m){
     // score-delta table below already shows generically for any reason.
     const offenderName=m.winner===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[m.winner]||`Seat ${m.winner}`);
     $('rehn').innerHTML=`<span class="re-winner re-offender">${escHtml(offenderName)}</span><span class="re-hand"> declared a false win</span>`;
-  } else { $('rehn').textContent=''; }
-  // FIX 2: yaku pills only — dora tiles move to sit directly above the winning hand tiles
-  const yl=$('reyl');yl.innerHTML='';
-  for(const y of(m.yakuList||[])){
-    const c=document.createElement('div');c.className='yc';
-    c.innerHTML=`${escHtml(y.name)}<span class="yh">${y.han}Han</span><span class="yj">${escHtml(y.jp||'')}</span>`;
-    yl.appendChild(c);
+    $('reyl').innerHTML='';
+    renderWinnerNav(null);
+  } else {
+    $('rehn').textContent='';
+    $('reyl').innerHTML='';
+    renderWinnerNav(null);
   }
   // Hand/dora/tenpai tile artwork, score table, and the panel reveal itself
   // are grouped into this one closure so a tsumo/ron win can delay all of
@@ -6197,7 +6686,7 @@ function onEnd(m){
       if(startScore===sc) return;
       const span=document.getElementById(`re-sc-${seat}`);
       if(!span) return;
-      const duration=1200;
+      const duration=1400;
       const start=performance.now();
       const ease=t=>t<.5?2*t*t:(-1+(4-2*t)*t);
       function frame(now){
@@ -6216,11 +6705,15 @@ function onEnd(m){
   }
   setTimeout(()=>{ inGame=true; },5500);
   };
-  // WIN_BANNER_DELAY — long enough for the call-banner above to slide in,
-  // hold, and clear (it removes itself at 1800ms — see callBanner) before
-  // the results panel takes over. Only tsumo/ron actually showed a banner
-  // above, so every other reason reveals immediately as before.
-  const WIN_BANNER_DELAY=1800;
+  // WIN_BANNER_DELAY — long enough for the call-banner(s) above to slide
+  // in, hold, and clear (winBannerHold — a double/triple ron plays its
+  // banners one after another, see ronBanners, so this already covers the
+  // WHOLE sequence, not just one banner's worth of time), THEN the
+  // yakuman/double-yakuman flash after them (hasYakumanFx) if there is
+  // one, before the results panel takes over. Only tsumo/ron actually
+  // showed a banner above, so every other reason reveals immediately as
+  // before.
+  const WIN_BANNER_DELAY=winBannerHold+(hasYakumanFx?YAKUMAN_FX_HOLD:0);
   if(m.reason==='tsumo'||m.reason==='ron'){
     // reveal() firing here is OUTSIDE this function's own try (the timeout
     // callback runs long after this synchronous block has already

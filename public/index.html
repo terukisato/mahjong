@@ -1031,8 +1031,25 @@
      ════════════════════════════════════════════════════════════ -->
 <div class="screen hidden" id="s-end">
   <div class="rec">
-    <div class="ret" id="ret">—</div><div class="rehn" id="rehn"></div>
-    <div class="yl" id="reyl"></div><div class="wt" id="rewt"></div>
+    <div class="ret" id="ret">—</div>
+    <!-- Double/triple ron only (see renderWinnerNav in script.js) — prev/
+         next arrows cycle currentEndWinnerIdx through m.winners; hidden
+         entirely for every other outcome, where there's only ever one
+         winner (or none) to navigate between. The winner's own name
+         already shows in #rehn below, so the indicator here is just a
+         plain position count, not a repeat of it. -->
+    <div class="re-winner-nav" id="re-winner-nav">
+      <button class="re-winner-arrow" id="re-winner-prev" type="button" aria-label="Previous winner" onclick="stepWinnerNav(-1)">◀</button>
+      <span class="re-winner-indicator" id="re-winner-indicator"></span>
+      <button class="re-winner-arrow" id="re-winner-next" type="button" aria-label="Next winner" onclick="stepWinnerNav(1)">▶</button>
+    </div>
+    <!-- Wraps just the per-winner info (not #re-tenpai/#rest below, which
+         aren't winner-specific) so switching winners can slide/fade this
+         one block in on its own — see renderWinnerInfo's animation restart. -->
+    <div class="re-win-content" id="re-win-content">
+      <div class="rehn" id="rehn"></div>
+      <div class="yl" id="reyl"></div><div class="wt" id="rewt"></div>
+    </div>
     <div class="re-tenpai" id="re-tenpai"></div>
     <table class="st" id="rest"></table>
     <div class="re-carryover" id="re-carryover"></div>
@@ -1055,6 +1072,11 @@
 <div class="cb-layer" id="cb-layer"></div>
 <div class="rs-layer" id="rs-layer"></div>
 <div class="gs-layer" id="gs-layer"></div>
+<!-- Yakuman/double-yakuman flash — see playYakumanFx in script.js. Sits
+     above every other overlay (round-start/game-start cards, call banners)
+     since it's the single most dramatic moment the game can produce and
+     should never end up hidden behind any of them. -->
+<div class="yakuman-layer" id="yakuman-layer"></div>
 <div class="chat-float" id="chat-float"></div>
 <!-- Seat-emoji popups land here (see showEmojiPopup in script.js) — a
      separate unrotated fixed layer rather than nesting inside .pa-t/.pa-l/

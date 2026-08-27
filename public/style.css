@@ -1122,6 +1122,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    as most riichi games use for these two. */
 .call-banner[data-type="tsumo"]{--accent:#ffe9b0;--accent-strong:#d4a017;--accent-glow:rgba(212,160,23,.5);}
 .call-banner[data-type="ron"]{--accent:#ffb8b0;--accent-strong:#c62828;--accent-glow:rgba(198,40,40,.5);}
+/* Double/triple ron (see ronBanners in script.js) plays one full-size
+   .call-banner per winner in this exact same spot, one after another —
+   no separate stacking/scaling styles needed here, since exactly one is
+   ever in the DOM at a time. */
 @keyframes cb-slide{
   0%{opacity:0;transform:translate(-58vw,42vh) scale(.55);}
   20%{opacity:.90;}
@@ -1273,6 +1277,34 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   box-shadow:0 0 100px rgba(201,168,76,.35);width:min(calc(var(--ui-vmin, 7.2px) * 70), 96vw);position:relative;}
 .rec::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);}
 .ret{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 3.125);color:var(--gl);filter:drop-shadow(0 0 14px rgba(201,168,76,.6));margin-bottom:5px;}
+/* Double/triple ron prev/next nav (see renderWinnerNav in script.js) —
+   display:none until .visible is added; there's nothing to navigate for
+   every other outcome (a single winner or none). */
+.re-winner-nav{display:none;align-items:center;justify-content:center;
+  gap:calc(var(--ui-vmin, 7.2px) * 1.111);}
+.re-winner-nav.visible{display:flex;margin-bottom:calc(var(--ui-vmin, 7.2px) * 1.111);}
+.re-winner-arrow{background:rgba(0,0,0,.4);border:1px solid rgba(201,168,76,.3);border-radius:50%;
+  width:calc(var(--ui-vmin, 7.2px) * 2.5);height:calc(var(--ui-vmin, 7.2px) * 2.5);flex-shrink:0;
+  color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.1);line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .2s;}
+.re-winner-arrow:hover{border-color:var(--gold);background:rgba(201,168,76,.15);}
+/* Just a position count ("1 / 2"), not the winner's name — that already
+   shows in #rehn right below, so repeating it here would be redundant. */
+.re-winner-indicator{font-family:'Cinzel Decorative',serif;color:rgba(245,237,216,.75);
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.25);letter-spacing:1px;
+  min-width:calc(var(--ui-vmin, 7.2px) * 6);text-align:center;}
+/* Wraps #rehn/#reyl/#rewt only (see index.html) — switching winner tabs
+   restarts this animation (toggle animation to 'none' then back, forcing a
+   reflow in between — the standard way to replay a CSS animation that's
+   already applied) so the newly-selected winner's info visibly slides in
+   rather than just snapping to the new content. Plays on the very first
+   render too (nothing suppresses it there), which is deliberate — every
+   winner reveal reads consistently, not just tab switches. */
+.re-win-content{animation:re-win-slide-in .35s ease;}
+@keyframes re-win-slide-in{from{opacity:0;transform:translateX(24px);}to{opacity:1;transform:translateX(0);}}
+@media (prefers-reduced-motion:reduce){
+  .re-win-content{animation:none;}
+}
 .rehn{font-size:calc(var(--ui-vmin, 7.2px) * 1.5625);color:var(--jl);letter-spacing:2px;margin-bottom:12px;}
 .re-hand{color:rgba(245,237,216,.6);font-size:0.9em;}
 /* Chonbo's offender name reuses .re-winner's markup (see onEnd in
@@ -1299,6 +1331,121 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .lbl-sanbaiman{background:rgba(200,100,60,.18);border:1px solid rgba(255,160,80,.4);color:#ffb070;}
 .lbl-yakuman {background:rgba(201,168,76,.18);border:1px solid rgba(201,168,76,.6);color:var(--gold);box-shadow:0 0 10px rgba(201,168,76,.3);}
 .lbl-double-yakuman{background:rgba(201,168,76,.28);border:1px solid rgba(201,168,76,.9);color:var(--gold);box-shadow:0 0 16px rgba(201,168,76,.55),0 0 32px rgba(201,168,76,.2);font-size:calc(var(--ui-vmin, 7.2px) * 1.5);letter-spacing:2px;}
+
+/* ── Yakuman/double-yakuman flash (see playYakumanFx in script.js) — a
+   bigger, more dramatic moment than an ordinary win, playing BEFORE the
+   normal call-banner announcement rather than replacing it. Plain vmin
+   (no --ui-vmin clamp) for the same reason .call-banner/.rs-plate use it:
+   this is meant to read as one specific size relative to the whole
+   screen, not scale with a panel's own local UI-density variable. ── */
+/* Palette is per-yakuman: playYakumanFx sets --ym-ink / --ym-glow /
+   --ym-glow2 / --ym-accent (the last three are "r,g,b" triples used inside
+   rgba()) / --ym-scrim-a / --ym-scrim-b on .yakuman-layer from the matched
+   YAKUMAN_THEMES entry. The fallbacks here reproduce the original gold
+   flash for any code path that appends layer content without setting them. */
+.yakuman-layer{position:fixed;inset:0;z-index:216;pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+  --ym-ink:var(--gl,#ffe9a8);--ym-glow:255,215,100;--ym-glow2:255,180,40;
+  --ym-accent:255,140,0;--ym-scrim-a:rgba(70,45,0,.6);--ym-scrim-b:rgba(0,0,0,.93);}
+.yakuman-layer.blocking{pointer-events:auto;}
+.yakuman-scrim{position:absolute;inset:0;z-index:0;
+  background:radial-gradient(circle,var(--ym-scrim-a),var(--ym-scrim-b) 70%);
+  opacity:0;animation:yakuman-scrim-hold 4.4s ease forwards;}
+.yakuman-burst{position:relative;z-index:2;display:flex;flex-direction:column;
+  align-items:center;gap:1.5vmin;}
+.yakuman-eyebrow{font-family:'Noto Serif JP',serif;font-weight:700;
+  font-size:3.4vmin;line-height:1;letter-spacing:.35em;
+  color:rgba(var(--ym-glow),.9);text-shadow:0 0 20px rgba(var(--ym-glow),.6);
+  opacity:0;animation:rs-fade-up .5s ease .3s forwards;}
+.yakuman-eyebrow.double{color:rgba(var(--ym-accent),.95);letter-spacing:.15em;}
+.yakuman-text{font-family:'Noto Serif JP',serif;font-weight:900;
+  font-size:16vmin;line-height:1;color:var(--ym-ink);
+  text-shadow:0 0 40px rgba(var(--ym-glow),.9),0 0 90px rgba(var(--ym-glow2),.6),
+    0 0 140px rgba(var(--ym-accent),.35);
+  opacity:0;
+  animation:yakuman-burst-in 1s cubic-bezier(.2,.9,.25,1.4) forwards,
+    yakuman-pulse 1.4s ease-in-out 1s infinite;}
+/* Longer headlines (the yaku's own kanji, or ダブル役満) shrink to keep the
+   burst reading as the same overall size/impact rather than growing wider
+   — same reasoning as .cb-label-long elsewhere. */
+.yakuman-text.long{font-size:11vmin;letter-spacing:.03em;}
+.yakuman-text.xlong{font-size:7.6vmin;letter-spacing:.02em;}
+.yakuman-text.double{font-size:11vmin;letter-spacing:.05em;
+  text-shadow:0 0 40px rgba(var(--ym-glow),.95),0 0 100px rgba(var(--ym-glow2),.7),
+    0 0 160px rgba(var(--ym-accent),.45);}
+.yakuman-sub{font-family:'Cinzel Decorative',serif;letter-spacing:.4em;
+  text-transform:uppercase;color:rgba(var(--ym-glow),.85);font-size:1.8vmin;
+  text-align:center;opacity:0;animation:rs-fade-up .6s ease .55s forwards;}
+@keyframes yakuman-burst-in{
+  0%{opacity:0;transform:scale(.3) rotate(-4deg);filter:blur(14px);}
+  55%{opacity:1;transform:scale(1.12) rotate(1deg);filter:blur(0);}
+  75%{transform:scale(.97) rotate(-.5deg);}
+  100%{opacity:1;transform:scale(1) rotate(0);}
+}
+@keyframes yakuman-pulse{
+  0%,100%{filter:drop-shadow(0 0 0 transparent);}
+  50%{filter:drop-shadow(0 0 25px rgba(var(--ym-glow),.6));}
+}
+@keyframes yakuman-scrim-hold{0%{opacity:0;}10%,82%{opacity:1;}100%{opacity:0;}}
+
+/* ── Per-yakuman particle motif (see spawnYakumanMotif). One <span> per
+   particle, absolutely placed inside .yakuman-motif; JS seeds --sz/--dur/
+   --delay/--rot and the per-particle vectors (--dx/--dy/--tilt), CSS runs
+   the chosen keyframe via --motion. --tint is the particle's fill. ── */
+.yakuman-motif{position:absolute;inset:0;z-index:1;overflow:hidden;}
+.ym-particle{position:absolute;width:var(--sz,2vmin);height:var(--sz,2vmin);
+  opacity:0;will-change:transform,opacity;
+  animation:var(--motion,ym-fall) var(--dur,2.2s) ease-out var(--delay,0s) forwards;}
+.ym-s-star{background:var(--tint,#ffd75a);
+  clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);
+  filter:drop-shadow(0 0 6px var(--tint,#ffd75a));}
+.ym-s-shard{background:linear-gradient(135deg,#fff,var(--tint,#b9c4ff));
+  clip-path:polygon(50% 0,100% 42%,58% 100%,0 58%);
+  filter:drop-shadow(0 0 8px var(--tint,#b9c4ff));}
+.ym-s-crystal{background:linear-gradient(180deg,#fff,var(--tint,#cfd6f0));
+  clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);
+  filter:drop-shadow(0 0 10px var(--tint,#cfd6f0));}
+.ym-s-leaf{background:var(--tint,#5ce65c);border-radius:0 100% 0 100%;
+  filter:drop-shadow(0 0 5px var(--tint,#5ce65c));}
+.ym-s-ember{border-radius:50%;
+  background:radial-gradient(circle at 40% 40%,rgba(255,255,255,.5),var(--tint,#ff5a46));
+  filter:drop-shadow(0 0 8px var(--tint,#ff5a46));}
+.ym-s-orb{border-radius:50%;
+  background:radial-gradient(circle at 40% 40%,#fff,var(--tint,#ffc86e) 70%,transparent);
+  filter:drop-shadow(0 0 12px var(--tint,#ffc86e));}
+.ym-s-coin{border-radius:50%;border:.3vmin solid rgba(255,255,255,.5);
+  background:radial-gradient(circle at 35% 35%,#fff8d0,var(--tint,#ffd75a));
+  filter:drop-shadow(0 0 8px var(--tint,#ffd75a));}
+.ym-s-bolt{background:linear-gradient(180deg,#fff,var(--tint,#fff));
+  clip-path:polygon(42% 0,76% 0,55% 40%,82% 40%,30% 100%,46% 54%,20% 54%);
+  filter:drop-shadow(0 0 10px var(--tint,#9ff)) drop-shadow(0 0 4px #fff);}
+.ym-s-streak{height:calc(var(--sz,14vmin) * .16);width:var(--sz,14vmin);border-radius:40%;
+  background:linear-gradient(90deg,transparent,var(--tint,#66e6ff),transparent);
+  filter:blur(.25vmin) drop-shadow(0 0 6px var(--tint,#66e6ff));}
+@keyframes ym-fall{
+  0%{opacity:0;transform:translate3d(0,0,0) rotate(0);}
+  12%{opacity:1;}85%{opacity:1;}
+  100%{opacity:0;transform:translate3d(var(--dx,0),115vh,0) rotate(var(--rot,360deg));}
+}
+@keyframes ym-rise{
+  0%{opacity:0;transform:translate3d(0,0,0) rotate(0);}
+  12%{opacity:1;}85%{opacity:1;}
+  100%{opacity:0;transform:translate3d(var(--dx,0),-120vh,0) rotate(var(--rot,-360deg));}
+}
+@keyframes ym-radiate{
+  0%{opacity:0;transform:translate3d(0,0,0) scale(.2) rotate(0);}
+  16%{opacity:1;}78%{opacity:.9;}
+  100%{opacity:0;transform:translate3d(var(--dx,0),var(--dy,0),0) scale(1) rotate(var(--rot,180deg));}
+}
+@keyframes ym-gale{
+  0%{opacity:0;transform:translate3d(0,0,0) rotate(var(--tilt,-8deg));}
+  14%{opacity:1;}85%{opacity:.85;}
+  100%{opacity:0;transform:translate3d(128vw,var(--dy,0),0) rotate(var(--tilt,-8deg));}
+}
+@media (prefers-reduced-motion:reduce){
+  .yakuman-text,.yakuman-sub,.yakuman-eyebrow,.yakuman-scrim{animation:none;opacity:1;filter:none;transform:none;}
+  .yakuman-motif{display:none;}
+}
 .yl{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-bottom:12px;}
 .yc{background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:calc(var(--ui-vmin, 7.2px) * .375) calc(var(--ui-vmin, 7.2px) * 1.25);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:var(--cream);}
 .yh{color:var(--gl);font-weight:700;margin-left:4px;}.yj{color:rgba(245,237,216,.4);font-size:calc(var(--ui-vmin, 7.2px) * 1);margin-left:3px;}
