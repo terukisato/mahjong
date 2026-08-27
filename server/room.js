@@ -2,7 +2,7 @@
 const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
        detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,isMenzen,shanten} = require('./mahjong');
 const {botName,bestDiscard,botReact,shouldRiichi} = require('./bot');
-const {recordGameResult} = require('./stats');
+const {recordGameResult,getStats} = require('./stats');
 const {recordGame} = require('./history');
 
 // Cheap composition heuristics for "what's this hand shaping up toward" —
@@ -2077,12 +2077,22 @@ class Room {
   _finishGame(reason,extra={}){
     const g=this.game;
     this.phase='done';
+    // Winner's Natsu-exclusive victory line (see playWinSfx in script.js),
+    // picked ONCE here and broadcast to everyone — letting each client
+    // independently roll its own Math.random() had every player hearing a
+    // different line for the same win instead of one shared moment.
+    // indexOf(max) rather than a full sort — matches the client's own
+    // stable-sort placement (first among ties), same winner either way.
+    const winnerSeat=g.scores.indexOf(Math.max(...g.scores));
+    const winnerTheme=this.seats[winnerSeat]?.voiceTheme||'Default';
+    const natsuWinLines=['Yavai','Otoko','Suberu','Hantei'];
+    const winSfxLine=winnerTheme==='Natsu'?natsuWinLines[Math.floor(Math.random()*natsuWinLines.length)]:null;
     // seats (same _seatInfo() shape as game_start/round_start) added so the
     // client's final results panel can show each player's actual profile
     // nameplate (icon/title/isBot) — playerNames alone (kept for existing
     // callers like lastGameOverNames) only ever carried bare name strings.
     this._broadcastAll({type:'game_over',reason,scores:g.scores,
-      playerNames:this.seats.map(p=>p?.name||'—'),seats:this._seatInfo(),...extra});
+      playerNames:this.seats.map(p=>p?.name||'—'),seats:this._seatInfo(),winSfxLine,...extra});
     const unlocked=recordGameResult({
       playerIds:this.seats.map(p=>p?.profileId||null),
       isBot:this.seats.map(p=>!p||p.isBot),
@@ -2670,7 +2680,21 @@ class Room {
     }
   }
 
-  _seatInfo(){ return this.seats.map(p=>p?{name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default',icon:p.icon||'default',title:p.title||null,difficulty:p.difficulty||null}:null); }
+  // wins (combined yonma+sanma gamesWon) added so the client can compute
+  // this seat's real nameplate tier (see nameplateTierClass in script.js)
+  // synchronously, the same way it already does for the local player's own
+  // User Profile hub nameplate — without this, every OTHER seat's game-
+  // start roll-call plate rendered at the plain bronze default regardless
+  // of their actual rank, since a get_player_stats round-trip per opponent
+  // wasn't worth the complexity just for that. getStats(null) (bots/guests
+  // — no profileId) safely returns zeroed stats, not an error, so this
+  // needs no isBot/isGuest branch of its own.
+  _seatInfo(){ return this.seats.map(p=>{
+    if(!p) return null;
+    const st=getStats(p.profileId);
+    return {name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default',icon:p.icon||'default',title:p.title||null,difficulty:p.difficulty||null,
+      wins:(st.yonma.gamesWon||0)+(st.sanma.gamesWon||0)};
+  }); }
 
   _broadcastRoomUpdate(){
     const readyIds=Array.from(this.ready);

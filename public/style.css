@@ -354,7 +354,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .kan-back{
   width:var(--tmd-w,26px);height:var(--tmd-h,36px);
   background:linear-gradient(135deg,#1a3a6a,#0d1f3a);
-  border:1px solid #2a4a8a;border-radius:3px;
+  border:1px solid #2a4a8a;border-radius:0.4vmin;
   flex-shrink:0;display:inline-flex;
   box-shadow:1px 2px 4px rgba(0,0,0,.5);
 }

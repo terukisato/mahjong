@@ -3109,17 +3109,20 @@ function playSfx(id, seat=null){
 // Winner's victory line on the game-over/bankruptcy panel (see onGameOver)
 // — Natsu-exclusive: Default has no equivalent lines at all (see
 // public/audio/Voice/Natsu/*.mp3 vs Default's smaller call-only set), so
-// this only ever plays when the WINNING seat has Natsu selected, picking
-// one of its four flavour lines at random each time rather than always the
-// same one. Shares fxGainNode/fxEnabled with playSfx (same "Voice" mute/
-// volume control) since this is a voice line too, just not a call.
+// this only ever plays when the WINNING seat has Natsu selected. The actual
+// line is picked ONCE server-side (see _finishGame in room.js) and sent as
+// m.winSfxLine, not rolled independently here — every client rolling its
+// own Math.random() meant different players heard different lines for the
+// exact same win. natsuWinLines here is now just a whitelist, guarding
+// against ever pointing <audio> at an arbitrary/malformed src. Shares
+// fxGainNode/fxEnabled with playSfx (same "Voice" mute/volume control)
+// since this is a voice line too, just not a call.
 const natsuWinLines=['Yavai','Otoko','Suberu','Hantei'];
-function playWinSfx(winnerVoiceTheme){
-  if(winnerVoiceTheme!=='Natsu') return;
+function playWinSfx(lineName){
+  if(!natsuWinLines.includes(lineName)) return;
   if(!fxEnabled) return;
   const el=$('sfx-win'); if(!el) return;
-  const name=natsuWinLines[Math.floor(Math.random()*natsuWinLines.length)];
-  el.src=`/audio/Voice/Natsu/${name}.mp3`;
+  el.src=`/audio/Voice/Natsu/${lineName}.mp3`;
   try{
     const ctx=getFxAudioCtx().ctx;
     if(!_fxConnectedEls.has(el)){
@@ -3995,7 +3998,13 @@ function gameStartIntro(m){
     const wind=document.createElement('div');wind.className='gs-wind';
     wind.textContent=windLabels[(abs-dealer+seatCount)%seatCount];
     const np=document.createElement('div');
-    np.className='up-nameplate'+(isMe&&selfTierCls?' '+selfTierCls:'');
+    // Self reads its tier off the User Profile hub's own live element (same
+    // as before); opponents/bots now get theirs from m.seats[abs].wins —
+    // added server-side (see _seatInfo in room.js) specifically so this no
+    // longer has to fall back to the plain bronze default for everyone but
+    // the local player.
+    const tierCls=isMe?selfTierCls:nameplateTierClass(p?.wins||0);
+    np.className='up-nameplate'+(tierCls?' '+tierCls:'');
     const icon=document.createElement('span');icon.className='pnp-icon';
     icon.innerHTML=isMe?(isSelfGuest?guestIconSvg:iconSvg(currentPlayerIcon)):iconSvg(p?.icon||'default');
     const info=document.createElement('span');info.className='pnp-info';
@@ -4037,6 +4046,14 @@ function startGame(m){
   // screen and the whole roll call, instead of kicking in once the card
   // actually clears.
   inGame=true;selId=null;lastState=null;
+  // A stuck `discarding=true` from the PREVIOUS game (see sendDiscardAction
+  // — the watchdog there recovers within 4s on its own, but this closes the
+  // gap for the one path that skips it entirely: hostStartPlayAgain/
+  // playAgain restarting the SAME room straight into a fresh game_start,
+  // with no resetLobby() round-trip to have already cleared it — see the
+  // "no lobby round-trip" comment further down) would otherwise carry
+  // straight into the new game and block discarding from turn one.
+  discarding=false; clearTimeout(discardWatchdog);
   declareWarningShown=false; // chonbo's declare-confirm message shows once per game, not once per browser session
   // Restore Ready button visibility for new game
   const btn=$('bround-ready'); if(btn){ btn.style.display=''; btn.disabled=false; btn.textContent='✓ Ready'; btn.style.opacity='1'; }
@@ -4345,7 +4362,7 @@ function renderState(m, prev){
         // this same 600ms window wasn't blocked at all (this timer never
         // set the flag), so it could fire its own extra 'discard' for
         // whatever tile happened to be selected at that moment.
-        if(lastState===m && !discarding){ wss({type:'action',action:{type:'discard',tileId:drawTile.id}}); discarding=true; }
+        if(lastState===m && !discarding){ sendDiscardAction(drawTile.id); }
       }, 600);
     }
   }
@@ -4523,6 +4540,31 @@ function renderState(m, prev){
   drawActions(m);
 }
 
+// Pending recovery timer for the LAST discard sent — see sendDiscardAction.
+let discardWatchdog=null;
+
+// Sends a discard action and arms a short recovery timer for it. Normally
+// the resulting game_state resets `discarding` (see its reset sites in
+// onMsg/gameStartIntro/roundStartBanner) — but room.js's _discard() silently
+// no-ops with NO reply at all if this tileId's already gone from the hand,
+// or _handleAction ignores the whole action if it's no longer actually this
+// seat's turn (see myTurnOpen there) — either can happen to a stale click
+// under real network latency. Without this timer, that left `discarding`
+// stuck true forever (nothing was ever going to arrive to clear it),
+// permanently locking the player out of discarding for the rest of the
+// game — the exact bug this exists to recover from. 4s is comfortably
+// longer than a normal same-tick server round trip, including the reaction-
+// window case (_sendState() fires immediately either way — see _discard in
+// room.js), so it never fires during ordinary play.
+function sendDiscardAction(tileId){
+  wss({type:'action',action:{type:'discard',tileId}});
+  discarding=true;
+  clearTimeout(discardWatchdog);
+  discardWatchdog=setTimeout(()=>{
+    if(discarding){ discarding=false; drawActions(lastState); }
+  },4000);
+}
+
 // Tap-to-select, tap-again-to-discard: first click on a tile just selects
 // it (highlights + shows available action buttons for that selection);
 // clicking the SAME tile again is what actually sends the discard. `discarding`
@@ -4531,8 +4573,7 @@ function renderState(m, prev){
 function clickTile(id){
   if(discarding) return;
   if(selId===id){
-    wss({type:'action',action:{type:'discard',tileId:id}});
-    discarding=true;
+    sendDiscardAction(id);
     selId=null;
   } else {
     selId=id;
@@ -4902,7 +4943,7 @@ function drawActions(m){
 
     // RIGHT: DISCARD
     if(selId!=null)
-      ab(bar,'DISCARD','bdis',()=>{if(discarding)return;wss({type:'action',action:{type:'discard',tileId:selId}});discarding=true;selId=null;});
+      ab(bar,'DISCARD','bdis',()=>{if(discarding)return;sendDiscardAction(selId);selId=null;});
 
     // RIGHT: KYUUSHU
     if(m.canKyuushu)
@@ -5830,6 +5871,34 @@ function onRoundStart(m){
   const bar=$('actbar'); if(bar){bar.innerHTML='';bar.classList.remove('visible');}
   // Clear selection
   selId=null;
+  // Same reasoning as startGame's own identical reset — a `discarding=true`
+  // stuck from the round that just ended (see sendDiscardAction's watchdog,
+  // which recovers within 4s regardless, but there's no reason to wait on
+  // it here when a new round is starting anyway) would otherwise block
+  // discarding for the entire next round too.
+  discarding=false; clearTimeout(discardWatchdog);
+  // Furiten/tenpai status dot (see renderState's own comment on it) — only
+  // renderState ever sets this, based on the state it's currently
+  // rendering, so without an explicit reset here it just keeps showing
+  // whatever it last was at the END of the PREVIOUS round (e.g. still
+  // "furiten") all the way through this round's start banner, until the
+  // new round's first game_state finally re-evaluates it.
+  const dot0=$('statusdot-b'); if(dot0) dot0.className='status-dot';
+  // Paint this round's actual post-payout scores immediately, same
+  // reasoning as startGame's own identical block — round_start's `scores`
+  // already reflects the just-settled tsumo/ron/draw payout, but without
+  // this the centre panel would keep showing the PREVIOUS round's numbers
+  // (whatever the last game_state left there) all through the round-start
+  // banner below, only catching up once the new round's first game_state
+  // arrives well after the banner's already been read.
+  const ctrIds0={b:'ctr-s-b',r:'ctr-s-r',t:'ctr-s-t',l:'ctr-s-l'};
+  if(m.scores){
+    for(let i=0;i<numSeats;i++){
+      const abs=(mySeat+i)%numSeats,id=P[i];
+      const ctrEl=$(ctrIds0[id]);
+      if(ctrEl&&m.scores[abs]!==undefined) ctrEl.textContent=m.scores[abs];
+    }
+  }
 
   // ── Round announcement ────────────────────────────────────────────────────
   const windChar=['東','南','西','北'];
@@ -5880,10 +5949,9 @@ function onGameOver(m){
   // game-start roll call uses — see gameStartIntro) instead of a bare name
   // string, so "who placed where" reads the same way "who's in this game"
   // already does. Self's tier class is read straight off the User Profile
-  // hub's own element, same reasoning as gameStartIntro; opponents/bots
-  // render at the plain bronze default since m.seats (added alongside
-  // playerNames — see _finishGame in room.js) only carries icon/title/
-  // isBot, not tier/wins.
+  // hub's own element, same reasoning as gameStartIntro; opponents/bots use
+  // their own m.seats[i].wins (see _seatInfo in room.js) through the same
+  // nameplateTierClass lookup, rather than always falling back to bronze.
   const ordinalLabels=['1st','2nd','3rd','4th'];
   const rankColours=['#f0d080','#c0c0c0','#cd7f32','var(--cream)'];
   const isSelfGuestFinal=$('iname').value==='Guest';
@@ -5901,7 +5969,8 @@ function onGameOver(m){
     ord.style.color=rankColours[rank]||'var(--cream)';
     ord.textContent=ordinalLabels[rank]||`${rank+1}th`;
     const np=document.createElement('div');
-    np.className='up-nameplate'+(isMe&&selfTierClsFinal?' '+selfTierClsFinal:'');
+    const tierClsFinal=isMe?selfTierClsFinal:nameplateTierClass(p?.wins||0);
+    np.className='up-nameplate'+(tierClsFinal?' '+tierClsFinal:'');
     const icon=document.createElement('span');icon.className='pnp-icon';
     icon.innerHTML=isMe?(isSelfGuestFinal?guestIconSvg:iconSvg(currentPlayerIcon)):iconSvg(p?.icon||'default');
     const info=document.createElement('span');info.className='pnp-info';
@@ -5915,9 +5984,10 @@ function onGameOver(m){
     row.appendChild(cell);row.appendChild(scoreCell);
     tbl.appendChild(row);
   });
-  // sorted[0] is the winning seat (highest final score) — see playWinSfx's
-  // own comment for why this only ever makes a sound for a Natsu winner.
-  playWinSfx(m.seats?.[sorted[0]?.i]?.voiceTheme);
+  // m.winSfxLine is picked server-side once per game (see _finishGame in
+  // room.js) so every client plays the SAME line for this win, rather than
+  // each rolling its own random pick.
+  playWinSfx(m.winSfxLine);
   show('s-end');
 }
 
