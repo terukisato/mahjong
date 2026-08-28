@@ -209,6 +209,25 @@ test('every unlocksTitle is listed in profiles.js\'s TITLES (setTitle would othe
   assert.deepStrictEqual(missing, []);
 });
 
+// A title in TITLES but absent from the client's `titles` picker array can
+// be earned and equipped server-side but never SHOWN in User Profile >
+// Title (renderTitles only iterates that array), so the player sees nothing
+// change — exactly the "Mighty Mouse not visible after 30 yaku" report.
+// The reverse (a picker entry not in TITLES) is a title setTitle silently
+// rejects, so the button does nothing. Both directions must stay in sync.
+test('client titles picker (public/script.js) exactly matches profiles.js TITLES', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'script.js'), 'utf8');
+  const block = src.match(/const titles=\[([\s\S]*?)\n\];/);
+  assert.ok(block, 'could not locate `const titles=[` array in public/script.js');
+  const clientIds = [...block[1].matchAll(/\{id:\s*("[^"]+"|'[^']+')/g)].map(m => m[1].slice(1, -1));
+  const clientSet = new Set(clientIds);
+  const titleSet = new Set(TITLES);
+  assert.deepStrictEqual(TITLES.filter(t => !clientSet.has(t)), [], 'TITLES missing from client picker');
+  assert.deepStrictEqual(clientIds.filter(t => !titleSet.has(t)), [], 'client picker has titles not in TITLES');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (failures.length) {
   console.log('\nFailures:');

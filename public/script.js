@@ -2326,6 +2326,17 @@ function onProfileUnlocked(m){
     try{ localStorage.setItem('mj-player-icon',currentPlayerIcon); }catch(e){}
     currentPlayerTitle=m.title||'Beginner';
     try{ localStorage.setItem('mj-player-title',currentPlayerTitle); }catch(e){}
+    // Voice theme is server-authoritative for a logged-in profile too now
+    // (see profiles.getVoiceTheme) — sync it the same way, so it survives a
+    // localStorage wipe / a different browser and can't drift from what the
+    // account actually has. renderVoiceThemes repaints the picker highlight
+    // (best-effort — it re-heals once the 'stats' message lands with this
+    // profile's unlockedThemes).
+    if(m.voiceTheme){
+      currentVoiceTheme=m.voiceTheme;
+      try{ localStorage.setItem('mj-voice-theme',m.voiceTheme); }catch(e){}
+      renderVoiceThemes();
+    }
     refreshProfileDisplay();
     if(m.token){
       // "Stay logged in" was checked — store the token in place of the
@@ -2755,7 +2766,12 @@ let currentVoiceTheme='Default';
 const fxFiles=['Pon','Chii','Kan','Riichi','Double_riichi','Ron','Tsumo','Kita'];
 const fxExts={Pon:'mp3',Chii:'mp3',Kan:'mp3',Riichi:'mp3',Double_riichi:'mp3',Ron:'mp3',Tsumo:'mp3',Kita:'mp3'};
 
-function applyVoiceTheme(themeId){
+// persist=true (a real user pick) writes the choice to localStorage AND
+// the profile server-side; persist=false (re-applying during renderVoiceThemes,
+// which happens on every 'stats' refresh) only repaints the highlight, so a
+// bare re-render can never overwrite the saved selection with a transient
+// value (e.g. 'Default' before the real one has been restored).
+function applyVoiceTheme(themeId,persist=true){
   if(themeId!=='Default'&&!unlockedThemes.includes(themeId)) return;
   currentVoiceTheme=themeId;
   // Scoped to #voice-theme-list (not a bare '.theme-btn') — the Title
@@ -2767,7 +2783,13 @@ function applyVoiceTheme(themeId){
     b.style.background=b.dataset.theme===themeId?'rgba(201,168,76,.25)':'rgba(42,58,42,.3)';
     b.style.borderColor=b.dataset.theme===themeId?'var(--gold)':'rgba(201,168,76,.2)';
   });
+  if(!persist) return;
   try{ localStorage.setItem('mj-voice-theme',themeId); }catch(e){}
+  // Persist onto the profile itself (server-side, see profiles.setVoiceTheme,
+  // re-checked there against this profile's own unlockedThemes) so the choice
+  // follows the account across devices — a no-op server-side if no profile is
+  // unlocked yet. Mirrors applyPlayerTitle's set_profile_title send.
+  wss({type:'set_profile_voice_theme',theme:themeId});
 }
 
 function renderVoiceThemes(){
@@ -2786,7 +2808,7 @@ function renderVoiceThemes(){
     else btn.onclick=()=>applyVoiceTheme(t.id);
     list.appendChild(btn);
   });
-  applyVoiceTheme(currentVoiceTheme);
+  applyVoiceTheme(currentVoiceTheme,false);
 }
 
 // Title system — same shape as voice themes above (pick one from a list,
@@ -2827,6 +2849,7 @@ const titles=[
   {id:'Plunderer', label:'Plunderer', hint:'Reach a final score of 100,000+ in sanma to unlock'},
   {id:'Conqueror', label:'Conqueror', hint:'Reach a final score of 105,000+ in sanma to unlock'},
   {id:'Double Knockout', label:'Double Knockout', hint:'Win a tsumo that bankrupts both opponents (sanma) to unlock'},
+  {id:'The South Pole', label:'The South Pole', hint:"Bank all 4 of a round's kita tiles yourself (sanma) to unlock"},
   {id:'Legend', label:'Legend', hint:'Play 500 games to unlock'},
   {id:'Living Legend', label:'Living Legend', hint:'Win 500 games to unlock'},
   {id:'Riichi Addict', label:'Riichi Addict', hint:'Declare riichi 200 times to unlock'},
@@ -2840,6 +2863,9 @@ const titles=[
   {id:'Double Crown', label:'Double Crown', hint:'Achieve a double yakuman (any kind) to unlock'},
   {id:'Twin Ascendant', label:'Twin Ascendant', hint:'Achieve 2 different kinds of double yakuman to unlock'},
   {id:'Grand Ascendant', label:'Grand Ascendant', hint:'Achieve all 4 kinds of double yakuman to unlock'},
+  {id:'The Last Emperor', label:'The Last Emperor', hint:'Win 70%+ of at least 100 games to unlock'},
+  {id:'Mighty Mouse', label:'Mighty Mouse', hint:'Achieve 30 different yaku to unlock'},
+  {id:'The Eagle', label:'The Eagle', hint:'Win 29 games in a row to unlock'},
   {id:'Master of Forms', label:'Master of Forms', hint:'Achieve 20 different yaku to unlock'},
   {id:'Survivor', label:'Survivor', hint:'Play 50 games without ever busting to unlock'},
   {id:'Robbing Kan', label:'Robbing Kan', hint:'Win with Chankan to unlock'},
@@ -6874,15 +6900,26 @@ try{
   }
   const savedGameTracks=localStorage.getItem('mj-game-tracks');
   if(savedGameTracks){
-    const parsed=JSON.parse(savedGameTracks);
-    if(Array.isArray(parsed)&&parsed.length&&parsed.every(id=>gameTracks.some(t=>t.id===id))){
-      selectedGameTracks=parsed;
-    }
+    // Own try — a corrupt/legacy value here must not abort the rest of this
+    // block (it used to skip the identity-pref restore below, which for
+    // voice theme then got overwritten with 'Default' by the first
+    // renderVoiceThemes() — icon/title survived only because the server
+    // re-sends them on profile unlock).
+    try{
+      const parsed=JSON.parse(savedGameTracks);
+      if(Array.isArray(parsed)&&parsed.length&&parsed.every(id=>gameTracks.some(t=>t.id===id))){
+        selectedGameTracks=parsed;
+      }
+    }catch(e){}
   }
   if(localStorage.getItem('mj-game-shuffle')==='1'){
     gameMusicShuffle=true;
     const b=$('bgame-music-shuffle'); if(b) b.classList.remove('off');
   }
+}catch(e){}
+// Identity prefs (voice theme / icon / title) — separate try so nothing in
+// the audio-pref restore above can stop these from loading.
+try{
   const savedTheme=localStorage.getItem('mj-voice-theme');
   if(savedTheme) currentVoiceTheme=savedTheme;
   const savedIcon=localStorage.getItem('mj-player-icon');

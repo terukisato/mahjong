@@ -194,7 +194,7 @@ function createProfile(name, code) {
   if (_findByName(all, name)[0]) return { ok: false, error: 'A profile with that name already exists' };
   const salt = crypto.randomBytes(16).toString('hex');
   const id = _generateId(new Set(Object.keys(all)));
-  all[id] = { id, name, salt, codeHash: _hashCode(code, salt), icon: 'default', title: 'Beginner' };
+  all[id] = { id, name, salt, codeHash: _hashCode(code, salt), icon: 'default', title: 'Beginner', voiceTheme: 'Default' };
   _save(all);
   return { ok: true };
 }
@@ -232,6 +232,25 @@ function setTitle(name, title) {
 
 function getTitle(name) {
   return _findByName(_load(), name)[1]?.title || 'Beginner';
+}
+
+// Voice-line theme (see 'set_profile_voice_theme' in index.js) — same
+// persist-on-the-profile pattern as setIcon/setTitle above, so the choice
+// follows the account across devices/browsers instead of living only in
+// one browser's localStorage. This only knows the overall recognized set
+// (VOICE_THEMES); index.js's handler cross-checks the profile's own earned
+// unlockedThemes (stats.js) before calling this, exactly like setTitle.
+const VOICE_THEMES = ['Default', 'Natsu'];
+function setVoiceTheme(name, theme) {
+  const all = _load();
+  const [, p] = _findByName(all, name);
+  if (!p || !VOICE_THEMES.includes(theme)) return;
+  p.voiceTheme = theme;
+  _save(all);
+}
+
+function getVoiceTheme(name) {
+  return _findByName(_load(), name)[1]?.voiceTheme || 'Default';
 }
 
 // Both hashes are fixed-length (128 hex chars, scrypt's 64-byte default
@@ -334,4 +353,4 @@ function setCode(name, code) {
   return { ok: true };
 }
 
-module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, renameProfile, setCode, setTitle, getTitle, TITLES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById, migrateLegacyIds };
+module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, renameProfile, setCode, setTitle, getTitle, TITLES, setVoiceTheme, getVoiceTheme, VOICE_THEMES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById, migrateLegacyIds };

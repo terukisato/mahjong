@@ -6,7 +6,7 @@ const path=require('path');
 const {Room}=require('./room');
 const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats,migrateToIds}=require('./stats');
 const {getHistory,getGameDetail,deleteHistory,clearAllHistory}=require('./history');
-const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,migrateLegacyIds}=require('./profiles');
+const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,migrateLegacyIds}=require('./profiles');
 
 // One-time upgrade of both data files from the old name-keyed shape to the
 // new stable-id-keyed shape (see profiles.js's migrateLegacyIds and
@@ -159,6 +159,7 @@ wss.on('connection',(ws)=>{
     if(unlockedName){
       player.name=unlockedName;
       player.icon=getIcon(unlockedName);
+      player.voiceTheme=getVoiceTheme(unlockedName);
       player.profileId=unlockedId;
       player.isGuest=false;
     } else {
@@ -180,6 +181,7 @@ wss.on('connection',(ws)=>{
       player.name=unlockedName;
       player.icon=getIcon(unlockedName);
       player.title=getTitle(unlockedName);
+      player.voiceTheme=getVoiceTheme(unlockedName);
       player.profileId=unlockedId;
       player.isGuest=false;
     } else {
@@ -287,7 +289,11 @@ wss.on('connection',(ws)=>{
         ws.send(JSON.stringify({type:'error',context:'quick_match',error:'This profile is already in a game on another device.'}));
         return;
       }
-      player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
+      // A logged-in profile's voice theme is server-authoritative (see
+      // profiles.getVoiceTheme / 'set_profile_voice_theme'), same as icon
+      // and title — the client's msg.voiceTheme is only trusted for guests,
+      // who have no profile to persist a choice onto.
+      player.voiceTheme=unlockedName?getVoiceTheme(unlockedName):(msg.voiceTheme||'Default').slice(0,30);
       const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
       const numPlayers=msg.variant==='sanma'?3:4;
       // Rule variants — picked once in the lobby, like gameMode.
@@ -327,7 +333,11 @@ wss.on('connection',(ws)=>{
         ws.send(JSON.stringify({type:'error',context:'create_room',error:'This profile is already in a game on another device.'}));
         return;
       }
-      player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
+      // A logged-in profile's voice theme is server-authoritative (see
+      // profiles.getVoiceTheme / 'set_profile_voice_theme'), same as icon
+      // and title — the client's msg.voiceTheme is only trusted for guests,
+      // who have no profile to persist a choice onto.
+      player.voiceTheme=unlockedName?getVoiceTheme(unlockedName):(msg.voiceTheme||'Default').slice(0,30);
       const mode=msg.gameMode==='hanchan'?'hanchan':'tonpuu';
       const numPlayers=msg.variant==='sanma'?3:4;
       const rules={
@@ -366,7 +376,11 @@ wss.on('connection',(ws)=>{
           ws.send(JSON.stringify({type:'join_room_result',ok:false,error:'This profile is already in a game on another device.'}));
           return;
         }
-        player.voiceTheme=(msg.voiceTheme||'Default').slice(0,30);
+        // A logged-in profile's voice theme is server-authoritative (see
+      // profiles.getVoiceTheme / 'set_profile_voice_theme'), same as icon
+      // and title — the client's msg.voiceTheme is only trusted for guests,
+      // who have no profile to persist a choice onto.
+      player.voiceTheme=unlockedName?getVoiceTheme(unlockedName):(msg.voiceTheme||'Default').slice(0,30);
         myRoom=room;
         if(!myRoom.addHuman(player)){
           myRoom=null;
@@ -645,7 +659,7 @@ wss.on('connection',(ws)=>{
         // 'unlock_profile_token' on future visits instead of asking for
         // the code again.
         const token=msg.remember?createRememberToken(name):undefined;
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),token}));
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),token}));
         goOnline();
         syncSeatedIdentity();
       } else {
@@ -662,7 +676,7 @@ wss.on('connection',(ws)=>{
       if(verifyRememberToken(name,msg.token)){
         unlockedName=name;
         unlockedId=getId(name);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),silent:true}));
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),silent:true}));
         goOnline();
         syncSeatedIdentity();
       } else {
@@ -707,6 +721,16 @@ wss.on('connection',(ws)=>{
     if(msg.type==='set_profile_title'&&unlockedId){
       if(getStats(unlockedId).unlockedTitles.includes(msg.title)){
         setTitle(unlockedName,msg.title);
+      }
+    }
+
+    // Same pattern again for the Voice Theme picker — cross-checked against
+    // this profile's own unlockedThemes (achievements.js's `unlocksTheme`)
+    // before setVoiceTheme, which only knows the recognized set. 'Default'
+    // is always allowed (it's in every record's unlockedThemes anyway).
+    if(msg.type==='set_profile_voice_theme'&&unlockedId){
+      if(getStats(unlockedId).unlockedThemes.includes(msg.theme)){
+        setVoiceTheme(unlockedName,msg.theme);
       }
     }
 
