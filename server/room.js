@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('crypto');
 const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
        detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,isMenzen,shanten} = require('./mahjong');
 const {botName,bestDiscard,botReact,shouldRiichi} = require('./bot');
@@ -72,6 +73,16 @@ const GAME_START_BOT_DELAY=5000;
 // normal thinking-pause mid-sentence, short enough that it doesn't linger
 // looking stale if they just abandoned the message unsent.
 const TYPING_TIMEOUT_MS=3000;
+// A dropped-mid-game socket does NOT get its seat handed to a bot — the
+// seat is just held (see disconnectHuman). Other seats' bots keep taking
+// their own turns; the game only waits when it actually reaches the absent
+// player's turn or a reaction they're part of, and a reconnect (reclaimSeat)
+// picks up exactly there. This is the sole last-resort fallback: if they're
+// still gone this long, concede they've left so a multiplayer table (or an
+// abandoned game sitting in the live-games registry) doesn't stay frozen
+// forever. Well past any real app-switch, so it never fires in practice for
+// the case it exists to smooth over.
+const SEAT_HOLD_MS=120000;
 // Chat message colour palette — must match CHAT_COLORS in public/script.js.
 // Validated server-side rather than trusting the client's `color` field
 // verbatim, since it gets echoed straight into another player's page.
@@ -171,6 +182,20 @@ class Room {
     // is reachable to clearTimeout/reschedule on every fresh keystroke
     // rather than just tracking which seats are currently flagged.
     this._typingTimers=new Map();
+    // Session-resume support (see start()/disconnectHuman/reclaimSeat).
+    // resumeInfo: seat -> {token,name,profileId,icon,voiceTheme,isGuest},
+    // rebuilt every start() (covers a Play Again rematch too). Persists for
+    // the whole game so a returning player can reclaim their seat any time
+    // before game_over. _graceTimers: seat -> the long SEAT_HOLD_MS
+    // last-resort "they're not coming back, give the seat to a bot" timeout,
+    // cancelled the moment the player reconnects.
+    this.resumeInfo=new Map();
+    this._graceTimers=new Map();
+    // Set by index.js right after construction — lets the module track this
+    // room in its live-games registry (for reconnect lookup) without Room
+    // needing to know that registry exists.
+    this.onStart=null;
+    this.onFinish=null;
   }
 
   // Hands per wind round = number of dealers = numPlayers (3 for sanma, 4
@@ -805,14 +830,31 @@ class Room {
       handsPlayed:0,
     };
     this._initRound();
+    // Fresh resume tokens for this game (a Play Again rematch re-runs start()
+    // and re-issues them — the seats were just reshuffled above, so the old
+    // seat->token mapping is stale anyway). One per human seat; sent only to
+    // that seat in its own game_start below, and echoed back by the client
+    // in a 'resume' message after a reconnect (see index.js).
+    this.resumeInfo=new Map();
+    this._clearGraceTimers();
+    for(let seat=0;seat<this.numPlayers;seat++){
+      const p=this.seats[seat];
+      if(!p||p.isBot) continue;
+      const token=crypto.randomBytes(16).toString('hex');
+      p._resumeToken=token;
+      this.resumeInfo.set(seat,{token,name:p.name,profileId:p.profileId||null,
+        icon:p.icon||'default',voiceTheme:p.voiceTheme||'Default',isGuest:!!p.isGuest});
+    }
     // Personalized (not _broadcastAll) — each player's actual seat just got
     // reshuffled above, so unlike every other game_start field (identical
     // for everyone) `seat` has to be sent per-recipient. The client latches
     // this onto its own mySeat (see game_start handling in script.js),
     // overriding whatever lobby slot 'joined' gave it.
     for(let seat=0;seat<this.numPlayers;seat++){
-      this._send(this.seats[seat],{type:'game_start',seat,seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,chonbo:this.rules.chonbo,scores:this.game.scores});
+      this._send(this.seats[seat],{type:'game_start',seat,seats:this._seatInfo(),gameMode:this.gameMode,dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,chonbo:this.rules.chonbo,scores:this.game.scores,
+        roomId:this.id,resumeToken:this.resumeInfo.get(seat)?.token||null});
     }
+    if(this.onStart) this.onStart(this);
     // Consumed by _draw() below, exactly once — see its own comment on why
     // only THIS first draw's bot-turn (if the dealer is a bot) gets the
     // longer GAME_START_BOT_DELAY instead of the normal BOT_DELAY.
@@ -2145,6 +2187,96 @@ class Room {
       const p=this.seats[seat];
       if(p&&!p.isBot&&p.ws?.readyState===1) p.ws.send(JSON.stringify({type:'achievements_unlocked',achievements:list}));
     });
+    // Game's over — no seat can be reclaimed any more (reclaimSeat checks
+    // phase), so drop the resume state and let index.js deregister this
+    // room from its live-games registry.
+    this.resumeInfo=new Map();
+    this._clearGraceTimers();
+    if(this.onFinish) this.onFinish(this);
+  }
+
+  _clearGraceTimers(){
+    for(const t of this._graceTimers.values()) clearTimeout(t);
+    this._graceTimers.clear();
+  }
+
+  // Drop a seat's resume eligibility — called when a player DELIBERATELY
+  // leaves (the 'leave' button, or joining a different room), as opposed to
+  // just dropping offline. After this, a stale client still holding the old
+  // token can't reclaim the seat it walked away from.
+  forfeitSeatResume(playerId){
+    const seat=this.seats.findIndex(p=>p&&p.id===playerId);
+    if(seat===-1) return;
+    this.resumeInfo.delete(seat);
+    const gt=this._graceTimers.get(seat);
+    if(gt){ clearTimeout(gt); this._graceTimers.delete(seat); }
+  }
+
+  // Socket dropped mid-game. The seat is NOT handed to a bot — it's just
+  // held for its human. Other seats' bots keep taking their own turns as
+  // normal (nothing here touches them); the game only actually waits once
+  // it reaches this seat, and a reconnect (reclaimSeat) resumes from
+  // exactly there. The lone fallback is a long SEAT_HOLD_MS safety timer:
+  // if they never come back, eventually give the seat to a bot so a
+  // multiplayer table / an abandoned game doesn't stay frozen forever.
+  // Silent — no broadcast — so a brief drop is invisible to everyone.
+  // Outside 'playing' (waiting room / post-game screen) there's nothing to
+  // hold, so just remove them as before.
+  disconnectHuman(playerId){
+    const seat=this.seats.findIndex(p=>p&&!p.isBot&&p.id===playerId);
+    if(seat===-1) return;
+    if(this.phase!=='playing'||!this.resumeInfo.has(seat)){ this.removeHuman(playerId); return; }
+    if(this._graceTimers.has(seat)) return;
+    const t=setTimeout(()=>{
+      this._graceTimers.delete(seat);
+      if(this.seats[seat]&&!this.seats[seat].isBot&&this.seats[seat].id===playerId) this.removeHuman(playerId);
+    },SEAT_HOLD_MS);
+    this._graceTimers.set(seat,t);
+  }
+
+  // A returning player takes their seat back. Usually it's still the held
+  // human placeholder (bots never replaced them); only after the full
+  // SEAT_HOLD_MS safety fallback would it be a bot. `player` is the NEW
+  // connection's player object — its identity fields are overwritten from
+  // the token-matched resumeInfo snapshot so a fresh (or guest) connection
+  // ends up correctly seated. Returns false if the game's over or the
+  // seat/token don't match — index.js then tells the client to fall back to
+  // the lobby.
+  reclaimSeat(seat,player,token){
+    if(this.phase!=='playing'||!this.game) return false;
+    const info=this.resumeInfo.get(seat);
+    if(!info||!token||info.token!==token) return false;
+    const gt=this._graceTimers.get(seat);
+    if(gt){ clearTimeout(gt); this._graceTimers.delete(seat); }
+    player.seat=seat;
+    player.isBot=false;
+    player.name=info.name;
+    player.profileId=info.profileId;
+    player.icon=info.icon;
+    player.voiceTheme=info.voiceTheme;
+    player.isGuest=info.isGuest;
+    player._resumeToken=token;
+    this.seats[seat]=player;
+    this.ready.delete(player.id);
+    this._broadcastRoomUpdate();
+    return true;
+  }
+
+  // Re-send a just-reclaimed seat's view. `warm` (the client still had the
+  // game in memory — a tab suspend, not a reload) means only the fresh
+  // game_state is needed and it renders in place with no visible blip. A
+  // cold client (full reload) also needs the game_start-shaped setup first;
+  // resumed:true tells it to skip the dealing / roll-call intro.
+  sendResumeSnapshot(player,warm){
+    const seat=player.seat;
+    if(!this.game||seat<0) return;
+    if(!warm){
+      this._send(player,{type:'game_start',seat,seats:this._seatInfo(),gameMode:this.gameMode,
+        dealer:this.game.dealer,numPlayers:this.numPlayers,sanma:this.rules.sanma,
+        chonbo:this.rules.chonbo,scores:this.game.scores,roomId:this.id,
+        resumeToken:this.resumeInfo.get(seat)?.token||null,resumed:true});
+    }
+    this._sendState(seat);
   }
 
   // ── Play Again (create_room/join_room rematch) ─────────────────────────────
@@ -2585,10 +2717,11 @@ class Room {
   // (canRiichi/canAnkan/canKakan/canTsumo/canKyuushu) — these are advisory
   // for the UI only, the server re-validates independently when the actual
   // action arrives (see action() and the individual handlers).
-  _sendState(){
+  _sendState(onlySeat=null){
     const g=this.game;
     if(!g) return;
     for(let seat=0;seat<this.numPlayers;seat++){
+      if(onlySeat!==null&&seat!==onlySeat) continue;
       const p=this.seats[seat];
       if(!p||p.isBot) continue;
       const hand=g.hands[seat];

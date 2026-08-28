@@ -50,7 +50,7 @@ const TITLES = [
   // titles above, plus new stricter/compound conditions.
   'Legend', 'Living Legend', 'Riichi Addict', 'Hand Hoarder', 'Tsumo Master',
   'Ron Master', 'Dora Addict',
-  'Yakuman Collector', 'Yakuman Legend', 'Master of Forms', 'Survivor',
+  'Yakuman Collector', 'Yakuman Legend', 'Master of Forms',
   // 2-different-yakuman-in-one-hand (see server/achievements.js's yakuman_stack)
   'Twin Fortune',
   // Double-yakuman ladder (see server/achievements.js's double_yakuman_*)

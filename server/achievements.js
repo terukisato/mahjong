@@ -78,11 +78,8 @@ const doubleBustWins = s => s.sanma.doubleBustWins;
 const quadKita = s => s.sanma.quadKita;
 // Total yakuman-tier WINS across every kind combined (unlike yakumanProgress
 // above, which only checks "at least one, any kind" — see
-// 'yakuman_collector'/'yakuman_legend' below), and total bankruptcies
-// ("tobi" — see room.js's _finishGame) across both variants, used by
-// 'survivor' below.
+// 'yakuman_collector'/'yakuman_legend' below).
 const totalYakumanCount = s => YAKUMAN_NAMES.reduce((n, name) => n + yakuCount(s, name), 0);
-const totalBusts = s => s.yonma.busts + s.sanma.busts;
 // The 4 yaku that score as a DOUBLE yakuman (han:26) in mahjong.js's ym()
 // calls, as opposed to every other entry in YAKUMAN_NAMES above (single,
 // han:13). detectYaku returns on the first matching yakuman condition and
@@ -226,13 +223,6 @@ const ACHIEVEMENTS = [
   { id: 'double_yakuman_collector', label: 'Achieve 2 different kinds of double yakuman', unlocksTitle: 'Twin Ascendant', target: 2, progress: s => Math.min(distinctDoubleYakumanCount(s), 2), check: s => distinctDoubleYakumanCount(s) >= 2 },
   { id: 'double_yakuman_legend', label: 'Achieve all 4 kinds of double yakuman', unlocksTitle: 'Grand Ascendant', target: 4, progress: s => Math.min(distinctDoubleYakumanCount(s), 4), check: s => distinctDoubleYakumanCount(s) >= 4 },
   { id: 'renaissance_plus', label: 'Achieve 20 different yaku', unlocksTitle: 'Master of Forms', target: 20, progress: distinctYakuCount, check: s => distinctYakuCount(s) >= 20 },
-  // Lifetime-cumulative, not a "current streak" (this whole stats system
-  // has no session/streak state — see stats.js's own top comment) — one
-  // bust (tobi) at any point ever recorded makes this permanently
-  // unearnable, same "check() can't flip back to true" shape every other
-  // achievement here relies on, just harsher: it can also permanently
-  // flip to "impossible" rather than merely "not yet".
-  { id: 'survivor', label: 'Play 50 games without ever busting', unlocksTitle: 'Survivor', target: 50, progress: s => totalBusts(s) === 0 ? Math.min(gamesPlayed(s), 50) : 0, check: s => gamesPlayed(s) >= 50 && totalBusts(s) === 0 },
 
   // ── Per-yaku achievements — one title per specific yaku, independent of
   // any existing achievement that might already cover the same yaku (e.g.

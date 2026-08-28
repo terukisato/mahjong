@@ -476,6 +476,25 @@ let P=['b','r','t','l'];
 // the previous game_state message, kept around so renderState can diff
 // against it (e.g. "did a new pon just happen" for sound effects).
 let ws=null, mySeat=-1, inGame=false, selId=null, lastState=null, isReady=false, discarding=false, pendingGameOver=null;
+// Session-resume (see connect()/visibilitychange/onMsg 'resume_result').
+// activeGameResume = {roomId, seat, token} — stashed at game_start, mirrored
+// into sessionStorage so it survives a full reload (a suspended mobile tab
+// keeps the in-memory copy; a killed-and-reopened one doesn't), cleared at
+// game_over / leaving. Reconnecting is silent: no overlay, no bot ever takes
+// the seat — the game just carries on for the bots and waits at this seat
+// until the socket is back. lastHiddenAt tracks how long the tab was
+// backgrounded so a brief app-switch doesn't force an unnecessary reconnect.
+let myRoomId=null, activeGameResume=null, lastHiddenAt=0;
+function loadResume(){
+  if(activeGameResume) return activeGameResume;
+  try{ const r=JSON.parse(sessionStorage.getItem('mj-resume')||'null');
+    if(r&&r.roomId!=null&&r.seat!=null&&r.token) activeGameResume=r; }catch(e){}
+  return activeGameResume;
+}
+function setResume(r){
+  activeGameResume=r;
+  try{ r?sessionStorage.setItem('mj-resume',JSON.stringify(r)):sessionStorage.removeItem('mj-resume'); }catch(e){}
+}
 // Play Again (same-room rematch) state — isPrivateRoomGame/isRoomHost come
 // from 'joined' (see onMsg below: quick_match never sets isHost and marks
 // itself with `instant`, so both stay false there, keeping the whole
@@ -557,12 +576,46 @@ function connect(){
       const token=localStorage.getItem('mj-remember-token');
       if(name&&token) wss({type:'unlock_profile_token',name,token});
     }catch(e){}
+    // Silently reconnect straight back into a game this client was dropped
+    // from (see activeGameResume). `warm` = we still have the game in memory
+    // (a tab suspend, not a reload), so the server just re-sends game_state
+    // and it re-renders in place. The server either restores the seat or, if
+    // the game's gone, replies resume_result{ok:false} (see onMsg).
+    const r=loadResume();
+    if(r) wss({type:'resume',roomId:r.roomId,seat:r.seat,token:r.token,warm:inGame&&!!lastState});
   };
   ws.onmessage=e=>{try{onMsg(JSON.parse(e.data));}catch(ex){console.error(ex);}};
   ws.onclose=()=>{setTimeout(connect,2000);};
   ws.onerror=()=>{try{ws.close();}catch{}};
 }
 function wss(d){if(ws&&ws.readyState===1)ws.send(JSON.stringify(d));}
+
+// Mobile browsers suspend a backgrounded tab and often silently kill its
+// WebSocket; `readyState` can still read OPEN for a while after. When the
+// player comes back mid-game, proactively tear down and rebuild the socket
+// (which then silently auto-resumes via connect()'s ws.onopen) rather than
+// waiting for the next doomed send to fail. A brief (<8s) switch-away is
+// left alone — the connection is very likely still fine.
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'){ lastHiddenAt=Date.now(); return; }
+  if(!inGame||!loadResume()) return;
+  const awayMs=Date.now()-lastHiddenAt;
+  const dead=!ws||ws.readyState===2||ws.readyState===3;
+  if(dead||awayMs>8000) reconnectNow();
+});
+
+// Detach the current socket and open a fresh one exactly once (connect()'s
+// ws.onopen then re-runs profile unlock + game resume). Null the old
+// handlers first so its own onclose can't also schedule a second connect().
+function reconnectNow(){
+  // A discard was in flight when the socket went — have the post-resume
+  // game_state re-send it if it never actually reached the server.
+  if(pendingDiscardTileId!=null) discardRetryArmed=true;
+  const old=ws;
+  if(old){ old.onopen=old.onmessage=old.onclose=old.onerror=null; try{ old.close(); }catch(e){} }
+  ws=null;
+  connect();
+}
 
 // Server -> client message router. Lobby/lifecycle messages (joined,
 // room_update, game_start, round_start/end, game_over, ready_status) are
@@ -571,12 +624,28 @@ function wss(d){if(ws&&ws.readyState===1)ws.send(JSON.stringify(d));}
 // only meaningful — and only processed — once actually seated at a table.
 function onMsg(m){
   if(m.type==='hello') return;
+  // Reconnect handshake (see connect()'s ws.onopen). ok → a game_state
+  // (warm) or game_start(resumed)+game_state (cold reload) follows and the
+  // board picks up where it left off; not ok → the game's gone (ended /
+  // server restarted / stale token), so drop the stale resume state and,
+  // if we were sitting on a now-dead board, return to the lobby.
+  if(m.type==='resume_result'){
+    if(m.ok){
+      // Clear any mid-animation state frozen from when the tab was
+      // suspended so the incoming game_state renders straight away.
+      if(m.warm){ roundStartBannerActive=false; pendingBannerGameState=null; discarding=false; clearActiveBanners(); }
+    } else {
+      setResume(null);
+      if(inGame){ inGame=false; toast('This game has ended.'); resetLobby(); }
+    }
+    return;
+  }
   // `instant` marks a quick_match reply — the server starts that game in
   // the same tick (see server/index.js), so 'game_start' is right behind
   // this message; skip the waiting-room screen entirely rather than flash
   // "Looking for players..." for a single frame before it's replaced.
   if(m.type==='joined'){
-    mySeat=m.seat;currentRoomRules=m.rules||null;currentRoomMode=m.gameMode||null;currentRoomNumPlayers=m.numPlayers||null;isPrivateRoomGame=!m.instant;isRoomHost=!!m.isHost;
+    mySeat=m.seat;myRoomId=m.roomId??myRoomId;currentRoomRules=m.rules||null;currentRoomMode=m.gameMode||null;currentRoomNumPlayers=m.numPlayers||null;isPrivateRoomGame=!m.instant;isRoomHost=!!m.isHost;
     if(!m.instant)showWaiting();
     // Fire off any invites picked in the Create Room flow (see
     // rulesSelectedInvites/openCreateRoomRules) now that the room this
@@ -595,11 +664,27 @@ function onMsg(m){
   // Table seating is reshuffled server-side on every game_start (see
   // Room.start in room.js) — the lobby-join seat from 'joined' is only a
   // starting guess, this personalized message's `seat` is the real one.
-  if(m.type==='game_start'){if(Number.isInteger(m.seat))mySeat=m.seat;startGame(m);return;}
+  if(m.type==='game_start'){
+    if(Number.isInteger(m.seat))mySeat=m.seat;
+    if(m.roomId!=null)myRoomId=m.roomId;
+    // Stash what a later reconnect needs to slot straight back into this
+    // seat (see connect()/loadResume). Re-sent on a resume too (harmless —
+    // same token), so it stays fresh across a Play Again rematch.
+    if(m.resumeToken&&myRoomId!=null) setResume({roomId:myRoomId,seat:mySeat,token:m.resumeToken});
+    // A resume can land mid-anything — wipe any frozen banner/intro state
+    // left over from when the tab was suspended so the rebuilt board isn't
+    // gated behind a stale round-start card that will never clear.
+    if(m.resumed) clearActiveBanners();
+    startGame(m);
+    return;
+  }
   if(m.type==='round_start'){onRoundStart(m);return;}
   if(m.type==='round_end'){onEnd(m);return;}
   if(m.type==='game_over'){
     pendingGameOver=m;
+    // Game's finished — the seat can't be resumed any more (a Play Again
+    // rematch issues a fresh token via its own game_start).
+    setResume(null);
     const btn=$('bview-results'); if(btn) btn.style.display='';
     return;
   }
@@ -709,6 +794,20 @@ function onMsg(m){
     // just-rendered (fully dealt) board, rather than back at game_start
     // when the board was still a "dealing tiles" placeholder.
     if(pendingGameStartIntro){const gm=pendingGameStartIntro;pendingGameStartIntro=null;gameStartIntro(gm);}
+    // Pending-discard reconciliation (see sendDiscardAction). Tile now gone
+    // from the hand → the discard landed, stop tracking. Still in hand and
+    // it's our turn again after a reconnect → the original send was lost,
+    // re-send it exactly once. Anything else → drop it.
+    if(pendingDiscardTileId!=null){
+      const stillHeld=(m.myHand||[]).some(t=>t.id===pendingDiscardTileId)
+        ||(m.drawTile&&m.drawTile.id===pendingDiscardTileId);
+      if(!stillHeld){ pendingDiscardTileId=null; discardRetryArmed=false; }
+      else if(discardRetryArmed&&m.turn===mySeat&&!m.pending&&!m.riichi?.[mySeat]){
+        discardRetryArmed=false;
+        const id=pendingDiscardTileId; pendingDiscardTileId=null;
+        sendDiscardAction(id);
+      } else { pendingDiscardTileId=null; discardRetryArmed=false; }
+    }
   }
   else if(m.type==='riichi'){onRiichi(m);}
   else if(m.type==='kan'){callBanner('kan',m.name||'Player','カン');}
@@ -2867,7 +2966,6 @@ const titles=[
   {id:'Mighty Mouse', label:'Mighty Mouse', hint:'Achieve 30 different yaku to unlock'},
   {id:'The Eagle', label:'The Eagle', hint:'Win 29 games in a row to unlock'},
   {id:'Master of Forms', label:'Master of Forms', hint:'Achieve 20 different yaku to unlock'},
-  {id:'Survivor', label:'Survivor', hint:'Play 50 games without ever busting to unlock'},
   {id:'Robbing Kan', label:'Robbing Kan', hint:'Win with Chankan to unlock'},
   {id:'Dead Wall Diver', label:'Dead Wall Diver', hint:'Win with Rinshan Kaihou to unlock'},
   {id:'Last Tile Standing', label:'Last Tile Standing', hint:'Win with Haitei to unlock'},
@@ -4098,7 +4196,9 @@ function clearActiveBanners(){
 
 function resetLobby(){
   clearActiveBanners();
+  setResume(null);
   mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;discarding=false;
+  pendingDiscardTileId=null;discardRetryArmed=false;suppressDiscardSfxOnce=false;clearTimeout(discardWatchdog);
   currentRoomRules=null;currentRoomMode=null;currentRoomNumPlayers=null;
   isPrivateRoomGame=false;isRoomHost=false;playAgainSeats=[];lastGameOverNames=null;
   $('wa').style.display='none';
@@ -4399,7 +4499,7 @@ function startGame(m){
   // with no resetLobby() round-trip to have already cleared it — see the
   // "no lobby round-trip" comment further down) would otherwise carry
   // straight into the new game and block discarding from turn one.
-  discarding=false; clearTimeout(discardWatchdog);
+  discarding=false; pendingDiscardTileId=null; discardRetryArmed=false; suppressDiscardSfxOnce=false; clearTimeout(discardWatchdog);
   declareWarningShown=false; // chonbo's declare-confirm message shows once per game, not once per browser session
   // Restore Ready button visibility for new game
   const btn=$('bround-ready'); if(btn){ btn.style.display=''; btn.disabled=false; btn.textContent='✓ Ready'; btn.style.opacity='1'; }
@@ -4422,7 +4522,11 @@ function startGame(m){
   // Consumed by onMsg's game_state handler the moment the game has actually
   // finished loading (first real state rendered) — see gameStartIntro's own
   // comment on why the roll call waits for that instead of firing here.
-  pendingGameStartIntro=m;
+  // A cold resume (full reload back into a game in progress) skips the
+  // dealing animation / roll-call intro entirely — the board is rebuilt
+  // directly from the game_state that follows. (A warm resume never gets
+  // here — the server sends only game_state for those.)
+  if(!m.resumed) pendingGameStartIntro=m;
   const seats=m.seats;
   inGameSeatInfo={};
   for(let i=0;i<numSeats;i++){
@@ -4546,8 +4650,10 @@ function startGame(m){
   $('cw-wind').textContent='—';
   $('cw-kyoku').textContent='';
   show('s-game');
-  // Show loading overlay until first game_state arrives
-  $('game-loading').style.display='flex';
+  // Show loading overlay until first game_state arrives — except on a cold
+  // resume, where that state is already on its way; also clears any stale
+  // deal overlay that was frozen on screen when the tab was suspended.
+  $('game-loading').style.display=m.resumed?'none':'flex';
 }
 
 // Absolute seat -> screen position id ('b'/'r'/'t'/'l'). The inverse of the
@@ -4743,7 +4849,15 @@ function renderState(m, prev){
   if(prev?.discards) prev.discards.forEach(d=>{ prevDiscardCount+=(d?.length||0); });
   let newDiscardCount=0;
   if(m.discards) m.discards.forEach(d=>{ newDiscardCount+=(d?.length||0); });
-  if(newDiscardCount>prevDiscardCount) playDiscardSfx();
+  // suppressDiscardSfxOnce: optimisticDiscard already played the click for
+  // the player's own just-sent discard — don't play it a second time when
+  // that discard's authoritative game_state lands.
+  if(newDiscardCount>prevDiscardCount){
+    if(suppressDiscardSfxOnce) suppressDiscardSfxOnce=false;
+    else playDiscardSfx();
+  } else if(suppressDiscardSfxOnce){
+    suppressDiscardSfxOnce=false; // discard was a no-op/rejected — release the guard
+  }
 
   // Detect new pon — check if main player's melds changed
   const prevMyPon=(prev?.myMelds||[]).filter(mel=>mel?.type==='pon').length;
@@ -4888,27 +5002,82 @@ function renderState(m, prev){
 
 // Pending recovery timer for the LAST discard sent — see sendDiscardAction.
 let discardWatchdog=null;
+// The tile id of a discard that's been sent but not yet confirmed by a
+// game_state. Kept so it can be re-sent once after a reconnect if the
+// original send fell into a dead socket (see the game_state handler in
+// onMsg). discardRetryArmed gates that re-send to exactly once per drop.
+let pendingDiscardTileId=null, discardRetryArmed=false;
+// Set by optimisticDiscard so renderState's own "discard count went up →
+// play the click" doesn't double up with the one optimisticDiscard already
+// played for this same tile.
+let suppressDiscardSfxOnce=false;
 
-// Sends a discard action and arms a short recovery timer for it. Normally
-// the resulting game_state resets `discarding` (see its reset sites in
-// onMsg/gameStartIntro/roundStartBanner) — but room.js's _discard() silently
-// no-ops with NO reply at all if this tileId's already gone from the hand,
-// or _handleAction ignores the whole action if it's no longer actually this
-// seat's turn (see myTurnOpen there) — either can happen to a stale click
-// under real network latency. Without this timer, that left `discarding`
-// stuck true forever (nothing was ever going to arrive to clear it),
-// permanently locking the player out of discarding for the rest of the
-// game — the exact bug this exists to recover from. 4s is comfortably
-// longer than a normal same-tick server round trip, including the reaction-
-// window case (_sendState() fires immediately either way — see _discard in
-// room.js), so it never fires during ordinary play.
+// Immediately reflect the player's own discard on the board — pull the tile
+// out of the hand, drop it into their river, clear the action bar, play the
+// click — WITHOUT waiting for the server's game_state to echo back. On a
+// slow/degraded mobile connection that round trip could be seconds; the
+// authoritative game_state still arrives and renderState rebuilds
+// everything from scratch, so this is purely a "feels instant" layer that
+// gets reconciled (or rolled back, if the discard is lost — see the
+// watchdog) the moment real data lands.
+function optimisticDiscard(tileId){
+  if(!lastState) return;
+  const hc=$('hdb'); if(!hc) return;
+  const el=[...hc.querySelectorAll('.tlg')].find(e=>parseInt(e.dataset.tid)===tileId);
+  const tileObj=(lastState.myHand||[]).find(t=>t.id===tileId)
+    ||(lastState.drawTile&&lastState.drawTile.id===tileId?lastState.drawTile:null);
+  if(!el||!tileObj) return;
+  el.remove();
+  hc.querySelector('.draw-sep')?.remove();
+  // Stop the rest of the hand looking playable until the real state lands.
+  hc.querySelectorAll('.tlg').forEach(e=>{ e.classList.remove('play','sel'); e.onclick=null; });
+  selId=null;
+  // Drop it into my own river, mirroring renderState's 6-per-row layout.
+  const dz=$('dzb');
+  if(dz){
+    const count=(lastState.discards&&lastState.discards[mySeat]||[]).length;
+    let row=dz.lastElementChild;
+    if(!row||count%6===0){ row=document.createElement('div'); row.className='dz-row'; dz.appendChild(row); }
+    row.appendChild(mkElMd(tileObj));
+  }
+  const bar=$('actbar'); if(bar){ bar.innerHTML=''; bar.classList.remove('visible'); }
+  ['chi-picker','riichi-picker','ankan-picker','declare-picker'].forEach(id=>$(id)?.remove());
+  $('npb')?.classList.remove('active');
+  const si=$('tst'); if(si) si.className='tb-st';
+  if(discardSfxEnabled){ playDiscardSfx(); suppressDiscardSfxOnce=true; }
+}
+
+// Sends a discard action, renders it optimistically, and arms a recovery
+// timer. Normally the resulting game_state resets `discarding` (see its
+// reset sites in onMsg/gameStartIntro/roundStartBanner) — but room.js's
+// _discard() silently no-ops with NO reply at all if this tileId's already
+// gone from the hand, or _handleAction ignores the whole action if it's no
+// longer actually this seat's turn (see myTurnOpen there) — either can
+// happen to a stale click, and on mobile the send can also vanish into a
+// half-dead socket that still reports OPEN. Without this timer that left
+// `discarding` stuck true forever, permanently locking the player out of
+// discarding. 4s is comfortably longer than a normal round trip (incl. the
+// reaction-window case — _sendState() fires immediately either way), so it
+// never trips during ordinary play.
 function sendDiscardAction(tileId){
+  const live=!!(ws&&ws.readyState===1);
   wss({type:'action',action:{type:'discard',tileId}});
+  optimisticDiscard(tileId);
   discarding=true;
+  pendingDiscardTileId=tileId;
   clearTimeout(discardWatchdog);
   discardWatchdog=setTimeout(()=>{
-    if(discarding){ discarding=false; drawActions(lastState); }
+    if(!discarding) return;
+    discarding=false;
+    // No confirmation — roll the optimistic discard back from the last
+    // authoritative state, and if the socket looks wedged rebuild it
+    // (resume re-syncs; the pending discard is re-sent once we're back).
+    if(lastState) renderState(lastState,lastState);
+    if(!ws||ws.readyState!==1){ discardRetryArmed=pendingDiscardTileId!=null; reconnectNow(); }
+    else { pendingDiscardTileId=null; discardRetryArmed=false; } // stale click, socket fine — just drop it
   },4000);
+  // Socket already down when we tried to send — don't sit on it for 4s.
+  if(!live){ discardRetryArmed=true; reconnectNow(); }
 }
 
 // Tap-to-select, tap-again-to-discard: first click on a tile just selects
@@ -6214,6 +6383,7 @@ function onReadyStatus(m){
 // ════════════════════════════════════════════════════════════
 function onRoundStart(m){
   inGame=true;
+  discarding=false; pendingDiscardTileId=null; discardRetryArmed=false; suppressDiscardSfxOnce=false; clearTimeout(discardWatchdog);
   show('s-game');
   // Reset Ready button for next round
   const btn=$('bround-ready');
@@ -6268,7 +6438,7 @@ function onRoundStart(m){
   // which recovers within 4s regardless, but there's no reason to wait on
   // it here when a new round is starting anyway) would otherwise block
   // discarding for the entire next round too.
-  discarding=false; clearTimeout(discardWatchdog);
+  discarding=false; pendingDiscardTileId=null; discardRetryArmed=false; suppressDiscardSfxOnce=false; clearTimeout(discardWatchdog);
   // Furiten/tenpai status dot (see renderState's own comment on it) — only
   // renderState ever sets this, based on the state it's currently
   // rendering, so without an explicit reset here it just keeps showing

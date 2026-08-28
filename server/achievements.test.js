@@ -171,18 +171,6 @@ test('Master of Forms: 20 distinct yaku required, not just 20 total wins of the 
   assert.strictEqual(sameYakuOver20Times.achievements['renaissance_plus'], undefined);
 });
 
-test('Survivor: 50+ games with zero busts unlocks it', () => {
-  const s = mkStats({ yonma: { gamesPlayed: 50, busts: 0 } });
-  applyUnlocks(s);
-  assert.strictEqual(s.achievements['survivor'], true);
-});
-
-test('Survivor: a single bust anywhere in the record permanently blocks it, even with 50+ games played', () => {
-  const s = mkStats({ yonma: { gamesPlayed: 60, busts: 1 } });
-  applyUnlocks(s);
-  assert.strictEqual(s.achievements['survivor'], undefined);
-});
-
 // ══════════════════════════════════════════════════════════════════════════
 // Sanity: every achievement id is unique, and every unlocksTitle is unique
 // (two different achievements silently sharing a title would make one of

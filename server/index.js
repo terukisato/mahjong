@@ -61,6 +61,12 @@ const heartbeatTimer=setInterval(()=>{
     ws.isAlive=false;
     ws.ping();
   });
+  // Backstop for activeGames (see below): a normal game deregisters itself
+  // via Room.onFinish, and even an abandoned bot-only one plays to
+  // completion within a few minutes — but drop anything absurdly old so a
+  // wedged room can't leak a resume entry forever.
+  const cutoff=Date.now()-2*60*60*1000;
+  for(const [id,e] of activeGames) if(e.startedAt<cutoff) activeGames.delete(id);
 },HEARTBEAT_INTERVAL_MS);
 wss.on('close',()=>clearInterval(heartbeatTimer));
 
@@ -74,10 +80,26 @@ wss.on('close',()=>clearInterval(heartbeatTimer));
 // something meant to be found or joined by anyone else.
 const openRooms=new Map();
 
+// Every Room that has actually STARTED and not yet finished, keyed by
+// Room.id — what a reconnecting client's 'resume' message looks its game up
+// in (see the handler below). Includes quick_match games, which openRooms
+// never tracks. A Room adds itself here via its onStart hook (set in
+// trackGame) and removes itself via onFinish; the heartbeat sweep below is
+// a backstop for the rare bot-only game that somehow never ends.
+const activeGames=new Map(); // roomId -> { room, startedAt }
+
+// Wire a freshly-constructed Room into activeGames' lifecycle. Called once
+// per Room, right after construction, before it can start.
+function trackGame(room){
+  room.onStart=r=>activeGames.set(r.id,{room:r,startedAt:Date.now()});
+  room.onFinish=r=>activeGames.delete(r.id);
+}
+
 // Used by 'create_room' — registers the room in openRooms so it's
 // immediately browsable/joinable via the Room List.
 function createFreshRoom(mode,rules,numPlayers){
   const room=new Room(mode,'normal',rules,numPlayers);
+  trackGame(room);
   openRooms.set(room.id,room);
   return room;
 }
@@ -206,6 +228,10 @@ wss.on('connection',(ws)=>{
   function leaveCurrentRoom(){
     if(!myRoom) return;
     if(player.profileId&&seatedProfiles.get(player.profileId)?.playerId===myId) seatedProfiles.delete(player.profileId);
+    // This is a deliberate exit (leave button / joining elsewhere), not a
+    // dropped connection — so give up the seat's resume slot too, or a
+    // stale token could later reclaim a seat the player chose to abandon.
+    myRoom.forfeitSeatResume(myId);
     myRoom.removeHuman(myId);
     if(myRoom.phase==='waiting'&&myRoom.humanCount()===0) openRooms.delete(myRoom.id);
     myRoom=null;
@@ -306,6 +332,7 @@ wss.on('connection',(ws)=>{
       };
       myRoom=new Room(mode,'normal',rules,numPlayers);
       myRoom.matchKind='quick';
+      trackGame(myRoom);
       myRoom.addHuman(player);
       if(player.profileId) seatedProfiles.set(player.profileId,{roomId:myRoom.id,playerId:myId});
       // 'joined' must reach the client BEFORE start()'s game_start broadcast
@@ -829,12 +856,58 @@ wss.on('connection',(ws)=>{
     if(msg.type==='leave'){
       leaveCurrentRoom();
     }
+
+    // Reconnect into a game this client was dropped from (phone app-switch,
+    // tab suspend, flaky network — see the heartbeat/disconnectHuman path).
+    // The client re-sends {roomId, seat, resumeToken} it stashed at
+    // game_start; reclaimSeat verifies the token and swaps this connection
+    // back into that seat (from the grace-held human placeholder, or the
+    // bot that replaced it). On any mismatch — game already over, server
+    // restarted, wrong token — tell the client so it can drop back to the
+    // lobby instead of sitting on a dead board.
+    if(msg.type==='resume'){
+      const entry=activeGames.get(Number(msg.roomId));
+      const room=entry&&entry.room;
+      const seat=Number(msg.seat);
+      if(!room||!Number.isInteger(seat)||!room.reclaimSeat(seat,player,String(msg.token||''))){
+        ws.send(JSON.stringify({type:'resume_result',ok:false}));
+      } else {
+        // Detach from anything this (fresh) connection was in first — should
+        // be nothing, but keeps seatedProfiles/openRooms honest if not.
+        if(myRoom&&myRoom!==room) leaveCurrentRoom();
+        myRoom=room;
+        // reclaimSeat restored the seat's original identity onto `player`
+        // (name/profileId/icon/…) from the game-start snapshot. Mirror the
+        // profile side of that so stats/achievements still attribute to the
+        // right account and the "seated elsewhere" guard stays accurate.
+        if(player.profileId){
+          unlockedId=unlockedId||player.profileId;
+          unlockedName=unlockedName||player.name;
+          seatedProfiles.set(player.profileId,{roomId:room.id,playerId:myId});
+          goOnline();
+        }
+        ws.send(JSON.stringify({type:'resume_result',ok:true,seat,warm:!!msg.warm}));
+        room.sendResumeSnapshot(player,!!msg.warm);
+      }
+    }
     }catch(e){ console.error('[server message error]',e.message,'\n',e.stack); }
   });
 
   ws.on('close',()=>{
     goOffline();
-    leaveCurrentRoom();
+    // Mid-game: hold the seat for a grace window so a quick reconnect lands
+    // back in it (see Room.disconnectHuman) rather than immediately handing
+    // it to a bot the way leaveCurrentRoom → removeHuman does. Still release
+    // the module-side bookkeeping (seatedProfiles/openRooms) now — a
+    // successful 'resume' re-establishes it, and if none comes the grace
+    // timer falls back to bot play anyway.
+    if(myRoom&&myRoom.phase==='playing'){
+      if(player.profileId&&seatedProfiles.get(player.profileId)?.playerId===myId) seatedProfiles.delete(player.profileId);
+      myRoom.disconnectHuman(myId);
+      myRoom=null;
+    } else {
+      leaveCurrentRoom();
+    }
   });
 });
 
