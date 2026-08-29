@@ -6898,8 +6898,13 @@ function onEnd(m){
   if(m.gameOver){
     const btn=$('bround-ready'); if(btn) btn.style.display='none';
     const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display=pendingGameOver?'':'none';
+    // Game's actually over — leave inGame false so "Leave Room" here just
+    // leaves (there's no progress left to lose, so no confirm — see
+    // goLobby/showLeaveConfirm). Only a BETWEEN-rounds results panel
+    // re-arms inGame below, since the game there really is still going.
+  } else {
+    setTimeout(()=>{ inGame=true; },5500);
   }
-  setTimeout(()=>{ inGame=true; },5500);
   };
   // WIN_BANNER_DELAY — long enough for the call-banner(s) above to slide
   // in, hold, and clear (winBannerHold — a double/triple ron plays its
