@@ -786,6 +786,21 @@ function onMsg(m){
     if($('friends-modal').classList.contains('visible')) wss({type:'get_friends'});
     return;
   }
+  // End-of-game coin payout (unicast, see _finishGame in server/room.js).
+  // Toast is the universal feedback; the game-over standings panel also
+  // shows it as a summary line IF the player opens "View Results" (see
+  // showCoinReward, called from onGameOver).
+  if(m.type==='coins'){
+    updateCoins(m.balance);
+    if(m.delta>0){
+      pendingCoinReward=m;
+      toast(`+${m.delta} coins`+(m.capped?' · daily limit reached':''));
+      // If the game-over results are already on screen (fast "View Results"
+      // click beat this message), paint the line now too.
+      if($('bend-menu')?.style.display!=='none'&&!$('s-end').classList.contains('hidden')) showCoinReward();
+    }
+    return;
+  }
   // Generic server-side rejection (currently just quick_match/create_room
   // refusing a profile that's already seated in another room — see
   // isProfileSeatedElsewhere in server/index.js; join_room reuses
@@ -941,6 +956,81 @@ function backToUserProfile(){
   $('userprofile-modal').classList.add('visible');
   $('userprofile-backdrop').classList.add('visible');
 }
+
+// ── Coins ──────────────────────────────────────────────────────────────
+
+// This connection's coin balance (see server/economy.js). 0 for Guest.
+let myCoins=0;
+// The last unrendered end-of-game coin payout ('coins' message), held until
+// the game-over results panel is on screen — see showCoinReward.
+let pendingCoinReward=null;
+
+// A short leaning stack of matte-gold cash coins, drawn in 3/4 view — two
+// coin edges plus a foreshortened top face with a small square hole (sized
+// to read naturally at the tilt). Matte: gentle two-stop gradients, no
+// chrome highlight. Sized to the surrounding text via .coin-svg in both the
+// lobby badge and the game-over reward line. Gradient ids are namespaced.
+const coinIconSvg='<svg class="coin-svg" viewBox="1.5 4 21 17.5" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+  +'<defs>'
+  +'<linearGradient id="mjCoinFace" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dcc584"/><stop offset="1" stop-color="#9f8440"/></linearGradient>'
+  +'<linearGradient id="mjCoinEdge" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c4a95c"/><stop offset="0.5" stop-color="#9f8440"/><stop offset="1" stop-color="#6a5526"/></linearGradient>'
+  +'</defs>'
+  +'<g transform="rotate(-9 12 13)">'
+  +'<ellipse cx="12" cy="17" rx="8.6" ry="3.4" fill="#9f8440"/>'
+  +'<path d="M3.4 13.6 v3.4 a8.6 3.4 0 0 0 17.2 0 v-3.4 z" fill="url(#mjCoinEdge)" stroke="#78632f" stroke-width="0.8"/>'
+  +'<path d="M3.4 10.2 v3.4 a8.6 3.4 0 0 0 17.2 0 v-3.4 z" fill="url(#mjCoinEdge)" stroke="#78632f" stroke-width="0.8"/>'
+  +'<ellipse cx="12" cy="9.8" rx="8.6" ry="3.6" fill="url(#mjCoinFace)" stroke="#78632f" stroke-width="1"/>'
+  +'<rect x="9.7" y="8.9" width="4.6" height="1.9" rx="0.5" fill="#241b09"/>'
+  +'</g>'
+  +'</svg>';
+
+// Gradient-fade angled underline behind the coin count — bright gold on the
+// left, tapering to nothing on the right, sitting under the numerals (not a
+// box). Stretches to the text width via preserveAspectRatio="none".
+const coinUnderlineSvg='<svg class="coin-underline" viewBox="0 0 260 24" preserveAspectRatio="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">'
+  +'<defs><linearGradient id="mjCoinUl" x1="0" y1="0" x2="1" y2="0">'
+  +'<stop offset="0" stop-color="#f0d080"/><stop offset="0.6" stop-color="#c9a84c"/><stop offset="1" stop-color="#c9a84c" stop-opacity="0"/>'
+  +'</linearGradient></defs>'
+  +'<polygon points="2,17 258,13 258,16.5 2,20.5" fill="url(#mjCoinUl)"/>'
+  +'</svg>';
+
+function updateCoins(n){
+  myCoins=Math.max(0,n|0);
+  const el=$('coin-amount'); if(el) el.textContent=myCoins.toLocaleString();
+  const ic=$('coin-icon'); if(ic&&ic.dataset.svg!=='1'){ ic.innerHTML=coinIconSvg; ic.dataset.svg='1'; }
+  const box=$('coin-count');
+  if(box){
+    if(box.dataset.ul!=='1'){ box.insertAdjacentHTML('afterbegin',coinUnderlineSvg); box.dataset.ul='1'; }
+    box.style.display='';
+  }
+}
+
+// Renders the "Coins earned +N" line on the game-over panel from
+// pendingCoinReward, then clears it. A no-op when there's nothing pending
+// (e.g. a between-rounds panel, or a guest game). Called from both the
+// 'coins' handler and onGameOver since either can run second.
+function showCoinReward(){
+  const el=$('coin-reward'); if(!el) return;
+  if(!pendingCoinReward){ el.textContent=''; return; }
+  const m=pendingCoinReward; pendingCoinReward=null;
+  const cap=m.capped?' <span class="coin-cap">· daily limit reached</span>':'';
+  el.innerHTML=`Coins earned&nbsp;&nbsp;+${m.delta} ${coinIconSvg}${cap}`;
+}
+
+// Store — placeholder window opened by clicking the coin balance. A
+// customization shop that spends coins is a later feature (economy.spend is
+// already stubbed server-side).
+function toggleStoreModal(){
+  const modal=$('store-modal'),backdrop=$('store-backdrop');
+  const open=modal.classList.contains('visible');
+  modal.classList.toggle('visible',!open);
+  backdrop.classList.toggle('visible',!open);
+}
+// #coin-count is a role="button" div (not a real <button>, to avoid the UA
+// button styling) — wire keyboard activation to match the click.
+$('coin-count')?.addEventListener('keydown',e=>{
+  if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleStoreModal(); }
+});
 
 // ── Friends & notifications ─────────────────────────────────────────────
 
@@ -2709,10 +2799,14 @@ function onProfileUnlocked(m){
     $('iname').value=m.name;
     $('bfind').disabled=false;
     $('user-icon-btn').style.display='';
-    // Friend ID + notification state come alive with the profile.
+    // Friend ID + notification state + coin balance come alive with the profile.
     myProfileId=m.id||null;
     friendIdSet=new Set();
     updateNotifBadge(m.unread||0);
+    updateCoins(m.coins||0);
+    // Fired on either unlock path (real code OR silent token) — the silent
+    // one is the normal "opened the game today" case, so don't gate on it.
+    if(m.dailyBonus) toast(`+${m.dailyBonus} coins · daily login bonus`);
     // Sync to the profile's own stored icon/title (server-authoritative —
     // see profiles.getIcon/getTitle), not whatever this browser last
     // cached, in case this device previously had a different profile's
@@ -2780,10 +2874,13 @@ function onGuestSelected(){
   // means a real profile's cached icon in localStorage doesn't get
   // clobbered with 'default' just because Guest was picked in between.
   $('user-icon-btn').style.display='none';
-  // Guest has no friend graph — drop any cached state and the unread dot.
+  // Guest has no friend graph and no wallet — drop cached state, the unread
+  // dot, and the coin display.
   myProfileId=null;
   friendIdSet=new Set();
   updateNotifBadge(0);
+  myCoins=0;
+  $('coin-count').style.display='none';
   refreshProfileDisplay();
   // Unlike icon/title above, the nameplate's win-tier class (see
   // updateNameplateTier) persists on the DOM element itself, not through a
@@ -4820,6 +4917,7 @@ function startGame(m){
   // actually clears.
   inGame=true;selId=null;lastState=null;
   clearTimeout(betweenRoundsTimer); // stale re-arm from the prior game's last round_end
+  pendingCoinReward=null; $('coin-reward').textContent=''; // any unrendered payout belongs to the finished game
   // A stuck `discarding=true` from the PREVIOUS game (see sendDiscardAction
   // — the watchdog there recovers within 4s on its own, but this closes the
   // gap for the one path that skips it entirely: hostStartPlayAgain/
@@ -6893,6 +6991,10 @@ function onGameOver(m){
     row.appendChild(cell);row.appendChild(scoreCell);
     tbl.appendChild(row);
   });
+  // Coin payout for this game (see the 'coins' message handler / server
+  // _finishGame). Called here AND from that handler since either can be the
+  // one that runs with data ready — whichever is second paints the line.
+  showCoinReward();
   // m.winSfxLine is picked server-side once per game (see _finishGame in
   // room.js) so every client plays the SAME line for this win, rather than
   // each rolling its own random pick.
@@ -7099,6 +7201,7 @@ function onEnd(m){
   try{
   inGame=false;
   lastEndState=m;
+  $('coin-reward').textContent=''; // round-result panel never shows a payout
   // Both set below (tsumo/ron branch), read again much further down by
   // WIN_BANNER_DELAY — declared up here rather than nested inside that
   // branch's own block scope, and rather than recomputing ronWinnerCount

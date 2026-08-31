@@ -8,6 +8,7 @@ const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats,migrateToIds}=re
 const {getHistory,getGameDetail,deleteHistory,clearAllHistory}=require('./history');
 const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,migrateLegacyIds}=require('./profiles');
 const friends=require('./friends');
+const coins=require('./economy');
 
 // One-time upgrade of both data files from the old name-keyed shape to the
 // new stable-id-keyed shape (see profiles.js's migrateLegacyIds and
@@ -759,7 +760,9 @@ wss.on('connection',(ws)=>{
         // 'unlock_profile_token' on future visits instead of asking for
         // the code again.
         const token=msg.remember?createRememberToken(name):undefined;
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),token,id:unlockedId,unread:friends.unreadCount(unlockedId)}));
+        // Daily login bonus — once per UTC day, on either unlock path.
+        const daily=coins.claimDailyBonus(unlockedId);
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),token,id:unlockedId,unread:friends.unreadCount(unlockedId),coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
         goOnline();
         syncSeatedIdentity();
       } else {
@@ -776,7 +779,8 @@ wss.on('connection',(ws)=>{
       if(verifyRememberToken(name,msg.token)){
         unlockedName=name;
         unlockedId=getId(name);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),silent:true,id:unlockedId,unread:friends.unreadCount(unlockedId)}));
+        const daily=coins.claimDailyBonus(unlockedId);
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),silent:true,id:unlockedId,unread:friends.unreadCount(unlockedId),coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
         goOnline();
         syncSeatedIdentity();
       } else {
@@ -906,7 +910,7 @@ wss.on('connection',(ws)=>{
         ws.send(JSON.stringify({type:'delete_profile_result',ok:false,error:'Invalid developer key'}));
       } else {
         const result=deleteProfile(msg.name);
-        if(result.ok){ deleteStats(result.id); deleteHistory(result.id); friends.purge(result.id); }
+        if(result.ok){ deleteStats(result.id); deleteHistory(result.id); friends.purge(result.id); coins.purge(result.id); }
         ws.send(JSON.stringify({type:'delete_profile_result',ok:result.ok,error:result.error}));
       }
     }

@@ -578,6 +578,19 @@
   </div>
 </div>
 
+<!-- Store — opened by clicking the coin balance (#coin-count). Placeholder
+     for now; a customization shop that spends coins is a later feature
+     (economy.spend is stubbed server-side). See toggleStoreModal. -->
+<div id="store-backdrop" class="about-backdrop" onclick="toggleStoreModal()"></div>
+<div id="store-modal" class="about-modal">
+  <button class="about-close" onclick="toggleStoreModal()">✕</button>
+  <div class="about-title">Store</div>
+  <div class="about-body">
+    <p class="store-soon">Coming soon…</p>
+    <p class="store-sub">Spend your coins on customization here.</p>
+  </div>
+</div>
+
 <!-- Profile picker modal — a card per profile (icon + name, see
      renderProfileList/selectProfileCard in script.js), not a dropdown.
      Picking a card reveals that profile's own code prompt below the grid;
@@ -795,6 +808,12 @@
        small red dot (.user-icon-btn.has-notif::after) whenever there are
        unread friend notifications; the Notifications panel lives inside the
        User Profile hub (see updateNotifBadge / toggleNotificationsModal). -->
+  <!-- Coin balance, left of the 人 icon. Lobby-only, hidden until a profile
+       is unlocked (guests hold no coins — see updateCoins / onProfileUnlocked).
+       updateCoins() fills #coin-icon with the leaning coin-stack SVG and
+       prepends the gradient-fade underline (coinUnderlineSvg) as the first
+       child of #coin-count — no box, just a mark under the numerals. -->
+  <div class="coin-count" id="coin-count" role="button" tabindex="0" title="Store" onclick="toggleStoreModal()" style="display:none;"><span class="coin-icon" id="coin-icon"></span><span id="coin-amount">0</span></div>
   <button class="settings-icon-btn user-icon-btn" id="user-icon-btn" onclick="toggleUserProfile()" title="User Profile" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 5.556);">人</button>
   <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Janshin</div></div>
@@ -1120,6 +1139,9 @@
     <div class="re-tenpai" id="re-tenpai"></div>
     <table class="st" id="rest"></table>
     <div class="re-carryover" id="re-carryover"></div>
+    <!-- End-of-game coin payout (see showCoinReward in script.js) — only
+         populated on the game-over view, blank between rounds. -->
+    <div class="coin-reward" id="coin-reward"></div>
     <div class="reb">
       <button id="bround-ready" class="ready-btn reb-btn" onclick="sendRoundReady()">✓ Ready</button>
       <button id="bview-results" class="bp reb-btn" style="display:none;" onclick="showGameOverResults()">View Results</button>

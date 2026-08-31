@@ -2022,6 +2022,51 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
   border-radius:50%;background:#d02323;vertical-align:middle;margin-left:calc(var(--ui-vmin, 7.2px) * .833);}
 .hub-badge.show{display:inline-block;}
 
+/* Coin balance — pale-gold serif numerals + leaning coin-stack icon over a
+   gradient-fade underline (no box; see coinUnderlineSvg / updateCoins in
+   script.js). Lobby top-right, left of the 人 icon; same `top` as
+   .settings-icon-btn so the number, 人 icon and ☰ all sit the same distance
+   from the top edge. */
+.coin-count{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.667);right:calc(var(--ui-vmin, 7.2px) * 12.7);
+  display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .6);
+  padding:0 calc(var(--ui-vmin, 7.2px) * .5) calc(var(--ui-vmin, 7.2px) * .55) 0;
+  color:#e6dcc2;font-family:'Noto Serif JP',serif;font-weight:700;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.85);line-height:1;white-space:nowrap;z-index:10;
+  letter-spacing:calc(var(--ui-vmin, 7.2px) * .06);font-variant-numeric:tabular-nums;
+  text-shadow:0 1px calc(var(--ui-vmin, 7.2px) * .28) rgba(0,0,0,.6);
+  cursor:pointer;background:none;border:0;outline-offset:calc(var(--ui-vmin, 7.2px) * .5);
+  transition:filter .18s;}
+.coin-count:hover{filter:brightness(1.12);}
+.coin-count:active{filter:brightness(.95);}
+.coin-count>span{position:relative;z-index:1;}
+.coin-count .coin-icon{display:flex;align-items:center;}
+/* Gradient-fade underline — a mark, not a container. Starts just left of
+   the coin icon and fades out past the numerals; preserveAspectRatio="none"
+   stretches it to width. */
+.coin-underline{position:absolute;left:calc(var(--ui-vmin, 7.2px) * -.4);
+  width:calc(100% + var(--ui-vmin, 7.2px) * .7);
+  bottom:calc(var(--ui-vmin, 7.2px) * -.55);height:calc(var(--ui-vmin, 7.2px) * 2.2);
+  z-index:0;pointer-events:none;}
+/* The SVG coin-stack — sized to the surrounding text, used in both the
+   lobby count and the #s-end reward line. */
+.coin-svg{width:1.65em;height:1.65em;display:inline-block;vertical-align:-.42em;flex-shrink:0;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));}
+
+/* "Coins earned +N" line on the game-over results panel (#s-end) — same
+   pale gold as the lobby count, no underline (one-off line, not a HUD). */
+.coin-reward{text-align:center;color:#e6dcc2;font-family:'Noto Serif JP',serif;font-weight:700;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.9);letter-spacing:calc(var(--ui-vmin, 7.2px) * .08);
+  margin:calc(var(--ui-vmin, 7.2px) * 1.1) 0 calc(var(--ui-vmin, 7.2px) * .4);}
+.coin-reward:empty{display:none;}
+.coin-reward .coin-cap{opacity:.65;font-size:.82em;}
+
+/* Store modal placeholder (opened from #coin-count). */
+.store-soon{text-align:center;color:var(--gold);font-family:'Cinzel Decorative',serif;
+  font-size:calc(var(--ui-vmin, 7.2px) * 3);letter-spacing:calc(var(--ui-vmin, 7.2px) * .28);
+  margin:calc(var(--ui-vmin, 7.2px) * 3) 0 calc(var(--ui-vmin, 7.2px) * 1);}
+.store-sub{text-align:center;color:rgba(245,237,216,.5);
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.5);margin:0 0 calc(var(--ui-vmin, 7.2px) * 2);}
+
 /* ── Friends panel & Notifications panel ── */
 .friends-my-id{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.111);flex-wrap:wrap;
   margin-bottom:calc(var(--ui-vmin, 7.2px) * 2);}

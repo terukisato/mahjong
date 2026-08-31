@@ -5,6 +5,7 @@ const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
 const {botName,bestDiscard,botReact,shouldRiichi} = require('./bot');
 const {recordGameResult,getStats} = require('./stats');
 const {recordGame} = require('./history');
+const {awardGameCoins} = require('./economy');
 
 // Cheap composition heuristics for "what's this hand shaping up toward" —
 // not a full search over every possible completion (overkill for a
@@ -2186,6 +2187,22 @@ class Room {
       if(!list||!list.length) return;
       const p=this.seats[seat];
       if(p&&!p.isBot&&p.ws?.readyState===1) p.ws.send(JSON.stringify({type:'achievements_unlocked',achievements:list}));
+    });
+    // Placement coins — same "real profile seats only, unicast to each" shape
+    // as the achievements loop above (an opponent's payout is their own
+    // business). See economy.awardGameCoins for the rate. Guests/bots skip.
+    const coinPlacements=this._computePlacements(g.scores);
+    this.seats.forEach((p,seat)=>{
+      if(!p||p.isBot||p.isGuest||!p.profileId) return;
+      const res=awardGameCoins(p.profileId,{
+        variant:this.numPlayers===3?'sanma':'yonma',
+        mode:this.gameMode,
+        matchKind:this.matchKind,
+        placement:coinPlacements[seat],
+        finalScore:g.scores[seat],
+      });
+      if(p.ws?.readyState===1) p.ws.send(JSON.stringify({type:'coins',reason:'placement',
+        balance:res.balance,delta:res.delta,base:res.base,bonus:res.bonus,capped:res.capped}));
     });
     // Game's over — no seat can be reclaimed any more (reclaimSeat checks
     // phase), so drop the resume state and let index.js deregister this
