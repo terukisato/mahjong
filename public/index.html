@@ -97,7 +97,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.14.5</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.14.6</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -387,6 +387,7 @@
     </span>
   </div>
   <div class="about-body">
+    <a href="#" class="hub-link" onclick="toggleUserProfile();toggleFriendsModal();return false;">Friends</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleVoiceThemeModal();return false;">Voice Theme</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleUserStatsModal();return false;">My Stats</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();togglePlayHistoryModal();return false;">Play History</a>
@@ -532,6 +533,48 @@
   </div>
 </div>
 
+<!-- Friends — a User Profile child panel (opened from the "Friends" hub
+     link). Shows this profile's own ID number (the 16-digit stable id from
+     server/profiles.js, only ever shown to its owner) to hand out, an
+     add-by-ID box, pending requests both directions, and the friends list
+     itself. See toggleFriendsModal/renderFriends in script.js. -->
+<div id="friends-backdrop" class="about-backdrop" onclick="toggleFriendsModal()"></div>
+<div id="friends-modal" class="about-modal">
+  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-close" onclick="toggleFriendsModal()">✕</button>
+  <div class="about-title">Friends</div>
+  <div class="about-body">
+    <div class="friends-my-id">
+      <span class="friends-my-id-label">Your ID</span>
+      <code id="friends-my-id">—</code>
+      <button type="button" id="friends-copy-id" onclick="copyMyFriendId()">Copy</button>
+    </div>
+    <div class="ig">
+      <label for="friend-id-input">Add a friend by ID</label>
+      <input type="text" id="friend-id-input" inputmode="numeric" maxlength="16" placeholder="16-digit ID" autocomplete="off">
+    </div>
+    <div id="friend-add-error" class="profile-error"></div>
+    <button class="bp" onclick="submitFriendRequest()">Send Request</button>
+    <div id="friend-incoming" class="friends-section"></div>
+    <div id="friend-outgoing" class="friends-section"></div>
+    <div class="friends-list-title" id="friends-list-title" style="display:none;">Friends</div>
+    <div id="friends-list" class="icon-grid"></div>
+  </div>
+</div>
+
+<!-- Notifications — opened straight from the bell (#notif-bell-btn), NOT a
+     User Profile child (no ← back). Friend requests here carry Accept/
+     Decline; "accepted" items are plain text. Opening it marks everything
+     read (see toggleNotifications/renderNotifications in script.js). -->
+<div id="notifications-backdrop" class="about-backdrop" onclick="toggleNotifications()"></div>
+<div id="notifications-modal" class="about-modal">
+  <button class="about-close" onclick="toggleNotifications()">✕</button>
+  <div class="about-title">Notifications</div>
+  <div class="about-body">
+    <div id="notifications-list">Loading…</div>
+  </div>
+</div>
+
 <!-- Profile picker modal — a card per profile (icon + name, see
      renderProfileList/selectProfileCard in script.js), not a dropdown.
      Picking a card reveals that profile's own code prompt below the grid;
@@ -665,6 +708,19 @@
   </div>
 </div>
 
+<!-- Generic yes/no confirm — reuses the leave-modal's compact two-button
+     layout. Body text and the confirm handler are set at call time by
+     uiConfirm() in script.js. -->
+<div id="confirm-backdrop" class="about-backdrop" onclick="closeUiConfirm()"></div>
+<div id="confirm-modal" class="about-modal leave-modal">
+  <div class="about-title" id="confirm-title">Confirm</div>
+  <div class="about-body"><p id="confirm-message"></p></div>
+  <div class="leave-actions">
+    <button class="leave-btn-stay" onclick="closeUiConfirm()">Cancel</button>
+    <button class="leave-btn-confirm" id="confirm-ok-btn">OK</button>
+  </div>
+</div>
+
 <!-- Achievement-unlocked notification — a corner toast, NOT a blocking
      modal (deliberately no backdrop/.about-modal here): it used to be a
      full about-modal, but that blocked clicks straight through to the
@@ -734,6 +790,13 @@
   <!-- Hidden until a profile is unlocked (see onProfileUnlocked) — there's
        no per-profile content to show before then. -->
   <button class="settings-icon-btn user-icon-btn" id="user-icon-btn" onclick="toggleUserProfile()" title="User Profile" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 5.556);">人</button>
+  <!-- Friend-notification bell — sits to the left of the 人 user icon, same
+       "hidden until a profile is unlocked" rule (see onProfileUnlocked).
+       #notif-badge shows the unread count (see updateNotifBadge). -->
+  <button class="settings-icon-btn notif-bell-btn" id="notif-bell-btn" onclick="toggleNotifications()" title="Notifications" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 9.167);">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+    <span class="notif-badge" id="notif-badge">0</span>
+  </button>
   <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Janshin</div></div>
   <div class="card">
@@ -1022,6 +1085,11 @@
   <div class="player-popover" id="player-popover" style="display:none;">
     <div class="player-popover-nameplate" id="pp-nameplate"></div>
     <div class="player-popover-stats" id="pp-stats"></div>
+    <!-- Shown only for a real (non-bot, non-guest) opponent who isn't
+         already a friend, and only when you're playing as a profile
+         yourself — see renderPlayerPopover in script.js. Click asks to
+         confirm, then sends a friend request. -->
+    <button class="pp-addfriend" id="pp-addfriend" style="display:none;" onclick="addFriendFromPopover()">＋ Add Friend</button>
   </div>
 
 </div>

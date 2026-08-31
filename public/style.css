@@ -2006,6 +2006,69 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    ceiling on a huge one. */
 .user-icon-btn{display:flex;align-items:center;justify-content:center;padding:0;}
 .user-icon-btn svg{width:calc(var(--ui-vmin, 7.2px) * 6.111);height:calc(var(--ui-vmin, 7.2px) * 6.111);display:block;}
+
+/* Friend-notification bell — a .settings-icon-btn sibling (position/color/
+   z-index inherited from there); this just sizes the bell svg to roughly the
+   ☰ glyph's footprint and hangs the unread badge off the top-right corner.
+   Badge styling mirrors .chat-hist-btn .badge (same --ui-vmin sizing, same
+   .show toggle). */
+.notif-bell-btn{display:flex;align-items:center;justify-content:center;padding:0;}
+.notif-bell-btn svg{width:calc(var(--ui-vmin, 7.2px) * 3);height:calc(var(--ui-vmin, 7.2px) * 3);display:block;}
+.notif-badge{position:absolute;top:calc(var(--ui-vmin, 7.2px) * -.7);right:calc(var(--ui-vmin, 7.2px) * -.7);
+  background:#c02020;color:#fff;font-size:calc(var(--ui-vmin, 7.2px) * 1.111);font-weight:700;
+  min-width:calc(var(--ui-vmin, 7.2px) * 1.944);height:calc(var(--ui-vmin, 7.2px) * 1.944);border-radius:calc(var(--ui-vmin, 7.2px) * .972);
+  display:none;align-items:center;justify-content:center;padding:0 calc(var(--ui-vmin, 7.2px) * .278);line-height:1;}
+.notif-badge.show{display:flex;}
+
+/* ── Friends panel & Notifications panel ── */
+.friends-my-id{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.111);flex-wrap:wrap;
+  margin-bottom:calc(var(--ui-vmin, 7.2px) * 2);}
+.friends-my-id-label{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);letter-spacing:calc(var(--ui-vmin, 7.2px) * .417);
+  color:var(--gold);text-transform:uppercase;opacity:.9;}
+#friends-my-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:calc(var(--ui-vmin, 7.2px) * 1.944);
+  color:var(--cream);background:rgba(0,0,0,.25);border:1px solid rgba(212,175,110,.3);border-radius:calc(var(--ui-vmin, 7.2px) * .833);
+  padding:calc(var(--ui-vmin, 7.2px) * .556) calc(var(--ui-vmin, 7.2px) * 1.111);user-select:all;letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);}
+#friends-copy-id{background:none;border:1px solid rgba(212,175,110,.4);border-radius:calc(var(--ui-vmin, 7.2px) * .694);
+  color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);cursor:pointer;
+  padding:calc(var(--ui-vmin, 7.2px) * .556) calc(var(--ui-vmin, 7.2px) * 1.111);font-family:'Noto Sans JP',sans-serif;}
+.friends-section{margin-top:calc(var(--ui-vmin, 7.2px) * 1.5);}
+.friends-section-title,.friends-list-title{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);letter-spacing:calc(var(--ui-vmin, 7.2px) * .417);
+  color:var(--gold);text-transform:uppercase;opacity:.9;margin:calc(var(--ui-vmin, 7.2px) * 1.5) 0 calc(var(--ui-vmin, 7.2px) * .833);}
+.friends-list-title{margin-top:calc(var(--ui-vmin, 7.2px) * 2);}
+.friends-empty{color:rgba(245,237,216,.5);font-size:calc(var(--ui-vmin, 7.2px) * 1.528);}
+.friend-row{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.111);
+  padding:calc(var(--ui-vmin, 7.2px) * .833) 0;border-bottom:1px solid rgba(212,175,110,.15);}
+.friend-row-pending{opacity:.7;}
+.friend-ic{flex-shrink:0;width:calc(var(--ui-vmin, 7.2px) * 3.333);height:calc(var(--ui-vmin, 7.2px) * 3.333);display:flex;align-items:center;justify-content:center;}
+.friend-ic svg{width:100%;height:100%;display:block;}
+.friend-nm{flex:1;min-width:0;color:var(--cream);font-size:calc(var(--ui-vmin, 7.2px) * 1.667);
+  display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .833);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.friend-dot{width:calc(var(--ui-vmin, 7.2px) * 1.111);height:calc(var(--ui-vmin, 7.2px) * 1.111);border-radius:50%;
+  background:#4caf50;box-shadow:0 0 calc(var(--ui-vmin, 7.2px) * .833) #4caf50;flex-shrink:0;}
+.friend-dot-busy{background:#d4af6e;box-shadow:none;}
+.friend-actions{display:flex;gap:calc(var(--ui-vmin, 7.2px) * .694);flex-shrink:0;}
+.friend-actions button{background:none;border:1px solid rgba(212,175,110,.4);border-radius:calc(var(--ui-vmin, 7.2px) * .694);
+  color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);cursor:pointer;font-family:'Noto Sans JP',sans-serif;
+  padding:calc(var(--ui-vmin, 7.2px) * .417) calc(var(--ui-vmin, 7.2px) * 1);white-space:nowrap;}
+.friend-actions .friend-remove{border-color:rgba(224,96,96,.4);color:#e06060;}
+.friend-pending{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:rgba(245,237,216,.5);align-self:center;}
+.notif-row{padding:calc(var(--ui-vmin, 7.2px) * 1.111) 0;border-bottom:1px solid rgba(212,175,110,.15);
+  display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .833);}
+.notif-row-unread{position:relative;}
+.notif-row-unread::before{content:"";position:absolute;left:calc(var(--ui-vmin, 7.2px) * -1.111);top:calc(var(--ui-vmin, 7.2px) * 1.667);
+  width:calc(var(--ui-vmin, 7.2px) * .833);height:calc(var(--ui-vmin, 7.2px) * .833);border-radius:50%;background:#c02020;}
+.notif-text{color:var(--cream);font-size:calc(var(--ui-vmin, 7.2px) * 1.667);}
+.notif-actions{display:flex;gap:calc(var(--ui-vmin, 7.2px) * .833);}
+.notif-actions button{background:none;border:1px solid rgba(212,175,110,.4);border-radius:calc(var(--ui-vmin, 7.2px) * .694);
+  color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.389);cursor:pointer;font-family:'Noto Sans JP',sans-serif;
+  padding:calc(var(--ui-vmin, 7.2px) * .556) calc(var(--ui-vmin, 7.2px) * 1.389);}
+.notif-actions .notif-decline{border-color:rgba(224,96,96,.4);color:#e06060;}
+
+/* ＋ Add Friend inside the in-game nameplate popover */
+.pp-addfriend{margin-top:calc(var(--ui-vmin, 7.2px) * 1.111);width:100%;
+  background:none;border:1px solid rgba(212,175,110,.45);border-radius:calc(var(--ui-vmin, 7.2px) * .833);
+  color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.528);cursor:pointer;font-family:'Noto Sans JP',sans-serif;
+  padding:calc(var(--ui-vmin, 7.2px) * .833) 0;}
 /* A flex item within .card-header-row (see index.html), alongside the
    header and Rankings/Match Settings, rather than absolutely anchored to
    .card's own top-left corner — .card-header-row's align-items:center is

@@ -2851,7 +2851,11 @@ class Room {
     if(!p) return null;
     const st=getStats(p.profileId);
     return {name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default',icon:p.icon||'default',title:p.title||null,difficulty:p.difficulty||null,
-      wins:(st.yonma.gamesWon||0)+(st.sanma.gamesWon||0)};
+      wins:(st.yonma.gamesWon||0)+(st.sanma.gamesWon||0),
+      // Stable profile id, so the client can offer "+ Add Friend" on an
+      // opponent's nameplate popover (see friends.js / addFriendFromPopover
+      // in script.js). null for bots and guests — nobody to befriend.
+      friendId:p.profileId||null};
   }); }
 
   _broadcastRoomUpdate(){

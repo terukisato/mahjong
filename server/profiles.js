@@ -216,6 +216,13 @@ function getIcon(name) {
   return _findByName(_load(), name)[1]?.icon || 'default';
 }
 
+// Same as getIcon but keyed by the stable id (see friends.js, which joins
+// its id-keyed lists back to a display icon the same way getNameById gives
+// it a display name) — 'default' for an id with no profile record.
+function getIconById(id) {
+  return _load()[id]?.icon || 'default';
+}
+
 // Same pattern as setIcon/getIcon above — persisted on the profile itself,
 // not just the browser, so it's what shows up on any device. Only checks
 // the title is a recognized one at all (TITLES) — NOT that this specific
@@ -353,4 +360,4 @@ function setCode(name, code) {
   return { ok: true };
 }
 
-module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, renameProfile, setCode, setTitle, getTitle, TITLES, setVoiceTheme, getVoiceTheme, VOICE_THEMES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById, migrateLegacyIds };
+module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, getIconById, renameProfile, setCode, setTitle, getTitle, TITLES, setVoiceTheme, getVoiceTheme, VOICE_THEMES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById, migrateLegacyIds };

@@ -732,6 +732,42 @@ function onMsg(m){
   if(m.type==='online_profiles'){renderInvitePlayers(m.profiles);return;}
   if(m.type==='invite_result'){onInviteResult(m);return;}
   if(m.type==='room_invite'){showRoomInvite(m);return;}
+  // ── Friends ──
+  if(m.type==='friends'){renderFriends(m);return;}
+  if(m.type==='notifications'){renderNotifications(m);updateNotifBadge(m.unread||0);return;}
+  if(m.type==='notifications_read'){updateNotifBadge(0);return;}
+  if(m.type==='friend_request_result'){
+    if(m.ok){
+      $('friend-add-error').textContent='';
+      const inp=$('friend-id-input'); if(inp) inp.value='';
+      toast(m.autoAccepted?'Friend added.':'Friend request sent.');
+      if($('friends-modal').classList.contains('visible')) wss({type:'get_friends'});
+    } else {
+      const err=m.error||'Could not send that request.';
+      if($('friends-modal').classList.contains('visible')) $('friend-add-error').textContent=err;
+      else toast(err);
+    }
+    return;
+  }
+  // Something changed our friends/requests (an accept/decline/remove we or
+  // the other party did) — refresh whatever friend UI is open, and always
+  // the notification badge.
+  if(m.type==='friend_action_done'){
+    if($('friends-modal').classList.contains('visible')) wss({type:'get_friends'});
+    wss({type:'get_notifications'});
+    return;
+  }
+  // Live badge bump while we're sitting in the lobby (see pushFriendBadge in
+  // server/index.js) — a friend request or acceptance just landed.
+  if(m.type==='friend_notification'){
+    updateNotifBadge(m.unread||0);
+    if($('notifications-modal').classList.contains('visible')) wss({type:'get_notifications'});
+    // A request/acceptance involving us just landed — if we're looking at
+    // the Friends panel, refresh it so a new incoming request or a
+    // just-confirmed friend shows without reopening.
+    if($('friends-modal').classList.contains('visible')) wss({type:'get_friends'});
+    return;
+  }
   // Generic server-side rejection (currently just quick_match/create_room
   // refusing a profile that's already seated in another room — see
   // isProfileSeatedElsewhere in server/index.js; join_room reuses
@@ -880,12 +916,161 @@ function toggleUserProfile(){
 // unconditionally clearing every child (not just the caller's own) so this
 // stays correct even if a future setting gets added here.
 function backToUserProfile(){
-  ['playericon','title','voicetheme','userstats','playhistory','achievements','changeusername','changecode'].forEach(id=>{
+  ['friends','playericon','title','voicetheme','userstats','playhistory','achievements','changeusername','changecode'].forEach(id=>{
     $(id+'-modal').classList.remove('visible');
     $(id+'-backdrop').classList.remove('visible');
   });
   $('userprofile-modal').classList.add('visible');
   $('userprofile-backdrop').classList.add('visible');
+}
+
+// ── Friends & notifications ─────────────────────────────────────────────
+
+// Bell badge — mirrors the chat-history #chat-badge pattern (textContent +
+// a .show class that CSS keys the visibility off). Hidden at 0.
+function updateNotifBadge(n){
+  const badge=$('notif-badge'); if(!badge) return;
+  n=Math.max(0,n|0);
+  badge.textContent=n>99?'99+':String(n);
+  badge.classList.toggle('show',n>0);
+}
+
+// Opened straight from the bell (not a User Profile child). Opening marks
+// everything read server-side and re-fetches the list.
+function toggleNotifications(){
+  const modal=$('notifications-modal');
+  const backdrop=$('notifications-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('notifications-list').textContent='Loading…';
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+  wss({type:'get_notifications'});
+  wss({type:'mark_notifications_read'});
+}
+
+function renderNotifications(m){
+  const box=$('notifications-list'); if(!box) return;
+  const items=m.items||[];
+  if(!items.length){ box.innerHTML='<p class="friends-empty">No notifications yet.</p>'; return; }
+  box.innerHTML='';
+  for(const it of items){
+    const row=document.createElement('div');
+    row.className='notif-row'+(it.read?'':' notif-row-unread');
+    const who=escHtml(it.fromName||'Someone');
+    if(it.type==='request'){
+      row.innerHTML=`<div class="notif-text"><b>${who}</b> sent you a friend request.</div>
+        <div class="notif-actions">
+          <button class="notif-accept">Accept</button>
+          <button class="notif-decline">Decline</button>
+        </div>`;
+      row.querySelector('.notif-accept').onclick=()=>{ wss({type:'accept_friend_request',fromId:it.fromId}); row.remove(); };
+      row.querySelector('.notif-decline').onclick=()=>{ wss({type:'decline_friend_request',fromId:it.fromId}); row.remove(); };
+    } else if(it.type==='accepted'){
+      row.innerHTML=`<div class="notif-text"><b>${who}</b> accepted your friend request.</div>`;
+    } else {
+      row.innerHTML=`<div class="notif-text">${who}</div>`;
+    }
+    box.appendChild(row);
+  }
+}
+
+function toggleFriendsModal(){
+  const modal=$('friends-modal');
+  const backdrop=$('friends-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('friends-my-id').textContent=myProfileId||'—';
+  $('friend-add-error').textContent='';
+  $('friend-incoming').innerHTML='';
+  $('friend-outgoing').innerHTML='';
+  $('friends-list').innerHTML='<p class="friends-empty">Loading…</p>';
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+  wss({type:'get_friends'});
+}
+
+function renderFriends(m){
+  friendIdSet=new Set((m.friends||[]).map(f=>f.id));
+  $('friends-my-id').textContent=m.myId||myProfileId||'—';
+
+  // Incoming requests — Accept / Decline.
+  const inc=$('friend-incoming');
+  if(inc){
+    const rows=(m.incoming||[]).map(f=>`
+      <div class="friend-row" data-id="${f.id}">
+        <span class="friend-ic">${iconSvg(f.icon)}</span>
+        <span class="friend-nm">${escHtml(f.name)}</span>
+        <span class="friend-actions">
+          <button onclick="acceptFriend('${f.id}')">Accept</button>
+          <button onclick="declineFriend('${f.id}')">Decline</button>
+        </span>
+      </div>`).join('');
+    inc.innerHTML=rows?`<div class="friends-section-title">Requests</div>${rows}`:'';
+  }
+
+  // Outgoing — just "Pending", with a Cancel (reuses decline).
+  const out=$('friend-outgoing');
+  if(out){
+    const rows=(m.outgoing||[]).map(f=>`
+      <div class="friend-row friend-row-pending" data-id="${f.id}">
+        <span class="friend-ic">${iconSvg(f.icon)}</span>
+        <span class="friend-nm">${escHtml(f.name)}</span>
+        <span class="friend-actions">
+          <span class="friend-pending">Pending</span>
+          <button onclick="declineFriend('${f.id}')">Cancel</button>
+        </span>
+      </div>`).join('');
+    out.innerHTML=rows?`<div class="friends-section-title">Sent</div>${rows}`:'';
+  }
+
+  // Friends list.
+  const list=$('friends-list');
+  const canInvite=isRoomHost && !inGame && $('wa').style.display==='block';
+  const friends=m.friends||[];
+  $('friends-list-title').style.display=friends.length?'':'none';
+  if(!friends.length){ list.innerHTML='<p class="friends-empty">No friends yet — add one by ID above.</p>'; return; }
+  list.innerHTML=friends.map(f=>{
+    const dot=f.online?'<span class="friend-dot" title="Online"></span>':(f.busy?'<span class="friend-dot friend-dot-busy" title="In a game"></span>':'');
+    const invite=(canInvite&&f.online&&!f.busy)?`<button onclick="inviteFriendToRoom('${escAttr(f.name)}')">Invite</button>`:'';
+    return `
+      <div class="friend-row" data-id="${f.id}">
+        <span class="friend-ic">${iconSvg(f.icon)}</span>
+        <span class="friend-nm">${escHtml(f.name)}${dot}</span>
+        <span class="friend-actions">
+          ${invite}
+          <button class="friend-remove" onclick="removeFriend('${f.id}','${escAttr(f.name)}')">Remove</button>
+        </span>
+      </div>`;
+  }).join('');
+}
+
+// Small attribute-safe escaper for the inline onclick string args above
+// (names can contain quotes/backslashes). escHtml handles element text;
+// this is for a JS string literal inside an HTML attribute.
+function escAttr(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function acceptFriend(id){ wss({type:'accept_friend_request',fromId:id}); }
+function declineFriend(id){ wss({type:'decline_friend_request',fromId:id}); }
+function removeFriend(id,name){
+  uiConfirm(`Remove ${name||'this friend'} from your friends?`,()=>wss({type:'remove_friend',otherId:id}),'Remove');
+}
+function inviteFriendToRoom(name){ wss({type:'invite_player',name}); toast(`Invited ${name}.`); }
+
+function submitFriendRequest(){
+  const inp=$('friend-id-input'); if(!inp) return;
+  const id=inp.value.trim();
+  if(!/^\d{16}$/.test(id)){ $('friend-add-error').textContent='Enter a 16-digit ID.'; return; }
+  if(id===myProfileId){ $('friend-add-error').textContent="That's your own ID."; return; }
+  $('friend-add-error').textContent='';
+  wss({type:'send_friend_request',toId:id});
+}
+
+function copyMyFriendId(){
+  if(!myProfileId) return;
+  try{
+    navigator.clipboard.writeText(myProfileId).then(()=>toast('ID copied.'),()=>toast('Copy failed.'));
+  }catch(e){ toast('Copy failed.'); }
 }
 
 function togglePlayerIconModal(){
@@ -2094,6 +2279,14 @@ function formatRankingPrimary(e,sortBy){
 // renderer to hand off to.
 let pendingPlayerCardName=null;
 let pendingPlayerCardKind=null;
+// This connection's own unlocked profile id (the 16-digit friend ID),
+// received in the 'profile_unlocked' message. null for Guest. Shown in the
+// Friends panel and used to suppress the in-game ＋ on your own nameplate.
+let myProfileId=null;
+// Ids the client currently believes are friends — repopulated from every
+// 'friends' message. Only used to hide the popover ＋ for known friends; the
+// server still validates every request regardless.
+let friendIdSet=new Set();
 function openPlayerCard(labelEl){
   const row=labelEl.closest('.sp-row');
   openPlayerCardByName(row.dataset.playerName);
@@ -2130,6 +2323,9 @@ let inGameSeatInfo={};
 // re-measure/reposition once real content replaces the "Loading…"
 // placeholder (its height changes, so the initial position can go stale).
 let popoverAnchorEl=null;
+// The clicked opponent's stable profile id (from room.js's _seatInfo
+// friendId), for the popover's ＋ Add Friend button. null for bots/guests.
+let popoverFriendId=null;
 function openPlayerCardInGame(posId,anchorEl){
   const info=inGameSeatInfo[posId];
   if(!info||info.isBot||!info.name) return;
@@ -2141,9 +2337,11 @@ function openPlayerCardInGame(posId,anchorEl){
   pendingPlayerCardName=info.name;
   pendingPlayerCardKind='popover';
   popoverAnchorEl=anchorEl;
+  popoverFriendId=info.friendId||null;
   positionPlayerPopover(anchorEl);
   $('pp-nameplate').innerHTML='';
   $('pp-stats').innerHTML=`<p class="player-card-loading">Loading…</p>`;
+  $('pp-addfriend').style.display='none';
   pop.style.display='';
   wss({type:'get_player_stats',name:info.name});
 }
@@ -2152,7 +2350,21 @@ function closePlayerPopover(){
   if(pendingPlayerCardKind==='popover') pendingPlayerCardName=null;
   pendingPlayerCardKind=null;
   popoverAnchorEl=null;
+  popoverFriendId=null;
+  const af=$('pp-addfriend'); if(af) af.style.display='none';
   $('player-popover').style.display='none';
+}
+
+// The popover's ＋ Add Friend button. Confirms first (per spec) then fires a
+// friend request by the opponent's stable id. friend_request_result (see
+// onMsg) toasts the outcome — including "Already friends" if the client's
+// friendIdSet was stale.
+function addFriendFromPopover(){
+  if(!popoverFriendId) return;
+  const nm=pendingPlayerCardName||'this player';
+  const toId=popoverFriendId;
+  closePlayerPopover();
+  uiConfirm(`Send a friend request to ${nm}?`,()=>wss({type:'send_friend_request',toId}),'Send Request');
 }
 
 // Anchors the popover just below-and-centered on whichever nameplate was
@@ -2219,6 +2431,13 @@ function renderPlayerPopover(m){
     <div class="sp-row"><span class="sp-label">Deal-In Rate</span><span>${dealIn}</span></div>
     <div class="sp-row"><span class="sp-label">Best Han</span><span>${bestHan}</span></div>
   `;
+  // ＋ Add Friend — only for a real opponent id you're not already friends
+  // with, and only when you're playing as a profile yourself.
+  const af=$('pp-addfriend');
+  if(af){
+    const show=popoverFriendId&&myProfileId&&popoverFriendId!==myProfileId&&!friendIdSet.has(popoverFriendId);
+    af.style.display=show?'':'none';
+  }
   if(popoverAnchorEl) positionPlayerPopover(popoverAnchorEl);
 }
 
@@ -2417,6 +2636,11 @@ function onProfileUnlocked(m){
     $('iname').value=m.name;
     $('bfind').disabled=false;
     $('user-icon-btn').style.display='';
+    // Friend ID + notification bell come alive with the profile.
+    myProfileId=m.id||null;
+    friendIdSet=new Set();
+    $('notif-bell-btn').style.display='';
+    updateNotifBadge(m.unread||0);
     // Sync to the profile's own stored icon/title (server-authoritative —
     // see profiles.getIcon/getTitle), not whatever this browser last
     // cached, in case this device previously had a different profile's
@@ -2484,6 +2708,11 @@ function onGuestSelected(){
   // means a real profile's cached icon in localStorage doesn't get
   // clobbered with 'default' just because Guest was picked in between.
   $('user-icon-btn').style.display='none';
+  // Guest has no friend graph — hide the bell and drop any cached state.
+  myProfileId=null;
+  friendIdSet=new Set();
+  $('notif-bell-btn').style.display='none';
+  updateNotifBadge(0);
   refreshProfileDisplay();
   // Unlike icon/title above, the nameplate's win-tier class (see
   // updateNameplateTier) persists on the DOM element itself, not through a
@@ -4234,6 +4463,25 @@ function showLeaveConfirm(){
   $('leave-modal').classList.add('visible');
   $('leave-backdrop').classList.add('visible');
 }
+
+// Generic themed yes/no confirm (see #confirm-modal in index.html) — a
+// drop-in for window.confirm, which this app's sandboxed preview disables
+// and which looks out of place against the rest of the UI anyway. `onYes`
+// runs only if the player confirms.
+let _uiConfirmYes=null;
+function uiConfirm(message,onYes,okLabel){
+  _uiConfirmYes=onYes||null;
+  $('confirm-message').textContent=message||'Are you sure?';
+  $('confirm-ok-btn').textContent=okLabel||'OK';
+  $('confirm-ok-btn').onclick=()=>{ const fn=_uiConfirmYes; closeUiConfirm(); if(fn) fn(); };
+  $('confirm-modal').classList.add('visible');
+  $('confirm-backdrop').classList.add('visible');
+}
+function closeUiConfirm(){
+  _uiConfirmYes=null;
+  $('confirm-modal').classList.remove('visible');
+  $('confirm-backdrop').classList.remove('visible');
+}
 function cancelLeaveConfirm(){
   $('leave-modal').classList.remove('visible');
   $('leave-backdrop').classList.remove('visible');
@@ -4546,7 +4794,7 @@ function startGame(m){
     // nameplate text itself above); an opponent seat can be null (empty
     // seat) mid-game in theory, hence the p?.name guard leaving it
     // undefined rather than the literal '—' placeholder shown on-screen.
-    inGameSeatInfo[id]=i===0?{name:selfName,isBot:false}:{name:p?.name,isBot:!!p?.isBot};
+    inGameSeatInfo[id]=i===0?{name:selfName,isBot:false}:{name:p?.name,isBot:!!p?.isBot,friendId:p?.friendId||null};
     // Title under the name — self shows currentPlayerTitle (kept live by
     // applyPlayerTitle, so this never goes stale even if changed moments
     // before starting) UNLESS playing as Guest, who has no profile to hold

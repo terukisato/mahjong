@@ -7,6 +7,7 @@ const {Room}=require('./room');
 const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats,migrateToIds}=require('./stats');
 const {getHistory,getGameDetail,deleteHistory,clearAllHistory}=require('./history');
 const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,migrateLegacyIds}=require('./profiles');
+const friends=require('./friends');
 
 // One-time upgrade of both data files from the old name-keyed shape to the
 // new stable-id-keyed shape (see profiles.js's migrateLegacyIds and
@@ -134,6 +135,20 @@ const seatedProfiles=new Map(); // profileId -> {roomId, playerId}
 // to room join/leave, since a player can be online in the lobby without
 // ever being seated anywhere.
 const onlineProfiles=new Map(); // profileId -> {name, ws, playerId}
+
+// Push a live friend-notification badge count to a profile if it's online
+// right now — so a friend request / acceptance bumps the recipient's bell
+// badge without them needing to reload. A no-op if they're offline; the
+// notification itself is already persisted (see friends.js), so they'll see
+// it in the panel next time they connect either way. Mirrors the
+// 'room_invite' unicast pattern below — straight to one connection's socket,
+// never a broadcast.
+function pushFriendBadge(targetId){
+  const entry=targetId&&onlineProfiles.get(targetId);
+  if(entry&&entry.ws?.readyState===1){
+    entry.ws.send(JSON.stringify({type:'friend_notification',unread:friends.unreadCount(targetId)}));
+  }
+}
 
 // One WebSocket connection = one prospective player. `player` is a plain
 // object handed to Room (see room.js) — it stays the same object across
@@ -675,6 +690,64 @@ wss.on('connection',(ws)=>{
       ws.send(JSON.stringify({type:'invite_result',ok:true,name:targetName}));
     }
 
+    // ── Friends ── all gated on unlockedId (this connection's own unlocked
+    // profile), same "trust the session, never a name/id in the message for
+    // WHO I am" reasoning as get_stats above. friends.js is the source of
+    // truth; these handlers just route to it and unicast a live badge nudge
+    // to the other party when they're online.
+
+    // Full friends view for the Friends panel — friends list (each tagged
+    // online/busy from this module's own maps), plus pending requests both
+    // ways so the panel can show Accept/Decline and "pending" rows.
+    if(msg.type==='get_friends'&&unlockedId){
+      const tag=row=>({...row,online:onlineProfiles.has(row.id),busy:seatedProfiles.has(row.id)});
+      ws.send(JSON.stringify({type:'friends',myId:unlockedId,
+        friends:friends.listFriends(unlockedId).map(tag),
+        incoming:friends.listIncoming(unlockedId),
+        outgoing:friends.listOutgoing(unlockedId)}));
+    }
+
+    // Notification panel contents (opened from the bell) + the unread count
+    // that drives its badge.
+    if(msg.type==='get_notifications'&&unlockedId){
+      ws.send(JSON.stringify({type:'notifications',
+        items:friends.notifications(unlockedId),unread:friends.unreadCount(unlockedId)}));
+    }
+
+    // Marks every notification read — sent when the bell panel is opened.
+    if(msg.type==='mark_notifications_read'&&unlockedId){
+      friends.markRead(unlockedId);
+      ws.send(JSON.stringify({type:'notifications_read',unread:0}));
+    }
+
+    // A -> B friend request, by B's 16-digit id (typed into the Friends
+    // panel, or read off an opponent's nameplate popover — see friendId in
+    // room.js's _seatInfo). friends.sendRequest does all validation and may
+    // auto-accept a crossed request.
+    if(msg.type==='send_friend_request'&&unlockedId){
+      const toId=String(msg.toId||'');
+      const r=friends.sendRequest(unlockedId,toId);
+      ws.send(JSON.stringify({type:'friend_request_result',...r}));
+      if(r.ok) pushFriendBadge(toId);
+    }
+
+    if(msg.type==='accept_friend_request'&&unlockedId){
+      const fromId=String(msg.fromId||'');
+      const r=friends.accept(unlockedId,fromId);
+      ws.send(JSON.stringify({type:'friend_action_done',ok:r.ok}));
+      if(r.ok) pushFriendBadge(fromId);
+    }
+
+    if(msg.type==='decline_friend_request'&&unlockedId){
+      friends.decline(unlockedId,String(msg.fromId||''));
+      ws.send(JSON.stringify({type:'friend_action_done',ok:true}));
+    }
+
+    if(msg.type==='remove_friend'&&unlockedId){
+      friends.remove(unlockedId,String(msg.otherId||''));
+      ws.send(JSON.stringify({type:'friend_action_done',ok:true}));
+    }
+
     if(msg.type==='unlock_profile'){
       const name=String(msg.name||'').slice(0,20);
       if(verifyProfile(name,msg.code)){
@@ -686,7 +759,7 @@ wss.on('connection',(ws)=>{
         // 'unlock_profile_token' on future visits instead of asking for
         // the code again.
         const token=msg.remember?createRememberToken(name):undefined;
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),token}));
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),token,id:unlockedId,unread:friends.unreadCount(unlockedId)}));
         goOnline();
         syncSeatedIdentity();
       } else {
@@ -703,7 +776,7 @@ wss.on('connection',(ws)=>{
       if(verifyRememberToken(name,msg.token)){
         unlockedName=name;
         unlockedId=getId(name);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),silent:true}));
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),silent:true,id:unlockedId,unread:friends.unreadCount(unlockedId)}));
         goOnline();
         syncSeatedIdentity();
       } else {
@@ -833,7 +906,7 @@ wss.on('connection',(ws)=>{
         ws.send(JSON.stringify({type:'delete_profile_result',ok:false,error:'Invalid developer key'}));
       } else {
         const result=deleteProfile(msg.name);
-        if(result.ok){ deleteStats(result.id); deleteHistory(result.id); }
+        if(result.ok){ deleteStats(result.id); deleteHistory(result.id); friends.purge(result.id); }
         ws.send(JSON.stringify({type:'delete_profile_result',ok:result.ok,error:result.error}));
       }
     }
