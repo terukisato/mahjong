@@ -772,8 +772,14 @@ function onMsg(m){
   // Live badge bump while we're sitting in the lobby (see pushFriendBadge in
   // server/index.js) — a friend request or acceptance just landed.
   if(m.type==='friend_notification'){
-    updateNotifBadge(m.unread||0);
-    if($('notifications-modal').classList.contains('visible')) wss({type:'get_notifications'});
+    // If the panel's already open, the new item counts as read on arrival.
+    if($('notifications-modal').classList.contains('visible')){
+      wss({type:'get_notifications'});
+      wss({type:'mark_notifications_read'});
+      updateNotifBadge(0);
+    } else {
+      updateNotifBadge(m.unread||0);
+    }
     // A request/acceptance involving us just landed — if we're looking at
     // the Friends panel, refresh it so a new incoming request or a
     // just-confirmed friend shows without reopening.
@@ -928,7 +934,7 @@ function toggleUserProfile(){
 // unconditionally clearing every child (not just the caller's own) so this
 // stays correct even if a future setting gets added here.
 function backToUserProfile(){
-  ['friends','playericon','title','voicetheme','userstats','playhistory','achievements','changeusername','changecode'].forEach(id=>{
+  ['friends','notifications','playericon','title','voicetheme','userstats','playhistory','achievements','changeusername','changecode'].forEach(id=>{
     $(id+'-modal').classList.remove('visible');
     $(id+'-backdrop').classList.remove('visible');
   });
@@ -938,18 +944,19 @@ function backToUserProfile(){
 
 // ── Friends & notifications ─────────────────────────────────────────────
 
-// Bell badge — mirrors the chat-history #chat-badge pattern (textContent +
-// a .show class that CSS keys the visibility off). Hidden at 0.
+// Unread-notification indicator: a red dot on the 人 user icon and, once the
+// User Profile hub is open, on its "Notifications" row. Just a boolean —
+// "there's something to read" — the actual count/list is in the panel.
 function updateNotifBadge(n){
-  const badge=$('notif-badge'); if(!badge) return;
-  n=Math.max(0,n|0);
-  badge.textContent=n>99?'99+':String(n);
-  badge.classList.toggle('show',n>0);
+  const has=Math.max(0,n|0)>0;
+  $('user-icon-btn')?.classList.toggle('has-notif',has);
+  $('notif-hub-badge')?.classList.toggle('show',has);
 }
 
-// Opened straight from the bell (not a User Profile child). Opening marks
-// everything read server-side and re-fetches the list.
-function toggleNotifications(){
+// Notifications panel — a User Profile child (opened from the hub's
+// "Notifications" link; ← returns to the hub, ✕ closes out). Opening marks
+// everything read server-side and re-fetches the list, which clears the dot.
+function toggleNotificationsModal(){
   const modal=$('notifications-modal');
   const backdrop=$('notifications-backdrop');
   const open=modal.classList.contains('visible');
@@ -957,8 +964,10 @@ function toggleNotifications(){
   $('notifications-list').textContent='Loading…';
   modal.classList.add('visible');
   backdrop.classList.add('visible');
-  wss({type:'get_notifications'});
+  // mark-read first so the list we then fetch already reflects it (no
+  // stale per-row "unread" dots on items you're looking at).
   wss({type:'mark_notifications_read'});
+  wss({type:'get_notifications'});
 }
 
 function renderNotifications(m){
@@ -2700,10 +2709,9 @@ function onProfileUnlocked(m){
     $('iname').value=m.name;
     $('bfind').disabled=false;
     $('user-icon-btn').style.display='';
-    // Friend ID + notification bell come alive with the profile.
+    // Friend ID + notification state come alive with the profile.
     myProfileId=m.id||null;
     friendIdSet=new Set();
-    $('notif-bell-btn').style.display='';
     updateNotifBadge(m.unread||0);
     // Sync to the profile's own stored icon/title (server-authoritative —
     // see profiles.getIcon/getTitle), not whatever this browser last
@@ -2772,10 +2780,9 @@ function onGuestSelected(){
   // means a real profile's cached icon in localStorage doesn't get
   // clobbered with 'default' just because Guest was picked in between.
   $('user-icon-btn').style.display='none';
-  // Guest has no friend graph — hide the bell and drop any cached state.
+  // Guest has no friend graph — drop any cached state and the unread dot.
   myProfileId=null;
   friendIdSet=new Set();
-  $('notif-bell-btn').style.display='none';
   updateNotifBadge(0);
   refreshProfileDisplay();
   // Unlike icon/title above, the nameplate's win-tier class (see
