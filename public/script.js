@@ -737,6 +737,18 @@ function onMsg(m){
   if(m.type==='notifications'){renderNotifications(m);updateNotifBadge(m.unread||0);return;}
   if(m.type==='notifications_read'){updateNotifBadge(0);return;}
   if(m.type==='friend_request_result'){
+    // Came from the in-game nameplate popover's ＋ button — report the
+    // outcome on the button itself, no toast (see addFriendFromPopover).
+    if(popoverRequestPending){
+      popoverRequestPending=false;
+      const b=$('pp-addfriend');
+      if(b){
+        b.disabled=true;
+        b.textContent=m.ok?(m.autoAccepted?'Friend added':'Friend request sent'):(m.error||'Request failed');
+      }
+      if(m.ok&&$('friends-modal').classList.contains('visible')) wss({type:'get_friends'});
+      return;
+    }
     if(m.ok){
       $('friend-add-error').textContent='';
       const inp=$('friend-id-input'); if(inp) inp.value='';
@@ -981,6 +993,7 @@ function toggleFriendsModal(){
   const open=modal.classList.contains('visible');
   if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
   $('friends-my-id').textContent=myProfileId||'—';
+  clearTimeout(_copyIdRevertTimer); $('friends-copy-id').textContent='Copy';
   $('friend-add-error').textContent='';
   $('friend-incoming').innerHTML='';
   $('friend-outgoing').innerHTML='';
@@ -1066,11 +1079,39 @@ function submitFriendRequest(){
   wss({type:'send_friend_request',toId:id});
 }
 
+// Async Clipboard API where available, with a hidden-textarea + execCommand
+// fallback for the contexts it isn't (older browsers, no focus/permission).
+function copyToClipboard(text){
+  if(navigator.clipboard&&window.isSecureContext){
+    return navigator.clipboard.writeText(text).catch(()=>legacyCopy(text));
+  }
+  return legacyCopy(text);
+}
+function legacyCopy(text){
+  return new Promise((resolve,reject)=>{
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=text; ta.setAttribute('readonly','');
+      ta.style.cssText='position:fixed;top:0;left:0;opacity:0;';
+      document.body.appendChild(ta); ta.select();
+      const ok=document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok?resolve():reject(new Error('execCommand failed'));
+    }catch(e){ reject(e); }
+  });
+}
+
+let _copyIdRevertTimer=null;
 function copyMyFriendId(){
   if(!myProfileId) return;
-  try{
-    navigator.clipboard.writeText(myProfileId).then(()=>toast('ID copied.'),()=>toast('Copy failed.'));
-  }catch(e){ toast('Copy failed.'); }
+  const btn=$('friends-copy-id');
+  const flash=txt=>{
+    if(!btn) return;
+    btn.textContent=txt;
+    clearTimeout(_copyIdRevertTimer);
+    _copyIdRevertTimer=setTimeout(()=>{ btn.textContent='Copy'; },1600);
+  };
+  copyToClipboard(myProfileId).then(()=>flash('Copied'),()=>flash('Copy failed'));
 }
 
 function togglePlayerIconModal(){
@@ -2326,6 +2367,10 @@ let popoverAnchorEl=null;
 // The clicked opponent's stable profile id (from room.js's _seatInfo
 // friendId), for the popover's ＋ Add Friend button. null for bots/guests.
 let popoverFriendId=null;
+// True between tapping the popover's ＋ Add Friend (confirm) and its
+// friend_request_result landing — so that result updates the button text
+// in place instead of firing the generic toast/modal-error handling.
+let popoverRequestPending=false;
 function openPlayerCardInGame(posId,anchorEl){
   const info=inGameSeatInfo[posId];
   if(!info||info.isBot||!info.name) return;
@@ -2341,7 +2386,7 @@ function openPlayerCardInGame(posId,anchorEl){
   positionPlayerPopover(anchorEl);
   $('pp-nameplate').innerHTML='';
   $('pp-stats').innerHTML=`<p class="player-card-loading">Loading…</p>`;
-  $('pp-addfriend').style.display='none';
+  resetPopoverAddFriend();
   pop.style.display='';
   wss({type:'get_player_stats',name:info.name});
 }
@@ -2351,20 +2396,34 @@ function closePlayerPopover(){
   pendingPlayerCardKind=null;
   popoverAnchorEl=null;
   popoverFriendId=null;
-  const af=$('pp-addfriend'); if(af) af.style.display='none';
+  resetPopoverAddFriend();
   $('player-popover').style.display='none';
 }
 
-// The popover's ＋ Add Friend button. Confirms first (per spec) then fires a
-// friend request by the opponent's stable id. friend_request_result (see
-// onMsg) toasts the outcome — including "Already friends" if the client's
-// friendIdSet was stale.
+// Back to the un-armed "＋ Add Friend" state — hidden, enabled, first tap.
+function resetPopoverAddFriend(){
+  popoverRequestPending=false;
+  const af=$('pp-addfriend');
+  if(af){ af.style.display='none'; af.disabled=false; af.dataset.armed='0'; af.textContent='＋ Add Friend'; }
+}
+
+// The popover's ＋ Add Friend button — a two-tap control, no separate
+// dialog: first tap arms it ("Tap again to confirm"), second tap sends the
+// request and the button itself becomes the status line ("Friend request
+// sent", or whatever friend_request_result reports — see onMsg).
 function addFriendFromPopover(){
-  if(!popoverFriendId) return;
-  const nm=pendingPlayerCardName||'this player';
-  const toId=popoverFriendId;
-  closePlayerPopover();
-  uiConfirm(`Send a friend request to ${nm}?`,()=>wss({type:'send_friend_request',toId}),'Send Request');
+  const btn=$('pp-addfriend');
+  if(!btn||!popoverFriendId) return;
+  if(btn.dataset.armed!=='1'){
+    btn.dataset.armed='1';
+    btn.textContent='Tap again to confirm';
+    return;
+  }
+  btn.dataset.armed='0';
+  btn.disabled=true;
+  btn.textContent='Friend request sent';
+  popoverRequestPending=true;
+  wss({type:'send_friend_request',toId:popoverFriendId});
 }
 
 // Anchors the popover just below-and-centered on whichever nameplate was
@@ -2432,11 +2491,16 @@ function renderPlayerPopover(m){
     <div class="sp-row"><span class="sp-label">Best Han</span><span>${bestHan}</span></div>
   `;
   // ＋ Add Friend — only for a real opponent id you're not already friends
-  // with, and only when you're playing as a profile yourself.
+  // with, and only when you're playing as a profile yourself. Shown fresh
+  // (un-armed) each time the popover opens.
   const af=$('pp-addfriend');
   if(af){
     const show=popoverFriendId&&myProfileId&&popoverFriendId!==myProfileId&&!friendIdSet.has(popoverFriendId);
-    af.style.display=show?'':'none';
+    if(show&&!popoverRequestPending){
+      af.style.display='';af.disabled=false;af.dataset.armed='0';af.textContent='＋ Add Friend';
+    } else if(!show){
+      af.style.display='none';
+    }
   }
   if(popoverAnchorEl) positionPlayerPopover(popoverAnchorEl);
 }
@@ -4459,6 +4523,14 @@ function goLobby(){
   if(inGame){ showLeaveConfirm(); return; }
   _leaveGame();
 }
+
+// The game-over panel's "Leave Room" button (#bend-menu, only ever shown by
+// onGameOver). The game is already finished, so there's no progress to
+// lose — leave straight to the lobby with no "progress will be lost"
+// confirm, regardless of what inGame happens to be.
+function leaveRoomFromGameOver(){
+  _leaveGame();
+}
 function showLeaveConfirm(){
   $('leave-modal').classList.add('visible');
   $('leave-backdrop').classList.add('visible');
@@ -4740,6 +4812,7 @@ function startGame(m){
   // screen and the whole roll call, instead of kicking in once the card
   // actually clears.
   inGame=true;selId=null;lastState=null;
+  clearTimeout(betweenRoundsTimer); // stale re-arm from the prior game's last round_end
   // A stuck `discarding=true` from the PREVIOUS game (see sendDiscardAction
   // — the watchdog there recovers within 4s on its own, but this closes the
   // gap for the one path that skips it entirely: hostStartPlayAgain/
@@ -6629,7 +6702,15 @@ function onReadyStatus(m){
 // ════════════════════════════════════════════════════════════
 // ROUND LIFECYCLE — start / end / game over
 // ════════════════════════════════════════════════════════════
+// Handle for the delayed "re-arm inGame" timer a BETWEEN-rounds round_end
+// schedules (see onEnd). Cleared whenever the next round actually starts or
+// the game ends, so a short final round can't let this fire AFTER game over
+// and wrongly put the "Leave Game? progress will be lost" confirm on the
+// game-over panel (goLobby only shows that while inGame is true).
+let betweenRoundsTimer=null;
+
 function onRoundStart(m){
+  clearTimeout(betweenRoundsTimer);
   inGame=true;
   discarding=false; pendingDiscardTileId=null; discardRetryArmed=false; suppressDiscardSfxOnce=false; clearTimeout(discardWatchdog);
   show('s-game');
@@ -6722,6 +6803,10 @@ function onRoundStart(m){
 
 function onGameOver(m){
   inGame=false;
+  // A short final round can leave a between-rounds re-arm timer still
+  // pending from the previous round_end — kill it so it can't flip inGame
+  // back to true under the game-over panel (see betweenRoundsTimer).
+  clearTimeout(betweenRoundsTimer);
   const loader=$('game-loading'); if(loader) loader.style.display='none';
   // Hide Ready, show Main Menu — game fully over
   const btn=$('bround-ready'); if(btn) btn.style.display='none';
@@ -7143,6 +7228,10 @@ function onEnd(m){
       requestAnimationFrame(frame);
     });
   }, 400);
+  // Drop any still-pending re-arm from a previous round_end — a new
+  // round_end supersedes it either way (this one either ends the game or
+  // schedules its own below).
+  clearTimeout(betweenRoundsTimer);
   if(m.gameOver){
     const btn=$('bround-ready'); if(btn) btn.style.display='none';
     const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display=pendingGameOver?'':'none';
@@ -7151,7 +7240,7 @@ function onEnd(m){
     // goLobby/showLeaveConfirm). Only a BETWEEN-rounds results panel
     // re-arms inGame below, since the game there really is still going.
   } else {
-    setTimeout(()=>{ inGame=true; },5500);
+    betweenRoundsTimer=setTimeout(()=>{ inGame=true; },5500);
   }
   };
   // WIN_BANNER_DELAY — long enough for the call-banner(s) above to slide

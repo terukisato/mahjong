@@ -792,8 +792,9 @@
   <button class="settings-icon-btn user-icon-btn" id="user-icon-btn" onclick="toggleUserProfile()" title="User Profile" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 5.556);">人</button>
   <!-- Friend-notification bell — sits to the left of the 人 user icon, same
        "hidden until a profile is unlocked" rule (see onProfileUnlocked).
-       #notif-badge shows the unread count (see updateNotifBadge). -->
-  <button class="settings-icon-btn notif-bell-btn" id="notif-bell-btn" onclick="toggleNotifications()" title="Notifications" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 9.167);">
+       Offset far enough left that #notif-badge (which sits to the bell's
+       right — see .notif-badge) clears the 人 icon. -->
+  <button class="settings-icon-btn notif-bell-btn" id="notif-bell-btn" onclick="toggleNotifications()" title="Notifications" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 14.5);">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
     <span class="notif-badge" id="notif-badge">0</span>
   </button>
@@ -1129,7 +1130,7 @@
           <button id="bplay-again" class="bp reb-btn reb-btn-green" style="display:none;" onclick="onPlayAgainClick()">↻ Play Again</button>
           <button id="bplay-again-start" class="bp reb-btn reb-btn-gold" style="display:none;" onclick="wss({type:'play_again_start'})">▶ Start New Game</button>
         </div>
-        <button id="bend-menu" class="bp reb-btn reb-btn-red" style="display:none;" onclick="goLobby()">Leave Room</button>
+        <button id="bend-menu" class="bp reb-btn reb-btn-red" style="display:none;" onclick="leaveRoomFromGameOver()">Leave Room</button>
       </div>
     </div>
     <div id="ready-status" class="ready-status"></div>

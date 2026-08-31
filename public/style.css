@@ -2009,12 +2009,13 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 
 /* Friend-notification bell — a .settings-icon-btn sibling (position/color/
    z-index inherited from there); this just sizes the bell svg to roughly the
-   ☰ glyph's footprint and hangs the unread badge off the top-right corner.
-   Badge styling mirrors .chat-hist-btn .badge (same --ui-vmin sizing, same
-   .show toggle). */
+   ☰ glyph's footprint. The unread badge sits just to the RIGHT of the bell,
+   vertically centred — beside the glyph, not covering it (and not above it,
+   which the viewport's top edge would clip). Badge colours/sizing mirror
+   .chat-hist-btn .badge; same .show toggle. */
 .notif-bell-btn{display:flex;align-items:center;justify-content:center;padding:0;}
 .notif-bell-btn svg{width:calc(var(--ui-vmin, 7.2px) * 3);height:calc(var(--ui-vmin, 7.2px) * 3);display:block;}
-.notif-badge{position:absolute;top:calc(var(--ui-vmin, 7.2px) * -.7);right:calc(var(--ui-vmin, 7.2px) * -.7);
+.notif-badge{position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:calc(var(--ui-vmin, 7.2px) * .33);
   background:#c02020;color:#fff;font-size:calc(var(--ui-vmin, 7.2px) * 1.111);font-weight:700;
   min-width:calc(var(--ui-vmin, 7.2px) * 1.944);height:calc(var(--ui-vmin, 7.2px) * 1.944);border-radius:calc(var(--ui-vmin, 7.2px) * .972);
   display:none;align-items:center;justify-content:center;padding:0 calc(var(--ui-vmin, 7.2px) * .278);line-height:1;}
