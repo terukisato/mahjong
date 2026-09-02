@@ -63,8 +63,9 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   100%{filter:drop-shadow(0 0 24px rgba(201,168,76,.7));transform:scale(1);}
 }
 .logo-s{font-family:'Cinzel Decorative',serif;font-size:2vmin;color:var(--jl);letter-spacing:1.1vmin;margin-top:2px;}
-.card{background:linear-gradient(155deg,rgba(20,55,35,.95),rgba(8,20,12,.98));border:1px solid rgba(201,168,76,.35);border-radius:16px;
-  padding:calc(var(--ui-vmin) * 2.5) calc(var(--ui-vmin) * 6.389);
+.card{background:linear-gradient(155deg,rgba(20,55,35,.95),rgba(8,20,12,.98));border:1px solid rgba(201,168,76,.12);border-radius:0;
+  --pg:calc(var(--ui-vmin) * 5.5);--pw:calc(var(--ui-vmin) * .2);
+  padding:calc(var(--ui-vmin) * 4.5) calc(var(--ui-vmin) * 6.9);
   /* Was a flat min(440px,96vw) — the box stayed capped at 440px while its
      own font-size/padding kept scaling up to --ui-vmin's 10px ceiling, so
      on a 4K screen the (now larger) text read as cramped into a box that
@@ -73,7 +74,36 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
      lets it grow in step with its own content instead of stalling. */
   width:min(calc(var(--ui-vmin) * 61.11), 96vw);
   box-shadow:0 0 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(201,168,76,.25);position:relative;overflow:hidden;}
-.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);}
+/* Diagonal-stagger gold frame, same as #bstart and the .about-modal family
+   — the lobby card doesn't scroll internally, so ::before/::after at the
+   edge work with no flex refactor. ::before = outer rule cut top-left +
+   bottom-right, ::after = inner rule cut the other two. Replaces the old
+   gradient top-bar. */
+.card::before,.card::after{content:'';position:absolute;pointer-events:none;z-index:2;background-repeat:no-repeat;}
+.card::before{inset:0;
+  background-image:linear-gradient(115deg,#b5903f 0%,#ffe9b0 48%,#cfa74d 100%);
+  -webkit-mask:
+    linear-gradient(90deg,transparent 0 var(--pg),#000 var(--pg)) top/100% var(--pw) no-repeat,
+    linear-gradient(90deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) bottom/100% var(--pw) no-repeat,
+    linear-gradient(180deg,transparent 0 var(--pg),#000 var(--pg)) left/var(--pw) 100% no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) right/var(--pw) 100% no-repeat;
+  mask:
+    linear-gradient(90deg,transparent 0 var(--pg),#000 var(--pg)) top/100% var(--pw) no-repeat,
+    linear-gradient(90deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) bottom/100% var(--pw) no-repeat,
+    linear-gradient(180deg,transparent 0 var(--pg),#000 var(--pg)) left/var(--pw) 100% no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) right/var(--pw) 100% no-repeat;}
+.card::after{inset:calc(var(--ui-vmin) * .6);opacity:.7;
+  background-image:linear-gradient(115deg,#a37f35 0%,#f4e0ac 48%,#bd9740 100%);
+  -webkit-mask:
+    linear-gradient(90deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) top/100% var(--pw) no-repeat,
+    linear-gradient(90deg,transparent 0 var(--pg),#000 var(--pg)) bottom/100% var(--pw) no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) left/var(--pw) 100% no-repeat,
+    linear-gradient(180deg,transparent 0 var(--pg),#000 var(--pg)) right/var(--pw) 100% no-repeat;
+  mask:
+    linear-gradient(90deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) top/100% var(--pw) no-repeat,
+    linear-gradient(90deg,transparent 0 var(--pg),#000 var(--pg)) bottom/100% var(--pw) no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) left/var(--pw) 100% no-repeat,
+    linear-gradient(180deg,transparent 0 var(--pg),#000 var(--pg)) right/var(--pw) 100% no-repeat;}
 .card h2{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin) * 1.528);letter-spacing:calc(var(--ui-vmin) * .694);color:var(--gold);text-align:center;}
 /* Back button, header, and Rankings/Match Settings all on one row/
    baseline — align-items:center is what actually lines up the back
@@ -132,16 +162,16 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    elsewhere in this modal family, just a row instead of a grid cell since
    each entry needs a title line, a sub line, AND a Join button. */
 .room-card{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--ui-vmin, 7.2px) * 1.111);
-  background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;
+  background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:2px;
   padding:calc(var(--ui-vmin, 7.2px) * 1.25) calc(var(--ui-vmin, 7.2px) * 1.389);
   margin-bottom:calc(var(--ui-vmin, 7.2px) * .833);}
 .room-card-title{font-size:calc(var(--ui-vmin, 7.2px) * 1.528);color:var(--cream);}
 .room-card-sub{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:var(--gold);opacity:.85;margin-top:calc(var(--ui-vmin, 7.2px) * .278);}
 .room-card-join{flex-shrink:0;padding:calc(var(--ui-vmin, 7.2px) * .833) calc(var(--ui-vmin, 7.2px) * 1.667);
-  background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);border-radius:8px;
+  background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);border-radius:2px;
   color:var(--cream);font-size:calc(var(--ui-vmin, 7.2px) * 1.389);cursor:pointer;font-family:'Noto Sans JP',sans-serif;}
 .room-card-join:disabled{opacity:.4;cursor:default;}
-.bp{width:100%;padding:calc(var(--ui-vmin) * 1.806);background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);border-radius:10px;color:var(--cream);
+.bp{width:100%;padding:calc(var(--ui-vmin) * 1.806);background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);border-radius:2px;color:var(--cream);
   font-size:calc(var(--ui-vmin) * 1.806);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;}
 /* Lobby's two front-screen actions (Quick Match / Room List, see
    index.html) — side by side instead of one ambiguous button. Smaller
@@ -152,7 +182,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   font-size:calc(var(--ui-vmin) * 1.6);letter-spacing:calc(var(--ui-vmin) * .278);}
 .bp:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(26,107,69,.55);border-color:var(--gold);}
 .bp:disabled{opacity:.4;cursor:default;transform:none;}
-.bs{width:100%;padding:calc(var(--ui-vmin) * 1.389);background:transparent;border:1px solid rgba(201,168,76,.3);border-radius:10px;color:rgba(245,237,216,.65);
+.bs{width:100%;padding:calc(var(--ui-vmin) * 1.389);background:transparent;border:1px solid rgba(201,168,76,.3);border-radius:2px;color:rgba(245,237,216,.65);
   font-size:calc(var(--ui-vmin) * 1.667);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;margin-top:8px;}
 .bs:hover{border-color:var(--gold);color:var(--gl);}
 .wa{display:none;margin-top:14px;}
@@ -169,7 +199,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    .mode-btn's flex:1 above, already used for this same "N equal items in
    a row" problem) while letting them shrink together, in one row, rather
    than wrap, when space is tight. */
-.slot{position:relative;flex:0 1 80px;min-width:0;min-height:64px;border-radius:10px;border:2px solid rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;background:rgba(0,0,0,.4);transition:border-color .4s,background .4s,box-shadow .4s;padding:6px 4px;}
+.slot{position:relative;flex:0 1 80px;min-width:0;min-height:64px;border-radius:2px;border:2px solid rgba(201,168,76,.2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;background:rgba(0,0,0,.4);transition:border-color .4s,background .4s,box-shadow .4s;padding:6px 4px;}
 .slot .si{font-size:calc(var(--ui-vmin) * 2.778);line-height:1;}
 /* Real player icon (see iconSvg in script.js) — bots keep the plain
    letter-avatar .si above instead, since they have no profile icon. */
@@ -223,10 +253,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    the fallback, --ui-vmin resolves to nothing there, calc() goes invalid,
    and padding (not an inherited property) collapses to 0, pinning the
    label text against the button edges. */
-.mode-btn{flex:1;padding:calc(var(--ui-vmin, 7.2px) * 1.389) calc(var(--ui-vmin, 7.2px) * .833);background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;color:rgba(245,237,216,.9);font-size:calc(var(--ui-vmin, 7.2px) * 1.806);font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
+.mode-btn{flex:1;padding:calc(var(--ui-vmin, 7.2px) * 1.389) calc(var(--ui-vmin, 7.2px) * .833);background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:2px;color:rgba(245,237,216,.9);font-size:calc(var(--ui-vmin, 7.2px) * 1.806);font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
 .mode-btn.active{background:rgba(26,107,69,.4);border-color:var(--jl);color:var(--cream);box-shadow:0 0 12px rgba(42,158,103,.3);}
 .mode-btn:hover:not(.active){border-color:rgba(201,168,76,.4);color:var(--cream);}
-.ready-btn{width:100%;padding:calc(var(--ui-vmin) * 1.667);background:linear-gradient(135deg,#0a5a2a,#1a8840);border:2px solid #4eff9a;border-radius:10px;color:#c0ffd8;font-size:calc(var(--ui-vmin) * 1.944);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;margin-top:12px;position:relative;overflow:hidden;}
+.ready-btn{width:100%;padding:calc(var(--ui-vmin) * 1.667);background:linear-gradient(135deg,#0a5a2a,#1a8840);border:2px solid #4eff9a;border-radius:2px;color:#c0ffd8;font-size:calc(var(--ui-vmin) * 1.944);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;margin-top:12px;position:relative;overflow:hidden;}
 .ready-btn:hover{transform:translateY(-2px);box-shadow:0 0 20px rgba(78,255,154,.4);}
 .ready-btn.pressed{opacity:.6;cursor:default;transform:none;}
 .ready-btn.pressed::after{content:'✓ Ready!';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a5a2a,#1a8840);font-size:calc(var(--ui-vmin) * 1.944);letter-spacing:calc(var(--ui-vmin) * .417);}
@@ -1484,9 +1514,19 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    nothing actually defining it, so it was permanently stuck at the 7.2px
    fallback (i.e. never actually scaling) regardless of screen size —
    which read as "too small" specifically on very large/4K displays. */
-#settings-panel{--ui-vmin:clamp(6px,1vmin,10px);position:fixed;top:0;right:0;bottom:0;
+#settings-panel{--ui-vmin:clamp(6px,1vmin,10px);--pg:calc(var(--ui-vmin) * 6);position:fixed;top:0;right:0;bottom:0;
   width:calc(var(--ui-vmin) * 33.33);max-width:calc(100vw - 24px);
-  background:rgba(6,12,7,.97);border-left:1px solid rgba(201,168,76,.2);
+  /* Diagonal-stagger, drawer edition — the panel is flush against three
+     screen edges, so only the left edge is treated: a staggered double
+     gold rule (bold outer at x=0 cut top+bottom, finer inner a few px in
+     cut through the middle). Drawn as background layers, not ::before, so
+     it stays pinned while the settings sections scroll. Matches the
+     .about-modal / #bstart frame language. */
+  background:
+    linear-gradient(180deg,transparent 0 var(--pg),#e8c25c var(--pg) calc(100% - var(--pg)),transparent) 0 0/2px 100% no-repeat,
+    linear-gradient(180deg,#c9a84c 0 38%,transparent 38% 62%,#c9a84c 62%) calc(var(--ui-vmin) * .7) 0/1px 100% no-repeat,
+    rgba(6,12,7,.97);
+  border-left:0;
   z-index:200;transform:translateX(100%);transition:transform .25s ease;
   display:flex;flex-direction:column;padding:calc(var(--ui-vmin) * 2.778) calc(var(--ui-vmin) * 2.222);
   gap:calc(var(--ui-vmin) * 2.778);overflow-y:auto;}
@@ -1675,7 +1715,7 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    with --ui-vmin like everything else in the modal; JS only ever toggles
    .locked (via a class, not inline px) plus the per-theme active/hover
    background swap already handled separately in applyVoiceTheme. */
-.theme-btn{padding:calc(var(--ui-vmin, 7.2px) * .972) calc(var(--ui-vmin, 7.2px) * 1.667);border-radius:4px;
+.theme-btn{padding:calc(var(--ui-vmin, 7.2px) * .972) calc(var(--ui-vmin, 7.2px) * 1.667);border-radius:2px;
   font-size:calc(var(--ui-vmin, 7.2px) * 1.528);letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);
   transition:all .2s;text-align:left;width:100%;
   background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);
@@ -1690,7 +1730,7 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    script.js). Each icon is a small hand-coded SVG mark, not an uploaded
    image — the app has no image-upload capability. */
 .icon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--ui-vmin, 7.2px) * 1.111);}
-.icon-btn{background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;
+.icon-btn{background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:2px;
   padding:calc(var(--ui-vmin, 7.2px) * .833);cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;}
 .icon-btn svg{width:calc(var(--ui-vmin, 7.2px) * 5);height:calc(var(--ui-vmin, 7.2px) * 5);display:block;}
 .icon-btn:hover{border-color:rgba(201,168,76,.5);}
@@ -1707,13 +1747,64 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    #s-start (inherited by its descendants) rather than :root, so it
    doesn't affect anything outside the start screen. */
 #s-start{--ui-vmin:clamp(6px,1vmin,10px);}
-#bstart{padding:calc(var(--ui-vmin) * 2.2) calc(var(--ui-vmin) * 6.7);
-  font-family:'Cinzel Decorative',serif;
-  font-size:calc(var(--ui-vmin) * 1.9);letter-spacing:calc(var(--ui-vmin) * .56);
-  background:linear-gradient(135deg,rgba(26,107,69,.5),rgba(13,61,40,.5));
-  border:1px solid var(--jl);border-radius:4px;color:var(--cream);cursor:pointer;
-  animation:pulse 1.5s ease-in-out infinite;transition:all .2s;}
+/* START — the "diagonal stagger" frame from the start-button exploration
+   (the Brushed Silver geometry from the start-frames artifact), static,
+   and recoloured to gold to match the 雀心 logo and the Janshin palette.
+   The button is two nested broken rectangles: the outer rule (::before)
+   is cut at its top-left and bottom-right corners, the inner (::after) at
+   the other two, so neither ever closes. Each is a gold gradient masked
+   to that stroke shape — a gentle static highlight, no sheen animation,
+   biased bright so no part of either frame drops out on the green ground.
+   No fill, no border, no radius — the frame is the button. The 18px
+   corner gap and 1px rule are the artifact's own fixed values. */
+#bstart{position:relative;isolation:isolate;
+  padding:1.15rem 2.9rem;
+  font-family:'Cinzel Decorative',serif;font-weight:700;
+  font-size:1.02rem;letter-spacing:.46em;
+  background:none;border:0;color:var(--gl);cursor:pointer;
+  transition:color .25s ease,letter-spacing .25s ease,transform .18s ease;}
+#bstart>span{position:relative;z-index:1;padding-left:.46em;}
+/* "Hanko" motif (see silver-motifs exploration) — a small tilted vermilion
+   seal, 始 "begin", pressed onto the frame's top-right corner; hover
+   straightens it. Red against the gold, the way a chop sits on a document. */
+#bstart>i{position:absolute;z-index:3;top:-7px;right:-7px;
+  width:19px;height:19px;border-radius:2px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Noto Serif JP',serif;font-weight:700;font-size:.66rem;font-style:normal;
+  background:#b23a2e;color:#f8ece4;
+  transform:rotate(-4deg);transition:transform .25s ease;
+  box-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;}
+#bstart:hover{color:#ffe680;}
+#bstart:hover>i{transform:rotate(0deg);}
 #bstart.pressed{transform:scale(.9);}
+#bstart:focus-visible{outline:2px solid var(--gl);outline-offset:8px;}
+#bstart::before,#bstart::after{content:"";position:absolute;pointer-events:none;
+  background-repeat:no-repeat;transition:filter .25s ease;}
+#bstart::before{inset:0;
+  background-image:linear-gradient(115deg,#b5903f 0%,#ffe9b0 48%,#cfa74d 100%);
+  -webkit-mask:
+    linear-gradient(90deg,transparent 0 18px,#000 18px) top/100% 1px no-repeat,
+    linear-gradient(90deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) bottom/100% 1px no-repeat,
+    linear-gradient(180deg,transparent 0 18px,#000 18px) left/1px 100% no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) right/1px 100% no-repeat;
+  mask:
+    linear-gradient(90deg,transparent 0 18px,#000 18px) top/100% 1px no-repeat,
+    linear-gradient(90deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) bottom/100% 1px no-repeat,
+    linear-gradient(180deg,transparent 0 18px,#000 18px) left/1px 100% no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) right/1px 100% no-repeat;}
+#bstart::after{inset:5px;opacity:.9;
+  background-image:linear-gradient(115deg,#a37f35 0%,#f4e0ac 48%,#bd9740 100%);
+  -webkit-mask:
+    linear-gradient(90deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) top/100% 1px no-repeat,
+    linear-gradient(90deg,transparent 0 18px,#000 18px) bottom/100% 1px no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) left/1px 100% no-repeat,
+    linear-gradient(180deg,transparent 0 18px,#000 18px) right/1px 100% no-repeat;
+  mask:
+    linear-gradient(90deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) top/100% 1px no-repeat,
+    linear-gradient(90deg,transparent 0 18px,#000 18px) bottom/100% 1px no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) left/1px 100% no-repeat,
+    linear-gradient(180deg,transparent 0 18px,#000 18px) right/1px 100% no-repeat;}
+#bstart:hover::before,#bstart:hover::after{filter:brightness(1.12);}
 
 /* Start -> lobby transition: press-pulse the button (via .pressed above),
    fade+scale the start screen out, then fade+scale the lobby in once
@@ -1752,7 +1843,7 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    the old #iname text field had — see refreshProfileDisplay in script.js
    for what keeps its icon/name in sync. */
 .profile-nameplate{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.389);width:100%;
-  background:rgba(0,0,0,.5);border:1px solid rgba(201,168,76,.2);border-radius:8px;
+  background:rgba(0,0,0,.5);border:1px solid rgba(201,168,76,.2);border-radius:2px;
   padding:calc(var(--ui-vmin, 7.2px) * 1.111) calc(var(--ui-vmin, 7.2px) * 1.667);cursor:pointer;transition:border-color .2s;position:relative;
   text-align:left;margin-bottom:calc(var(--ui-vmin, 7.2px) * 2.222);}
 .profile-nameplate:hover{border-color:rgba(201,168,76,.5);}
@@ -1893,13 +1984,52 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    up, while narrower/portrait viewports are unaffected (still driven down
    to the same 6px floor as before). */
 .about-modal{--ui-vmin:clamp(6px,1vw,12px);
-  display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  --pg:calc(var(--ui-vmin) * 4.5);--pw:calc(var(--ui-vmin) * .15);
+  display:none;flex-direction:column;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
   width:calc(var(--ui-vmin) * 50);height:calc(var(--ui-vmin) * 48);
-  max-width:calc(100vw - 24px);max-height:calc(100vh - 48px);overflow-y:auto;
-  background:#0a160c;border:1px solid rgba(201,168,76,.3);
-  border-radius:8px;padding:calc(var(--ui-vmin) * 3.333);z-index:301;box-shadow:0 12px 48px rgba(0,0,0,.8);}
-.about-backdrop.visible,.about-modal.visible{display:block;}
+  max-width:calc(100vw - 24px);max-height:calc(100vh - 48px);overflow:visible;
+  background:#0a160c;border:1px solid rgba(201,168,76,.12);
+  border-radius:0;padding:calc(var(--ui-vmin) * 3.333);z-index:301;box-shadow:0 12px 48px rgba(0,0,0,.8);}
+/* Diagonal-stagger gold frame — the same treatment as the START button
+   (#bstart), at panel scale. The modal is a flex column with .about-body
+   scrolling inside it (see below) so this ::before/::after stays pinned to
+   the panel edge rather than scrolling away with the content. Outer rule
+   (::before) is cut at top-left + bottom-right — the ✕ sits in that
+   top-right gap — inner rule (::after) at the other two. --pg is the corner
+   gap (scales with the panel via --ui-vmin), --pw the rule weight. */
+.about-modal::before,.about-modal::after{content:"";position:absolute;pointer-events:none;z-index:2;
+  background-repeat:no-repeat;}
+.about-modal::before{inset:0;
+  background-image:linear-gradient(115deg,#b5903f 0%,#ffe9b0 48%,#cfa74d 100%);
+  -webkit-mask:
+    linear-gradient(90deg,transparent 0 var(--pg),#000 var(--pg)) top/100% var(--pw) no-repeat,
+    linear-gradient(90deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) bottom/100% var(--pw) no-repeat,
+    linear-gradient(180deg,transparent 0 var(--pg),#000 var(--pg)) left/var(--pw) 100% no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) right/var(--pw) 100% no-repeat;
+  mask:
+    linear-gradient(90deg,transparent 0 var(--pg),#000 var(--pg)) top/100% var(--pw) no-repeat,
+    linear-gradient(90deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) bottom/100% var(--pw) no-repeat,
+    linear-gradient(180deg,transparent 0 var(--pg),#000 var(--pg)) left/var(--pw) 100% no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) right/var(--pw) 100% no-repeat;}
+.about-modal::after{inset:calc(var(--ui-vmin) * .55);opacity:.7;
+  background-image:linear-gradient(115deg,#a37f35 0%,#f4e0ac 48%,#bd9740 100%);
+  -webkit-mask:
+    linear-gradient(90deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) top/100% var(--pw) no-repeat,
+    linear-gradient(90deg,transparent 0 var(--pg),#000 var(--pg)) bottom/100% var(--pw) no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) left/var(--pw) 100% no-repeat,
+    linear-gradient(180deg,transparent 0 var(--pg),#000 var(--pg)) right/var(--pw) 100% no-repeat;
+  mask:
+    linear-gradient(90deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) top/100% var(--pw) no-repeat,
+    linear-gradient(90deg,transparent 0 var(--pg),#000 var(--pg)) bottom/100% var(--pw) no-repeat,
+    linear-gradient(180deg,#000 0 calc(100% - var(--pg)),transparent calc(100% - var(--pg))) left/var(--pw) 100% no-repeat,
+    linear-gradient(180deg,transparent 0 var(--pg),#000 var(--pg)) right/var(--pw) 100% no-repeat;}
+.about-backdrop.visible{display:block;}
+.about-modal.visible{display:flex;}
 .leave-modal{height:auto;}
+/* Smaller corner gap on the compact confirm dialogs (Leave Game? / the
+   generic yes/no) — at their short auto height the default gap would eat
+   almost the whole vertical rule. */
+.leave-modal{--pg:calc(var(--ui-vmin) * 2.5);}
 /* Portrait phones (and phone-sized/portrait tablets) have far more spare
    vertical room than --ui-vmin's width-driven (1vw) value assumes — the
    height formula above never sees how tall the viewport actually is, only
@@ -1930,7 +2060,12 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 .about-back:hover{color:var(--gold);}
 .about-title{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 1.944);letter-spacing:calc(var(--ui-vmin, 7.2px) * .278);
   color:var(--gold);margin-bottom:calc(var(--ui-vmin, 7.2px) * 1.944);text-align:center;}
-.about-body{font-size:calc(var(--ui-vmin, 7.2px) * 1.667);line-height:1.6;color:rgba(245,237,216,.75);}
+/* flex:1 + own overflow so the body scrolls INSIDE the flex-column modal
+   (see .about-modal) — this is what keeps the title, the ✕/← and the gold
+   frame pinned while a long list scrolls. flex-basis:auto (not 0) so the
+   short confirm dialogs, which are height:auto, still size to their text. */
+.about-body{font-size:calc(var(--ui-vmin, 7.2px) * 1.667);line-height:1.6;color:rgba(245,237,216,.75);
+  flex:1 1 auto;min-height:0;overflow-y:auto;}
 .about-body p{margin:0 0 calc(var(--ui-vmin, 7.2px) * 1.389);}
 .about-body p:last-child{margin-bottom:0;}
 .about-section{margin-top:calc(var(--ui-vmin, 7.2px) * 1.944);padding-top:calc(var(--ui-vmin, 7.2px) * 1.944);border-top:1px solid rgba(201,168,76,.15);}
@@ -1957,7 +2092,7 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    renderProfileList/selectProfileCard in script.js). Reuses .icon-grid's
    3-column layout but each cell needs a taller, name-labeled card instead
    of .icon-btn's icon-only square. */
-.profile-card{position:relative;background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:8px;
+.profile-card{position:relative;background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:2px;
   padding:calc(var(--ui-vmin, 7.2px) * 1.111) calc(var(--ui-vmin, 7.2px) * .556);cursor:pointer;transition:all .2s;display:flex;flex-direction:column;
   align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .556);overflow:hidden;}
 .profile-card svg{width:calc(var(--ui-vmin, 7.2px) * 5);height:calc(var(--ui-vmin, 7.2px) * 5);display:block;}
@@ -1994,7 +2129,7 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 #profile-code-section{margin-top:calc(var(--ui-vmin, 7.2px) * 2.222);}
 .leave-modal .about-body{text-align:center;}
 .leave-actions{display:flex;gap:calc(var(--ui-vmin, 7.2px) * 1.389);margin-top:calc(var(--ui-vmin, 7.2px) * 2.5);}
-.leave-actions button{flex:1;padding:calc(var(--ui-vmin, 7.2px) * 1.528);border-radius:10px;font-size:calc(var(--ui-vmin, 7.2px) * 1.667);
+.leave-actions button{flex:1;padding:calc(var(--ui-vmin, 7.2px) * 1.528);border-radius:2px;font-size:calc(var(--ui-vmin, 7.2px) * 1.667);
   font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin, 7.2px) * .278);cursor:pointer;transition:all .25s;}
 .leave-btn-stay{background:linear-gradient(135deg,var(--jade),var(--jd));border:1px solid var(--jl);color:var(--cream);}
 .leave-btn-stay:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(26,107,69,.5);}
@@ -2082,9 +2217,9 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 .friends-my-id-label{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);letter-spacing:calc(var(--ui-vmin, 7.2px) * .417);
   color:var(--gold);text-transform:uppercase;opacity:.9;}
 #friends-my-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:calc(var(--ui-vmin, 7.2px) * 1.944);
-  color:var(--cream);background:rgba(0,0,0,.25);border:1px solid rgba(212,175,110,.3);border-radius:calc(var(--ui-vmin, 7.2px) * .833);
+  color:var(--cream);background:rgba(0,0,0,.25);border:1px solid rgba(212,175,110,.3);border-radius:2px;
   padding:calc(var(--ui-vmin, 7.2px) * .556) calc(var(--ui-vmin, 7.2px) * 1.111);user-select:all;letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);}
-#friends-copy-id{background:none;border:1px solid rgba(212,175,110,.4);border-radius:calc(var(--ui-vmin, 7.2px) * .694);
+#friends-copy-id{background:none;border:1px solid rgba(212,175,110,.4);border-radius:2px;
   color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);cursor:pointer;
   padding:calc(var(--ui-vmin, 7.2px) * .556) calc(var(--ui-vmin, 7.2px) * 1.111);font-family:'Noto Sans JP',sans-serif;}
 /* Friends modal's two-tab strip — friends list vs. add-by-ID search.
@@ -2119,7 +2254,7 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
   background:#4caf50;box-shadow:0 0 calc(var(--ui-vmin, 7.2px) * .833) #4caf50;flex-shrink:0;}
 .friend-dot-busy{background:#d4af6e;box-shadow:none;}
 .friend-actions{display:flex;gap:calc(var(--ui-vmin, 7.2px) * .694);flex-shrink:0;}
-.friend-actions button{background:none;border:1px solid rgba(212,175,110,.4);border-radius:calc(var(--ui-vmin, 7.2px) * .694);
+.friend-actions button{background:none;border:1px solid rgba(212,175,110,.4);border-radius:2px;
   color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);cursor:pointer;font-family:'Noto Sans JP',sans-serif;
   padding:calc(var(--ui-vmin, 7.2px) * .417) calc(var(--ui-vmin, 7.2px) * 1);white-space:nowrap;}
 .friend-actions .friend-remove{border-color:rgba(224,96,96,.4);color:#e06060;}
@@ -2131,14 +2266,14 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
   width:calc(var(--ui-vmin, 7.2px) * .833);height:calc(var(--ui-vmin, 7.2px) * .833);border-radius:50%;background:#c02020;}
 .notif-text{color:var(--cream);font-size:calc(var(--ui-vmin, 7.2px) * 1.667);}
 .notif-actions{display:flex;gap:calc(var(--ui-vmin, 7.2px) * .833);}
-.notif-actions button{background:none;border:1px solid rgba(212,175,110,.4);border-radius:calc(var(--ui-vmin, 7.2px) * .694);
+.notif-actions button{background:none;border:1px solid rgba(212,175,110,.4);border-radius:2px;
   color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.389);cursor:pointer;font-family:'Noto Sans JP',sans-serif;
   padding:calc(var(--ui-vmin, 7.2px) * .556) calc(var(--ui-vmin, 7.2px) * 1.389);}
 .notif-actions .notif-decline{border-color:rgba(224,96,96,.4);color:#e06060;}
 
 /* ＋ Add Friend inside the in-game nameplate popover */
 .pp-addfriend{margin-top:calc(var(--ui-vmin, 7.2px) * 1.111);width:100%;
-  background:none;border:1px solid rgba(212,175,110,.45);border-radius:calc(var(--ui-vmin, 7.2px) * .833);
+  background:none;border:1px solid rgba(212,175,110,.45);border-radius:2px;
   color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.528);cursor:pointer;font-family:'Noto Sans JP',sans-serif;
   padding:calc(var(--ui-vmin, 7.2px) * .833) 0;}
 /* A flex item within .card-header-row (see index.html), alongside the
