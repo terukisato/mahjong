@@ -97,7 +97,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.14.6</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.14.7</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -535,10 +535,12 @@
 </div>
 
 <!-- Friends — a User Profile child panel (opened from the "Friends" hub
-     link). Shows this profile's own ID number (the 16-digit stable id from
-     server/profiles.js, only ever shown to its owner) to hand out, an
-     add-by-ID box, pending requests both directions, and the friends list
-     itself. See toggleFriendsModal/renderFriends in script.js. -->
+     link). The 16-digit ID box (this profile's own stable id from
+     server/profiles.js, only ever shown to its owner) stays pinned at the
+     top; below it a two-tab strip splits the friends list (default tab,
+     with pending requests both directions) from the add-by-ID search pane
+     behind the magnifier icon. See toggleFriendsModal/setFriendsTab/
+     renderFriends in script.js. -->
 <div id="friends-backdrop" class="about-backdrop" onclick="toggleFriendsModal()"></div>
 <div id="friends-modal" class="about-modal">
   <button class="about-back" onclick="backToUserProfile()">←</button>
@@ -550,16 +552,29 @@
       <code id="friends-my-id">—</code>
       <button type="button" id="friends-copy-id" onclick="copyMyFriendId()">Copy</button>
     </div>
-    <div class="ig">
-      <label for="friend-id-input">Add a friend by ID</label>
-      <input type="text" id="friend-id-input" inputmode="numeric" maxlength="16" placeholder="16-digit ID" autocomplete="off">
+    <!-- Underline-tab strip, same visual language as Rankings'
+         #rank-sort-tabs. The add tab is icon-only (magnifier) — its label
+         lives in title/aria-label. -->
+    <div class="friends-tabs" id="friends-tabs">
+      <button class="friends-tab active" id="friends-tab-list" onclick="setFriendsTab('list')">Friends</button>
+      <button class="friends-tab friends-tab-icon" id="friends-tab-add" onclick="setFriendsTab('add')" title="Add a Friend" aria-label="Add a Friend">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </button>
     </div>
-    <div id="friend-add-error" class="profile-error"></div>
-    <button class="bp" onclick="submitFriendRequest()">Send Request</button>
-    <div id="friend-incoming" class="friends-section"></div>
-    <div id="friend-outgoing" class="friends-section"></div>
-    <div class="friends-list-title" id="friends-list-title" style="display:none;">Friends</div>
-    <div id="friends-list" class="icon-grid"></div>
+    <div id="friends-pane-list" class="friends-pane">
+      <div id="friend-incoming" class="friends-section"></div>
+      <div id="friend-outgoing" class="friends-section"></div>
+      <div class="friends-list-title" id="friends-list-title" style="display:none;">Friends</div>
+      <div id="friends-list" class="icon-grid"></div>
+    </div>
+    <div id="friends-pane-add" class="friends-pane" style="display:none;">
+      <div class="ig">
+        <label for="friend-id-input">Add a friend by ID</label>
+        <input type="text" id="friend-id-input" inputmode="numeric" maxlength="16" placeholder="16-digit ID" autocomplete="off">
+      </div>
+      <div id="friend-add-error" class="profile-error"></div>
+      <button class="bp" onclick="submitFriendRequest()">Send Request</button>
+    </div>
   </div>
 </div>
 
@@ -774,6 +789,19 @@
   <div class="achv-toast-title">Room Invite</div>
   <div id="invite-toast-body"></div>
   <button class="bp" id="invite-toast-accept" onclick="acceptRoomInvite()">Join Room</button>
+</div>
+
+<!-- Daily login bonus notification — same corner-toast pattern as
+     Achievement Unlocked above (own id/element so it can coexist with the
+     others), purely informational and auto-dismissing. Replaces the old
+     centre-screen toast() the daily bonus used to use. Fires from
+     onProfileUnlocked when the 'profile_unlocked' message carries a
+     dailyBonus amount (server grants it once per UTC day on either unlock
+     path — see claimDailyBonus in server/economy.js). -->
+<div id="coin-toast" class="achv-toast">
+  <button class="about-close" onclick="closeCoinBonus()">✕</button>
+  <div class="achv-toast-title">Daily Login Bonus</div>
+  <div id="coin-toast-body"></div>
 </div>
 
 <!-- Invite Players — its own window, opened either from the waiting room's

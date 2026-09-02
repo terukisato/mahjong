@@ -1174,6 +1174,41 @@ test('A single (non-stacked) yakuman win is NOT tagged "Yakuman Stack"', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+// Play Again — must survive a host reconnecting mid-game. A dropped-and-
+// resumed host arrives on a brand-new connection id; without hostId being
+// carried over, hostStartPlayAgain's `playerId !== this.hostId` guard never
+// matches again and the game-over "Start New Game" button silently does
+// nothing.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Play Again works after the host reconnects mid-game', () => {
+  const room = new Room('tonpuu');
+  const host = { id: 'h-old', name: 'Host', isBot: false, ws: { readyState: 1, send() {} } };
+  room.addHuman(host);
+  room.hostId = host.id;
+  room.fillBots();
+  room.start();
+
+  const seat = room.seats.findIndex(p => p && p.id === 'h-old');
+  assert.notStrictEqual(seat, -1);
+  assert.strictEqual(room.hostSeat, seat, 'start() pins the host\'s post-shuffle seat');
+
+  // Drop + resume onto a fresh connection id (what reconnectNow/connect do).
+  const token = room.resumeInfo.get(seat).token;
+  const revived = { id: 'h-new', name: '', isBot: false, ws: { readyState: 1, send() {} } };
+  assert.strictEqual(room.reclaimSeat(seat, revived, token), true);
+  assert.strictEqual(room.hostId, 'h-new', 'reclaimSeat moves hostId onto the returning host');
+
+  // Game ends; host votes then starts the rematch.
+  room.phase = 'done';
+  room.playAgain('h-new');
+  assert.ok(room.playAgainVotes.has(seat), 'host\'s play-again vote registers');
+  const booted = room.hostStartPlayAgain('h-new');
+  assert.ok(Array.isArray(booted), 'hostStartPlayAgain fires for the reconnected host');
+  assert.strictEqual(room.phase, 'playing', 'a fresh game actually started');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
 // Summary
 // ══════════════════════════════════════════════════════════════════════════
 

@@ -592,22 +592,49 @@ function wss(d){if(ws&&ws.readyState===1)ws.send(JSON.stringify(d));}
 
 // Mobile browsers suspend a backgrounded tab and often silently kill its
 // WebSocket; `readyState` can still read OPEN for a while after. When the
-// player comes back mid-game, proactively tear down and rebuild the socket
-// (which then silently auto-resumes via connect()'s ws.onopen) rather than
-// waiting for the next doomed send to fail. A brief (<8s) switch-away is
-// left alone — the connection is very likely still fine.
+// player comes back mid-game, verify the socket is actually alive and
+// rebuild it if not (the rebuild then silently auto-resumes via connect()'s
+// ws.onopen) rather than waiting for the next doomed send to fail. A long
+// absence almost certainly means a dead socket, so skip straight to the
+// rebuild; a short one gets an app-level ping and only rebuilds if no pong
+// comes back — see probeConnection. (The old "leave anything under 8s
+// alone" shortcut is gone: even a 2-3s app switch is enough for a mobile OS
+// to suspend the tab and quietly drop the socket while readyState still
+// reads OPEN, which is exactly the case that stranded the player.)
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden'){ lastHiddenAt=Date.now(); return; }
   if(!inGame||!loadResume()) return;
-  const awayMs=Date.now()-lastHiddenAt;
   const dead=!ws||ws.readyState===2||ws.readyState===3;
-  if(dead||awayMs>8000) reconnectNow();
+  if(dead||Date.now()-lastHiddenAt>8000) reconnectNow();
+  else probeConnection();
 });
+
+// App-level liveness probe. The browser WebSocket API can't send protocol
+// pings or observe pongs, and a mobile-suspended socket keeps reporting
+// readyState OPEN long after the OS silently killed it (see the server's
+// own heartbeat comment in index.js) — so an otherwise-dead socket is only
+// noticed ~30-60s later, when the server's ping sweep terminates it and the
+// client finally gets a close event. This sends {type:'ping'} and, if no
+// {type:'pong'} (handled in onMsg) comes back fast, rebuilds the socket.
+// Fired on return-to-foreground mid-game and right after every table action
+// (see act()) — the two moments a wedged socket actually strands the player.
+let pingProbeTimer=null;
+function probeConnection(){
+  if(!inGame||!loadResume()) return;
+  if(!ws||ws.readyState===2||ws.readyState===3){ reconnectNow(); return; }
+  if(ws.readyState===0) return; // still opening — its own onopen will resume
+  clearTimeout(pingProbeTimer);
+  pingProbeTimer=setTimeout(()=>{ pingProbeTimer=null; reconnectNow(); },2500);
+  wss({type:'ping'});
+}
 
 // Detach the current socket and open a fresh one exactly once (connect()'s
 // ws.onopen then re-runs profile unlock + game resume). Null the old
 // handlers first so its own onclose can't also schedule a second connect().
 function reconnectNow(){
+  // Cancel any in-flight probe timer so its own fallback can't fire a
+  // second reconnect on top of the fresh socket that's now opening.
+  clearTimeout(pingProbeTimer); pingProbeTimer=null;
   // A discard was in flight when the socket went — have the post-resume
   // game_state re-send it if it never actually reached the server.
   if(pendingDiscardTileId!=null) discardRetryArmed=true;
@@ -617,6 +644,17 @@ function reconnectNow(){
   connect();
 }
 
+// Piggybacks a liveness probe on every table action (turn plays and
+// reactions alike). If the socket died while backgrounded the send just
+// vanishes and the player is left tapping a button that does nothing until
+// the server's 30s heartbeat notices — the probe catches that in ~2.5s and
+// rebuilds instead. The action itself is NOT replayed: resume re-sends the
+// authoritative game_state, so either the action already landed (state
+// reflects it) or it didn't (buttons are back) and the player taps again.
+// Discards opt out — they have their own richer optimistic/rollback
+// watchdog (see sendDiscardAction).
+function act(action){ wss({type:'action',action}); probeConnection(); }
+
 // Server -> client message router. Lobby/lifecycle messages (joined,
 // room_update, game_start, round_start/end, game_over, ready_status) are
 // handled regardless of state; the `if(!inGame) return;` gate below that
@@ -624,6 +662,9 @@ function reconnectNow(){
 // only meaningful — and only processed — once actually seated at a table.
 function onMsg(m){
   if(m.type==='hello') return;
+  // Answer to probeConnection()'s app-level ping — the socket is alive, so
+  // stand down the fallback reconnect it armed.
+  if(m.type==='pong'){ clearTimeout(pingProbeTimer); pingProbeTimer=null; return; }
   // Reconnect handshake (see connect()'s ws.onopen). ok → a game_state
   // (warm) or game_start(resumed)+game_state (cold reload) follows and the
   // board picks up where it left off; not ok → the game's gone (ended /
@@ -753,7 +794,12 @@ function onMsg(m){
       $('friend-add-error').textContent='';
       const inp=$('friend-id-input'); if(inp) inp.value='';
       toast(m.autoAccepted?'Friend added.':'Friend request sent.');
-      if($('friends-modal').classList.contains('visible')) wss({type:'get_friends'});
+      if($('friends-modal').classList.contains('visible')){
+        // Drop back to the list so the new friend / pending "Sent" row is
+        // visible right away, rather than leaving them on the empty add form.
+        setFriendsTab('list');
+        wss({type:'get_friends'});
+      }
     } else {
       const err=m.error||'Could not send that request.';
       if($('friends-modal').classList.contains('visible')) $('friend-add-error').textContent=err;
@@ -1094,12 +1140,25 @@ function toggleFriendsModal(){
   $('friends-my-id').textContent=myProfileId||'—';
   clearTimeout(_copyIdRevertTimer); $('friends-copy-id').textContent='Copy';
   $('friend-add-error').textContent='';
+  $('friend-id-input').value='';
   $('friend-incoming').innerHTML='';
   $('friend-outgoing').innerHTML='';
   $('friends-list').innerHTML='<p class="friends-empty">Loading…</p>';
+  setFriendsTab('list');
   modal.classList.add('visible');
   backdrop.classList.add('visible');
   wss({type:'get_friends'});
+}
+
+// Switches the Friends modal between the friends-list pane (default) and
+// the add-by-ID pane behind the magnifier tab. The "Your ID" box above the
+// tab strip stays put either way.
+function setFriendsTab(which){
+  const isAdd=which==='add';
+  $('friends-tab-list').classList.toggle('active',!isAdd);
+  $('friends-tab-add').classList.toggle('active',isAdd);
+  $('friends-pane-list').style.display=isAdd?'none':'';
+  $('friends-pane-add').style.display=isAdd?'':'none';
 }
 
 function renderFriends(m){
@@ -1141,7 +1200,7 @@ function renderFriends(m){
   const canInvite=isRoomHost && !inGame && $('wa').style.display==='block';
   const friends=m.friends||[];
   $('friends-list-title').style.display=friends.length?'':'none';
-  if(!friends.length){ list.innerHTML='<p class="friends-empty">No friends yet — add one by ID above.</p>'; return; }
+  if(!friends.length){ list.innerHTML='<p class="friends-empty">No friends yet — add one by ID from the search tab above.</p>'; return; }
   list.innerHTML=friends.map(f=>{
     const dot=f.online?'<span class="friend-dot" title="Online"></span>':(f.busy?'<span class="friend-dot friend-dot-busy" title="In a game"></span>':'');
     const invite=(canInvite&&f.online&&!f.busy)?`<button onclick="inviteFriendToRoom('${escAttr(f.name)}')">Invite</button>`:'';
@@ -1622,6 +1681,29 @@ function showAchievementUnlock(list){
 function closeAchievementUnlock(){
   $('achv-toast').classList.remove('show');
   if(achvToastTimer){ clearTimeout(achvToastTimer); achvToastTimer=null; }
+}
+
+// Daily login bonus — slides in from the top-right on the same .achv-toast
+// track as the achievement/invite toasts (see showAchievementUnlock), rather
+// than the old centre-screen toast(). Fired from onProfileUnlocked when the
+// 'profile_unlocked' message carries a dailyBonus amount. Auto-dismisses
+// after 8s; ✕ (closeCoinBonus) closes it early.
+let coinToastTimer=null;
+function showCoinBonus(amount){
+  if(!amount) return;
+  $('coin-toast-body').innerHTML=`
+    <div class="achv-item">
+      <div class="achv-label">Welcome back!</div>
+      <div class="achv-reward">+${amount} ${coinIconSvg}</div>
+    </div>`;
+  $('coin-toast').classList.add('show');
+  if(coinToastTimer) clearTimeout(coinToastTimer);
+  coinToastTimer=setTimeout(closeCoinBonus,8000);
+}
+
+function closeCoinBonus(){
+  $('coin-toast').classList.remove('show');
+  if(coinToastTimer){ clearTimeout(coinToastTimer); coinToastTimer=null; }
 }
 
 // Owner-only — see 'change_username' in server/index.js, which re-verifies
@@ -2806,7 +2888,9 @@ function onProfileUnlocked(m){
     updateCoins(m.coins||0);
     // Fired on either unlock path (real code OR silent token) — the silent
     // one is the normal "opened the game today" case, so don't gate on it.
-    if(m.dailyBonus) toast(`+${m.dailyBonus} coins · daily login bonus`);
+    // A top-right slide-in toast (see showCoinBonus), same as the
+    // achievement-unlock notification.
+    if(m.dailyBonus) showCoinBonus(m.dailyBonus);
     // Sync to the profile's own stored icon/title (server-authoritative —
     // see profiles.getIcon/getTitle), not whatever this browser last
     // cached, in case this device previously had a different profile's
@@ -5824,7 +5908,7 @@ function drawActions(m){
     // canAttemptTsumo in room.js), so every tsumo goes through the manual
     // declare+confirm path below instead, valid or not.
     if(m.canTsumo&&!m.chonbo)
-      ab(bar,'TSUMO','btsu',()=>wss({type:'action',action:{type:'tsumo'}}));
+      ab(bar,'TSUMO','btsu',()=>act({type:'tsumo'}));
     // LEFT: chonbo-only "attempt" declare — deliberately NOT a normal
     // one-tap button (see showDeclareConfirm), since unlike canTsumo this
     // isn't actually confirmed valid; a stray tap here can end the hand
@@ -5841,7 +5925,7 @@ function drawActions(m){
     // actually needed, to tell the candidates apart.
     const canAnkan=m.canAnkan||[];
     if(canAnkan.length===1){
-      ab(bar,'ANKAN','bkan',()=>wss({type:'action',action:{type:'ankan',tileKey:canAnkan[0]}}));
+      ab(bar,'ANKAN','bkan',()=>act({type:'ankan',tileKey:canAnkan[0]}));
     } else if(canAnkan.length>1){
       ab(bar,'ANKAN','bkan',()=>showAnkanPicker(canAnkan));
     }
@@ -5856,10 +5940,10 @@ function drawActions(m){
     // selection state.
     const canKakan=m.canKakan||[];
     if(canKakan.length===1){
-      ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:canKakan[0]}}));
+      ab(bar,'KAN','bkan',()=>act({type:'kakan',tileId:canKakan[0]}));
     } else if(canKakan.length>1){
       const tid=(selId!=null&&canKakan.includes(selId))?selId:canKakan[0];
-      ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kakan',tileId:tid}}));
+      ab(bar,'KAN','bkan',()=>act({type:'kakan',tileId:tid}));
     }
 
     // LEFT: KITA (sanma only) — banks a North tile for a +1 han bonus later;
@@ -5867,7 +5951,7 @@ function drawActions(m){
     // single button covers however many copies happen to be in hand.
     const canKita=m.canKita||[];
     if(canKita.length>0)
-      ab(bar,'KITA','bkita',()=>wss({type:'action',action:{type:'kita',tileId:canKita[0]}}));
+      ab(bar,'KITA','bkita',()=>act({type:'kita',tileId:canKita[0]}));
 
     // LEFT: RIICHI — like CHI's sequence picker, pick which tile to
     // discard when more than one keeps the hand tenpai; a single option
@@ -5877,7 +5961,7 @@ function drawActions(m){
     // hand tiles that make up a sequence.
     const canRiichi=m.canRiichi||[];
     if(canRiichi.length===1){
-      ab(bar,'RIICHI','brii',()=>{wss({type:'action',action:{type:'riichi',tileId:canRiichi[0]}});selId=null;});
+      ab(bar,'RIICHI','brii',()=>{act({type:'riichi',tileId:canRiichi[0]});selId=null;});
     } else if(canRiichi.length>1){
       ab(bar,'RIICHI','brii',()=>showRiichiPicker(canRiichi,m.myHand||[],m.drawTile||null));
     }
@@ -5888,7 +5972,7 @@ function drawActions(m){
 
     // RIGHT: KYUUSHU
     if(m.canKyuushu)
-      ab(bar,'Kyuushu Kyuuhai','bkyu',()=>wss({type:'action',action:{type:'kyuushu'}}));
+      ab(bar,'Kyuushu Kyuuhai','bkyu',()=>act({type:'kyuushu'}));
 
     if(bar.children.length>0) bar.classList.add('visible');
 
@@ -5900,25 +5984,25 @@ function drawActions(m){
     // same recessed/confirm-required treatment as the tsumo attempt above
     // instead of the normal one-tap RON button.
     if(opts.some(o=>o.type==='ron'&&o.valid!==false))
-      ab(bar,'RON','bron',()=>wss({type:'action',action:{type:'ron'}}));
+      ab(bar,'RON','bron',()=>act({type:'ron'}));
     else if(opts.some(o=>o.type==='ron'&&o.valid===false))
       ab(bar,'⚠ Declare…','bchonbo',()=>showDeclareConfirm('ron'));
     if(opts.some(o=>o.type==='pon'))
-      ab(bar,'PON','bpon',()=>wss({type:'action',action:{type:'pon'}}));
+      ab(bar,'PON','bpon',()=>act({type:'pon'}));
     if(opts.some(o=>o.type==='kan'))
-      ab(bar,'KAN','bkan',()=>wss({type:'action',action:{type:'kan'}}));
+      ab(bar,'KAN','bkan',()=>act({type:'kan'}));
     if(opts.some(o=>o.type==='chi')){
       const c=opts.find(o=>o.type==='chi');
       const discTile=m.pending.discard;
       const myHand=m.myHand||[];
       if(c.sequences.length===1){
-        ab(bar,'CHI','bchi',()=>wss({type:'action',action:{type:'chi',tileIds:c.sequences[0]}}));
+        ab(bar,'CHI','bchi',()=>act({type:'chi',tileIds:c.sequences[0]}));
       } else {
         ab(bar,'CHI','bchi',()=>showChiPicker(c.sequences,discTile,myHand));
       }
     }
     // RIGHT: SKIP
-    ab(bar,'SKIP','bpas',()=>wss({type:'action',action:{type:'pass'}}));
+    ab(bar,'SKIP','bpas',()=>act({type:'pass'}));
     if(bar.children.length>0) bar.classList.add('visible');
   }
   if(!bar.classList.contains('visible')) bar.classList.remove('visible');
@@ -5999,7 +6083,7 @@ function showChiPicker(sequences,discTile,myHand){
     const optBtn=document.createElement('button');
     optBtn.className='chi-picker-opt';
     optBtn.onclick=()=>{
-      wss({type:'action',action:{type:'chi',tileIds:seq}});
+      act({type:'chi',tileIds:seq});
       picker.remove();
     };
     group.forEach(t=>{
@@ -6035,7 +6119,7 @@ function showRiichiPicker(tileIds,myHand,drawTile){
     const optBtn=document.createElement('button');
     optBtn.className='chi-picker-opt';
     optBtn.onclick=()=>{
-      wss({type:'action',action:{type:'riichi',tileId:id}});
+      act({type:'riichi',tileId:id});
       selId=null;
       picker.remove();
     };
@@ -6064,7 +6148,7 @@ function showAnkanPicker(tileKeys){
     const optBtn=document.createElement('button');
     optBtn.className='chi-picker-opt';
     optBtn.onclick=()=>{
-      wss({type:'action',action:{type:'ankan',tileKey}});
+      act({type:'ankan',tileKey});
       picker.remove();
     };
     optBtn.appendChild(mkElMd(keyToTile(tileKey)));
@@ -6110,7 +6194,7 @@ function showDeclareConfirm(type){
   confirmBtn.className='ba bchonbo declare-picker-confirm';
   confirmBtn.textContent=`Yes, Declare ${type==='tsumo'?'Tsumo':'Ron'}`;
   confirmBtn.onclick=()=>{
-    wss({type:'action',action:{type}});
+    act({type});
     picker.remove();
   };
   picker.appendChild(confirmBtn);
@@ -6794,7 +6878,7 @@ function roundStartBanner(wind,round,honba){
 // ROUND READY
 // ════════════════════════════════════════════════════════════
 function sendRoundReady(){
-  wss({type:'action',action:{type:'round_ready'}});
+  act({type:'round_ready'});
   const btn=$('bround-ready');
   if(btn){ btn.disabled=true; btn.textContent='✓ Waiting...'; btn.style.opacity='0.5'; }
 }

@@ -161,6 +161,15 @@ class Room {
     // join_room room keeps the ORIGINAL creator's id, joiners never
     // overwrite it.
     this.hostId=null;
+    // Table seat currently held by the host — re-derived from hostId on
+    // every start() (seating is reshuffled there, so the host's seat number
+    // isn't stable across games). reclaimSeat uses it to move hostId onto a
+    // returning host's NEW connection id: without that, a host who dropped
+    // and reconnected even once mid-game keeps a stale hostId, and
+    // hostStartPlayAgain then silently rejects their "Start New Game" (its
+    // playerId!==this.hostId guard never matches again) — the game-over
+    // screen just hangs on a dead button. -1 until the first start().
+    this.hostSeat=-1;
     // Seats (not player ids — a seat's occupant can change) that have
     // opted into a same-room rematch after game_over via playAgain() below.
     // Only meaningful while phase==='done'; cleared on every fresh
@@ -789,6 +798,9 @@ class Room {
     // Play Again rematch (hostStartPlayAgain also funnels through here).
     this.seats=shuffle(this.seats);
     this.seats.forEach((p,i)=>{if(p) p.seat=i;});
+    // Pin the host's post-shuffle seat so a mid-game reconnect can keep
+    // hostId pointing at the live connection (see hostSeat's own comment).
+    this.hostSeat=this.hostId?this.seats.findIndex(p=>p&&p.id===this.hostId):-1;
     const startDealer=Math.floor(Math.random()*this.numPlayers);
     // Sanma conventionally starts with more points per player (one fewer
     // opponent to redistribute among) — 35000 is the standard Tenhou/club
@@ -2274,6 +2286,9 @@ class Room {
     player.isGuest=info.isGuest;
     player._resumeToken=token;
     this.seats[seat]=player;
+    // The returning host arrives on a fresh connection id — carry hostId
+    // over to it, or hostStartPlayAgain will never fire for them again.
+    if(seat===this.hostSeat) this.hostId=player.id;
     this.ready.delete(player.id);
     this._broadcastRoomUpdate();
     return true;

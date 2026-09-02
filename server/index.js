@@ -300,6 +300,14 @@ wss.on('connection',(ws)=>{
   ws.on('message',(raw)=>{
     let msg; try{msg=JSON.parse(raw);}catch{return;}
     try{
+    // App-level liveness probe, separate from the protocol-level ping/pong
+    // heartbeat above: the browser WebSocket API can neither send protocol
+    // pings nor observe pongs, so the client can't use that sweep to check
+    // its own socket after a background suspend. It sends {type:'ping'} and
+    // treats a missing {type:'pong'} as a dead socket worth rebuilding (see
+    // probeConnection in script.js). Answer it before anything else and
+    // without touching room state.
+    if(msg.type==='ping'){ try{ ws.send(JSON.stringify({type:'pong'})); }catch{} return; }
     // "Quick Match" — straight into a game against bots, no waiting room,
     // never listed/joinable by anyone else (see openRooms's comment above).
     // Unlike 'create_room'/'join_room' below this never sits in 'waiting'
