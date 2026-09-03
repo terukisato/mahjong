@@ -2,7 +2,7 @@
 const crypto = require('crypto');
 const {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
        detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,isMenzen,shanten} = require('./mahjong');
-const {botName,bestDiscard,botReact,shouldRiichi} = require('./bot');
+const {botName,bestDiscard,botReact,shouldRiichi,chooseRiichiTile} = require('./bot');
 const {recordGameResult,getStats} = require('./stats');
 const {recordGame} = require('./history');
 const {awardGameCoins} = require('./economy');
@@ -919,7 +919,7 @@ class Room {
   // worse than a permanent stall.
   _safeBotReact(seat,hand,tile,options,melds,difficulty){
     try{
-      return botReact(hand,tile,options,melds,difficulty);
+      return botReact(hand,tile,options,melds,difficulty,this._botCtx(seat));
     }catch(e){
       console.error(`[bot react error] seat=${seat} tile=${tile&&key(tile)}`,e.message,e.stack);
       return {type:'pass'};
@@ -939,7 +939,7 @@ class Room {
     const g=this.game;
     const hand=g.hands[seat];
     try{
-      const id=bestDiscard(hand,g.melds[seat],this.seats[seat].difficulty,this._dangerSetsFor(seat));
+      const id=bestDiscard(hand,g.melds[seat],this.seats[seat].difficulty,this._botCtx(seat));
       if(hand.some(t=>t.id===id)) return id;
       console.error(`[bot discard error] seat=${seat} bestDiscard returned a tileId not in hand`);
     }catch(e){
@@ -1038,7 +1038,13 @@ class Room {
   }
 
   _findRiichiTile(seat){
-    const hand=this.game.hands[seat];
+    const g=this.game;
+    const hand=g.hands[seat];
+    // 'hard' bots pick the declaration tile for wait quality + safety
+    // (bot.js's chooseRiichiTile); every difficulty falls back to "first
+    // tile that keeps tenpai" if that returns nothing (or isn't in hand).
+    const picked=chooseRiichiTile(hand,g.melds[seat],this._botCtx(seat));
+    if(picked!=null && hand.some(t=>t.id===picked)) return picked;
     for(const t of hand){if(waits(hand.filter(x=>x.id!==t.id),undefined,this.rules.sanma).length>0) return t.id;}
     return null;
   }
@@ -1076,13 +1082,36 @@ class Room {
     return 'mid';
   }
 
-  // Discard-key piles of every OTHER seat currently in riichi — used by
-  // bot.js's 'hard' difficulty to find genbutsu-safe tiles. A tile is only
-  // treated as safe if it's genbutsu against every riichi opponent at once
-  // (bot.js itself enforces the "every" part; this just gathers the piles).
-  _dangerSetsFor(seat){
+  // Full table context for the shanten/defense bot AI (bot.js) — everything
+  // it needs that it can't see from just (hand, melds): every OTHER seat's
+  // visible state (pond, melds, riichi flag), the dora indicators, this
+  // seat's/round's winds, the rules that affect scoring, and how deep the
+  // hand is. Rebuilt fresh per decision (cheap, never stale). Arrays are
+  // sliced so a bot can't mutate live game state through the ctx.
+  _botCtx(seat){
     const g=this.game;
-    return g.riichi.map((r,s)=>(r&&s!==seat)?g.discards[s].map(key):null).filter(Boolean);
+    const opponents=[];
+    for(let s=0;s<this.numPlayers;s++){
+      if(s===seat) continue;
+      opponents.push({
+        seat:s,
+        seatWind:this._seatWindOf(s),
+        riichi:!!g.riichi[s],
+        discards:g.discards[s].slice(),
+        melds:g.melds[s].slice(),
+      });
+    }
+    return {
+      seat,
+      seatWind:this._seatWindOf(seat),
+      roundWind:this._roundWindValue(),
+      kuitanAri:this.rules.kuitanAri,
+      sanma:!!this.rules.sanma,
+      turnCount:g.turnCount,
+      dora:g.dora.slice(),
+      scores:g.scores.slice(),
+      opponents,
+    };
   }
 
   _findAnkan(seat){

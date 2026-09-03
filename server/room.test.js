@@ -518,8 +518,8 @@ test('_safeBotReact: an exception thrown by botReact is caught and falls back to
 test('_botDiscardTile: an exception thrown by bestDiscard does not propagate (empty hand — a real internal throw, not a mock)', () => {
   const room = freshRoom(0);
   const g = room.game;
-  // bestDiscard('normal') → _shantenBestDiscard → _rankDiscards(hand)[0].id
-  // — _rankDiscards on an empty hand returns [], so [0].id genuinely throws
+  // bestDiscard('normal') → _smartDiscard, whose candidate list is empty for
+  // an empty hand, so Math.min(...[]) / cands[0].id genuinely throws a
   // TypeError inside bot.js. This is a pathological state (a bot should
   // never legitimately hold zero tiles on its own turn) but it's exactly
   // the shape of bug this wrapper exists to survive without crashing.
