@@ -2787,7 +2787,12 @@ class Room {
         }).map(t=>t.id);
       }
       let canAnkan=[];
-      if(g.turn===seat&&hand.length===fullHandSize){
+      // g.kanCount<4 mirrors _ankan/_kakan/_daiminkan's own guard: a 5th kan
+      // is impossible, and 4 kans by ONE seat doesn't abort the hand
+      // (suukaikan needs 2+ seats — see _checkSuukaikan), so that seat can
+      // still reach here holding another quad. Without this the button
+      // rendered but the action silently no-op'd server-side.
+      if(g.turn===seat&&hand.length===fullHandSize&&g.kanCount<4){
         const c={};hand.forEach(t=>{c[key(t)]=(c[key(t)]||0)+1;});
         if(!g.riichi[seat]){
           canAnkan=Object.entries(c).filter(([k,n])=>n===4).map(([k])=>k);
@@ -2812,7 +2817,7 @@ class Room {
         canKita=hand.filter(t=>key(t)==='4z').map(t=>t.id);
       }
       let canKakan=[];
-      if(g.turn===seat&&!g.riichi[seat]&&g.drawTile){
+      if(g.turn===seat&&!g.riichi[seat]&&g.drawTile&&g.kanCount<4){
         const ponKeys=g.melds[seat].filter(m=>m.type==='pon').map(m=>key(m.tiles[0]));
         canKakan=hand.filter(t=>ponKeys.includes(key(t))&&t.id===g.drawTile.id).map(t=>t.id);
         // Also allow kakan with any tile in hand matching a pon (not just draw tile)

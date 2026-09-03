@@ -470,6 +470,13 @@ test('Chankan: a human passing on a valid rob-the-kan must complete the kan (not
   assert.strictEqual(g.pending.isChankan, true);
   assert.ok(g.pending.seats.includes(1));
   assert.ok(g.pending.timer, 'the 3s completion watchdog should be armed');
+  // The declarer's turn is intentionally left pointing at them through the
+  // window (same as a discard's reaction window). action() gates every
+  // own-turn move on `!g.pending`, so the client must too — it derives
+  // `mine` as `turn===mySeat && !pending` and shows NO own-turn buttons
+  // here. If g.turn stops being the declarer, that client check breaks and
+  // the KAN button reappears mid-window, tappable but silently rejected.
+  assert.strictEqual(g.turn, 0, 'the declarer stays on turn through the chankan window');
 
   const armedTimer = g.pending.timer;
   const realClearTimeout = global.clearTimeout;

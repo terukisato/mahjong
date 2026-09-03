@@ -5900,7 +5900,17 @@ function drawActions(m){
   const staleRiichi=$('riichi-picker'); if(staleRiichi) staleRiichi.remove();
   if(!m) return;
   bar.className='act-overlay';
-  const mine=m.turn===mySeat, react=m.pending?.isForMe;
+  // `mine` requires !m.pending, matching the server's own `myTurnOpen`
+  // gate (g.turn===seat && !g.pending) in room.js action(). While a
+  // reaction window is open the server leaves g.turn pointing at the
+  // player who caused it — the discarder, or the seat that just declared
+  // kakan/kita — so m.turn===mySeat stays true even though every own-turn
+  // action (discard/tsumo/riichi/ankan/kakan/kita) is now rejected until
+  // that window resolves. Without the !m.pending check the full own-turn
+  // button set (KAN included) kept rendering and stayed tappable through
+  // the whole chankan window after declaring kakan, every press silently
+  // dropped server-side — "pressing the kan button did nothing".
+  const mine=m.turn===mySeat && !m.pending, react=m.pending?.isForMe;
 
   if(mine){
     // LEFT: TSUMO — the safe one-tap button only exists without chonbo;
