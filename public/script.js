@@ -833,14 +833,12 @@ function onMsg(m){
     return;
   }
   // End-of-game coin payout (unicast, see _finishGame in server/room.js).
-  // Toast is the universal feedback; the game-over standings panel also
-  // shows it as a summary line IF the player opens "View Results" (see
-  // showCoinReward, called from onGameOver).
+  // The game-over standings panel shows it as a summary line IF the player
+  // opens "View Results" (see showCoinReward, called from onGameOver).
   if(m.type==='coins'){
     updateCoins(m.balance);
     if(m.delta>0){
       pendingCoinReward=m;
-      toast(`+${m.delta} coins`+(m.capped?' · daily limit reached':''));
       // If the game-over results are already on screen (fast "View Results"
       // click beat this message), paint the line now too.
       if($('bend-menu')?.style.display!=='none'&&!$('s-end').classList.contains('hidden')) showCoinReward();
@@ -1010,6 +1008,10 @@ let myCoins=0;
 // The last unrendered end-of-game coin payout ('coins' message), held until
 // the game-over results panel is on screen — see showCoinReward.
 let pendingCoinReward=null;
+// A daily-login bonus from profile_unlocked, held until the player presses
+// Start (enterLobby) instead of popping up over the start screen the instant
+// the app loads/reconnects — see onProfileUnlocked and enterLobby.
+let pendingDailyBonus=null;
 
 // A short leaning stack of matte-gold cash coins, drawn in 3/4 view — two
 // coin edges plus a foreshortened top face with a small square hole (sized
@@ -2889,8 +2891,13 @@ function onProfileUnlocked(m){
     // Fired on either unlock path (real code OR silent token) — the silent
     // one is the normal "opened the game today" case, so don't gate on it.
     // A top-right slide-in toast (see showCoinBonus), same as the
-    // achievement-unlock notification.
-    if(m.dailyBonus) showCoinBonus(m.dailyBonus);
+    // achievement-unlock notification. Held until Start is pressed if we're
+    // still on the start screen (silent token unlock fires on page load,
+    // before the player has done anything) — see enterLobby.
+    if(m.dailyBonus){
+      if($('s-start').classList.contains('hidden')) showCoinBonus(m.dailyBonus);
+      else pendingDailyBonus=m.dailyBonus;
+    }
     // Sync to the profile's own stored icon/title (server-authoritative —
     // see profiles.getIcon/getTitle), not whatever this browser last
     // cached, in case this device previously had a different profile's
@@ -7681,6 +7688,7 @@ function enterLobby(){
     $('s-start').classList.remove('screen-out');
     $('s-lobby').classList.add('screen-in');
     setTimeout(()=>$('s-lobby').classList.remove('screen-in'),360);
+    if(pendingDailyBonus){ showCoinBonus(pendingDailyBonus); pendingDailyBonus=null; }
   },252);
 }
 // Back to the start screen from the lobby — sends 'leave' unconditionally
