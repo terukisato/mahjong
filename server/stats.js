@@ -1,55 +1,40 @@
 'use strict';
-const fs = require('fs');
-const path = require('path');
+const { getDb, transaction } = require('./db');
 const { ACHIEVEMENTS, applyUnlocks, getProgressList } = require('./achievements');
 
-// Plain JSON-file persistence, keyed by the profile's stable id (see
-// profiles.js — never the display name, so renaming a profile never has to
-// touch this file at all; a stray guest name is never a valid key here
-// either, since recordGameResult below only ever gets called with a real
-// profile's id). Re-read from disk on every call rather than cached in
-// memory — writes only happen once per finished game, so the extra read is
-// free, and caching across the whole process lifetime actively loses data:
-// if the server process is ever restarted (nodemon reload, crash, or a
-// second instance briefly overlapping the old one) while a game is in
-// progress, the new process's cache reflects an older snapshot, and its
-// next save would overwrite the file with that stale snapshot, silently
-// erasing whatever another process wrote in the meantime.
-// Same DATA_DIR env var as profiles.js — must resolve to the same directory
-// as that file's, since both files need to sit together on whatever
-// persistent volume a deployment mounts (see profiles.js's comment for why).
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const STATS_FILE = path.join(DATA_DIR, 'player-stats.json');
-
+// SQLite-backed persistence (see server/db.js's `stats` table and its own
+// schema comment for why this file is kept as one JSON blob per profile
+// rather than decomposed into further tables), keyed by the profile's
+// stable id (see profiles.js — never the display name, so renaming a
+// profile never has to touch this table at all; a stray guest name is never
+// a valid key here either, since recordGameResult below only ever gets
+// called with a real profile's id).
+//
+// _load()/_save() re-read/rewrite EVERY profile's record on every call,
+// same as the JSON file this replaces — see getLeaderboard/
+// getPeriodLeaderboard below, which both need every profile's row anyway to
+// rank them, and recordGameResult, which only ever touches a handful of
+// rows (this game's own seats) but historically saved the whole set back in
+// one go. _save's INSERT...ON CONFLICT loop runs inside one transaction
+// (see server/db.js's transaction()), so a multi-profile update from a
+// single finished game either lands entirely or not at all — something a
+// raw fs.writeFileSync of the old JSON file could never guarantee if the
+// process died mid-write.
 function _load() {
-  try {
-    return JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
-  } catch (e) {
-    return {};
-  }
+  const rows = getDb().prepare('SELECT profile_id, data FROM stats').all();
+  const all = {};
+  for (const row of rows) all[row.profile_id] = JSON.parse(row.data);
+  return all;
 }
 
 function _save(all) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(STATS_FILE, JSON.stringify(all, null, 2));
-}
-
-// Companion to profiles.migrateLegacyIds() — this file used to be keyed by
-// name too, moved in lockstep with a rename via the old renameStats(). Given
-// the {oldName: newId} map profiles.js produced while upgrading itself,
-// move any record still sitting under `oldName` here over to `newId`, once.
-// A name with no matching entry here (never played a game) is just skipped.
-function migrateToIds(nameToId) {
-  const all = _load();
-  let changed = false;
-  for (const [name, id] of Object.entries(nameToId)) {
-    if (all[name] && !all[id]) {
-      all[id] = all[name];
-      delete all[name];
-      changed = true;
-    }
-  }
-  if (changed) _save(all);
+  transaction(db => {
+    const upsert = db.prepare(`
+      INSERT INTO stats (profile_id, data) VALUES (?, ?)
+      ON CONFLICT(profile_id) DO UPDATE SET data = excluded.data
+    `);
+    for (const [id, rec] of Object.entries(all)) upsert.run(id, JSON.stringify(rec));
+  });
 }
 
 // The full set of accumulable per-match-kind fields — shared shape for both
@@ -798,11 +783,7 @@ function getPeriodLeaderboard(sortBy = 'totalFinalScore', variant = 'yonma', per
 // name starts fresh instead of inheriting the old one's unlocked themes
 // (a fresh create_profile always gets a brand-new id, never the old one).
 function deleteStats(id) {
-  const all = _load();
-  if (all[id]) {
-    delete all[id];
-    _save(all);
-  }
+  getDb().prepare('DELETE FROM stats WHERE profile_id = ?').run(id);
 }
 
 // One-time maintenance helper (see scripts/backfill-achievements.js) —
@@ -835,4 +816,4 @@ function recheckAchievements() {
   return granted;
 }
 
-module.exports = { getStats, recordGameResult, getLeaderboard, getPeriodLeaderboard, deleteStats, migrateToIds, recheckAchievements };
+module.exports = { getStats, recordGameResult, getLeaderboard, getPeriodLeaderboard, deleteStats, recheckAchievements };

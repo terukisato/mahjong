@@ -23,3 +23,12 @@ public/tile-preview.html
 # that stale commit and silently erased everything written since. Never
 # track these — back them up out-of-band if needed, don't rely on git.
 server/data/*.json
+
+# Same reasoning as the JSON files above, now that server/db.js persists the
+# same live player data in SQLite instead — the database file itself, plus
+# its WAL-mode sidecar files (server/db.js turns on `PRAGMA journal_mode =
+# WAL`, which keeps not-yet-checkpointed writes in -wal, with -shm as its
+# shared index).
+server/data/*.db
+server/data/*.db-wal
+server/data/*.db-shm

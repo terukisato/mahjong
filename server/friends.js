@@ -1,74 +1,57 @@
 'use strict';
-const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
+const { getDb, transaction } = require('./db');
 const { getNameById, getIconById } = require('./profiles');
 
 // Friends store — the social graph that sits alongside profiles.js (who a
-// player IS) and stats.js (how they've done). Same plain-JSON-file approach
-// and reasoning as those two: no real concurrency at this scale, re-read on
-// every call rather than cached in memory (a restart mid-write would
-// otherwise let a stale cache clobber the file — see stats.js's own comment).
-// Same DATA_DIR env var, so this file sits next to profiles.json /
-// player-stats.json on whatever persistent volume a deployment mounts.
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const FRIENDS_FILE = path.join(DATA_DIR, 'friends.json');
-
-// Keyed by profiles.js's stable 16-digit id (never the renameable display
-// name), same as player-stats.json. Every record has this exact shape;
-// _record() below fills in the defaults for a profile that's never touched
-// the friends system, so callers never have to null-check the arrays.
-//   friends  — mutual, both sides carry each other's id
-//   incoming — pending requests others have sent me (their id)
-//   outgoing — pending requests I've sent (their id)
-//   notifications — newest-first, capped; type 'request' | 'accepted'
+// player IS) and stats.js (how they've done), in the same shared SQLite
+// database (see server/db.js). Normalized into three tables instead of the
+// three parallel JSON arrays (friends/incoming/outgoing) the old
+// friends.json record kept per id — see db.js's schema comment for why each
+// table looks the way it does.
+//
+// Keyed throughout by profiles.js's stable 16-digit id (never the renameable
+// display name), same as before.
+//
+// How many notifications are kept per profile — newest-first, oldest
+// trimmed once a fresh one pushes the count over this (see _notify below).
 const NOTIF_CAP = 50;
 
-function _load() {
-  try {
-    return JSON.parse(fs.readFileSync(FRIENDS_FILE, 'utf8'));
-  } catch (e) {
-    return {};
-  }
+// Canonical (id1, id2) ordering for a mutual-friendship row — a plain string
+// comparison sorts identically to numeric here since every id is a
+// fixed-width 16-digit string — so "are A and B friends" is always exactly
+// one row, regardless of which side is asking.
+function _pair(a, b) { return a < b ? [a, b] : [b, a]; }
+
+function _areFriends(db, a, b) {
+  const [id1, id2] = _pair(a, b);
+  return !!db.prepare('SELECT 1 FROM friend_edges WHERE id1 = ? AND id2 = ?').get(id1, id2);
 }
 
-function _save(all) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(FRIENDS_FILE, JSON.stringify(all, null, 2));
+function _hasRequest(db, fromId, toId) {
+  return !!db.prepare('SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ?').get(fromId, toId);
 }
 
-function _record(all, id) {
-  const r = all[id] || {};
-  r.friends = Array.isArray(r.friends) ? r.friends : [];
-  r.incoming = Array.isArray(r.incoming) ? r.incoming : [];
-  r.outgoing = Array.isArray(r.outgoing) ? r.outgoing : [];
-  r.notifications = Array.isArray(r.notifications) ? r.notifications : [];
-  all[id] = r;
-  return r;
+// Drops any pending 'request' notification from `fromId` on `ownerId`'s
+// list — called once that request has been resolved (accepted or declined)
+// so the bell panel doesn't keep showing a dead Accept/Decline row for it.
+function _dropRequestNotif(db, ownerId, fromId) {
+  db.prepare("DELETE FROM friend_notifications WHERE owner_id = ? AND type = 'request' AND from_id = ?").run(ownerId, fromId);
 }
 
-function _pull(arr, val) {
-  const i = arr.indexOf(val);
-  if (i >= 0) arr.splice(i, 1);
-}
-
-// Drop any pending 'request' notification from `fromId` in this record —
-// called once that request has been resolved (accepted or declined) so the
-// bell panel doesn't keep showing a dead Accept/Decline row for it.
-function _dropRequestNotif(rec, fromId) {
-  rec.notifications = rec.notifications.filter(n => !(n.type === 'request' && n.fromId === fromId));
-}
-
-function _notify(rec, type, fromId) {
-  rec.notifications.unshift({
-    nid: crypto.randomBytes(8).toString('hex'),
-    type,
-    fromId,
-    fromName: getNameById(fromId),
-    ts: Date.now(),
-    read: false,
-  });
-  if (rec.notifications.length > NOTIF_CAP) rec.notifications.length = NOTIF_CAP;
+function _notify(db, ownerId, type, fromId) {
+  db.prepare('INSERT INTO friend_notifications (nid, owner_id, type, from_id, from_name, ts, read) VALUES (?,?,?,?,?,?,0)')
+    .run(crypto.randomBytes(8).toString('hex'), ownerId, type, fromId, getNameById(fromId), Date.now());
+  // Trim to the newest NOTIF_CAP for this owner — same "newest-first,
+  // capped" shape the old notifications array kept. `rowid` (SQLite's
+  // implicit row-order column) tie-breaks two notifications stamped in the
+  // same millisecond, so the trim always agrees with insertion order.
+  db.prepare(`
+    DELETE FROM friend_notifications
+    WHERE owner_id = ? AND nid NOT IN (
+      SELECT nid FROM friend_notifications WHERE owner_id = ? ORDER BY ts DESC, rowid DESC LIMIT ?
+    )
+  `).run(ownerId, ownerId, NOTIF_CAP);
 }
 
 // Real profile check — getNameById falls back to '(unknown)' for an id with
@@ -81,7 +64,14 @@ function _isRealProfile(id) {
 // The normalized record for one profile — safe to call for any id, returns
 // the empty shape for one that's never used the friends system.
 function getData(id) {
-  return _record(_load(), id);
+  const db = getDb();
+  const friends = db.prepare('SELECT CASE WHEN id1 = ? THEN id2 ELSE id1 END AS fid FROM friend_edges WHERE id1 = ? OR id2 = ?')
+    .all(id, id, id).map(r => r.fid);
+  const incoming = db.prepare('SELECT from_id FROM friend_requests WHERE to_id = ?').all(id).map(r => r.from_id);
+  const outgoing = db.prepare('SELECT to_id FROM friend_requests WHERE from_id = ?').all(id).map(r => r.to_id);
+  const notifications = db.prepare('SELECT nid, type, from_id, from_name, ts, read FROM friend_notifications WHERE owner_id = ? ORDER BY ts DESC, rowid DESC').all(id)
+    .map(n => ({ nid: n.nid, type: n.type, fromId: n.from_id, fromName: n.from_name, ts: n.ts, read: !!n.read }));
+  return { friends, incoming, outgoing, notifications };
 }
 
 // A -> B friend request. Auto-accepts when B has already sent A a request
@@ -91,73 +81,59 @@ function sendRequest(fromId, toId) {
   if (!fromId || !toId) return { ok: false, error: 'Missing id' };
   if (fromId === toId) return { ok: false, error: "You can't add yourself" };
   if (!_isRealProfile(toId)) return { ok: false, error: 'No player with that ID' };
-  const all = _load();
-  const me = _record(all, fromId);
-  if (me.friends.includes(toId)) return { ok: false, error: 'Already friends' };
-  if (me.outgoing.includes(toId)) return { ok: false, error: 'Request already sent' };
-  // Crossed requests — just accept.
-  if (me.incoming.includes(toId)) {
-    _pull(me.incoming, toId);
-    _dropRequestNotif(me, toId);
-    const other = _record(all, toId);
-    _pull(other.outgoing, fromId);
-    me.friends.push(toId);
-    other.friends.push(fromId);
-    _notify(other, 'accepted', fromId);
-    _save(all);
-    return { ok: true, autoAccepted: true };
-  }
-  me.outgoing.push(toId);
-  const other = _record(all, toId);
-  if (!other.incoming.includes(fromId)) other.incoming.push(fromId);
-  _notify(other, 'request', fromId);
-  _save(all);
-  return { ok: true };
+  return transaction(db => {
+    if (_areFriends(db, fromId, toId)) return { ok: false, error: 'Already friends' };
+    if (_hasRequest(db, fromId, toId)) return { ok: false, error: 'Request already sent' };
+    // Crossed requests — toId already has a pending request out to fromId —
+    // just accept instead of leaving two mirrored pending requests sitting
+    // there.
+    if (_hasRequest(db, toId, fromId)) {
+      db.prepare('DELETE FROM friend_requests WHERE from_id = ? AND to_id = ?').run(toId, fromId);
+      _dropRequestNotif(db, fromId, toId);
+      const [id1, id2] = _pair(fromId, toId);
+      db.prepare('INSERT OR IGNORE INTO friend_edges (id1, id2) VALUES (?,?)').run(id1, id2);
+      _notify(db, toId, 'accepted', fromId);
+      return { ok: true, autoAccepted: true };
+    }
+    db.prepare('INSERT INTO friend_requests (from_id, to_id) VALUES (?,?)').run(fromId, toId);
+    _notify(db, toId, 'request', fromId);
+    return { ok: true };
+  });
 }
 
 // myId accepts a pending request from fromId.
 function accept(myId, fromId) {
-  const all = _load();
-  const me = _record(all, myId);
-  if (!me.incoming.includes(fromId)) return { ok: false, error: 'No such request' };
-  _pull(me.incoming, fromId);
-  _dropRequestNotif(me, fromId);
-  const other = _record(all, fromId);
-  _pull(other.outgoing, myId);
-  if (!me.friends.includes(fromId)) me.friends.push(fromId);
-  if (!other.friends.includes(myId)) other.friends.push(myId);
-  _notify(other, 'accepted', myId);
-  _save(all);
-  return { ok: true };
+  return transaction(db => {
+    if (!_hasRequest(db, fromId, myId)) return { ok: false, error: 'No such request' };
+    db.prepare('DELETE FROM friend_requests WHERE from_id = ? AND to_id = ?').run(fromId, myId);
+    _dropRequestNotif(db, myId, fromId);
+    const [id1, id2] = _pair(myId, fromId);
+    db.prepare('INSERT OR IGNORE INTO friend_edges (id1, id2) VALUES (?,?)').run(id1, id2);
+    _notify(db, fromId, 'accepted', myId);
+    return { ok: true };
+  });
 }
 
 // myId declines / cancels a pending request from fromId. Silent — no
 // notification either way.
 function decline(myId, fromId) {
-  const all = _load();
-  const me = _record(all, myId);
-  const other = _record(all, fromId);
-  _pull(me.incoming, fromId);
-  _dropRequestNotif(me, fromId);
-  _pull(other.outgoing, myId);
-  _save(all);
-  return { ok: true };
+  return transaction(db => {
+    db.prepare('DELETE FROM friend_requests WHERE from_id = ? AND to_id = ?').run(fromId, myId);
+    _dropRequestNotif(db, myId, fromId);
+    return { ok: true };
+  });
 }
 
 // Mutual unfriend — also clears any stray pending request in either
 // direction, so "remove then re-add" always starts from a clean slate.
 function remove(myId, otherId) {
-  const all = _load();
-  const me = _record(all, myId);
-  const other = _record(all, otherId);
-  _pull(me.friends, otherId);
-  _pull(other.friends, myId);
-  _pull(me.incoming, otherId);
-  _pull(me.outgoing, otherId);
-  _pull(other.incoming, myId);
-  _pull(other.outgoing, myId);
-  _save(all);
-  return { ok: true };
+  return transaction(db => {
+    const [id1, id2] = _pair(myId, otherId);
+    db.prepare('DELETE FROM friend_edges WHERE id1 = ? AND id2 = ?').run(id1, id2);
+    db.prepare('DELETE FROM friend_requests WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)')
+      .run(myId, otherId, otherId, myId);
+    return { ok: true };
+  });
 }
 
 // {id,name,icon} rows for a list — the caller (index.js) tags on `online`
@@ -179,26 +155,22 @@ function unreadCount(id) {
 }
 
 function markRead(id) {
-  const all = _load();
-  const me = _record(all, id);
-  let changed = false;
-  for (const n of me.notifications) if (!n.read) { n.read = true; changed = true; }
-  if (changed) _save(all);
+  getDb().prepare('UPDATE friend_notifications SET read = 1 WHERE owner_id = ? AND read = 0').run(id);
 }
 
 // Called when a profile is deleted (see 'delete_profile' in index.js) —
-// drop its own record AND scrub its id out of everyone else's lists, so no
-// friend list is left pointing at a profile that no longer exists.
+// drops its own edges/requests/notifications, which also scrubs it out of
+// everyone else's friends/incoming/outgoing (those are the same shared rows,
+// not a separate copy per side). Leaves any notification on ANOTHER
+// profile's list that merely mentions this id as `from_id` (e.g. a past
+// "accepted" notification) untouched — same limitation the old JSON purge
+// had, since it only ever deleted the purged id's OWN record.
 function purge(id) {
-  const all = _load();
-  delete all[id];
-  for (const rec of Object.values(all)) {
-    if (!rec || typeof rec !== 'object') continue;
-    if (Array.isArray(rec.friends)) _pull(rec.friends, id);
-    if (Array.isArray(rec.incoming)) _pull(rec.incoming, id);
-    if (Array.isArray(rec.outgoing)) _pull(rec.outgoing, id);
-  }
-  _save(all);
+  transaction(db => {
+    db.prepare('DELETE FROM friend_edges WHERE id1 = ? OR id2 = ?').run(id, id);
+    db.prepare('DELETE FROM friend_requests WHERE from_id = ? OR to_id = ?').run(id, id);
+    db.prepare('DELETE FROM friend_notifications WHERE owner_id = ?').run(id);
+  });
 }
 
 module.exports = {

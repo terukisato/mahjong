@@ -1,17 +1,11 @@
 'use strict';
-const fs = require('fs');
-const path = require('path');
+const { getDb } = require('./db');
 
 // Coin economy — a soft currency earned by playing, spent (later) on
 // cosmetic customization. Sits alongside profiles.js (who a player is),
-// stats.js (how they've done) and friends.js (their social graph). Same
-// plain-JSON-file approach and reasoning as those: no real concurrency at
-// this scale, re-read on every call rather than cached in memory (a restart
-// mid-write would otherwise let a stale cache clobber the file — see
-// stats.js's own comment). Same DATA_DIR env var so this file sits next to
-// the others on whatever persistent volume a deployment mounts.
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const COINS_FILE = path.join(DATA_DIR, 'coins.json');
+// stats.js (how they've done) and friends.js (their social graph) in the
+// same shared SQLite database (see server/db.js) — this file only ever
+// touches its own `coins` table.
 
 // Granted once per UTC calendar day when a profile is unlocked.
 const DAILY_BONUS = 100;
@@ -38,52 +32,50 @@ function _today() {
   return new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
 }
 
-function _load() {
-  try {
-    return JSON.parse(fs.readFileSync(COINS_FILE, 'utf8'));
-  } catch (e) {
-    return {};
+// Reads one profile's wallet row (a fresh, all-zero one for an id that's
+// never earned anything), rolling earnedToday/earnedTodayDate back to 0 the
+// first time it's read on a new UTC day — same normalization the old
+// coins.json record did on load. Callers write it back with _put.
+function _get(db, id) {
+  const row = db.prepare('SELECT balance, last_daily_bonus, earned_today, earned_today_date FROM coins WHERE profile_id = ?').get(id);
+  const rec = row
+    ? { balance: row.balance, lastDailyBonus: row.last_daily_bonus, earnedToday: row.earned_today, earnedTodayDate: row.earned_today_date }
+    : { balance: 0, lastDailyBonus: '', earnedToday: 0, earnedTodayDate: '' };
+  if (rec.earnedTodayDate !== _today()) {
+    rec.earnedToday = 0;
+    rec.earnedTodayDate = _today();
   }
+  return rec;
 }
 
-function _save(all) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(COINS_FILE, JSON.stringify(all, null, 2));
-}
-
-// The normalized record for one profile id — every field defaulted, so
-// callers never have to null-check. `earnedToday` is rolled back to 0 here
-// (not on write) the first time it's read on a new UTC day.
-function _record(all, id) {
-  const r = all[id] || {};
-  r.balance = Number.isFinite(r.balance) ? r.balance : 0;
-  r.lastDailyBonus = typeof r.lastDailyBonus === 'string' ? r.lastDailyBonus : '';
-  r.earnedToday = Number.isFinite(r.earnedToday) ? r.earnedToday : 0;
-  r.earnedTodayDate = typeof r.earnedTodayDate === 'string' ? r.earnedTodayDate : '';
-  if (r.earnedTodayDate !== _today()) {
-    r.earnedToday = 0;
-    r.earnedTodayDate = _today();
-  }
-  all[id] = r;
-  return r;
+function _put(db, id, rec) {
+  db.prepare(`
+    INSERT INTO coins (profile_id, balance, last_daily_bonus, earned_today, earned_today_date)
+    VALUES (?,?,?,?,?)
+    ON CONFLICT(profile_id) DO UPDATE SET
+      balance = excluded.balance,
+      last_daily_bonus = excluded.last_daily_bonus,
+      earned_today = excluded.earned_today,
+      earned_today_date = excluded.earned_today_date
+  `).run(id, rec.balance, rec.lastDailyBonus, rec.earnedToday, rec.earnedTodayDate);
 }
 
 function getBalance(id) {
-  return _record(_load(), id).balance;
+  return _get(getDb(), id).balance;
 }
 
 // Once-per-UTC-day login bonus. Returns {balance, granted, amount} either
 // way — `granted:false` (amount 0) when already claimed today.
 function claimDailyBonus(id) {
   if (!id) return { balance: 0, granted: false, amount: 0 };
-  const all = _load();
-  const rec = _record(all, id);
+  const db = getDb();
+  const rec = _get(db, id);
   if (rec.lastDailyBonus === _today()) {
     return { balance: rec.balance, granted: false, amount: 0 };
   }
   rec.balance += DAILY_BONUS;
   rec.lastDailyBonus = _today();
-  _save(all);
+  _put(db, id, rec);
   return { balance: rec.balance, granted: true, amount: DAILY_BONUS };
 }
 
@@ -105,14 +97,14 @@ function awardGameCoins(id, { variant, mode, matchKind, placement, finalScore })
   let gross = base + bonus;
   if (matchKind === 'quick') gross = Math.round(gross * QUICK_MULTIPLIER);
 
-  const all = _load();
-  const rec = _record(all, id);
+  const db = getDb();
+  const rec = _get(db, id);
   const room = Math.max(0, DAILY_EARN_CAP - rec.earnedToday);
   const delta = Math.min(gross, room);
   if (delta > 0) {
     rec.balance += delta;
     rec.earnedToday += delta;
-    _save(all);
+    _put(db, id, rec);
   }
   return { balance: rec.balance, delta, base, bonus, gross, capped: delta < gross };
 }
@@ -121,18 +113,17 @@ function awardGameCoins(id, { variant, mode, matchKind, placement, finalScore })
 // spend side of the contract exists. Returns {ok, balance, error?}.
 function spend(id, amount) {
   amount = Math.max(0, Math.floor(Number(amount) || 0));
-  const all = _load();
-  const rec = _record(all, id);
+  const db = getDb();
+  const rec = _get(db, id);
   if (amount > rec.balance) return { ok: false, balance: rec.balance, error: 'Not enough coins' };
   rec.balance -= amount;
-  _save(all);
+  _put(db, id, rec);
   return { ok: true, balance: rec.balance };
 }
 
 // Profile deleted (see 'delete_profile' in index.js) — drop its wallet.
 function purge(id) {
-  const all = _load();
-  if (all[id]) { delete all[id]; _save(all); }
+  getDb().prepare('DELETE FROM coins WHERE profile_id = ?').run(id);
 }
 
 module.exports = {

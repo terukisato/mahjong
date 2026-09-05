@@ -1,37 +1,20 @@
 'use strict';
-const fs = require('fs');
-const path = require('path');
+const { getDb } = require('./db');
 
-// Per-profile play history — a separate file from stats.js's aggregate
+// Per-profile play history — a separate table from stats.js's aggregate
 // counters on purpose: stats.js answers "how has this player done overall"
-// (running totals, never shrinking), while this file answers "what actually
+// (running totals, never shrinking), while this table answers "what actually
 // happened in each of their recent games" (a bounded, newest-first list of
-// full game records, including every round's own result). Same plain-JSON
-// approach and same DATA_DIR env var as stats.js/profiles.js — see either
-// file's own comment for why (no real concurrency at this scale, and
-// DATA_DIR lets a deployment point this at a persistent volume).
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const HISTORY_FILE = path.join(DATA_DIR, 'game-history.json');
-
-// How many past games are kept per profile — bounds the file's growth
+// full game records, including every round's own result). Shares the same
+// SQLite database as every other persistence module (see server/db.js) but
+// only ever touches its own `game_history` table.
+//
+// How many past games are kept per profile — bounds the table's growth
 // (unlike stats.js's running totals, a full game record with every round's
 // hand/yaku/tile detail is not a handful of bytes) while still covering
 // "what did I just play" far past what anyone realistically scrolls back
 // through.
 const MAX_GAMES_PER_PLAYER = 20;
-
-function _load() {
-  try {
-    return JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
-  } catch (e) {
-    return {};
-  }
-}
-
-function _save(all) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(all, null, 2));
-}
 
 // Called once per finished game (see room.js's _finishGame, right alongside
 // its recordGameResult call) — same seat-indexed-array shape as that
@@ -42,30 +25,32 @@ function _save(all) {
 // Bots/guests are skipped, same reasoning as stats.js's recordGameResult —
 // only a real unlocked profile has anywhere to persist this.
 function recordGame({ playerIds, isBot, isGuest = [], variant, matchKind, gameMode, numPlayers, playerNames, finalScores, placements, rounds }) {
-  const all = _load();
-  const id16 = String(Date.now()) + Math.random().toString(36).slice(2, 8);
+  const db = getDb();
+  const gameId = String(Date.now()) + Math.random().toString(36).slice(2, 8);
   const date = new Date().toISOString();
+  const insert = db.prepare(`
+    INSERT INTO game_history
+      (game_id, profile_id, date, variant, match_kind, game_mode, num_players, seat, player_names, final_scores, placements, rounds)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+  `);
+  // Trims THIS profile's rows down to the most recent MAX_GAMES_PER_PLAYER
+  // by date — run right after each insert rather than as a separate sweep,
+  // same "bounded per-player, checked on write" shape the old
+  // list.length>MAX_GAMES_PER_PLAYER truncation had.
+  const trim = db.prepare(`
+    DELETE FROM game_history
+    WHERE profile_id = ? AND game_id NOT IN (
+      SELECT game_id FROM game_history WHERE profile_id = ? ORDER BY date DESC LIMIT ?
+    )
+  `);
   for (let seat = 0; seat < playerIds.length; seat++) {
     if (isBot[seat] || isGuest[seat]) continue;
     const pid = playerIds[seat];
     if (!pid) continue;
-    const list = all[pid] || (all[pid] = []);
-    list.unshift({
-      id: id16,
-      date,
-      variant,
-      matchKind,
-      gameMode,
-      numPlayers,
-      seat,
-      playerNames,
-      finalScores,
-      placements,
-      rounds,
-    });
-    if (list.length > MAX_GAMES_PER_PLAYER) list.length = MAX_GAMES_PER_PLAYER;
+    insert.run(gameId, pid, date, variant, matchKind, gameMode, numPlayers, seat,
+      JSON.stringify(playerNames), JSON.stringify(finalScores), JSON.stringify(placements), JSON.stringify(rounds));
+    trim.run(pid, pid, MAX_GAMES_PER_PLAYER);
   }
-  _save(all);
 }
 
 // Summary rows only (no `rounds`) — powers the Play History list itself,
@@ -74,8 +59,15 @@ function recordGame({ playerIds, isBot, isGuest = [], variant, matchKind, gameMo
 // single game's rounds on demand (the dropdown), so a client browsing the
 // list never pays for data it isn't currently looking at.
 function getHistory(id, limit = MAX_GAMES_PER_PLAYER) {
-  const list = _load()[id] || [];
-  return list.slice(0, limit).map(({ rounds, ...summary }) => summary);
+  const rows = getDb().prepare(`
+    SELECT game_id, date, variant, match_kind, game_mode, num_players, seat, player_names, final_scores, placements
+    FROM game_history WHERE profile_id = ? ORDER BY date DESC LIMIT ?
+  `).all(id, limit);
+  return rows.map(r => ({
+    id: r.game_id, date: r.date, variant: r.variant, matchKind: r.match_kind, gameMode: r.game_mode,
+    numPlayers: r.num_players, seat: r.seat,
+    playerNames: JSON.parse(r.player_names), finalScores: JSON.parse(r.final_scores), placements: JSON.parse(r.placements),
+  }));
 }
 
 // One game's full round-by-round detail, looked up by the same `id`
@@ -83,8 +75,17 @@ function getHistory(id, limit = MAX_GAMES_PER_PLAYER) {
 // player expands a specific game, rather than shipping every game's rounds
 // up front (see getHistory above).
 function getGameDetail(profileId, gameId) {
-  const list = _load()[profileId] || [];
-  return list.find(g => g.id === gameId) || null;
+  const row = getDb().prepare(`
+    SELECT game_id, date, variant, match_kind, game_mode, num_players, seat, player_names, final_scores, placements, rounds
+    FROM game_history WHERE profile_id = ? AND game_id = ?
+  `).get(profileId, gameId);
+  if (!row) return null;
+  return {
+    id: row.game_id, date: row.date, variant: row.variant, matchKind: row.match_kind, gameMode: row.game_mode,
+    numPlayers: row.num_players, seat: row.seat,
+    playerNames: JSON.parse(row.player_names), finalScores: JSON.parse(row.final_scores),
+    placements: JSON.parse(row.placements), rounds: JSON.parse(row.rounds),
+  };
 }
 
 // Companion to profiles.deleteProfile/stats.deleteStats (see index.js's
@@ -92,19 +93,15 @@ function getGameDetail(profileId, gameId) {
 // profile doesn't linger, and a later profile recreated under the same name
 // (a brand-new id — see profiles.js) starts with none.
 function deleteHistory(id) {
-  const all = _load();
-  if (all[id]) {
-    delete all[id];
-    _save(all);
-  }
+  getDb().prepare('DELETE FROM game_history WHERE profile_id = ?').run(id);
 }
 
-// Developer-only, whole-file wipe — every profile's play history at once,
+// Developer-only, whole-table wipe — every profile's play history at once,
 // not just one (see index.js's 'clear_all_history', gated by DEV_SECRET
 // same as delete_profile). Profiles/stats/achievements are untouched; this
-// only ever clears this file's game-history.json.
+// only ever clears game_history.
 function clearAllHistory() {
-  _save({});
+  getDb().prepare('DELETE FROM game_history').run();
 }
 
 module.exports = { recordGame, getHistory, getGameDetail, deleteHistory, clearAllHistory };

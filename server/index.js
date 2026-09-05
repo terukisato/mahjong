@@ -4,17 +4,20 @@ const http=require('http');
 const WebSocket=require('ws');
 const path=require('path');
 const {Room}=require('./room');
-const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats,migrateToIds}=require('./stats');
+const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats}=require('./stats');
 const {getHistory,getGameDetail,deleteHistory,clearAllHistory}=require('./history');
-const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,migrateLegacyIds}=require('./profiles');
+const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById}=require('./profiles');
 const friends=require('./friends');
 const coins=require('./economy');
 
-// One-time upgrade of both data files from the old name-keyed shape to the
-// new stable-id-keyed shape (see profiles.js's migrateLegacyIds and
-// stats.js's migrateToIds) — a no-op on every boot after the first. Must
-// run before anything else touches either file.
-migrateToIds(migrateLegacyIds());
+// Opens (creating if needed) the shared SQLite database every persistence
+// module above reads/writes through — see server/db.js. Called explicitly
+// here so the schema exists as soon as the server starts, rather than
+// waiting on whichever WebSocket message happens to be the first to touch
+// it; every module's own functions call db.getDb() lazily too, so this line
+// is only about eager, visible-at-boot setup, not something those modules
+// depend on having already run.
+require('./db').getDb();
 
 const app=express();
 const server=http.createServer(app);

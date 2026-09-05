@@ -3,10 +3,14 @@
   "version": "0.14.9",
   "description": "Janshin (雀心) — riichi mahjong web game",
   "main": "server/index.js",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
-    "test": "node server/mahjong.test.js && node server/room.test.js && node server/bot.test.js && node server/achievements.test.js && node server/friends.test.js && node server/economy.test.js"
+    "test": "node server/mahjong.test.js && node server/room.test.js && node server/bot.test.js && node server/achievements.test.js && node server/friends.test.js && node server/economy.test.js && node server/stats.test.js",
+    "migrate-db": "node server/migrate-json-to-sqlite.js"
   },
   "keywords": [
     "mahjong",
