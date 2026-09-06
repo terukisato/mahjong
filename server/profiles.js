@@ -286,4 +286,196 @@ function setCode(name, code) {
   return { ok: true };
 }
 
-module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, getIconById, renameProfile, setCode, setTitle, getTitle, TITLES, setVoiceTheme, getVoiceTheme, VOICE_THEMES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById };
+// ── Email sign-up ── a second way to create/unlock a profile, alongside the
+// name+code path above. See server/db.js's PROFILE_EMAIL_COLUMNS comment for
+// the columns this uses. A profile made this way still gets a real
+// salt/code_hash (a random, never-shown 32-byte code — see _hashCode above),
+// purely so it satisfies the same NOT NULL columns every other profile row
+// does; nobody ever knows that code, so in practice this profile just has no
+// working name+code login, only email+password.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// SHA-256 of the raw token, not scrypt — unlike a password/code (low
+// entropy, needs a slow hash to resist guessing), this token is 32 random
+// bytes the caller already can't guess; a fast hash is enough to avoid ever
+// storing it in the clear, and cheap to look up by.
+function _hashToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Returns {ok:true,id,name,verifyToken} on success — verifyToken is the
+// RAW token (only ever stored here as its hash); index.js is responsible for
+// emailing it (or, in dev mode with no mail provider configured, just
+// logging it — see server/mailer.js) and must never forward it to the
+// browser in the signup_result/profile_unlocked response.
+function signUpWithEmail(name, email, password, acceptedTerms) {
+  name = String(name || '').trim().slice(0, 20);
+  email = String(email || '').trim().toLowerCase().slice(0, 200);
+  if (!name) return { ok: false, error: 'Name required' };
+  if (!EMAIL_RE.test(email)) return { ok: false, error: 'Enter a valid email address' };
+  if (!password || String(password).length < 8) return { ok: false, error: 'Password must be at least 8 characters' };
+  if (!acceptedTerms) return { ok: false, error: 'You must agree to the Terms of Service and Privacy Policy' };
+  const db = getDb();
+  if (db.prepare('SELECT 1 FROM profiles WHERE name = ?').get(name)) {
+    return { ok: false, error: 'A profile with that name already exists' };
+  }
+  if (db.prepare('SELECT 1 FROM profiles WHERE email = ?').get(email)) {
+    return { ok: false, error: 'An account with that email already exists' };
+  }
+  const id = _generateId(db);
+  const codeSalt = crypto.randomBytes(16).toString('hex');
+  const unusedCode = crypto.randomBytes(32).toString('hex');
+  const passwordSalt = crypto.randomBytes(16).toString('hex');
+  const verifyToken = crypto.randomBytes(32).toString('hex');
+  const verifyExpires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS).toISOString();
+  db.prepare(`
+    INSERT INTO profiles (
+      id, name, salt, code_hash, icon, title, voice_theme,
+      email, password_salt, password_hash, email_verified,
+      verify_token_hash, verify_token_expires, terms_accepted_at
+    ) VALUES (?,?,?,?,'default','Beginner','Default', ?,?,?,0, ?,?,?)
+  `).run(
+    id, name, codeSalt, _hashCode(unusedCode, codeSalt),
+    email, passwordSalt, _hashCode(password, passwordSalt),
+    _hashToken(verifyToken), verifyExpires, new Date().toISOString()
+  );
+  return { ok: true, id, name, verifyToken };
+}
+
+// Same shape as verifyProfile, but by email+password — returns the unlocked
+// profile's {id,name,icon,title,voiceTheme,emailVerified} or null. Doesn't
+// gate on emailVerified: with no real mail provider wired up yet (see
+// server/mailer.js), refusing login until verified would lock a player out
+// permanently, since they'd have no way to ever receive the link. index.js
+// surfaces emailVerified to the client instead so the UI can nudge toward
+// verifying without blocking play.
+function verifyEmailLogin(email, password) {
+  email = String(email || '').trim().toLowerCase();
+  if (!email || !password) return null;
+  const row = getDb().prepare(
+    'SELECT id, name, icon, title, voice_theme, password_salt, password_hash, email_verified FROM profiles WHERE email = ?'
+  ).get(email);
+  if (!row || !row.password_hash) return null;
+  const candidate = Buffer.from(_hashCode(password, row.password_salt), 'hex');
+  const actual = Buffer.from(row.password_hash, 'hex');
+  if (candidate.length !== actual.length || !crypto.timingSafeEqual(candidate, actual)) return null;
+  return { id: row.id, name: row.name, icon: row.icon || 'default', title: row.title, voiceTheme: row.voice_theme, emailVerified: !!row.email_verified };
+}
+
+// Checks a NAME + password against password_hash — mirrors verifyEmailLogin
+// above, just keyed by name instead of email. Needed because an
+// email-registered profile still HAS a display name, and login() below has
+// to accept that name as the identifier too, not only its email.
+function _verifyPasswordByName(name, password) {
+  const row = getDb().prepare('SELECT password_salt, password_hash FROM profiles WHERE name = ?').get(name);
+  if (!row || !row.password_hash) return false;
+  const candidate = Buffer.from(_hashCode(password, row.password_salt), 'hex');
+  const actual = Buffer.from(row.password_hash, 'hex');
+  return candidate.length === actual.length && crypto.timingSafeEqual(candidate, actual);
+}
+
+// The single entry point the Log In form actually calls (see 'login' in
+// server/index.js) — one "username or email" field plus one "password"
+// field has to work for a name+code profile (the code IS the password, in
+// that box), an email+password one addressed by its EMAIL, and an
+// email+password one addressed by its NAME, without the player ever saying
+// up front which kind of account or which identifier they're using. Tries
+// whichever lookup the identifier looks more like first (an '@' means try
+// email first), then falls back to the other — so a name that happens to
+// contain '@' (unusual, but not disallowed by createProfile) still isn't
+// permanently unreachable, it just costs one extra failed lookup. Returns
+// the same {id,name,icon,title,voiceTheme,emailVerified} shape as
+// verifyEmailLogin either way.
+function login(identifier, secret) {
+  identifier = String(identifier || '').trim();
+  if (!identifier || !secret) return null;
+  const byName = () => {
+    const row = getDb().prepare('SELECT id, name, icon, title, voice_theme, email_verified FROM profiles WHERE name = ?').get(identifier);
+    if (!row) return null;
+    if (!verifyProfile(identifier, secret) && !_verifyPasswordByName(identifier, secret)) return null;
+    return { id: row.id, name: row.name, icon: row.icon || 'default', title: row.title, voiceTheme: row.voice_theme, emailVerified: !!row.email_verified };
+  };
+  const byEmail = () => verifyEmailLogin(identifier, secret);
+  return identifier.includes('@') ? (byEmail() || byName()) : (byName() || byEmail());
+}
+
+// Called from the /verify-email link (see server/index.js) — looks the
+// profile up BY TOKEN (hashed), not by name/email, since that link carries
+// nothing else identifying which account it's for. Expired or unknown tokens
+// get the same generic error, same "don't help an attacker distinguish
+// cases" reasoning as resendVerification below.
+function verifyEmailToken(token) {
+  if (!token) return { ok: false, error: 'Invalid or expired verification link' };
+  const db = getDb();
+  const row = db.prepare(
+    'SELECT id, name, verify_token_expires FROM profiles WHERE verify_token_hash = ?'
+  ).get(_hashToken(token));
+  if (!row || !row.verify_token_expires || new Date(row.verify_token_expires) < new Date()) {
+    return { ok: false, error: 'Invalid or expired verification link' };
+  }
+  db.prepare('UPDATE profiles SET email_verified = 1, verify_token_hash = NULL, verify_token_expires = NULL WHERE id = ?').run(row.id);
+  return { ok: true, name: row.name };
+}
+
+// Re-issues a fresh verify token for an unverified email — always returns
+// {ok:true} regardless of whether the email is registered/already verified,
+// so this can't be used to probe which emails have accounts (an attacker
+// watching responses learns nothing; index.js only actually emails/logs a
+// link when there was something to send). Returns the raw token the same
+// way signUpWithEmail does, for index.js to send — null when nothing was
+// (re)generated.
+function resendVerification(email) {
+  email = String(email || '').trim().toLowerCase();
+  const db = getDb();
+  const row = db.prepare('SELECT id, email_verified FROM profiles WHERE email = ?').get(email);
+  if (!row || row.email_verified) return { ok: true, verifyToken: null };
+  const verifyToken = crypto.randomBytes(32).toString('hex');
+  const verifyExpires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS).toISOString();
+  db.prepare('UPDATE profiles SET verify_token_hash = ?, verify_token_expires = ? WHERE id = ?')
+    .run(_hashToken(verifyToken), verifyExpires, row.id);
+  return { ok: true, verifyToken };
+}
+
+// ── Forgot password ── same shape/reasoning as resendVerification above:
+// always {ok:true}, so watching responses can't reveal which emails have
+// accounts — index.js only actually emails a link when resetToken is
+// non-null. A name+code-only profile (email IS NULL) can never match here,
+// which is correct: there's no password to reset for one.
+function requestPasswordReset(email) {
+  email = String(email || '').trim().toLowerCase();
+  const db = getDb();
+  const row = db.prepare('SELECT id FROM profiles WHERE email = ?').get(email);
+  if (!row) return { ok: true, resetToken: null };
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  const resetExpires = new Date(Date.now() + VERIFY_TOKEN_TTL_MS).toISOString();
+  db.prepare('UPDATE profiles SET reset_token_hash = ?, reset_token_expires = ? WHERE id = ?')
+    .run(_hashToken(resetToken), resetExpires, row.id);
+  return { ok: true, resetToken };
+}
+
+// Called from the /reset-password form's POST (see server/index.js) — same
+// look-up-BY-TOKEN pattern as verifyEmailToken, since that's all the
+// request carries. On success, also drops any "stay logged in" token (same
+// reasoning as setCode above: a token issued under the old password
+// shouldn't keep working after this) and clears the reset token so the
+// link can't be replayed.
+function resetPassword(token, newPassword) {
+  if (!token) return { ok: false, error: 'Invalid or expired reset link' };
+  if (!newPassword || String(newPassword).length < 8) return { ok: false, error: 'Password must be at least 8 characters' };
+  const db = getDb();
+  const row = db.prepare(
+    'SELECT id, name, reset_token_expires FROM profiles WHERE reset_token_hash = ?'
+  ).get(_hashToken(token));
+  if (!row || !row.reset_token_expires || new Date(row.reset_token_expires) < new Date()) {
+    return { ok: false, error: 'Invalid or expired reset link' };
+  }
+  const passwordSalt = crypto.randomBytes(16).toString('hex');
+  db.prepare(
+    'UPDATE profiles SET password_salt = ?, password_hash = ?, reset_token_hash = NULL, reset_token_expires = NULL, remember_salt = NULL, remember_token_hash = NULL WHERE id = ?'
+  ).run(passwordSalt, _hashCode(newPassword, passwordSalt), row.id);
+  return { ok: true, name: row.name };
+}
+
+module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, getIconById, renameProfile, setCode, setTitle, getTitle, TITLES, setVoiceTheme, getVoiceTheme, VOICE_THEMES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById, signUpWithEmail, verifyEmailLogin, verifyEmailToken, resendVerification, login, requestPasswordReset, resetPassword };

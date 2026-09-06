@@ -109,6 +109,10 @@
       <div class="about-section-title">Special Thanks</div>
       <p>Natsu "Daijoubu Ma" Hashimoto - Tester/Voice Actor</p>
     </div>
+    <div class="about-section">
+      <div class="about-section-title">Legal</div>
+      <p><a href="#" onclick="toggleTermsModal();return false;">Terms of Service</a> · <a href="#" onclick="togglePrivacyModal();return false;">Privacy Policy</a></p>
+    </div>
   </div>
 </div>
 
@@ -606,24 +610,84 @@
   </div>
 </div>
 
-<!-- Profile picker modal — a card per profile (icon + name, see
-     renderProfileList/selectProfileCard in script.js), not a dropdown.
-     Picking a card reveals that profile's own code prompt below the grid;
-     unlockProfile() then unlocks it for the session
-     (see toggleProfilePicker/unlockProfile). -->
-<div id="profile-backdrop" class="about-backdrop" onclick="toggleProfilePicker()"></div>
-<div id="profile-modal" class="about-modal">
-  <button class="about-close" onclick="toggleProfilePicker()">✕</button>
-  <div class="about-title">Select Profile</div>
+<!-- Email verification notification — same corner-toast pattern as
+     Achievement Unlocked/Daily Login Bonus above. Fires right after a
+     successful email sign-up (see 'justSignedUp' on the 'profile_unlocked'
+     message, and showVerifyToast in script.js) since there's no real mail
+     provider wired up yet — see server/mailer.js — so the player can't just
+     click a link in their inbox today. Auto-dismisses; ✕ closes it early. -->
+<div id="verify-toast" class="achv-toast">
+  <button class="about-close" onclick="closeVerifyToast()">✕</button>
+  <div class="achv-toast-title">Verify Your Email</div>
+  <div id="verify-toast-body"></div>
+</div>
+
+<!-- Terms of Service — reachable from the email sign-up form's checkbox
+     and from About > Legal. Placeholder content: a starting point for a
+     small independently-run hobby project, not reviewed legal advice. -->
+<div id="terms-backdrop" class="about-backdrop" onclick="toggleTermsModal()"></div>
+<div id="terms-modal" class="about-modal">
+  <button class="about-close" onclick="toggleTermsModal()">✕</button>
+  <div class="about-title">Terms of Service</div>
   <div class="about-body">
-    <div id="profile-card-grid" class="icon-grid"></div>
-    <div id="profile-code-section" style="display:none;">
-      <div class="ig"><label id="profile-code-label" for="profile-code">Code</label>
-        <input type="password" id="profile-code" maxlength="20" placeholder="Enter code">
-      </div>
-      <label class="profile-remember-row"><input type="checkbox" id="profile-remember" onchange="toggleProfileRemember()"> Remember me</label>
-      <div id="profile-error" class="profile-error"></div>
-      <button class="bp" onclick="unlockProfile()">Unlock</button>
+    <p><em>Last updated: September 2026</em></p>
+    <div class="about-section">
+      <div class="about-section-title">1. About Janshin</div>
+      <p>雀心 - Janshin ("the game") is an independently developed riichi mahjong web game. By creating an account or otherwise playing, you agree to these Terms.</p>
+    </div>
+    <div class="about-section">
+      <div class="about-section-title">2. Accounts</div>
+      <p>You may create a profile with just a display name and unlock code, or sign up with an email and password. You're responsible for keeping your password/code confidential — one person, one account. Don't impersonate another player or share accounts to manipulate rankings or stats.</p>
+    </div>
+    <div class="about-section">
+      <div class="about-section-title">3. Acceptable Use</div>
+      <p>Don't use the game to harass other players, cheat or exploit bugs for an unfair advantage, or attempt to disrupt the service for others.</p>
+    </div>
+    <div class="about-section">
+      <div class="about-section-title">4. Availability</div>
+      <p>Janshin is provided free of charge, as-is, with no uptime guarantee. Features — including account sign-up — may change or be removed at any time.</p>
+    </div>
+    <div class="about-section">
+      <div class="about-section-title">5. Termination</div>
+      <p>An account may be removed for violating these Terms. You can ask to have your account and its data deleted at any time — see the Privacy Policy for how.</p>
+    </div>
+    <div class="about-section">
+      <div class="about-section-title">6. Contact</div>
+      <p>Questions about these Terms can be directed to the developer, Teruki Sato, through the game's usual support channel.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Privacy Policy — same reachability/placeholder caveat as Terms above. -->
+<div id="privacy-backdrop" class="about-backdrop" onclick="togglePrivacyModal()"></div>
+<div id="privacy-modal" class="about-modal">
+  <button class="about-close" onclick="togglePrivacyModal()">✕</button>
+  <div class="about-title">Privacy Policy</div>
+  <div class="about-body">
+    <p><em>Last updated: September 2026</em></p>
+    <div class="about-section">
+      <div class="about-section-title">What we store</div>
+      <p>Your display name; your email address, if you sign up with one; a salted hash of your password or unlock code (never the plain text); your chosen icon, title, and voice theme; your coin balance; and your own game history and stats.</p>
+    </div>
+    <div class="about-section">
+      <div class="about-section-title">Why</div>
+      <p>Solely to run your account: logging you in, showing your own stats/history, and — if you provide an email — verifying it's really yours and letting you recover the account later.</p>
+    </div>
+    <div class="about-section">
+      <div class="about-section-title">Email use</div>
+      <p>Your email is used only to verify your account and, if you request it, to help you regain access. It's never sold, shared with third parties, or used for marketing.</p>
+    </div>
+    <div class="about-section">
+      <div class="about-section-title">Cookies &amp; local storage</div>
+      <p>The game stores a "stay logged in" token and a few display preferences in your browser's local storage. No third-party trackers or ads.</p>
+    </div>
+    <div class="about-section">
+      <div class="about-section-title">Your choices</div>
+      <p>You can ask to have your account and its data deleted at any time by contacting the developer.</p>
+    </div>
+    <div class="about-section">
+      <div class="about-section-title">Changes</div>
+      <p>This policy may be updated as the game evolves; the "Last updated" date above will change whenever it does.</p>
     </div>
   </div>
 </div>
@@ -845,7 +909,111 @@
   <button class="settings-icon-btn user-icon-btn" id="user-icon-btn" onclick="toggleUserProfile()" title="User Profile" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 5.556);">人</button>
   <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Janshin</div></div>
-  <div class="card">
+
+  <!-- Log In gate — shown before the game-selection card below (same
+       .card size/style, see showLobbyLoginCard/showLobbyGameCard in
+       script.js), so nobody reaches Quick Match/Room List without either
+       logging in, creating an account, or explicitly choosing Guest.
+       Three sub-states of this ONE card (Log In / Sign Up / Forgot
+       Password — see showLobbyLogin/showLobbySignup/
+       showLobbyForgotPassword), not three separate cards, so the header
+       and card chrome stay put while only the fields underneath swap. -->
+  <div class="card" id="lobby-login-card">
+    <div class="card-header-row">
+      <!-- One back button for all three sub-states of this card (see
+           lobbyLoginBack in script.js) — from Sign Up/Forgot Password it
+           steps back to Log In first, rather than leaving straight to the
+           start menu; only Log In itself (the top of this card) actually
+           calls backToMenu(). Replaces the separate "← Back to Log In"
+           link each of those sub-states used to have of its own. -->
+      <button class="back-icon-btn" onclick="lobbyLoginBack()" title="Back">←</button>
+      <h2 id="lobby-login-title">Log In</h2>
+    </div>
+
+    <div id="lobby-login-fields">
+      <!-- Continue as Guest sits above the identifier field, right-aligned
+           — the one thing on this card that doesn't need a filled-in
+           field at all, so it sits apart from the fields themselves. -->
+      <div class="lobby-guest-row"><a href="#" class="lobby-auth-link" onclick="continueAsGuestFromLobby();return false;">Continue as Guest</a></div>
+      <!-- .ig-float — floating label: "Username or Email"/"Password" live
+           INSIDE the box (like a placeholder) until the field is focused
+           or filled, then shrink and move to the box's own top edge (see
+           .ig-float in style.css). Needs `placeholder=" "` (a real, if
+           blank, placeholder) purely so the :placeholder-shown pseudo-class
+           has something to key off of — the space itself is never seen,
+           the floating label always covers it. -->
+      <div class="ig ig-float">
+        <input type="text" id="lobby-identifier" maxlength="200" placeholder=" ">
+        <label for="lobby-identifier">Username or Email</label>
+      </div>
+      <div class="ig ig-float">
+        <div class="pw-field">
+          <input type="password" id="lobby-password" placeholder=" ">
+          <label for="lobby-password">Password</label>
+          <button type="button" class="pw-eye" tabindex="-1" aria-label="Show password" onclick="togglePasswordVisibility('lobby-password',this)">
+            <svg class="eye-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.29 20.29 0 0 1-3.22 4.44M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+      <label class="profile-remember-row"><input type="checkbox" id="lobby-remember"> Remember me</label>
+      <div id="lobby-login-error" class="profile-error"></div>
+      <button class="bp" onclick="submitLobbyLogin()">Log In</button>
+      <!-- Each link wrapped in its own block so only the TEXT is
+           clickable (.lobby-auth-link is inline-block, sized to its own
+           content) rather than the link stretching to fill the whole
+           line the way a block-level anchor would. -->
+      <div><a href="#" class="lobby-auth-link" onclick="showLobbySignup();return false;">Create an Account</a></div>
+      <div><a href="#" class="lobby-auth-link" onclick="showLobbyForgotPassword();return false;">Forgot Password?</a></div>
+    </div>
+
+    <div id="lobby-signup-fields" style="display:none;">
+      <div class="ig ig-float">
+        <input type="text" id="lobby-signup-name" maxlength="20" placeholder=" ">
+        <label for="lobby-signup-name">Name</label>
+      </div>
+      <div class="ig ig-float">
+        <input type="email" id="lobby-signup-email" maxlength="200" placeholder=" ">
+        <label for="lobby-signup-email">Email</label>
+      </div>
+      <div class="ig ig-float">
+        <div class="pw-field">
+          <input type="password" id="lobby-signup-password" maxlength="72" placeholder=" ">
+          <label for="lobby-signup-password">Password (8+ characters)</label>
+          <button type="button" class="pw-eye" tabindex="-1" aria-label="Show password" onclick="togglePasswordVisibility('lobby-signup-password',this)">
+            <svg class="eye-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.29 20.29 0 0 1-3.22 4.44M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="ig ig-float">
+        <div class="pw-field">
+          <input type="password" id="lobby-signup-password2" maxlength="72" placeholder=" ">
+          <label for="lobby-signup-password2">Confirm Password</label>
+          <button type="button" class="pw-eye" tabindex="-1" aria-label="Show password" onclick="togglePasswordVisibility('lobby-signup-password2',this)">
+            <svg class="eye-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.29 20.29 0 0 1-3.22 4.44M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+      <label class="profile-remember-row"><input type="checkbox" id="lobby-signup-terms"> I agree to the
+        <a href="#" onclick="toggleTermsModal();return false;">Terms of Service</a> and
+        <a href="#" onclick="togglePrivacyModal();return false;">Privacy Policy</a></label>
+      <div id="lobby-signup-error" class="profile-error"></div>
+      <button class="bp" onclick="submitLobbySignup()">Create Account</button>
+    </div>
+
+    <div id="lobby-forgot-fields" style="display:none;">
+      <div class="ig ig-float">
+        <input type="email" id="lobby-forgot-email" maxlength="200" placeholder=" ">
+        <label for="lobby-forgot-email">Email</label>
+      </div>
+      <div id="lobby-forgot-error" class="profile-error"></div>
+      <button class="bp" onclick="submitLobbyForgotPassword()">Send Reset Link</button>
+    </div>
+  </div>
+
+  <div class="card" id="lobby-game-card" style="display:none;">
     <!-- Back button, header, and Rankings/Match Settings all share one
          flex row now (rather than the header sitting in normal flow below
          two absolutely-positioned icon groups) so all four sit on the
@@ -887,7 +1055,7 @@
          pure display of it plus the icon, kept in sync by
          refreshProfileDisplay(). -->
     <input type="hidden" id="iname" value="Guest">
-    <button class="profile-nameplate" id="profile-nameplate" onclick="toggleProfilePicker()" title="Select Profile">
+    <button class="profile-nameplate" id="profile-nameplate" onclick="returnToLoginCard()" title="Switch Account">
       <span class="pnp-icon" id="pnp-icon"></span>
       <span class="pnp-info">
         <span class="pnp-name" id="pnp-name">Guest</span>

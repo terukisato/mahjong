@@ -567,7 +567,7 @@ function connect(){
   try{ ws=new WebSocket(url); } catch(e){ setTimeout(connect,3000); return; }
   // Silent "stay logged in" auto-unlock — fires once per (re)connect, using
   // whatever token onProfileUnlocked stashed the last time this profile was
-  // unlocked with the toggle on (see toggleProfileRemember/unlockProfile).
+  // unlocked with "Remember me" checked (see submitLobbyLogin).
   // The `silent:true` echoed back in the response is what tells
   // onProfileUnlocked not to treat a failure here as a wrong-code error.
   ws.onopen=()=>{
@@ -879,6 +879,9 @@ function onMsg(m){
   }
   if(m.type==='profiles'){renderProfileList(m);return;}
   if(m.type==='profile_unlocked'){onProfileUnlocked(m);return;}
+  if(m.type==='signup_result'){onSignupResult(m);return;}
+  if(m.type==='resend_verification_result'){onResendVerificationResult(m);return;}
+  if(m.type==='forgot_password_result'){onForgotPasswordResult(m);return;}
   if(m.type==='guest_selected'){onGuestSelected();return;}
   if(m.type==='dev_key_result'){onDevKeyResult(m);return;}
   if(m.type==='create_profile_result'){onCreateProfileResult(m);return;}
@@ -2760,100 +2763,202 @@ function renderPlayerCard(m){
 // $('iname').value keeps working unchanged, since it's now just always
 // the confirmed profile name instead of freely typed text.
 // ════════════════════════════════════════════════════════════
-// Which card the player has clicked in the picker grid, if any — the
-// actual login target once they submit a code (see unlockProfile). Reset
-// to null every time the picker (re)opens, same "ask again" spirit as
-// Developer Settings' own gate.
-let selectedProfileName=null;
-
-function toggleProfilePicker(){
-  const modal=$('profile-modal');
-  const backdrop=$('profile-backdrop');
-  const open=modal.classList.contains('visible');
-  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
-  selectedProfileName=null;
-  $('profile-error').textContent='';
-  $('profile-code').value='';
-  $('profile-code-section').style.display='none';
-  rememberProfile=false;
-  $('profile-remember').checked=false;
-  $('profile-card-grid').innerHTML='<p>Loading…</p>';
-  wss({type:'list_profiles'});
-  modal.classList.add('visible');
-  backdrop.classList.add('visible');
+// #lobby-login-card and #lobby-game-card are siblings inside #s-lobby (see
+// index.html) — exactly one of the two is ever visible. Log In is the gate:
+// nothing shows Quick Match/Room List until either a real login/signup
+// succeeds or the player explicitly picks Guest (see onProfileUnlocked/
+// continueAsGuestFromLobby below). Which one is currently showing IS the
+// state — there's no separate "am I logged in" flag to keep in sync.
+function showLobbyLoginCard(){
+  $('lobby-game-card').style.display='none';
+  $('lobby-login-card').style.display='';
+  showLobbyLogin();
 }
 
-// Shared by the player-facing picker (icon+name cards, #profile-card-grid)
-// and Developer Settings' delete dropdown (#dev-delete-select, still a
-// plain name list) — both are driven by the same 'list_profiles'
-// request/response, just from different callers (toggleProfilePicker/
-// toggleDevPanel), so this fills in whichever of the two is present.
+function showLobbyGameCard(){
+  $('lobby-login-card').style.display='none';
+  $('lobby-game-card').style.display='';
+}
+
+// Show/hide toggle for a password field (see .pw-field/.pw-eye in
+// index.html) — swaps the input's type and which of the two eye SVGs is
+// visible together, so they can never fall out of sync with each other.
+function togglePasswordVisibility(id,btn){
+  const input=$(id);
+  const showing=input.type==='text';
+  input.type=showing?'password':'text';
+  btn.querySelector('.eye-on').style.display=showing?'':'none';
+  btn.querySelector('.eye-off').style.display=showing?'none':'';
+  btn.setAttribute('aria-label',showing?'Show password':'Hide password');
+}
+
+// Resets one password field back to hidden text + the closed-eye icon —
+// called whenever a form clearing its fields (see showLobbyLogin/
+// showLobbySignup below) shouldn't also leave a password sitting visible
+// from a previous visit to the card.
+function resetPasswordVisibility(id){
+  const input=$(id);
+  input.type='password';
+  // Looked up by class rather than assuming a fixed sibling position — the
+  // floating-label markup puts <label> between the input and this button
+  // (see .ig-float in index.html), so the button is no longer necessarily
+  // input.nextElementSibling.
+  const btn=input.parentElement.querySelector('.pw-eye');
+  if(btn){
+    btn.querySelector('.eye-on').style.display='';
+    btn.querySelector('.eye-off').style.display='none';
+    btn.setAttribute('aria-label','Show password');
+  }
+}
+
+// Three sub-states of #lobby-login-card itself (Log In / Sign Up / Forgot
+// Password) — swapping which fields show under the same card chrome,
+// rather than three separate cards, so only the header text and the
+// fields change.
+
+// The card's one "←" button (see .card-header-row in index.html) — steps
+// back one level of THIS card first, rather than always leaving straight
+// to the start menu: Sign Up/Forgot Password go back to Log In, and only
+// Log In itself (nothing left to step back through inside the card) falls
+// through to backToMenu(). Replaces the separate "← Back to Log In" link
+// each of those two sub-states used to have.
+function lobbyLoginBack(){
+  if($('lobby-login-fields').style.display==='none') showLobbyLogin();
+  else backToMenu();
+}
+
+function showLobbyLogin(){
+  $('lobby-login-title').textContent='Log In';
+  $('lobby-login-fields').style.display='';
+  $('lobby-signup-fields').style.display='none';
+  $('lobby-forgot-fields').style.display='none';
+  $('lobby-identifier').value=''; $('lobby-password').value='';
+  $('lobby-remember').checked=false; $('lobby-login-error').textContent='';
+  resetPasswordVisibility('lobby-password');
+}
+
+function showLobbySignup(){
+  $('lobby-login-title').textContent='Sign Up';
+  $('lobby-login-fields').style.display='none';
+  $('lobby-signup-fields').style.display='';
+  $('lobby-forgot-fields').style.display='none';
+  $('lobby-signup-name').value=''; $('lobby-signup-email').value='';
+  $('lobby-signup-password').value=''; $('lobby-signup-password2').value='';
+  $('lobby-signup-terms').checked=false; $('lobby-signup-error').textContent='';
+  resetPasswordVisibility('lobby-signup-password');
+  resetPasswordVisibility('lobby-signup-password2');
+}
+
+function showLobbyForgotPassword(){
+  $('lobby-login-title').textContent='Forgot Password';
+  $('lobby-login-fields').style.display='none';
+  $('lobby-signup-fields').style.display='none';
+  $('lobby-forgot-fields').style.display='';
+  $('lobby-forgot-email').value='';
+  $('lobby-forgot-error').style.color='';
+  $('lobby-forgot-error').textContent='';
+}
+
+function submitLobbyLogin(){
+  const identifier=$('lobby-identifier').value.trim();
+  const password=$('lobby-password').value;
+  if(!identifier||!password){ $('lobby-login-error').textContent='Please fill in every field.'; return; }
+  $('lobby-login-error').textContent='';
+  wss({type:'login',identifier,password,remember:$('lobby-remember').checked});
+}
+
+// Client-side checks mirror profiles.signUpWithEmail's own validation
+// (name/email/password required, password >= 8 chars, terms accepted) so
+// the common mistakes never make a round trip — the server re-validates
+// everything regardless (see 'signup' in server/index.js), this is purely
+// so the error shows up instantly.
+function submitLobbySignup(){
+  const name=$('lobby-signup-name').value.trim();
+  const email=$('lobby-signup-email').value.trim();
+  const password=$('lobby-signup-password').value;
+  const password2=$('lobby-signup-password2').value;
+  const acceptedTerms=$('lobby-signup-terms').checked;
+  if(!name||!email||!password){ $('lobby-signup-error').textContent='Please fill in every field.'; return; }
+  if(password.length<8){ $('lobby-signup-error').textContent='Password must be at least 8 characters.'; return; }
+  if(password!==password2){ $('lobby-signup-error').textContent='Passwords do not match.'; return; }
+  if(!acceptedTerms){ $('lobby-signup-error').textContent='You must agree to the Terms of Service and Privacy Policy.'; return; }
+  $('lobby-signup-error').textContent='';
+  wss({type:'signup',name,email,password,acceptedTerms});
+}
+
+// Only ever a FAILURE path — success comes back as 'profile_unlocked' (see
+// onProfileUnlocked), same as a real login, since a successful signup
+// immediately logs the new profile in.
+function onSignupResult(m){
+  if(!m.ok) $('lobby-signup-error').textContent=m.error||'Could not create account.';
+}
+
+function submitLobbyForgotPassword(){
+  const email=$('lobby-forgot-email').value.trim();
+  if(!email){ $('lobby-forgot-error').style.color=''; $('lobby-forgot-error').textContent='Enter your email.'; return; }
+  $('lobby-forgot-error').style.color=''; $('lobby-forgot-error').textContent='';
+  wss({type:'forgot_password',email});
+}
+
+// forgot_password's server response is always ok:true (see its own
+// comment on why — an attacker watching responses shouldn't learn which
+// emails have accounts), so there's nothing to branch on here, just a
+// generic confirmation. Colored gold rather than .profile-error's default
+// red since this isn't a failure — same inline-color-override pattern
+// Developer Settings' own confirm rows use.
+function onForgotPasswordResult(m){
+  $('lobby-forgot-error').style.color='var(--gold)';
+  $('lobby-forgot-error').textContent='If that email has an account, a password reset link has been sent.';
+}
+
+function onResendVerificationResult(m){
+  showVerifyToast();
+}
+
+// Corner toast nudging toward email verification — see #verify-toast in
+// index.html and its own comment on why this doesn't just show a clickable
+// "verified!" state: no real mail provider is wired up yet (server/
+// mailer.js), so today this only ever points at the server console/log.
+let verifyToastTimer=null;
+function showVerifyToast(){
+  $('verify-toast-body').innerHTML='<p>Check your email to verify your account.</p>';
+  $('verify-toast').classList.add('show');
+  if(verifyToastTimer) clearTimeout(verifyToastTimer);
+  verifyToastTimer=setTimeout(closeVerifyToast,10000);
+}
+function closeVerifyToast(){
+  $('verify-toast').classList.remove('show');
+  if(verifyToastTimer){ clearTimeout(verifyToastTimer); verifyToastTimer=null; }
+}
+
+function toggleTermsModal(){
+  const modal=$('terms-modal');
+  const backdrop=$('terms-backdrop');
+  const open=modal.classList.contains('visible');
+  modal.classList.toggle('visible',!open);
+  backdrop.classList.toggle('visible',!open);
+}
+
+function togglePrivacyModal(){
+  const modal=$('privacy-modal');
+  const backdrop=$('privacy-backdrop');
+  const open=modal.classList.contains('visible');
+  modal.classList.toggle('visible',!open);
+  backdrop.classList.toggle('visible',!open);
+}
+
+// Populates Developer Settings' Delete Profile dropdown (#dev-delete-select)
+// — the Log In card no longer needs a profile list (see showLobbyLoginCard/
+// submitLobbyLogin above), so this 'list_profiles' response only has one
+// consumer left, requested by toggleDeleteProfileModal.
 function renderProfileList(m){
   const profiles=m.profiles||[];
-  const grid=$('profile-card-grid');
-  if(grid){
-    grid.innerHTML='';
-    // Always present, first, regardless of how many real profiles exist —
-    // the no-code, no-data option (see select_guest in index.js). Unlike
-    // the real cards below, clicking it logs in immediately, no code
-    // prompt (see selectGuest).
-    const guestBtn=document.createElement('button');
-    guestBtn.className='profile-card';
-    guestBtn.innerHTML=`${guestIconSvg}<span class="profile-card-name">Guest</span>`;
-    guestBtn.onclick=selectGuest;
-    grid.appendChild(guestBtn);
-    profiles.forEach(p=>{
-      const btn=document.createElement('button');
-      btn.className='profile-card';
-      btn.dataset.name=p.name;
-      btn.innerHTML=`${iconSvg(p.icon)}<span class="profile-card-name">${escHtml(p.name)}</span>`;
-      btn.onclick=()=>selectProfileCard(p.name);
-      grid.appendChild(btn);
-    });
-  }
   const del=$('dev-delete-select');
   if(del){
     del.innerHTML=profiles.length
       ? profiles.map(p=>`<option value="${escHtml(p.name)}">${escHtml(p.name)}</option>`).join('')
       : '<option value="">No profiles yet</option>';
   }
-}
-
-// Clicking a card doesn't log in by itself — it just picks which profile
-// the code prompt below the grid now applies to (highlighted via .active,
-// same pattern as the theme/icon pickers elsewhere in this file). Picking
-// the profile that's already unlocked on this connection (#iname's value —
-// see the block comment above) is a no-op server-side, so skip the code
-// prompt entirely and just close the picker instead of asking to re-enter
-// a code that's already verified.
-function selectProfileCard(name){
-  if(name===$('iname').value){ toggleProfilePicker(); return; }
-  selectedProfileName=name;
-  document.querySelectorAll('.profile-card').forEach(c=>{
-    c.classList.toggle('active',c.dataset.name===name);
-  });
-  $('profile-code-label').textContent=`Code for ${name}`;
-  $('profile-error').textContent='';
-  $('profile-code').value='';
-  $('profile-code-section').style.display='';
-  $('profile-code').focus();
-}
-
-// "Stay logged in" checkbox inside the profile picker's code prompt —
-// deliberately doesn't persist across picker opens (toggleProfilePicker
-// resets it unchecked every time, same "ask again" spirit as the code
-// field next to it). See unlockProfile/onProfileUnlocked for what actually
-// happens when it's checked.
-let rememberProfile=false;
-function toggleProfileRemember(){
-  rememberProfile=$('profile-remember').checked;
-}
-
-function unlockProfile(){
-  const name=selectedProfileName;
-  const code=$('profile-code').value;
-  if(!name){ $('profile-error').textContent='No profile selected.'; return; }
-  wss({type:'unlock_profile',name,code,remember:rememberProfile});
 }
 
 // Clears this device's "stay logged in" state, both the token stored here
@@ -2869,15 +2974,17 @@ function forgetRememberedProfile(){
 }
 
 // Called from onMsg on 'profile_unlocked' — on success, confirms #iname
-// (readonly, so it can't be hand-edited back to an unverified name) and
-// unblocks Find Match; on failure, shows the error inline in the picker
-// rather than closing it, so the player can just retry the code.
-// `m.silent` marks a response to connect()'s automatic 'unlock_profile_token'
-// attempt on open (see ws.onopen below) rather than a user-driven code
-// submission — so a failure here (stale/revoked token) is handled quietly
-// instead of surfacing "Incorrect code" for something the player never typed,
-// and a success here must NOT call toggleProfilePicker (the picker was never
-// opened for it).
+// (readonly, so it can't be hand-edited back to an unverified name),
+// unblocks Find Match, and swaps #lobby-login-card for #lobby-game-card
+// (safe to call before #s-lobby is even showing yet — e.g. the silent
+// auto-login below, which usually resolves while still on the start
+// screen — since it's just which of two already-hidden cards has
+// display:none); on failure, shows the error inline in the Log In form
+// instead. `m.silent` marks a response to connect()'s automatic
+// 'unlock_profile_token' attempt on open (see ws.onopen below) rather than
+// a user-driven login submission — so a failure here (stale/revoked token)
+// is handled quietly instead of surfacing "Incorrect username/email or
+// password" for something the player never typed.
 function onProfileUnlocked(m){
   if(m.ok){
     $('iname').value=m.name;
@@ -2898,6 +3005,10 @@ function onProfileUnlocked(m){
       if($('s-start').classList.contains('hidden')) showCoinBonus(m.dailyBonus);
       else pendingDailyBonus=m.dailyBonus;
     }
+    // Fresh email sign-up (see 'signup' in server/index.js) — nudge toward
+    // verifying since there's no real mail provider yet to just click a
+    // link from (see #verify-toast's own comment).
+    if(m.justSignedUp) showVerifyToast();
     // Sync to the profile's own stored icon/title (server-authoritative —
     // see profiles.getIcon/getTitle), not whatever this browser last
     // cached, in case this device previously had a different profile's
@@ -2928,29 +3039,50 @@ function onProfileUnlocked(m){
       // would auto-login again next visit despite the box being unchecked.
       forgetRememberedProfile();
     }
-    if(!m.silent) toggleProfilePicker();
+    showLobbyGameCard();
     // Refresh stats/theme-lock state for the now-confirmed profile.
     wss({type:'get_stats'});
   } else if(m.silent){
     // Stored token no longer works (revoked, code changed since) — clear
-    // it so this doesn't retry forever, and just fall back to the picker.
+    // it so this doesn't retry forever, and just fall back to the Log In
+    // card (already the default — see index.html).
     try{ localStorage.removeItem('mj-remember-name'); localStorage.removeItem('mj-remember-token'); }catch(e){}
   } else {
-    $('profile-error').textContent=m.error||'Incorrect code';
+    $('lobby-login-error').textContent=m.error||'Incorrect username/email or password';
   }
 }
 
-// Explicit "play as Guest" pick — no code prompt, logs in immediately
-// (see the Guest card in renderProfileList). Clears any profile this
-// connection had unlocked server-side too (see select_guest in
-// index.js), so switching to Guest after already unlocking a real
-// profile actually takes effect on the next join, not just cosmetically.
+// Explicit "play as Guest" pick — no code prompt, logs in immediately.
+// Clears any profile this connection had unlocked server-side too (see
+// select_guest in index.js), so switching to Guest after already unlocking
+// a real profile actually takes effect on the next join, not just
+// cosmetically. Only clears state — deliberately doesn't touch which card
+// is showing, since it's shared by two opposite intents (see
+// continueAsGuestFromLobby/returnToLoginCard below, which each decide that
+// for themselves right after calling this).
 function selectGuest(){
   // Explicit switch to Guest is a logout — drop any "stay logged in" token
   // this device was holding so it doesn't silently re-unlock the profile
   // on the next visit.
   forgetRememberedProfile();
   wss({type:'select_guest'});
+}
+
+// "Continue as Guest" in the Log In card — the gate is satisfied, move on
+// to the game-selection card right away rather than waiting on the
+// 'guest_selected' round trip (there's nothing it could fail on).
+function continueAsGuestFromLobby(){
+  selectGuest();
+  showLobbyGameCard();
+}
+
+// The nameplate's "Change" button (see index.html) — logging out back to
+// the Log In card, whether the current profile is a real one or Guest.
+// Opposite intent from continueAsGuestFromLobby above despite calling the
+// same selectGuest(): this one is leaving the game card, not entering it.
+function returnToLoginCard(){
+  selectGuest();
+  showLobbyLoginCard();
 }
 
 function onGuestSelected(){
@@ -2979,7 +3111,6 @@ function onGuestSelected(){
   // need to explicitly reset it back to Bronze, or a previous real
   // profile's Silver/Gold/Platinum tier would keep showing.
   updateNameplateTier(0);
-  toggleProfilePicker();
 }
 
 // Hidden entry point for Developer Settings — no link anywhere in normal
@@ -7710,7 +7841,10 @@ $('bleave').onclick=goLobby;
 $('bsettings').onclick=toggleSettings;
 $('iname').onkeydown=e=>{if(e.key==='Enter')findMatch();};
 $('dev-secret').onkeydown=e=>{if(e.key==='Enter')submitDevKey();};
-$('profile-code').onkeydown=e=>{if(e.key==='Enter')unlockProfile();};
+$('lobby-identifier').onkeydown=e=>{if(e.key==='Enter')submitLobbyLogin();};
+$('lobby-password').onkeydown=e=>{if(e.key==='Enter')submitLobbyLogin();};
+$('lobby-signup-password2').onkeydown=e=>{if(e.key==='Enter')submitLobbySignup();};
+$('lobby-forgot-email').onkeydown=e=>{if(e.key==='Enter')submitLobbyForgotPassword();};
 $('chat-send').onclick=sendChat;
 $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};
 // Pings room.js's typing()/TYPING_TIMEOUT_MS on every keystroke — no

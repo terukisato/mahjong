@@ -1675,6 +1675,10 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    these are all short (title + one or two lines). */
 .achv-toast.show ~ .achv-toast.show{transform:translateX(0) translateY(calc(var(--ui-vmin) * 15));}
 .achv-toast.show ~ .achv-toast.show ~ .achv-toast.show{transform:translateX(0) translateY(calc(var(--ui-vmin) * 30));}
+/* 4th sibling — #verify-toast joins the achv/invite/coin trio above (see
+   its own comment in index.html), so the same stacking chain needs one more
+   step for the (rare) case all four are visible at once. */
+.achv-toast.show ~ .achv-toast.show ~ .achv-toast.show ~ .achv-toast.show{transform:translateX(0) translateY(calc(var(--ui-vmin) * 45));}
 /* Room Invite toast's Accept button (#invite-toast-accept) — the
    achievement toast has no equivalent, it's purely informational, so this
    only applies to the invite variant. */
@@ -2068,6 +2072,11 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
   flex:1 1 auto;min-height:0;overflow-y:auto;}
 .about-body p{margin:0 0 calc(var(--ui-vmin, 7.2px) * 1.389);}
 .about-body p:last-child{margin-bottom:0;}
+/* Inline links inside modal body text (Legal section, sign-up's Terms/
+   Privacy checkbox) — otherwise unstyled <a> tags would fall back to the
+   browser default blue, which nothing else in this gold/jade palette uses. */
+.about-body a,.profile-remember-row a{color:var(--gold);}
+.about-body a:hover,.profile-remember-row a:hover{text-decoration:none;}
 .about-section{margin-top:calc(var(--ui-vmin, 7.2px) * 1.944);padding-top:calc(var(--ui-vmin, 7.2px) * 1.944);border-top:1px solid rgba(201,168,76,.15);}
 .about-section-title{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);letter-spacing:calc(var(--ui-vmin, 7.2px) * .278);color:rgba(201,168,76,.95);
   font-family:'Cinzel Decorative',serif;margin-bottom:calc(var(--ui-vmin, 7.2px) * .833);}
@@ -2088,6 +2097,60 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
   font-family:'Cinzel Decorative',serif;text-align:left;text-decoration:none;padding:calc(var(--ui-vmin, 7.2px) * 1.389) 0;
   cursor:pointer;}
 .hub-link:hover{color:var(--gold);}
+/* Log In card's Create an Account/Forgot Password/Continue as Guest links
+   (see #lobby-login-fields in index.html) — sized and set in the same
+   font as "Remember me" (.profile-remember-row), plain white with no
+   hover color change (unlike .hub-link, used for actual navigation links
+   elsewhere — About > Legal, Developer Settings' hub). inline-block
+   rather than .hub-link's display:block so the clickable area is only
+   ever the text itself — each link sits in its own wrapper div in
+   index.html for the line break that display:block used to give for
+   free, since two inline-block elements next to each other in markup
+   would otherwise sit side by side. */
+.lobby-auth-link{display:inline-block;font-size:calc(var(--ui-vmin, 7.2px) * 1.389);font-family:'Noto Sans JP',sans-serif;
+  color:#fff;text-decoration:none;cursor:pointer;padding:calc(var(--ui-vmin, 7.2px) * .694) 0;}
+/* Continue as Guest sits above the identifier field, right-aligned (see
+   #lobby-login-fields in index.html) — .lobby-auth-link is already
+   inline-block, so text-align on this row is enough with no extra
+   override needed on the link itself. */
+.lobby-guest-row{text-align:right;}
+/* Floating label — "Username or Email"/"Password"/etc. live INSIDE the
+   box like a placeholder until the field is focused or has a value, then
+   shrink and move to sit at the box's own top edge (see .ig-float in
+   index.html for the input+label markup this pairs with, and its comment
+   on why each input needs a real, if blank, placeholder attribute).
+   Scoped to .ig.ig-float specifically — plain .ig (Developer Settings,
+   Change Username/Code, etc.) keeps its ordinary label-above-input
+   layout unchanged. */
+.ig.ig-float{position:relative;}
+/* Two extra classes (.ig.ig-float, not just .ig-float) so this reliably
+   outranks plain .ig input's own padding shorthand regardless of which
+   rule happens to come first in the file — same specificity trick as
+   .ig .pw-field input below. */
+.ig.ig-float input{padding-top:calc(var(--ui-vmin, 7.2px) * 2.6);padding-bottom:calc(var(--ui-vmin, 7.2px) * .9);}
+.ig-float label{position:absolute;left:calc(var(--ui-vmin, 7.2px) * 1.944);top:50%;transform:translateY(-50%);
+  font-size:calc(var(--ui-vmin, 7.2px) * 2.222);color:rgba(245,237,216,.55);
+  text-transform:none;letter-spacing:normal;margin-bottom:0;pointer-events:none;
+  transition:top .15s ease,font-size .15s ease,color .15s ease;}
+.ig-float input:focus+label,
+.ig-float input:not(:placeholder-shown)+label{
+  top:calc(var(--ui-vmin, 7.2px) * 1.15);transform:translateY(0);
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:var(--gold);
+  text-transform:uppercase;letter-spacing:calc(var(--ui-vmin, 7.2px) * .417);}
+/* Show/hide toggle inside a password field (see .pw-field/.pw-eye in
+   index.html's Log In/Sign Up forms) — the eye button sits absolutely
+   inside the same wrapper as the input, so .ig input's own 100%-width
+   padding rule needs a right-side callout wide enough for the icon
+   without the typed text running under it; higher specificity than plain
+   ".ig input" (two classes instead of one) is what lets this win without
+   !important. */
+.pw-field{position:relative;}
+.ig .pw-field input{padding-right:calc(var(--ui-vmin, 7.2px) * 5);}
+.pw-eye{position:absolute;top:50%;right:calc(var(--ui-vmin, 7.2px) * 1.111);transform:translateY(-50%);
+  background:none;border:none;padding:0;margin:0;color:rgba(245,237,216,.5);cursor:pointer;
+  display:flex;align-items:center;line-height:0;}
+.pw-eye:hover{color:var(--gold);}
+.pw-eye svg{width:calc(var(--ui-vmin, 7.2px) * 2.222);height:calc(var(--ui-vmin, 7.2px) * 2.222);}
 /* Profile picker cards — icon on top, name below, one per profile (see
    renderProfileList/selectProfileCard in script.js). Reuses .icon-grid's
    3-column layout but each cell needs a taller, name-labeled card instead
