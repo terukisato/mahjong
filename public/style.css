@@ -2130,7 +2130,7 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    #lobby-login-fields in index.html) — .lobby-auth-link is already
    inline-block, so text-align on this row is enough with no extra
    override needed on the link itself. */
-.lobby-guest-row{text-align:right;}
+.lobby-guest-row{text-align:left;}
 /* Floating label — "Username"/"Password"/etc. live INSIDE the
    box like a placeholder until the field is focused or has a value, then
    shrink and move to sit at the box's own top edge (see .ig-float in
