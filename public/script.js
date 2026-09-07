@@ -880,8 +880,6 @@ function onMsg(m){
   if(m.type==='profiles'){renderProfileList(m);return;}
   if(m.type==='profile_unlocked'){onProfileUnlocked(m);return;}
   if(m.type==='signup_result'){onSignupResult(m);return;}
-  if(m.type==='resend_verification_result'){onResendVerificationResult(m);return;}
-  if(m.type==='forgot_password_result'){onForgotPasswordResult(m);return;}
   if(m.type==='guest_selected'){onGuestSelected();return;}
   if(m.type==='dev_key_result'){onDevKeyResult(m);return;}
   if(m.type==='create_profile_result'){onCreateProfileResult(m);return;}
@@ -2811,17 +2809,14 @@ function resetPasswordVisibility(id){
   }
 }
 
-// Three sub-states of #lobby-login-card itself (Log In / Sign Up / Forgot
-// Password) — swapping which fields show under the same card chrome,
-// rather than three separate cards, so only the header text and the
-// fields change.
+// Two sub-states of #lobby-login-card itself (Log In / Sign Up) — swapping
+// which fields show under the same card chrome, rather than two separate
+// cards, so only the header text and the fields change.
 
 // The card's one "←" button (see .card-header-row in index.html) — steps
-// back one level of THIS card first, rather than always leaving straight
-// to the start menu: Sign Up/Forgot Password go back to Log In, and only
-// Log In itself (nothing left to step back through inside the card) falls
-// through to backToMenu(). Replaces the separate "← Back to Log In" link
-// each of those two sub-states used to have.
+// back to Log In first if currently on Sign Up, rather than always
+// leaving straight to the start menu; only Log In itself (nothing left to
+// step back through inside the card) falls through to backToMenu().
 function lobbyLoginBack(){
   if($('lobby-login-fields').style.display==='none') showLobbyLogin();
   else backToMenu();
@@ -2831,9 +2826,10 @@ function showLobbyLogin(){
   $('lobby-login-title').textContent='Log In';
   $('lobby-login-fields').style.display='';
   $('lobby-signup-fields').style.display='none';
-  $('lobby-forgot-fields').style.display='none';
   $('lobby-identifier').value=''; $('lobby-password').value='';
   $('lobby-remember').checked=false; $('lobby-login-error').textContent='';
+  $('choose-profile-modal').classList.remove('visible');
+  $('choose-profile-backdrop').classList.remove('visible');
   resetPasswordVisibility('lobby-password');
 }
 
@@ -2841,22 +2837,11 @@ function showLobbySignup(){
   $('lobby-login-title').textContent='Sign Up';
   $('lobby-login-fields').style.display='none';
   $('lobby-signup-fields').style.display='';
-  $('lobby-forgot-fields').style.display='none';
-  $('lobby-signup-name').value=''; $('lobby-signup-email').value='';
+  $('lobby-signup-name').value='';
   $('lobby-signup-password').value=''; $('lobby-signup-password2').value='';
   $('lobby-signup-terms').checked=false; $('lobby-signup-error').textContent='';
   resetPasswordVisibility('lobby-signup-password');
   resetPasswordVisibility('lobby-signup-password2');
-}
-
-function showLobbyForgotPassword(){
-  $('lobby-login-title').textContent='Forgot Password';
-  $('lobby-login-fields').style.display='none';
-  $('lobby-signup-fields').style.display='none';
-  $('lobby-forgot-fields').style.display='';
-  $('lobby-forgot-email').value='';
-  $('lobby-forgot-error').style.color='';
-  $('lobby-forgot-error').textContent='';
 }
 
 function submitLobbyLogin(){
@@ -2867,23 +2852,22 @@ function submitLobbyLogin(){
   wss({type:'login',identifier,password,remember:$('lobby-remember').checked});
 }
 
-// Client-side checks mirror profiles.signUpWithEmail's own validation
-// (name/email/password required, password >= 8 chars, terms accepted) so
-// the common mistakes never make a round trip — the server re-validates
-// everything regardless (see 'signup' in server/index.js), this is purely
-// so the error shows up instantly.
+// Client-side checks mirror profiles.createProfile's own validation
+// (name/password required, password >= 4 chars) so the common mistakes
+// never make a round trip — the server re-validates everything regardless
+// (see 'signup' in server/index.js), this is purely so the error shows up
+// instantly.
 function submitLobbySignup(){
   const name=$('lobby-signup-name').value.trim();
-  const email=$('lobby-signup-email').value.trim();
   const password=$('lobby-signup-password').value;
   const password2=$('lobby-signup-password2').value;
   const acceptedTerms=$('lobby-signup-terms').checked;
-  if(!name||!email||!password){ $('lobby-signup-error').textContent='Please fill in every field.'; return; }
-  if(password.length<8){ $('lobby-signup-error').textContent='Password must be at least 8 characters.'; return; }
+  if(!name||!password){ $('lobby-signup-error').textContent='Please fill in every field.'; return; }
+  if(password.length<4){ $('lobby-signup-error').textContent='Password must be at least 4 characters.'; return; }
   if(password!==password2){ $('lobby-signup-error').textContent='Passwords do not match.'; return; }
   if(!acceptedTerms){ $('lobby-signup-error').textContent='You must agree to the Terms of Service and Privacy Policy.'; return; }
   $('lobby-signup-error').textContent='';
-  wss({type:'signup',name,email,password,acceptedTerms});
+  wss({type:'signup',name,password});
 }
 
 // Only ever a FAILURE path — success comes back as 'profile_unlocked' (see
@@ -2891,44 +2875,6 @@ function submitLobbySignup(){
 // immediately logs the new profile in.
 function onSignupResult(m){
   if(!m.ok) $('lobby-signup-error').textContent=m.error||'Could not create account.';
-}
-
-function submitLobbyForgotPassword(){
-  const email=$('lobby-forgot-email').value.trim();
-  if(!email){ $('lobby-forgot-error').style.color=''; $('lobby-forgot-error').textContent='Enter your email.'; return; }
-  $('lobby-forgot-error').style.color=''; $('lobby-forgot-error').textContent='';
-  wss({type:'forgot_password',email});
-}
-
-// forgot_password's server response is always ok:true (see its own
-// comment on why — an attacker watching responses shouldn't learn which
-// emails have accounts), so there's nothing to branch on here, just a
-// generic confirmation. Colored gold rather than .profile-error's default
-// red since this isn't a failure — same inline-color-override pattern
-// Developer Settings' own confirm rows use.
-function onForgotPasswordResult(m){
-  $('lobby-forgot-error').style.color='var(--gold)';
-  $('lobby-forgot-error').textContent='If that email has an account, a password reset link has been sent.';
-}
-
-function onResendVerificationResult(m){
-  showVerifyToast();
-}
-
-// Corner toast nudging toward email verification — see #verify-toast in
-// index.html and its own comment on why this doesn't just show a clickable
-// "verified!" state: no real mail provider is wired up yet (server/
-// mailer.js), so today this only ever points at the server console/log.
-let verifyToastTimer=null;
-function showVerifyToast(){
-  $('verify-toast-body').innerHTML='<p>Check your email to verify your account.</p>';
-  $('verify-toast').classList.add('show');
-  if(verifyToastTimer) clearTimeout(verifyToastTimer);
-  verifyToastTimer=setTimeout(closeVerifyToast,10000);
-}
-function closeVerifyToast(){
-  $('verify-toast').classList.remove('show');
-  if(verifyToastTimer){ clearTimeout(verifyToastTimer); verifyToastTimer=null; }
 }
 
 function toggleTermsModal(){
@@ -2959,6 +2905,53 @@ function renderProfileList(m){
       ? profiles.map(p=>`<option value="${escHtml(p.name)}">${escHtml(p.name)}</option>`).join('')
       : '<option value="">No profiles yet</option>';
   }
+  // Choose an Existing Profile window's grid (see #lobby-profile-grid in
+  // index.html/toggleChooseProfileModal below) — same 'list_profiles'
+  // response, refreshed here alongside the dropdown above whenever either
+  // one asked for it; harmless to update even when this grid isn't the
+  // one that triggered the request.
+  const grid=$('lobby-profile-grid');
+  if(grid){
+    grid.innerHTML='';
+    if(!profiles.length){
+      grid.innerHTML='<p style="grid-column:1/-1;text-align:center;color:rgba(245,237,216,.5);">No profiles yet.</p>';
+    } else {
+      profiles.forEach(p=>{
+        const btn=document.createElement('button');
+        btn.type='button';
+        btn.className='profile-card';
+        btn.innerHTML=`${iconSvg(p.icon)}<span class="profile-card-name">${escHtml(p.name)}</span>`;
+        btn.onclick=()=>selectLobbyProfileCard(p.name);
+        grid.appendChild(btn);
+      });
+    }
+  }
+}
+
+// Picking a card just fills #lobby-identifier and closes the grid — from
+// here it behaves exactly as if the name had been typed directly, so
+// submitLobbyLogin needs no changes at all to support this second way of
+// choosing an account.
+function selectLobbyProfileCard(name){
+  $('lobby-identifier').value=name;
+  toggleChooseProfileModal();
+  $('lobby-password').focus();
+}
+
+// Choose an Existing Profile — its own window (see #choose-profile-modal
+// in index.html), same toggle-modal pattern as Create/Delete Profile
+// elsewhere in this file. Fetches a fresh 'list_profiles' each time it
+// opens (a profile created since this window was last shown should still
+// show up without a page reload).
+function toggleChooseProfileModal(){
+  const modal=$('choose-profile-modal');
+  const backdrop=$('choose-profile-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('lobby-profile-grid').innerHTML='<p style="grid-column:1/-1;text-align:center;color:rgba(245,237,216,.5);">Loading…</p>';
+  wss({type:'list_profiles'});
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
 }
 
 // Clears this device's "stay logged in" state, both the token stored here
@@ -2983,8 +2976,8 @@ function forgetRememberedProfile(){
 // instead. `m.silent` marks a response to connect()'s automatic
 // 'unlock_profile_token' attempt on open (see ws.onopen below) rather than
 // a user-driven login submission — so a failure here (stale/revoked token)
-// is handled quietly instead of surfacing "Incorrect username/email or
-// password" for something the player never typed.
+// is handled quietly instead of surfacing "Incorrect username or password"
+// for something the player never typed.
 function onProfileUnlocked(m){
   if(m.ok){
     $('iname').value=m.name;
@@ -3005,10 +2998,6 @@ function onProfileUnlocked(m){
       if($('s-start').classList.contains('hidden')) showCoinBonus(m.dailyBonus);
       else pendingDailyBonus=m.dailyBonus;
     }
-    // Fresh email sign-up (see 'signup' in server/index.js) — nudge toward
-    // verifying since there's no real mail provider yet to just click a
-    // link from (see #verify-toast's own comment).
-    if(m.justSignedUp) showVerifyToast();
     // Sync to the profile's own stored icon/title (server-authoritative —
     // see profiles.getIcon/getTitle), not whatever this browser last
     // cached, in case this device previously had a different profile's
@@ -3048,7 +3037,7 @@ function onProfileUnlocked(m){
     // card (already the default — see index.html).
     try{ localStorage.removeItem('mj-remember-name'); localStorage.removeItem('mj-remember-token'); }catch(e){}
   } else {
-    $('lobby-login-error').textContent=m.error||'Incorrect username/email or password';
+    $('lobby-login-error').textContent=m.error||'Incorrect username or password';
   }
 }
 
@@ -3074,6 +3063,15 @@ function selectGuest(){
 function continueAsGuestFromLobby(){
   selectGuest();
   showLobbyGameCard();
+}
+
+// The Logout link's own confirm gate (see index.html) — reuses the
+// generic yes/no modal (uiConfirm) rather than a bespoke one, same as
+// removeFriend elsewhere in this file. Guards against a stray/misplaced
+// tap logging someone out mid-lobby with no way back except logging in
+// again.
+function confirmLogout(){
+  uiConfirm('Are you sure you want to logout?',returnToLoginCard,'Logout');
 }
 
 // The nameplate's "Change" button (see index.html) — logging out back to
@@ -7844,7 +7842,6 @@ $('dev-secret').onkeydown=e=>{if(e.key==='Enter')submitDevKey();};
 $('lobby-identifier').onkeydown=e=>{if(e.key==='Enter')submitLobbyLogin();};
 $('lobby-password').onkeydown=e=>{if(e.key==='Enter')submitLobbyLogin();};
 $('lobby-signup-password2').onkeydown=e=>{if(e.key==='Enter')submitLobbySignup();};
-$('lobby-forgot-email').onkeydown=e=>{if(e.key==='Enter')submitLobbyForgotPassword();};
 $('chat-send').onclick=sendChat;
 $('chat-input').onkeydown=e=>{if(e.key==='Enter')sendChat();};
 // Pings room.js's typing()/TYPING_TIMEOUT_MS on every keystroke — no

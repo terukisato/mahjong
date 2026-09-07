@@ -1675,10 +1675,6 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    these are all short (title + one or two lines). */
 .achv-toast.show ~ .achv-toast.show{transform:translateX(0) translateY(calc(var(--ui-vmin) * 15));}
 .achv-toast.show ~ .achv-toast.show ~ .achv-toast.show{transform:translateX(0) translateY(calc(var(--ui-vmin) * 30));}
-/* 4th sibling — #verify-toast joins the achv/invite/coin trio above (see
-   its own comment in index.html), so the same stacking chain needs one more
-   step for the (rare) case all four are visible at once. */
-.achv-toast.show ~ .achv-toast.show ~ .achv-toast.show ~ .achv-toast.show{transform:translateX(0) translateY(calc(var(--ui-vmin) * 45));}
 /* Room Invite toast's Accept button (#invite-toast-accept) — the
    achievement toast has no equivalent, it's purely informational, so this
    only applies to the invite variant. */
@@ -1734,6 +1730,21 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    script.js). Each icon is a small hand-coded SVG mark, not an uploaded
    image — the app has no image-upload capability. */
 .icon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--ui-vmin, 7.2px) * 1.111);}
+/* Choose an Existing Profile — its own window now (#choose-profile-modal
+   in index.html), so this just fills that window's .about-body, which
+   already scrolls on its own (see .about-body's comment) — no height cap
+   needed here the way the old inline version needed one to avoid pushing
+   the Log In card's own fields around underneath it. Still a compact
+   variant of .profile-card though: icon and name laid out horizontally
+   (like a plain list row) instead of icon-on-top/name-below, 2 columns
+   (not .icon-grid's usual 3) so a horizontal card has enough width for
+   the name. */
+#lobby-profile-grid{grid-template-columns:repeat(2,1fr);}
+#lobby-profile-grid .profile-card{flex-direction:row;justify-content:flex-start;
+  padding:calc(var(--ui-vmin, 7.2px) * .833) calc(var(--ui-vmin, 7.2px) * 1.111);
+  gap:calc(var(--ui-vmin, 7.2px) * .833);}
+#lobby-profile-grid .profile-card svg{width:calc(var(--ui-vmin, 7.2px) * 2.778);height:calc(var(--ui-vmin, 7.2px) * 2.778);flex-shrink:0;}
+#lobby-profile-grid .profile-card-name{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);}
 .icon-btn{background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:2px;
   padding:calc(var(--ui-vmin, 7.2px) * .833);cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;}
 .icon-btn svg{width:calc(var(--ui-vmin, 7.2px) * 5);height:calc(var(--ui-vmin, 7.2px) * 5);display:block;}
@@ -1846,20 +1857,19 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    empty). Click anywhere on it to open the profile picker, same action
    the old #iname text field had — see refreshProfileDisplay in script.js
    for what keeps its icon/name in sync. */
+/* Plain display now, not a button — logging out lives in its own Logout
+   link below (see .lobby-auth-link on #lobby-inputs' Logout <a>), so this
+   is just the icon+name+title readout, no click affordance of its own. */
 .profile-nameplate{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.389);width:100%;
   background:rgba(0,0,0,.5);border:1px solid rgba(201,168,76,.2);border-radius:2px;
-  padding:calc(var(--ui-vmin, 7.2px) * 1.111) calc(var(--ui-vmin, 7.2px) * 1.667);cursor:pointer;transition:border-color .2s;position:relative;
-  text-align:left;margin-bottom:calc(var(--ui-vmin, 7.2px) * 2.222);}
-.profile-nameplate:hover{border-color:rgba(201,168,76,.5);}
+  padding:calc(var(--ui-vmin, 7.2px) * 1.111) calc(var(--ui-vmin, 7.2px) * 1.667);
+  text-align:left;margin-bottom:0;}
 .pnp-icon{flex-shrink:0;width:calc(var(--ui-vmin, 7.2px) * 4.444);height:calc(var(--ui-vmin, 7.2px) * 4.444);}
 .pnp-icon svg{width:100%;height:100%;display:block;}
 .pnp-info{display:flex;flex-direction:column;flex:1;min-width:0;}
 .pnp-name{font-size:calc(var(--ui-vmin, 7.2px) * 1.944);color:var(--cream);font-family:'Cinzel Decorative',serif;
   letter-spacing:calc(var(--ui-vmin, 7.2px) * .069);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .pnp-title{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:var(--gold);opacity:.9;letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);min-height:calc(var(--ui-vmin, 7.2px) * 1.667);}
-.pnp-change{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.111);right:calc(var(--ui-vmin, 7.2px) * 1.667);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:rgba(245,237,216,.35);
-  letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);text-transform:uppercase;opacity:0;transition:opacity .2s;}
-.profile-nameplate:hover .pnp-change{opacity:1;}
 /* User Profile hub's header — same icon+name pairing as .profile-nameplate
    above, boxed the same way (rounded corners, gold border) but centered and
    non-interactive in place of .about-title's plain text (see #up-icon/
@@ -2098,23 +2108,30 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
   cursor:pointer;}
 .hub-link:hover{color:var(--gold);}
 /* Log In card's Create an Account/Forgot Password/Continue as Guest links
-   (see #lobby-login-fields in index.html) — sized and set in the same
-   font as "Remember me" (.profile-remember-row), plain white with no
-   hover color change (unlike .hub-link, used for actual navigation links
-   elsewhere — About > Legal, Developer Settings' hub). inline-block
-   rather than .hub-link's display:block so the clickable area is only
-   ever the text itself — each link sits in its own wrapper div in
-   index.html for the line break that display:block used to give for
-   free, since two inline-block elements next to each other in markup
-   would otherwise sit side by side. */
+   (see #lobby-login-fields in index.html), plus the game card's own
+   Logout link below the nameplate — sized and set in the same font as
+   "Remember me" (.profile-remember-row), same dim color as the start
+   screen's About link (.about-link) with no hover color change (unlike
+   .hub-link, used for actual navigation links elsewhere — About > Legal,
+   Developer Settings' hub). inline-block rather than .hub-link's
+   display:block so the clickable area is only ever the text itself —
+   each link sits in its own wrapper div in index.html for the line break
+   that display:block used to give for free, since two inline-block
+   elements next to each other in markup would otherwise sit side by
+   side. */
 .lobby-auth-link{display:inline-block;font-size:calc(var(--ui-vmin, 7.2px) * 1.389);font-family:'Noto Sans JP',sans-serif;
-  color:#fff;text-decoration:none;cursor:pointer;padding:calc(var(--ui-vmin, 7.2px) * .694) 0;}
+  color:rgba(245,237,216,.4);text-decoration:none;cursor:pointer;padding:calc(var(--ui-vmin, 7.2px) * .694) 0;}
+/* Logout's own top padding overridden to near-zero so it sits snug under
+   the nameplate above it (see #profile-nameplate in index.html) — the
+   bottom padding stays, for breathing room before Quick Match/Room List
+   below it. */
+.nameplate-logout{padding-top:calc(var(--ui-vmin, 7.2px) * .139);}
 /* Continue as Guest sits above the identifier field, right-aligned (see
    #lobby-login-fields in index.html) — .lobby-auth-link is already
    inline-block, so text-align on this row is enough with no extra
    override needed on the link itself. */
 .lobby-guest-row{text-align:right;}
-/* Floating label — "Username or Email"/"Password"/etc. live INSIDE the
+/* Floating label — "Username"/"Password"/etc. live INSIDE the
    box like a placeholder until the field is focused or has a value, then
    shrink and move to sit at the box's own top edge (see .ig-float in
    index.html for the input+label markup this pairs with, and its comment

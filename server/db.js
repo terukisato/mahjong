@@ -137,41 +137,15 @@ CREATE TABLE IF NOT EXISTS stats (
 );
 `;
 
-// profiles.js's email sign-up (see its signUpWithEmail/verifyEmailLogin) adds
-// these columns on top of the original name+code shape above. Added via
-// ALTER TABLE here rather than in CREATE TABLE IF NOT EXISTS itself, because
-// that statement is a no-op against a database file that already has a
-// profiles table (i.e. every deployment that existed before this feature) —
-// only a fresh install would ever pick up new columns added there. Checking
-// PRAGMA table_info first and adding whatever's missing means both a brand
-// new database and an existing janshin.db converge on the same shape, with
-// no separate migration script to remember to run. email/password_salt/
-// password_hash/verify_token_hash/verify_token_expires/terms_accepted_at all
-// start out NULL — an existing name+code profile simply has no email login
-// until its owner (or a fresh email signup) adds one; nothing here requires
-// backfilling old rows.
-const PROFILE_EMAIL_COLUMNS = [
-  ['email', 'TEXT'],
-  ['password_salt', 'TEXT'],
-  ['password_hash', 'TEXT'],
-  ['email_verified', "INTEGER NOT NULL DEFAULT 0"],
-  ['verify_token_hash', 'TEXT'],
-  ['verify_token_expires', 'TEXT'],
-  ['terms_accepted_at', 'TEXT'],
-  // Forgot-password (see profiles.requestPasswordReset/resetPassword) —
-  // same hashed-token-with-expiry shape as verify_token_hash/expires above,
-  // just a separate pair so an outstanding email-verify link and an
-  // outstanding password-reset link can never invalidate each other.
-  ['reset_token_hash', 'TEXT'],
-  ['reset_token_expires', 'TEXT'],
-];
-function _migrateProfileColumns(db) {
-  const existing = new Set(db.prepare('PRAGMA table_info(profiles)').all().map(c => c.name));
-  for (const [name, def] of PROFILE_EMAIL_COLUMNS) {
-    if (!existing.has(name)) db.exec(`ALTER TABLE profiles ADD COLUMN ${name} ${def}`);
-  }
-}
-
+// A profiles table created while the email sign-up feature existed may
+// still carry its extra columns (email, password_hash, verify_token_hash,
+// etc.) and the idx_profiles_email unique index — nothing here drops them
+// (SQLite ALTER TABLE DROP COLUMN is available but that's a one-way trip on
+// whoever's real database happened to have email-registered accounts in
+// it), they're just unused dead weight now that profiles.js no longer
+// reads or writes any of them. A fresh install never creates them at all,
+// since CREATE TABLE IF NOT EXISTS above only ever defines the plain
+// name+code shape.
 function getDb() {
   if (_db) return _db;
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -183,15 +157,6 @@ function getDb() {
   // synchronous.
   _db.exec('PRAGMA journal_mode = WAL');
   _db.exec(SCHEMA);
-  _migrateProfileColumns(_db);
-  // Case-sensitive as stored, but profiles.js always lowercases an email
-  // before writing or looking one up, so this is effectively
-  // case-insensitive uniqueness. Partial (WHERE email IS NOT NULL) so any
-  // number of name+code-only profiles — which all leave email NULL — can
-  // coexist; NULL is never considered equal to NULL under a unique index/
-  // constraint in SQLite, but the WHERE clause makes that explicit rather
-  // than relying on it.
-  _db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email) WHERE email IS NOT NULL');
   return _db;
 }
 

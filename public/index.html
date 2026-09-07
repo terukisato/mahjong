@@ -97,7 +97,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.15.0</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.15.1</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI and real opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -610,21 +610,9 @@
   </div>
 </div>
 
-<!-- Email verification notification — same corner-toast pattern as
-     Achievement Unlocked/Daily Login Bonus above. Fires right after a
-     successful email sign-up (see 'justSignedUp' on the 'profile_unlocked'
-     message, and showVerifyToast in script.js) since there's no real mail
-     provider wired up yet — see server/mailer.js — so the player can't just
-     click a link in their inbox today. Auto-dismisses; ✕ closes it early. -->
-<div id="verify-toast" class="achv-toast">
-  <button class="about-close" onclick="closeVerifyToast()">✕</button>
-  <div class="achv-toast-title">Verify Your Email</div>
-  <div id="verify-toast-body"></div>
-</div>
-
-<!-- Terms of Service — reachable from the email sign-up form's checkbox
-     and from About > Legal. Placeholder content: a starting point for a
-     small independently-run hobby project, not reviewed legal advice. -->
+<!-- Terms of Service — reachable from the sign-up form's checkbox and from
+     About > Legal. Placeholder content: a starting point for a small
+     independently-run hobby project, not reviewed legal advice. -->
 <div id="terms-backdrop" class="about-backdrop" onclick="toggleTermsModal()"></div>
 <div id="terms-modal" class="about-modal">
   <button class="about-close" onclick="toggleTermsModal()">✕</button>
@@ -637,7 +625,7 @@
     </div>
     <div class="about-section">
       <div class="about-section-title">2. Accounts</div>
-      <p>You may create a profile with just a display name and unlock code, or sign up with an email and password. You're responsible for keeping your password/code confidential — one person, one account. Don't impersonate another player or share accounts to manipulate rankings or stats.</p>
+      <p>You create a profile with a display name and password. You're responsible for keeping your password confidential — one person, one account. Don't impersonate another player or share accounts to manipulate rankings or stats.</p>
     </div>
     <div class="about-section">
       <div class="about-section-title">3. Acceptable Use</div>
@@ -667,15 +655,11 @@
     <p><em>Last updated: September 2026</em></p>
     <div class="about-section">
       <div class="about-section-title">What we store</div>
-      <p>Your display name; your email address, if you sign up with one; a salted hash of your password or unlock code (never the plain text); your chosen icon, title, and voice theme; your coin balance; and your own game history and stats.</p>
+      <p>Your display name; a salted hash of your password (never the plain text); your chosen icon, title, and voice theme; your coin balance; and your own game history and stats. No email address or other personal information is collected.</p>
     </div>
     <div class="about-section">
       <div class="about-section-title">Why</div>
-      <p>Solely to run your account: logging you in, showing your own stats/history, and — if you provide an email — verifying it's really yours and letting you recover the account later.</p>
-    </div>
-    <div class="about-section">
-      <div class="about-section-title">Email use</div>
-      <p>Your email is used only to verify your account and, if you request it, to help you regain access. It's never sold, shared with third parties, or used for marketing.</p>
+      <p>Solely to run your account: logging you in and showing your own stats/history.</p>
     </div>
     <div class="about-section">
       <div class="about-section-title">Cookies &amp; local storage</div>
@@ -890,6 +874,23 @@
   </div>
 </div>
 
+<!-- Choose an Existing Profile — opened from the Log In card's own link
+     (see #lobby-login-fields below). Its own window rather than expanding
+     inline, same reasoning as Create/Delete Profile's own windows: this
+     needs real space for a scrollable card list without pushing the
+     password field/Log In button around underneath it. Picking a card
+     just fills #lobby-identifier and closes this window (see
+     selectLobbyProfileCard in script.js) — from there it behaves exactly
+     as if the name had been typed. -->
+<div id="choose-profile-backdrop" class="about-backdrop" onclick="toggleChooseProfileModal()"></div>
+<div id="choose-profile-modal" class="about-modal">
+  <button class="about-close" onclick="toggleChooseProfileModal()">✕</button>
+  <div class="about-title">Choose a Profile</div>
+  <div class="about-body">
+    <div id="lobby-profile-grid" class="icon-grid"></div>
+  </div>
+</div>
+
 <!-- ════════════════════════════════════════════════════════════
      LOBBY SCREEN
      ════════════════════════════════════════════════════════════ -->
@@ -914,18 +915,19 @@
        .card size/style, see showLobbyLoginCard/showLobbyGameCard in
        script.js), so nobody reaches Quick Match/Room List without either
        logging in, creating an account, or explicitly choosing Guest.
-       Three sub-states of this ONE card (Log In / Sign Up / Forgot
-       Password — see showLobbyLogin/showLobbySignup/
-       showLobbyForgotPassword), not three separate cards, so the header
-       and card chrome stay put while only the fields underneath swap. -->
+       Two sub-states of this ONE card (Log In / Sign Up — see
+       showLobbyLogin/showLobbySignup), not two separate cards, so the
+       header and card chrome stay put while only the fields underneath
+       swap. Username + password only, no email at all — self-service
+       account creation is all this needs; see git history for the
+       email/verification version this replaced. -->
   <div class="card" id="lobby-login-card">
     <div class="card-header-row">
-      <!-- One back button for all three sub-states of this card (see
-           lobbyLoginBack in script.js) — from Sign Up/Forgot Password it
-           steps back to Log In first, rather than leaving straight to the
-           start menu; only Log In itself (the top of this card) actually
-           calls backToMenu(). Replaces the separate "← Back to Log In"
-           link each of those sub-states used to have of its own. -->
+      <!-- One back button for both sub-states of this card (see
+           lobbyLoginBack in script.js) — from Sign Up it steps back to
+           Log In first, rather than leaving straight to the start menu;
+           only Log In itself (the top of this card) actually calls
+           backToMenu(). -->
       <button class="back-icon-btn" onclick="lobbyLoginBack()" title="Back">←</button>
       <h2 id="lobby-login-title">Log In</h2>
     </div>
@@ -935,16 +937,22 @@
            — the one thing on this card that doesn't need a filled-in
            field at all, so it sits apart from the fields themselves. -->
       <div class="lobby-guest-row"><a href="#" class="lobby-auth-link" onclick="continueAsGuestFromLobby();return false;">Continue as Guest</a></div>
-      <!-- .ig-float — floating label: "Username or Email"/"Password" live
-           INSIDE the box (like a placeholder) until the field is focused
-           or filled, then shrink and move to the box's own top edge (see
+      <!-- Opens its own window (#choose-profile-modal below) rather than
+           expanding inline — picking a name there just fills
+           #lobby-identifier and closes that window; from there it behaves
+           exactly as if the name had been typed, the password field below
+           is unaffected. -->
+      <div><a href="#" class="lobby-auth-link" onclick="toggleChooseProfileModal();return false;">Choose an Existing Profile</a></div>
+      <!-- .ig-float — floating label: "Username"/"Password" live INSIDE
+           the box (like a placeholder) until the field is focused or
+           filled, then shrink and move to the box's own top edge (see
            .ig-float in style.css). Needs `placeholder=" "` (a real, if
            blank, placeholder) purely so the :placeholder-shown pseudo-class
            has something to key off of — the space itself is never seen,
            the floating label always covers it. -->
       <div class="ig ig-float">
-        <input type="text" id="lobby-identifier" maxlength="200" placeholder=" ">
-        <label for="lobby-identifier">Username or Email</label>
+        <input type="text" id="lobby-identifier" maxlength="20" placeholder=" ">
+        <label for="lobby-identifier">Username</label>
       </div>
       <div class="ig ig-float">
         <div class="pw-field">
@@ -959,12 +967,11 @@
       <label class="profile-remember-row"><input type="checkbox" id="lobby-remember"> Remember me</label>
       <div id="lobby-login-error" class="profile-error"></div>
       <button class="bp" onclick="submitLobbyLogin()">Log In</button>
-      <!-- Each link wrapped in its own block so only the TEXT is
-           clickable (.lobby-auth-link is inline-block, sized to its own
-           content) rather than the link stretching to fill the whole
-           line the way a block-level anchor would. -->
+      <!-- Wrapped in its own block so only the TEXT is clickable
+           (.lobby-auth-link is inline-block, sized to its own content)
+           rather than the link stretching to fill the whole line the way
+           a block-level anchor would. -->
       <div><a href="#" class="lobby-auth-link" onclick="showLobbySignup();return false;">Create an Account</a></div>
-      <div><a href="#" class="lobby-auth-link" onclick="showLobbyForgotPassword();return false;">Forgot Password?</a></div>
     </div>
 
     <div id="lobby-signup-fields" style="display:none;">
@@ -973,13 +980,9 @@
         <label for="lobby-signup-name">Name</label>
       </div>
       <div class="ig ig-float">
-        <input type="email" id="lobby-signup-email" maxlength="200" placeholder=" ">
-        <label for="lobby-signup-email">Email</label>
-      </div>
-      <div class="ig ig-float">
         <div class="pw-field">
           <input type="password" id="lobby-signup-password" maxlength="72" placeholder=" ">
-          <label for="lobby-signup-password">Password (8+ characters)</label>
+          <label for="lobby-signup-password">Password (4+ characters)</label>
           <button type="button" class="pw-eye" tabindex="-1" aria-label="Show password" onclick="togglePasswordVisibility('lobby-signup-password',this)">
             <svg class="eye-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 5.06-6.06M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.29 20.29 0 0 1-3.22 4.44M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -1001,15 +1004,6 @@
         <a href="#" onclick="togglePrivacyModal();return false;">Privacy Policy</a></label>
       <div id="lobby-signup-error" class="profile-error"></div>
       <button class="bp" onclick="submitLobbySignup()">Create Account</button>
-    </div>
-
-    <div id="lobby-forgot-fields" style="display:none;">
-      <div class="ig ig-float">
-        <input type="email" id="lobby-forgot-email" maxlength="200" placeholder=" ">
-        <label for="lobby-forgot-email">Email</label>
-      </div>
-      <div id="lobby-forgot-error" class="profile-error"></div>
-      <button class="bp" onclick="submitLobbyForgotPassword()">Send Reset Link</button>
     </div>
   </div>
 
@@ -1055,7 +1049,7 @@
          pure display of it plus the icon, kept in sync by
          refreshProfileDisplay(). -->
     <input type="hidden" id="iname" value="Guest">
-    <button class="profile-nameplate" id="profile-nameplate" onclick="returnToLoginCard()" title="Switch Account">
+    <div class="profile-nameplate" id="profile-nameplate">
       <span class="pnp-icon" id="pnp-icon"></span>
       <span class="pnp-info">
         <span class="pnp-name" id="pnp-name">Guest</span>
@@ -1063,8 +1057,12 @@
              in script.js, same as #pnp-name above. -->
         <span class="pnp-title" id="pnp-title"></span>
       </span>
-      <span class="pnp-change">Change</span>
-    </button>
+    </div>
+    <!-- Logout — its own row below the nameplate now (used to be a
+         hover-revealed label inside the nameplate itself, see
+         .pnp-change's old comment history), same About-text color as
+         .lobby-auth-link. -->
+    <a href="#" class="lobby-auth-link nameplate-logout" onclick="confirmLogout();return false;">Logout</a>
     </div>
     <!-- Two distinct entry points, not one ambiguous "Find Match": Quick
          Match goes straight into a game against bots, no waiting room (see

@@ -6,8 +6,7 @@ const path=require('path');
 const {Room}=require('./room');
 const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats}=require('./stats');
 const {getHistory,getGameDetail,deleteHistory,clearAllHistory}=require('./history');
-const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,signUpWithEmail,verifyEmailToken,resendVerification,login,requestPasswordReset,resetPassword}=require('./profiles');
-const {sendMail}=require('./mailer');
+const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById}=require('./profiles');
 const friends=require('./friends');
 const coins=require('./economy');
 
@@ -46,73 +45,7 @@ const VALID_PERIODS=['week','month'];
 // isn't just localhost — the fallback below is fine for local dev only.
 const DEV_SECRET=process.env.DEV_SECRET||'changeme';
 
-// Base URL used to build the clickable link in a verification/resend email
-// (see 'signup'/'resend_verification' below) — set PUBLIC_URL for any
-// deployment reachable at something other than plain localhost:PORT.
-const PUBLIC_URL=process.env.PUBLIC_URL||`http://localhost:${process.env.PORT||3000}`;
-
 app.use(express.static(path.join(__dirname,'../public')));
-// Only /reset-password's own <form> below actually posts a body — every
-// other client/server exchange goes over the WebSocket as JSON, never HTTP.
-app.use(express.urlencoded({extended:false}));
-
-function _authPage(title,bodyHtml){
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Janshin</title>
-<style>body{font-family:sans-serif;background:#0a160c;color:#f0e6c8;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center;margin:0;padding:24px;box-sizing:border-box;}
-a{color:#c9a84c;}
-.box{max-width:360px;}
-input{width:100%;background:rgba(0,0,0,.5);border:1px solid rgba(201,168,76,.4);color:#f0e6c8;padding:10px;box-sizing:border-box;margin:8px 0;font-size:16px;}
-button{width:100%;padding:10px;background:#2a6b3a;border:1px solid #4a9a5a;color:#f0e6c8;font-size:16px;cursor:pointer;margin-top:8px;}
-label{display:block;text-align:left;font-size:13px;color:#c9a84c;margin-top:12px;}
-.err{color:#ff8080;}</style></head><body><div class="box">${bodyHtml}</div></body></html>`;
-}
-
-// Classic click-through email verification link — a plain HTTP GET (not a
-// WebSocket message) since the browser that clicks it may not be the one
-// that signed up, and doesn't need a live game connection just to flip
-// email_verified. Serves its own tiny confirmation page rather than
-// redirecting into the SPA, so it reads sensibly even opened cold from an
-// email client with no game state at all.
-app.get('/verify-email',(req,res)=>{
-  const r=verifyEmailToken(String(req.query.token||''));
-  res.status(r.ok?200:400).send(_authPage('Janshin',`
-<h2>${r.ok?'✅ Email verified':'⚠️ Verification failed'}</h2>
-<p>${r.ok?`Thanks${r.name?', '+r.name:''} — your email is verified. You can close this tab and return to the game.`:(r.error||'This link is invalid or has expired.')}</p>
-<p><a href="/">Return to Janshin</a></p>`));
-});
-
-// Forgot-password link — same "plain HTTP GET/POST, no WebSocket needed"
-// reasoning as /verify-email above, but this one needs actual user input
-// (the new password), so GET renders a <form> and POST handles its
-// submission — the only place in this app that receives a form body (see
-// the express.urlencoded middleware above) rather than JSON over the
-// socket.
-app.get('/reset-password',(req,res)=>{
-  const token=String(req.query.token||'');
-  res.send(_authPage('Janshin',`
-<h2>Reset Your Password</h2>
-<form method="POST" action="/reset-password">
-  <input type="hidden" name="token" value="${token.replace(/"/g,'&quot;')}">
-  <label for="password">New Password</label>
-  <input type="password" id="password" name="password" minlength="8" placeholder="At least 8 characters" required>
-  <label for="password2">Confirm Password</label>
-  <input type="password" id="password2" name="password2" minlength="8" required>
-  <button type="submit">Reset Password</button>
-</form>`));
-});
-
-app.post('/reset-password',(req,res)=>{
-  const {token,password,password2}=req.body||{};
-  if(password!==password2){
-    const safeToken=String(token||'').replace(/[^a-f0-9]/gi,'');
-    res.status(400).send(_authPage('Janshin',`<h2>⚠️ Passwords didn't match</h2><p><a href="/reset-password?token=${safeToken}">Try again</a>.</p>`));
-    return;
-  }
-  const r=resetPassword(token,password);
-  res.status(r.ok?200:400).send(_authPage('Janshin',r.ok
-    ?`<h2>✅ Password reset</h2><p>Thanks${r.name?', '+r.name:''} — your password has been changed. You can close this tab and log back in.</p>`
-    :`<h2>⚠️ Reset failed</h2><p>${r.error||'This link is invalid or has expired.'}</p><p><a href="/">Return to Janshin</a></p>`));
-});
 
 // Detect and clean up dead connections the browser never tells us about.
 // Mobile OSes routinely suspend a backgrounded tab's socket without firing
@@ -827,88 +760,51 @@ wss.on('connection',(ws)=>{
       ws.send(JSON.stringify({type:'friend_action_done',ok:true}));
     }
 
-    // Email sign-up — a second way to create a profile, alongside the
-    // developer-gated 'create_profile' below. No DEV_SECRET needed: this is
-    // the actual self-service path (see profiles.signUpWithEmail for the
-    // name/email/password/terms validation). On success, unlock this
-    // connection as the new profile immediately — same as a normal
-    // 'unlock_profile' — rather than making the player log in again right
-    // after signing up; verification happens in the background (an emailed
-    // link, or in dev mode just a logged one — see server/mailer.js) and
-    // doesn't gate play, only shown as a nudge (see 'justSignedUp' below,
-    // and profiles.verifyEmailLogin's own comment on why login isn't gated
-    // on it either).
+    // Self-service sign-up — a username + password, no email at all. No
+    // DEV_SECRET needed, unlike the developer-gated 'create_profile' below
+    // (still there for manual use, but this is the actual self-service
+    // path). Just createProfile with a friendlier name — the password IS
+    // the "code" createProfile already expects; see profiles.js. On
+    // success, unlock this connection as the new profile immediately
+    // rather than making the player log in again right after signing up.
     if(msg.type==='signup'){
-      const r=signUpWithEmail(msg.name,msg.email,msg.password,!!msg.acceptedTerms);
+      const r=createProfile(msg.name,msg.password);
       if(!r.ok){
         ws.send(JSON.stringify({type:'signup_result',ok:false,error:r.error}));
       } else {
-        sendMail({to:msg.email,subject:'Verify your Janshin email',
-          text:`Hi ${r.name},\n\nVerify your email to finish setting up your Janshin account:\n${PUBLIC_URL}/verify-email?token=${r.verifyToken}\n\nThis link expires in 24 hours.`});
-        unlockedName=r.name;
-        unlockedId=r.id;
+        const name=String(msg.name||'').trim().slice(0,20);
+        unlockedName=name;
+        unlockedId=getId(name);
         const daily=coins.claimDailyBonus(unlockedId);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name:r.name,icon:'default',title:'Beginner',voiceTheme:'Default',
-          id:unlockedId,unread:0,coins:daily.balance,dailyBonus:daily.granted?daily.amount:0,justSignedUp:true,emailVerified:false}));
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:'default',title:'Beginner',voiceTheme:'Default',
+          id:unlockedId,unread:0,coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
         goOnline();
         syncSeatedIdentity();
       }
     }
 
-    // Re-sends the verification email/link for an unverified account —
-    // resendVerification always reports ok:true (see its own comment on why:
-    // a false/true split here would let a caller probe which emails have
-    // accounts), so there's nothing for the client to show but a generic
-    // "check your email again" confirmation.
-    if(msg.type==='resend_verification'){
-      const r=resendVerification(msg.email);
-      if(r.verifyToken){
-        sendMail({to:msg.email,subject:'Verify your Janshin email',
-          text:`Verify your email to finish setting up your Janshin account:\n${PUBLIC_URL}/verify-email?token=${r.verifyToken}\n\nThis link expires in 24 hours.`});
-      }
-      ws.send(JSON.stringify({type:'resend_verification_result',ok:true}));
-    }
-
-    // "Forgot Password" link on the Log In card — same generic-ok:true
-    // shape as resend_verification above, for the same anti-enumeration
-    // reason. The actual reset happens on the /reset-password HTTP page
-    // (see above), not over this socket, since it needs a real form for the
-    // new password and the click may land in a different browser/tab than
-    // the one that's connected here.
-    if(msg.type==='forgot_password'){
-      const r=requestPasswordReset(msg.email);
-      if(r.resetToken){
-        sendMail({to:msg.email,subject:'Reset your Janshin password',
-          text:`Someone (hopefully you) asked to reset your Janshin password:\n${PUBLIC_URL}/reset-password?token=${r.resetToken}\n\nThis link expires in 24 hours. If you didn't request this, you can ignore this email.`});
-      }
-      ws.send(JSON.stringify({type:'forgot_password_result',ok:true}));
-    }
-
-    // The Log In form's single submit — one "username or email" field plus
-    // one "password" field, covering both a name+code profile (the code
-    // typed into the password box) and an email+password one, without the
-    // player picking which kind up front (see profiles.login for how it
-    // tells them apart). Replaces the old separate 'unlock_profile' (code
-    // entered against a picked card) and 'email_login' handlers now that
-    // the Profile Picker opens straight to this form instead of an icon
-    // grid to browse first.
+    // The Log In form's single submit — a username + password, same
+    // verifyProfile check 'unlock_profile' used to do directly (see git
+    // history for that version) before the email/password detour; kept as
+    // its own 'login' message rather than reverting the name back to
+    // 'unlock_profile' purely to avoid touching the client for no reason.
     if(msg.type==='login'){
-      const r=login(msg.identifier,msg.password);
-      if(!r){
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:false,error:'Incorrect username/email or password'}));
+      const name=String(msg.identifier||'').trim().slice(0,20);
+      if(!verifyProfile(name,msg.password)){
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:false,error:'Incorrect username or password'}));
       } else {
-        unlockedName=r.name;
-        unlockedId=r.id;
+        unlockedName=name;
+        unlockedId=getId(name);
         // "Stay logged in" — only issues a token when the client opts in
-        // (see #login-remember in script.js); the client then stores
+        // (see #lobby-remember in script.js); the client then stores
         // name+token in localStorage and trades it in via
         // 'unlock_profile_token' on future visits instead of asking for
-        // the password/code again.
-        const token=msg.remember?createRememberToken(r.name):undefined;
+        // the password again.
+        const token=msg.remember?createRememberToken(name):undefined;
         // Daily login bonus — once per UTC day, on either unlock path.
         const daily=coins.claimDailyBonus(unlockedId);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name:r.name,icon:r.icon,title:r.title,voiceTheme:r.voiceTheme,token,
-          id:unlockedId,unread:friends.unreadCount(unlockedId),coins:daily.balance,dailyBonus:daily.granted?daily.amount:0,emailVerified:r.emailVerified}));
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),token,
+          id:unlockedId,unread:friends.unreadCount(unlockedId),coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
         goOnline();
         syncSeatedIdentity();
       }
