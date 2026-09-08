@@ -2647,40 +2647,36 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 .np-wrap-r{position:absolute;bottom:15%;right:calc(var(--tsm-h) + 3vmin);transform:translateX(50%) rotate(90deg);transform-origin:center top;z-index:20;}
 .np-flip{transform:rotate(180deg); transform-origin:center center;}
 
-/* ── Kita strip (sanma only) — banked North (pei-nuki) tiles. Every seat
-   reads the SAME way: horizontal, left-to-right, oldest tile first, like
-   the bottom seat. The opponents' strips used to be rotated to face each
-   player (mirrored +90/-90deg like ml-l/ml-r), which meant the left
-   seat's tiles ran bottom-to-top and the right seat's top-to-bottom —
-   neither matched the bottom seat's left-to-right order. Now the two
-   opponent strips sit in the open band along the top edge (the top seat
-   doesn't exist in sanma, so nothing else is up there): the left one
-   tucks against the left nameplate, the right one mirrors it in the
-   top-right corner, clear of that seat's meld column. ── */
+/* ── Kita strip (sanma only) — banked North (pei-nuki) tiles. Each seat's
+   strip is rotated to FACE that seat, exactly like its discard pile and
+   meld row (ml-l/dzl +90°, ml-r/dzr -90°, top 180°), and sits just inboard
+   of that seat's meld column. Tiles are read oldest-first in that seat's
+   own left-to-right — which, once rotated, is screen top→bottom for the
+   left seat and screen bottom→top for the right seat. That "oldest first
+   from the seat's own view" is the fix: the strip used to be
+   flex-direction:row-reverse (so .kita-b had to override back to row),
+   which made both opponents' strips run newest-first. Plain `row` +
+   oldest-appended-last (see renderState) now gives every seat the same
+   oldest→newest order in its own frame. ── */
 .kita-strip{position:absolute;display:flex;flex-direction:row;gap:0;align-items:flex-end;z-index:20;}
 .kita-strip:empty{display:none;}
-/* Anchored at the felt's horizontal CENTER (left:50%) rather than tucked
-   close to the nameplate — .pname has no max-width of its own (grows with
-   the player's name up to the 20-char profile limit), so a closer anchor
-   risks the two overlapping on a narrow screen with a long name. 50%
-   still leaves the whole right half of the row for tiles to grow into.
-   max-width hard-caps growth before it reaches the right player's
-   nameplate corner regardless of tile count or screen size (4 tiles is
-   the realistic case; this also covers a rarer 5th+); overflow-x auto
-   (not hidden) keeps an actual overflow reachable by scrolling rather
-   than silently clipped. */
+/* Bottom seat: anchored at the felt's horizontal CENTRE (left:50%) rather
+   than tucked close to the nameplate — .pname has no max-width of its own
+   (grows with the player's name up to the 20-char profile limit), so a
+   closer anchor risks the two overlapping on a narrow screen with a long
+   name. 50% still leaves the whole right half of the row for tiles to grow
+   into. max-width hard-caps growth before it reaches the right player's
+   nameplate corner regardless of tile count or screen size (4 tiles is the
+   realistic case; this also covers a rarer 5th+); overflow-x auto (not
+   hidden) keeps an actual overflow reachable by scrolling rather than
+   silently clipped. */
 .kita-b{bottom:calc(var(--tlg-h) + 3vmin);left:50%;max-width:38%;overflow-x:auto;overflow-y:hidden;}
 /* kita-t: the top seat never exists in sanma (.table.sanma .kita-t is
    display:none) and kita only ever renders in sanma, so this is dead —
-   kept only so the element has a sane position if that ever changes.
-   Shares kita-l's spot since the two can never be shown together. */
-.kita-t,
-.kita-l{top:calc(var(--tsm-h) + 3vmin);left:15%;}
-/* Right seat grows leftward from a right anchor (newest tile enters at
-   the fixed right:15% edge, older tiles push left) — reading order stays
-   left-to-right, and it grows into open top-centre space rather than
-   toward the meld column at the felt's right edge. */
-.kita-r{top:calc(var(--tsm-h) + 3vmin);right:15%;}
+   kept only so the element still has a sane position if that changes. */
+.kita-t{top:calc(var(--tsm-h) + 3vmin);left:15%;transform:rotate(180deg);}
+.kita-l{bottom:15%;left:calc(var(--tsm-h) + 3vmin);transform:rotate(90deg) translateX(-100%);transform-origin:bottom left;}
+.kita-r{top:15%;right:calc(var(--tsm-h) + 3vmin);transform:rotate(-90deg) translateY(-100%);transform-origin:top right;}
 .kita-strip .mg{outline:1.5px solid var(--gold, #c9a84c);outline-offset:-1px;border-radius:2px;}
 
 /* ── Dora panel ── */

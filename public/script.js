@@ -5785,8 +5785,8 @@ function renderState(m, prev){
   // strip (.kita-strip, id 'k'+seat) rather than mixed into the meld row,
   // since kita tiles aren't melds — they don't affect hand shape/fu and
   // mixing them in made the meld row harder to read at a glance. Tiles are
-  // appended oldest-first; every seat's strip renders them horizontally
-  // left-to-right (see .kita-strip in style.css for the per-seat anchors).
+  // appended oldest-first; .kita-strip in style.css rotates each seat's
+  // strip to face that seat so the order reads oldest→newest from there.
   if(m.sanma&&m.kita){
     for(let i=0;i<numSeats;i++){
       const abs=(mySeat+i)%numSeats,id=P[i];
