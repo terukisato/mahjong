@@ -7304,7 +7304,11 @@ function onRoundStart(m){
   const wind=m.displayWind||m.roundWind||1;
   const rnd=m.displayRound||m.round||1;
   $('cw-wind').textContent = windChar[wind-1];
-  $('cw-kyoku').textContent = rnd + '局';
+  // Just the number, no 「局」 — matches what renderState writes here once the
+  // round's first game_state lands (a second or so later). Without this the
+  // centre readout briefly flashes "東2局" during the round-load transition,
+  // then silently drops the 局 when renderState catches up.
+  $('cw-kyoku').textContent = rnd;
   $('ci').textContent = '';
   roundStartBanner(windChar[wind-1], rnd+'局', (m.honba||0)+'本場');
 }
