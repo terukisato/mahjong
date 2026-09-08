@@ -2246,16 +2246,28 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
   border-radius:50%;background:#d02323;vertical-align:middle;margin-left:calc(var(--ui-vmin, 7.2px) * .833);}
 .hub-badge.show{display:inline-block;}
 
+/* Lobby status cluster — the "Online Friends" button + coin balance, as one
+   flex row anchored where the coin balance alone used to sit (see
+   #coin-count's old `right`) and growing LEFTWARD, so a wide coin count
+   pushes the button further from the 人 icon rather than overlapping it.
+   Same `top` as .settings-icon-btn so button, numerals, 人 and ☰ all sit
+   the same distance from the top edge. */
+.lobby-status{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.667);right:calc(var(--ui-vmin, 7.2px) * 12.7);
+  display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.4);z-index:10;}
+.lobby-status-btn{background:none;border:0;padding:0;cursor:pointer;color:#888;
+  display:flex;align-items:center;justify-content:center;position:relative;transition:color .18s;}
+.lobby-status-btn:hover{color:var(--gold, #c9a84c);}
+.lobby-status-btn svg{width:calc(var(--ui-vmin, 7.2px) * 2.9);height:calc(var(--ui-vmin, 7.2px) * 2.9);display:block;}
+
 /* Coin balance — pale-gold serif numerals + leaning coin-stack icon over a
    gradient-fade underline (no box; see coinUnderlineSvg / updateCoins in
-   script.js). Lobby top-right, left of the 人 icon; same `top` as
-   .settings-icon-btn so the number, 人 icon and ☰ all sit the same distance
-   from the top edge. */
-.coin-count{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 1.667);right:calc(var(--ui-vmin, 7.2px) * 12.7);
+   script.js). Sits inside .lobby-status now (was absolutely positioned
+   itself). */
+.coin-count{position:relative;
   display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .6);
   padding:0 calc(var(--ui-vmin, 7.2px) * .5) calc(var(--ui-vmin, 7.2px) * .55) 0;
   color:#e6dcc2;font-family:'Noto Serif JP',serif;font-weight:700;
-  font-size:calc(var(--ui-vmin, 7.2px) * 1.85);line-height:1;white-space:nowrap;z-index:10;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.85);line-height:1;white-space:nowrap;
   letter-spacing:calc(var(--ui-vmin, 7.2px) * .06);font-variant-numeric:tabular-nums;
   text-shadow:0 1px calc(var(--ui-vmin, 7.2px) * .28) rgba(0,0,0,.6);
   cursor:pointer;background:none;border:0;outline-offset:calc(var(--ui-vmin, 7.2px) * .5);
@@ -2317,7 +2329,18 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
   color:rgba(245,237,216,.45);cursor:pointer;transition:all .2s;}
 .friends-tab:hover{color:var(--gl);}
 .friends-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+/* The magnifier tab is label-less — let it shrink to its icon so the two
+   text tabs ("Friends", "Recently Played") get the width instead of a
+   three-way even split. */
+.friends-tab-icon{flex:0 0 auto;padding-left:calc(var(--ui-vmin, 7.2px) * 2.4);padding-right:calc(var(--ui-vmin, 7.2px) * 2.4);}
 .friends-tab-icon svg{width:calc(var(--ui-vmin, 7.2px) * 2.222);height:calc(var(--ui-vmin, 7.2px) * 2.222);display:block;}
+/* Recently Played tab — the intro line, plus a muted "3d ago" after each
+   name. .recent-when sits inside .friend-nm (a flex row) so it shares that
+   row's baseline with the name. */
+.friends-recent-hint{color:rgba(245,237,216,.5);font-size:calc(var(--ui-vmin, 7.2px) * 1.35);
+  line-height:1.5;margin:calc(var(--ui-vmin, 7.2px) * .5) 0 calc(var(--ui-vmin, 7.2px) * 1.5);}
+.recent-when{flex-shrink:0;color:rgba(245,237,216,.4);font-size:calc(var(--ui-vmin, 7.2px) * 1.15);
+  font-family:'Noto Sans JP',sans-serif;font-weight:400;}
 .friends-section{margin-top:calc(var(--ui-vmin, 7.2px) * 1.5);}
 .friends-section-title,.friends-list-title{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);letter-spacing:calc(var(--ui-vmin, 7.2px) * .417);
   color:var(--gold);text-transform:uppercase;opacity:.9;margin:calc(var(--ui-vmin, 7.2px) * 1.5) 0 calc(var(--ui-vmin, 7.2px) * .833);}
@@ -2339,6 +2362,20 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
   padding:calc(var(--ui-vmin, 7.2px) * .417) calc(var(--ui-vmin, 7.2px) * 1);white-space:nowrap;}
 .friend-actions .friend-remove{border-color:rgba(224,96,96,.4);color:#e06060;}
 .friend-pending{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:rgba(245,237,216,.5);align-self:center;}
+
+/* Online Friends modal — each row is a multi-select toggle (no checkbox
+   control, the whole row is the hit target, same as the Invite Players
+   picker's cards). .online-pick is the little hollow ring on the right that
+   fills in when the row is selected. */
+.online-row-pick{cursor:pointer;transition:background .15s;}
+.online-row-pick:hover{background:rgba(212,175,110,.06);}
+.friend-row.selected{background:rgba(201,168,76,.12);}
+.online-pick{width:calc(var(--ui-vmin, 7.2px) * 1.8);height:calc(var(--ui-vmin, 7.2px) * 1.8);border-radius:50%;
+  border:1.5px solid rgba(212,175,110,.5);box-sizing:border-box;display:block;align-self:center;transition:all .15s;}
+.friend-row.selected .online-pick{background:var(--gold, #c9a84c);border-color:var(--gold, #c9a84c);
+  box-shadow:0 0 calc(var(--ui-vmin, 7.2px) * .7) rgba(201,168,76,.6);}
+#online-invite-btn{margin-top:calc(var(--ui-vmin, 7.2px) * 2);}
+#online-invite-btn:disabled{opacity:.45;cursor:default;}
 .notif-row{padding:calc(var(--ui-vmin, 7.2px) * 1.111) 0;border-bottom:1px solid rgba(212,175,110,.15);
   display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .833);}
 .notif-row-unread{position:relative;}
@@ -2610,39 +2647,40 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 .np-wrap-r{position:absolute;bottom:15%;right:calc(var(--tsm-h) + 3vmin);transform:translateX(50%) rotate(90deg);transform-origin:center top;z-index:20;}
 .np-flip{transform:rotate(180deg); transform-origin:center center;}
 
-/* ── Kita strip (sanma only) — banked North tiles, in line with each
-   seat's own nameplate row. Rotation follows the tile-facing convention
-   used by ml-l/ml-r (left:+90deg, right:-90deg), not the nameplate rows
-   (which both use +90deg since text orientation doesn't mirror). ── */
-.kita-strip{position:absolute;display:flex;flex-direction:row-reverse;gap:0;align-items:flex-end;z-index:20;}
+/* ── Kita strip (sanma only) — banked North (pei-nuki) tiles. Every seat
+   reads the SAME way: horizontal, left-to-right, oldest tile first, like
+   the bottom seat. The opponents' strips used to be rotated to face each
+   player (mirrored +90/-90deg like ml-l/ml-r), which meant the left
+   seat's tiles ran bottom-to-top and the right seat's top-to-bottom —
+   neither matched the bottom seat's left-to-right order. Now the two
+   opponent strips sit in the open band along the top edge (the top seat
+   doesn't exist in sanma, so nothing else is up there): the left one
+   tucks against the left nameplate, the right one mirrors it in the
+   top-right corner, clear of that seat's meld column. ── */
+.kita-strip{position:absolute;display:flex;flex-direction:row;gap:0;align-items:flex-end;z-index:20;}
 .kita-strip:empty{display:none;}
-/* Own (bottom) seat reads left-to-right like everything else on this row —
-   opposite of the other three seats, which is why it needs its own
-   flex-direction override: stability requires the FIXED anchor edge to be
-   whichever side the OLDEST tile renders on (see .kita-strip's shared
-   row-reverse comment above), and for a left-to-right reading order the
-   oldest tile is the LEFTMOST one, so the anchor has to be `left`, not
-   `right` like the other three.
-   Anchored at the felt's horizontal CENTER (left:50%) rather than some
-   percentage tucked close to the nameplate — the nameplate (.pname) has no
-   max-width of its own (grows freely with the player's name, up to the
-   20-char limit the profile name input enforces), so any fixed anchor close
-   to it risks the two overlapping on a narrow screen with a long name. 50%
-   needs the nameplate to reach clear across half the felt's width to reach
-   it, which no realistic name does, while still leaving the whole right
-   half of the row for tiles to grow into before the corner shared with the
-   right player's nameplate (see the max-width note below). */
-.kita-b{bottom:calc(var(--tlg-h) + 3vmin);left:50%;flex-direction:row;
-  /* Hard-caps growth before it reaches the right player's nameplate corner
-     regardless of tile count or screen size — 4 tiles is the realistic
-     case this was sized for (see conversation), but this also protects
-     against a rarer 5th+ tile in one game rather than just assuming 4 is a
-     hard limit. overflow-x auto (not hidden) so an actual overflow is
-     still reachable by scrolling rather than silently clipped/invisible. */
-  max-width:38%;overflow-x:auto;overflow-y:hidden;}
-.kita-t{top:calc(var(--tsm-h) + 3vmin);left:15%;transform:rotate(180deg);}
-.kita-l{bottom:15%;left:calc(var(--tsm-h) + 3vmin);transform:rotate(90deg) translateX(-100%);transform-origin:bottom left;}
-.kita-r{top:15%;right:calc(var(--tsm-h) + 3vmin);transform:rotate(-90deg) translateY(-100%);transform-origin:top right;}
+/* Anchored at the felt's horizontal CENTER (left:50%) rather than tucked
+   close to the nameplate — .pname has no max-width of its own (grows with
+   the player's name up to the 20-char profile limit), so a closer anchor
+   risks the two overlapping on a narrow screen with a long name. 50%
+   still leaves the whole right half of the row for tiles to grow into.
+   max-width hard-caps growth before it reaches the right player's
+   nameplate corner regardless of tile count or screen size (4 tiles is
+   the realistic case; this also covers a rarer 5th+); overflow-x auto
+   (not hidden) keeps an actual overflow reachable by scrolling rather
+   than silently clipped. */
+.kita-b{bottom:calc(var(--tlg-h) + 3vmin);left:50%;max-width:38%;overflow-x:auto;overflow-y:hidden;}
+/* kita-t: the top seat never exists in sanma (.table.sanma .kita-t is
+   display:none) and kita only ever renders in sanma, so this is dead —
+   kept only so the element has a sane position if that ever changes.
+   Shares kita-l's spot since the two can never be shown together. */
+.kita-t,
+.kita-l{top:calc(var(--tsm-h) + 3vmin);left:15%;}
+/* Right seat grows leftward from a right anchor (newest tile enters at
+   the fixed right:15% edge, older tiles push left) — reading order stays
+   left-to-right, and it grows into open top-centre space rather than
+   toward the meld column at the felt's right edge. */
+.kita-r{top:calc(var(--tsm-h) + 3vmin);right:15%;}
 .kita-strip .mg{outline:1.5px solid var(--gold, #c9a84c);outline-offset:-1px;border-radius:2px;}
 
 /* ── Dora panel ── */

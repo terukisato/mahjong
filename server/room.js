@@ -2174,7 +2174,7 @@ class Room {
     // stable-sort placement (first among ties), same winner either way.
     const winnerSeat=g.scores.indexOf(Math.max(...g.scores));
     const winnerTheme=this.seats[winnerSeat]?.voiceTheme||'Default';
-    const natsuWinLines=['Yavai','Otoko','Suberu','Hantei'];
+    const natsuWinLines=['Yavai','Otoko','Suberu','Hantei','Derumaeni','Nametennoka','Urayamashii'];
     const winSfxLine=winnerTheme==='Natsu'?natsuWinLines[Math.floor(Math.random()*natsuWinLines.length)]:null;
     // seats (same _seatInfo() shape as game_start/round_start) added so the
     // client's final results panel can show each player's actual profile

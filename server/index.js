@@ -5,8 +5,8 @@ const WebSocket=require('ws');
 const path=require('path');
 const {Room}=require('./room');
 const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats}=require('./stats');
-const {getHistory,getGameDetail,deleteHistory,clearAllHistory}=require('./history');
-const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById}=require('./profiles');
+const {getHistory,getGameDetail,getRecentOpponents,deleteHistory,clearAllHistory}=require('./history');
+const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,getIconById}=require('./profiles');
 const friends=require('./friends');
 const coins=require('./economy');
 
@@ -717,6 +717,39 @@ wss.on('connection',(ws)=>{
         friends:friends.listFriends(unlockedId).map(tag),
         incoming:friends.listIncoming(unlockedId),
         outgoing:friends.listOutgoing(unlockedId)}));
+    }
+
+    // Just this profile's friends who are reachable right now — powers the
+    // lobby's "Online Friends" button (the people-icon next to the coin
+    // balance). `busy` (seated in a room) ones are kept in the list but
+    // marked, since the invite flow can't seat them anyway. Online-then-
+    // alphabetical isn't needed here (all rows are online by definition) —
+    // just not-busy first, then by name.
+    if(msg.type==='get_online_friends'&&unlockedId){
+      const players=friends.listFriends(unlockedId)
+        .filter(f=>onlineProfiles.has(f.id))
+        .map(f=>({...f,busy:seatedProfiles.has(f.id)}))
+        .sort((a,b)=>(a.busy-b.busy)||a.name.localeCompare(b.name));
+      ws.send(JSON.stringify({type:'online_friends',players}));
+    }
+
+    // The Friends panel's Recently Played tab — profiles this connection
+    // has most recently shared a table with (see recent_opponents in
+    // history.js), newest first, each tagged with the current friend
+    // relationship so the client can show Add / Pending / Accept / Friends.
+    // A since-deleted opponent (getNameById -> '(unknown)') is dropped
+    // rather than shown as an un-addable ghost row.
+    if(msg.type==='get_recent_players'&&unlockedId){
+      const fd=friends.getData(unlockedId);
+      const fset=new Set(fd.friends), oset=new Set(fd.outgoing), iset=new Set(fd.incoming);
+      const players=getRecentOpponents(unlockedId)
+        .filter(r=>r.id!==unlockedId&&getNameById(r.id)!=='(unknown)')
+        .map(r=>({
+          id:r.id,name:getNameById(r.id),icon:getIconById(r.id),lastPlayed:r.lastPlayed,
+          status:fset.has(r.id)?'friend':oset.has(r.id)?'outgoing':iset.has(r.id)?'incoming':'none',
+          online:onlineProfiles.has(r.id),busy:seatedProfiles.has(r.id),
+        }));
+      ws.send(JSON.stringify({type:'recent_players',players}));
     }
 
     // Notification panel contents (opened from the bell) + the unread count

@@ -16,6 +16,14 @@ const { getDb } = require('./db');
 // through.
 const MAX_GAMES_PER_PLAYER = 20;
 
+// How many distinct "recently played with" opponents are kept per profile
+// (see the recent_opponents table in db.js) — the Friends panel's Recently
+// Played tab only ever shows the most recent handful, and an unbounded list
+// of everyone a busy player has ever shared a table with is not worth
+// keeping. Trimmed newest-first on write, same shape as MAX_GAMES_PER_PLAYER
+// above.
+const MAX_RECENT_OPPONENTS = 30;
+
 // Called once per finished game (see room.js's _finishGame, right alongside
 // its recordGameResult call) — same seat-indexed-array shape as that
 // function's own args, plus `rounds`: the game's own list of round_end
@@ -51,6 +59,46 @@ function recordGame({ playerIds, isBot, isGuest = [], variant, matchKind, gameMo
       JSON.stringify(playerNames), JSON.stringify(finalScores), JSON.stringify(placements), JSON.stringify(rounds));
     trim.run(pid, pid, MAX_GAMES_PER_PLAYER);
   }
+
+  // "Recently played with" — every ordered pair of real-profile seats gets
+  // an upsert bumping last_played, so the Recently Played tab can offer a
+  // one-click friend request to anyone you just shared a table with. Only
+  // real profiles (an id to key on, somewhere to persist it); bots/guests
+  // skipped, same as the history rows above.
+  const realIds = [];
+  for (let seat = 0; seat < playerIds.length; seat++) {
+    if (isBot[seat] || isGuest[seat] || !playerIds[seat]) continue;
+    realIds.push(playerIds[seat]);
+  }
+  if (realIds.length > 1) {
+    const now = Date.now();
+    const bump = db.prepare(`
+      INSERT INTO recent_opponents (profile_id, opponent_id, last_played) VALUES (?,?,?)
+      ON CONFLICT(profile_id, opponent_id) DO UPDATE SET last_played = excluded.last_played
+    `);
+    const trimRecent = db.prepare(`
+      DELETE FROM recent_opponents
+      WHERE profile_id = ? AND opponent_id NOT IN (
+        SELECT opponent_id FROM recent_opponents WHERE profile_id = ? ORDER BY last_played DESC LIMIT ?
+      )
+    `);
+    for (const me of realIds) {
+      for (const other of realIds) {
+        if (me !== other) bump.run(me, other, now);
+      }
+      trimRecent.run(me, me, MAX_RECENT_OPPONENTS);
+    }
+  }
+}
+
+// [{id, lastPlayed}] newest-first — the ids a profile has most recently
+// shared a table with. index.js hydrates each into name/icon/friend-status
+// for the Friends panel's Recently Played tab.
+function getRecentOpponents(id, limit = MAX_RECENT_OPPONENTS) {
+  return getDb().prepare(`
+    SELECT opponent_id, last_played FROM recent_opponents
+    WHERE profile_id = ? ORDER BY last_played DESC LIMIT ?
+  `).all(id, limit).map(r => ({ id: r.opponent_id, lastPlayed: r.last_played }));
 }
 
 // Summary rows only (no `rounds`) — powers the Play History list itself,
@@ -93,7 +141,11 @@ function getGameDetail(profileId, gameId) {
 // profile doesn't linger, and a later profile recreated under the same name
 // (a brand-new id — see profiles.js) starts with none.
 function deleteHistory(id) {
-  getDb().prepare('DELETE FROM game_history WHERE profile_id = ?').run(id);
+  const db = getDb();
+  db.prepare('DELETE FROM game_history WHERE profile_id = ?').run(id);
+  // Both directions — scrub this id out of everyone else's recent list too,
+  // not just its own (same shared rows, not a per-side copy).
+  db.prepare('DELETE FROM recent_opponents WHERE profile_id = ? OR opponent_id = ?').run(id, id);
 }
 
 // Developer-only, whole-table wipe — every profile's play history at once,
@@ -101,7 +153,9 @@ function deleteHistory(id) {
 // same as delete_profile). Profiles/stats/achievements are untouched; this
 // only ever clears game_history.
 function clearAllHistory() {
-  getDb().prepare('DELETE FROM game_history').run();
+  const db = getDb();
+  db.prepare('DELETE FROM game_history').run();
+  db.prepare('DELETE FROM recent_opponents').run();
 }
 
-module.exports = { recordGame, getHistory, getGameDetail, deleteHistory, clearAllHistory };
+module.exports = { recordGame, getHistory, getGameDetail, getRecentOpponents, deleteHistory, clearAllHistory };

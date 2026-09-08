@@ -116,6 +116,21 @@ CREATE TABLE IF NOT EXISTS game_history (
 );
 CREATE INDEX IF NOT EXISTS idx_game_history_profile ON game_history(profile_id, date DESC);
 
+-- history.js — "recently played with" graph, one row per (me, someone I
+-- shared a table with), last_played bumped every time we play again. A
+-- separate table from game_history on purpose: game_history stores only
+-- player NAMES (renameable), while adding a friend from the Recently Played
+-- tab needs the other player's stable id. Bounded per profile the same way
+-- game_history is (see MAX_RECENT_OPPONENTS in history.js). Bots/guests are
+-- never recorded — only real profiles have an id to key on.
+CREATE TABLE IF NOT EXISTS recent_opponents (
+  profile_id  TEXT NOT NULL,
+  opponent_id TEXT NOT NULL,
+  last_played INTEGER NOT NULL,
+  PRIMARY KEY (profile_id, opponent_id)
+);
+CREATE INDEX IF NOT EXISTS idx_recent_opponents_profile ON recent_opponents(profile_id, last_played DESC);
+
 -- stats.js — deliberately NOT decomposed into further tables. A profile's
 -- stats record is a deeply nested, still-evolving shape (per-variant/per-
 -- match-kind buckets, a rolling window of recent hands, dated period deltas,

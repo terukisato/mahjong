@@ -24,7 +24,7 @@
 <!-- Game-over/bankruptcy win line — Natsu-exclusive (see playWinSfx in
      script.js), so unlike every sfx-* above there's no Default src to set
      upfront; .src is only ever assigned right before playback, to one of
-     four Natsu-only files picked at random. -->
+     seven Natsu-only files picked at random. -->
 <audio id="sfx-win" preload="auto" style="display:none;"></audio>
 
 <!-- Settings panel -->
@@ -97,7 +97,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.15.1</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.15.2</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI and real opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -561,6 +561,7 @@
          lives in title/aria-label. -->
     <div class="friends-tabs" id="friends-tabs">
       <button class="friends-tab active" id="friends-tab-list" onclick="setFriendsTab('list')">Friends</button>
+      <button class="friends-tab" id="friends-tab-recent" onclick="setFriendsTab('recent')" title="People you recently played with">Recently Played</button>
       <button class="friends-tab friends-tab-icon" id="friends-tab-add" onclick="setFriendsTab('add')" title="Add a Friend" aria-label="Add a Friend">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
       </button>
@@ -571,6 +572,10 @@
       <div class="friends-list-title" id="friends-list-title" style="display:none;">Friends</div>
       <div id="friends-list" class="icon-grid"></div>
     </div>
+    <div id="friends-pane-recent" class="friends-pane" style="display:none;">
+      <p class="friends-recent-hint">Players from your recent games. Send a friend request to anyone you'd like to play with again.</p>
+      <div id="recent-list"><p class="friends-empty">Loading…</p></div>
+    </div>
     <div id="friends-pane-add" class="friends-pane" style="display:none;">
       <div class="ig">
         <label for="friend-id-input">Add a friend by ID</label>
@@ -579,6 +584,21 @@
       <div id="friend-add-error" class="profile-error"></div>
       <button class="bp" onclick="submitFriendRequest()">Send Request</button>
     </div>
+  </div>
+</div>
+
+<!-- Online Friends — opened from the people-icon next to the coin balance
+     (lobby only, logged-in only). Lists just this profile's friends who are
+     online right now; pick one or more and "Invite to Game" routes through
+     the normal Create Room flow with the picks staged as chips (see
+     inviteSelectedOnline / openCreateRoomRules in script.js). -->
+<div id="online-backdrop" class="about-backdrop" onclick="toggleOnlineModal()"></div>
+<div id="online-modal" class="about-modal">
+  <button class="about-close" onclick="toggleOnlineModal()">✕</button>
+  <div class="about-title">Online Friends</div>
+  <div class="about-body">
+    <div id="online-list"><p class="friends-empty">Loading…</p></div>
+    <button class="bp" id="online-invite-btn" onclick="inviteSelectedOnline()" disabled>Invite to Game</button>
   </div>
 </div>
 
@@ -906,7 +926,17 @@
        updateCoins() fills #coin-icon with the leaning coin-stack SVG and
        prepends the gradient-fade underline (coinUnderlineSvg) as the first
        child of #coin-count — no box, just a mark under the numerals. -->
-  <div class="coin-count" id="coin-count" role="button" tabindex="0" title="Store" onclick="toggleStoreModal()" style="display:none;"><span class="coin-icon" id="coin-icon"></span><span id="coin-amount">0</span></div>
+  <!-- Lobby status cluster, anchored where the coin balance used to sit and
+       growing leftward — so the "Online Friends" button never collides with
+       a wide coin count no matter how large the balance gets. Both children
+       stay hidden for guests (no wallet, no friend graph); onProfileUnlocked
+       reveals them, onGuestSelected hides them again. -->
+  <div class="lobby-status" id="lobby-status">
+    <button class="lobby-status-btn" id="online-btn" onclick="toggleOnlineModal()" title="Online Friends" aria-label="Online Friends" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+    </button>
+    <div class="coin-count" id="coin-count" role="button" tabindex="0" title="Store" onclick="toggleStoreModal()" style="display:none;"><span class="coin-icon" id="coin-icon"></span><span id="coin-amount">0</span></div>
+  </div>
   <button class="settings-icon-btn user-icon-btn" id="user-icon-btn" onclick="toggleUserProfile()" title="User Profile" style="display:none;right:calc(var(--ui-vmin, 7.2px) * 5.556);">人</button>
   <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
   <div class="logo"><div class="logo-k">雀 心</div><div class="logo-s">Janshin</div></div>

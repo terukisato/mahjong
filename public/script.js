@@ -775,6 +775,8 @@ function onMsg(m){
   if(m.type==='room_invite'){showRoomInvite(m);return;}
   // ── Friends ──
   if(m.type==='friends'){renderFriends(m);return;}
+  if(m.type==='recent_players'){renderRecentPlayers(m);return;}
+  if(m.type==='online_friends'){renderOnlineFriends(m);return;}
   if(m.type==='notifications'){renderNotifications(m);updateNotifBadge(m.unread||0);return;}
   if(m.type==='notifications_read'){updateNotifBadge(0);return;}
   if(m.type==='friend_request_result'){
@@ -788,6 +790,16 @@ function onMsg(m){
         b.textContent=m.ok?(m.autoAccepted?'Friend added':'Friend request sent'):(m.error||'Request failed');
       }
       if(m.ok&&$('friends-modal').classList.contains('visible')) wss({type:'get_friends'});
+      return;
+    }
+    // Came from a Recently Played row's Add Friend button — stay on that tab
+    // and just refresh it in place (the row's control flips to Pending/
+    // Friends), rather than the jump-to-list behaviour the add-by-ID form
+    // wants below.
+    if(recentRequestPending){
+      recentRequestPending=false;
+      if(!m.ok) toast(m.error||'Could not send that request.');
+      if($('friends-modal').classList.contains('visible')){ wss({type:'get_recent_players'}); wss({type:'get_friends'}); }
       return;
     }
     if(m.ok){
@@ -811,7 +823,10 @@ function onMsg(m){
   // the other party did) — refresh whatever friend UI is open, and always
   // the notification badge.
   if(m.type==='friend_action_done'){
-    if($('friends-modal').classList.contains('visible')) wss({type:'get_friends'});
+    if($('friends-modal').classList.contains('visible')){
+      wss({type:'get_friends'});
+      if(friendsActiveTab==='recent') wss({type:'get_recent_players'});
+    }
     wss({type:'get_notifications'});
     return;
   }
@@ -829,7 +844,10 @@ function onMsg(m){
     // A request/acceptance involving us just landed — if we're looking at
     // the Friends panel, refresh it so a new incoming request or a
     // just-confirmed friend shows without reopening.
-    if($('friends-modal').classList.contains('visible')) wss({type:'get_friends'});
+    if($('friends-modal').classList.contains('visible')){
+      wss({type:'get_friends'});
+      if(friendsActiveTab==='recent') wss({type:'get_recent_players'});
+    }
     return;
   }
   // End-of-game coin payout (unicast, see _finishGame in server/room.js).
@@ -1147,21 +1165,30 @@ function toggleFriendsModal(){
   $('friend-incoming').innerHTML='';
   $('friend-outgoing').innerHTML='';
   $('friends-list').innerHTML='<p class="friends-empty">Loading…</p>';
+  $('recent-list').innerHTML='<p class="friends-empty">Loading…</p>';
   setFriendsTab('list');
   modal.classList.add('visible');
   backdrop.classList.add('visible');
   wss({type:'get_friends'});
 }
 
-// Switches the Friends modal between the friends-list pane (default) and
-// the add-by-ID pane behind the magnifier tab. The "Your ID" box above the
-// tab strip stays put either way.
+// Which Friends-modal tab is showing — read by the friend-graph message
+// handlers (friend_request_result etc.) so a change made from the Recently
+// Played tab refreshes THAT tab in place instead of yanking the user to the
+// friends list.
+let friendsActiveTab='list';
+
+// Switches the Friends modal between its three panes: the friends list
+// (default), Recently Played, and the add-by-ID form behind the magnifier
+// tab. The "Your ID" box above the tab strip stays put throughout.
 function setFriendsTab(which){
-  const isAdd=which==='add';
-  $('friends-tab-list').classList.toggle('active',!isAdd);
-  $('friends-tab-add').classList.toggle('active',isAdd);
-  $('friends-pane-list').style.display=isAdd?'none':'';
-  $('friends-pane-add').style.display=isAdd?'':'none';
+  friendsActiveTab=which;
+  for(const t of ['list','recent','add'])
+    $('friends-tab-'+t).classList.toggle('active',t===which);
+  $('friends-pane-list').style.display=which==='list'?'':'none';
+  $('friends-pane-recent').style.display=which==='recent'?'':'none';
+  $('friends-pane-add').style.display=which==='add'?'':'none';
+  if(which==='recent') wss({type:'get_recent_players'});
 }
 
 function renderFriends(m){
@@ -1231,6 +1258,58 @@ function removeFriend(id,name){
 }
 function inviteFriendToRoom(name){ wss({type:'invite_player',name}); toast(`Invited ${name}.`); }
 
+// Compact "how long ago" label for the Recently Played list — minutes/hours/
+// days/weeks, falling back to a plain date past a month so an old entry
+// doesn't read as "37w ago".
+function relTime(ts){
+  const s=Math.max(0,Math.floor((Date.now()-ts)/1000));
+  if(s<60) return 'just now';
+  const m=Math.floor(s/60); if(m<60) return `${m}m ago`;
+  const h=Math.floor(m/60); if(h<24) return `${h}h ago`;
+  const d=Math.floor(h/24); if(d<7) return `${d}d ago`;
+  const w=Math.floor(d/7); if(w<5) return `${w}w ago`;
+  return new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric'});
+}
+
+// Recently Played tab — one row per profile the server says we've recently
+// shared a table with (see 'get_recent_players' in server/index.js), each
+// with the right friend-status control: Add for a stranger, Accept for
+// someone who's already requested us, a plain "Pending"/"Friends" label
+// otherwise.
+function renderRecentPlayers(m){
+  const list=$('recent-list'); if(!list) return;
+  const players=m.players||[];
+  if(!players.length){
+    list.innerHTML='<p class="friends-empty">No recent games with other players yet — play a Room Match with friends and they\'ll show up here.</p>';
+    return;
+  }
+  list.innerHTML=players.map(p=>{
+    const dot=p.online?'<span class="friend-dot" title="Online"></span>'
+      :(p.busy?'<span class="friend-dot friend-dot-busy" title="In a game"></span>':'');
+    let action;
+    if(p.status==='friend') action='<span class="friend-pending">Friends</span>';
+    else if(p.status==='outgoing') action='<span class="friend-pending">Pending</span>';
+    else if(p.status==='incoming') action=`<button onclick="acceptFriend('${p.id}')">Accept</button>`;
+    else action=`<button onclick="addRecentFriend('${p.id}',this)">Add Friend</button>`;
+    return `
+      <div class="friend-row" data-id="${p.id}">
+        <span class="friend-ic">${iconSvg(p.icon)}</span>
+        <span class="friend-nm">${escHtml(p.name)}${dot}<span class="recent-when">${escHtml(relTime(p.lastPlayed))}</span></span>
+        <span class="friend-actions">${action}</span>
+      </div>`;
+  }).join('');
+}
+
+// Add-friend from a Recently Played row — we already hold the stable id, so
+// this goes straight through send_friend_request (no ID typing). Optimistic
+// button state; the 'friend_request_result' handler refreshes the tab.
+function addRecentFriend(id,btn){
+  if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+  recentRequestPending=true;
+  wss({type:'send_friend_request',toId:id});
+}
+let recentRequestPending=false;
+
 function submitFriendRequest(){
   const inp=$('friend-id-input'); if(!inp) return;
   const id=inp.value.trim();
@@ -1238,6 +1317,97 @@ function submitFriendRequest(){
   if(id===myProfileId){ $('friend-add-error').textContent="That's your own ID."; return; }
   $('friend-add-error').textContent='';
   wss({type:'send_friend_request',toId:id});
+}
+
+// ── Online Friends ──────────────────────────────────────────────────────
+// The people-icon next to the coin balance (lobby, logged-in only). Shows
+// which friends are online and lets you pull one or more straight into a
+// new room. Names picked here (onlineSelected) feed the same
+// rulesSelectedInvites the Create Room flow already uses, so the actual
+// room creation + invites reuse that path untouched.
+let onlineSelected=new Set();
+
+function toggleOnlineModal(){
+  const modal=$('online-modal'),backdrop=$('online-backdrop');
+  if(modal.classList.contains('visible')){
+    modal.classList.remove('visible'); backdrop.classList.remove('visible'); return;
+  }
+  onlineSelected=new Set();
+  $('online-list').innerHTML='<p class="friends-empty">Loading…</p>';
+  $('online-invite-btn').disabled=true;
+  $('online-invite-btn').textContent='Invite to Game';
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+  wss({type:'get_online_friends'});
+}
+
+// 'online_friends' reply — one selectable row per online friend. A busy
+// friend (already seated in a room) is shown but not selectable, same
+// "visible so you know why, just not actionable" treatment the Invite
+// Players picker gives offline profiles.
+function renderOnlineFriends(m){
+  const list=$('online-list'); if(!list) return;
+  const players=m.players||[];
+  if(!players.length){
+    list.innerHTML='<p class="friends-empty">None of your friends are online right now.</p>';
+    updateOnlineInviteBtn();
+    return;
+  }
+  list.innerHTML='';
+  for(const p of players){
+    const row=document.createElement('div');
+    row.className='friend-row online-row'+(p.busy?' friend-row-pending':'');
+    row.dataset.name=p.name;
+    const busyTag=p.busy?'<span class="friend-pending">In a game</span>'
+      :'<span class="online-pick" aria-hidden="true"></span>';
+    row.innerHTML=`
+      <span class="friend-ic">${iconSvg(p.icon)}</span>
+      <span class="friend-nm">${escHtml(p.name)}<span class="friend-dot" title="Online"></span></span>
+      <span class="friend-actions">${busyTag}</span>`;
+    if(!p.busy){
+      row.classList.add('online-row-pick');
+      row.onclick=()=>{
+        if(onlineSelected.has(p.name)){ onlineSelected.delete(p.name); row.classList.remove('selected'); }
+        else { onlineSelected.add(p.name); row.classList.add('selected'); }
+        updateOnlineInviteBtn();
+      };
+    }
+    list.appendChild(row);
+  }
+  updateOnlineInviteBtn();
+}
+
+function updateOnlineInviteBtn(){
+  const btn=$('online-invite-btn'); if(!btn) return;
+  const n=onlineSelected.size;
+  btn.disabled=n===0;
+  btn.textContent=n?`Invite to Game (${n})`:'Invite to Game';
+}
+
+// Do something with the picked names. Two cases:
+//  - Already hosting a waiting room (opened this from there): invite them
+//    straight into it, same as that room's own Invite Players picker —
+//    creating a fresh room would just abandon the one they're set up in.
+//  - Otherwise (the normal lobby case): hand the picks to the Create Room
+//    flow — stage them as rulesSelectedInvites (the set the 'joined'
+//    handler fires invites from once the room exists) and open Match
+//    Settings with its "+ Create Room" button + invite section showing,
+//    exactly as openCreateRoomRules does from the Room List.
+function inviteSelectedOnline(){
+  const names=[...onlineSelected];
+  if(!names.length) return;
+  toggleOnlineModal();
+  const inWaitingRoomAsHost=isRoomHost && !inGame && $('wa').style.display==='block';
+  if(inWaitingRoomAsHost){
+    for(const name of names) wss({type:'invite_player',name});
+    toast(names.length===1?`Invited ${names[0]}.`:`Invited ${names.length} players.`);
+    return;
+  }
+  rulesSelectedInvites=new Set(names);
+  toggleRulesModal();
+  $('rules-modal-create-btn').style.display='block';
+  $('rules-invite-section').style.display='block';
+  renderInvitedChips();
 }
 
 // Async Clipboard API where available, with a hidden-textarea + execCommand
@@ -2983,6 +3153,7 @@ function onProfileUnlocked(m){
     $('iname').value=m.name;
     $('bfind').disabled=false;
     $('user-icon-btn').style.display='';
+    $('online-btn').style.display='';
     // Friend ID + notification state + coin balance come alive with the profile.
     myProfileId=m.id||null;
     friendIdSet=new Set();
@@ -3102,6 +3273,7 @@ function onGuestSelected(){
   updateNotifBadge(0);
   myCoins=0;
   $('coin-count').style.display='none';
+  $('online-btn').style.display='none';
   refreshProfileDisplay();
   // Unlike icon/title above, the nameplate's win-tier class (see
   // updateNameplateTier) persists on the DOM element itself, not through a
@@ -3864,7 +4036,7 @@ function playSfx(id, seat=null){
 // against ever pointing <audio> at an arbitrary/malformed src. Shares
 // fxGainNode/fxEnabled with playSfx (same "Voice" mute/volume control)
 // since this is a voice line too, just not a call.
-const natsuWinLines=['Yavai','Otoko','Suberu','Hantei'];
+const natsuWinLines=['Yavai','Otoko','Suberu','Hantei','Derumaeni','Nametennoka','Urayamashii'];
 function playWinSfx(lineName){
   if(!natsuWinLines.includes(lineName)) return;
   if(!fxEnabled) return;
@@ -5610,10 +5782,11 @@ function renderState(m, prev){
   });
 
   // Kita (sanma only) — banked North tiles, shown face-up in their own
-  // strip (.kita-strip, id 'k'+seat) in line with that seat's nameplate
-  // rather than mixed into the meld row, since kita tiles aren't melds —
-  // they don't affect hand shape/fu and mixing them in made the meld row
-  // harder to read at a glance.
+  // strip (.kita-strip, id 'k'+seat) rather than mixed into the meld row,
+  // since kita tiles aren't melds — they don't affect hand shape/fu and
+  // mixing them in made the meld row harder to read at a glance. Tiles are
+  // appended oldest-first; every seat's strip renders them horizontally
+  // left-to-right (see .kita-strip in style.css for the per-seat anchors).
   if(m.sanma&&m.kita){
     for(let i=0;i<numSeats;i++){
       const abs=(mySeat+i)%numSeats,id=P[i];
