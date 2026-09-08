@@ -2648,16 +2648,21 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 .np-flip{transform:rotate(180deg); transform-origin:center center;}
 
 /* ── Kita strip (sanma only) — banked North (pei-nuki) tiles. Each seat's
-   strip is rotated to FACE that seat, exactly like its discard pile and
-   meld row (ml-l/dzl +90°, ml-r/dzr -90°, top 180°), and sits just inboard
-   of that seat's meld column. Tiles are read oldest-first in that seat's
-   own left-to-right — which, once rotated, is screen top→bottom for the
-   left seat and screen bottom→top for the right seat. That "oldest first
-   from the seat's own view" is the fix: the strip used to be
-   flex-direction:row-reverse (so .kita-b had to override back to row),
-   which made both opponents' strips run newest-first. Plain `row` +
-   oldest-appended-last (see renderState) now gives every seat the same
-   oldest→newest order in its own frame. ── */
+   strip sits right by that seat's nameplate and is rotated to FACE that
+   seat, like its discard pile / hand / melds (left +90°, right -90°). It
+   also FILLS the same way that seat's discard pile does: tiles are
+   appended oldest-first (see renderState) and the OLDEST tile is the fixed
+   anchor — new tiles extend away from it and nothing already placed moves.
+     - bottom seat: oldest at the left, grows right;
+     - left seat: oldest at the TOP, grows down (its discards run top→bottom);
+     - right seat: oldest at the BOTTOM, grows up, so the newest is on top
+       (its discards run bottom→top — the mirror of the left).
+   The earlier version pinned the NEWEST tile and let every older tile jump
+   to make room on each new kita, which read as the strip filling backwards
+   ("right to left") for both opponents. Plain `flex-direction:row` with the
+   left edge pinned (via `left`, and a `transform-origin` on that same edge,
+   NOT the width-scaled translate the old rule used) keeps the oldest tile
+   still. ── */
 .kita-strip{position:absolute;display:flex;flex-direction:row;gap:0;align-items:flex-end;z-index:20;}
 .kita-strip:empty{display:none;}
 /* Bottom seat: anchored at the felt's horizontal CENTRE (left:50%) rather
@@ -2675,8 +2680,14 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    display:none) and kita only ever renders in sanma, so this is dead —
    kept only so the element still has a sane position if that changes. */
 .kita-t{top:calc(var(--tsm-h) + 3vmin);left:15%;transform:rotate(180deg);}
-.kita-l{bottom:15%;left:calc(var(--tsm-h) + 3vmin);transform:rotate(90deg) translateX(-100%);transform-origin:bottom left;}
-.kita-r{top:15%;right:calc(var(--tsm-h) + 3vmin);transform:rotate(-90deg) translateY(-100%);transform-origin:top right;}
+/* Left seat: just below its nameplate (top:15%); rotate about the bottom-
+   left corner so the strip grows straight down from a fixed oldest tile. */
+.kita-l{top:27%;left:calc(var(--tsm-h) + 3vmin);transform:rotate(90deg);transform-origin:bottom left;}
+/* Right seat: just above its nameplate (bottom:15%); rotate about the top-
+   left corner so it grows straight up. `left` (not `right`) so the oldest
+   tile — the first flex child — is the pinned one; the -var(--tmd-h) keeps
+   the rotated strip's far edge on the felt. */
+.kita-r{top:68%;left:calc(100% - (var(--tsm-h) + 3vmin) - var(--tmd-h));transform:rotate(-90deg);transform-origin:top left;}
 .kita-strip .mg{outline:1.5px solid var(--gold, #c9a84c);outline-offset:-1px;border-radius:2px;}
 
 /* ── Dora panel ── */
