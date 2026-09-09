@@ -2663,7 +2663,13 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    left edge pinned (via `left`, and a `transform-origin` on that same edge,
    NOT the width-scaled translate the old rule used) keeps the oldest tile
    still. ── */
-.kita-strip{position:absolute;display:flex;flex-direction:row;gap:0;align-items:flex-end;z-index:20;}
+/* z-index below the nameplates (.np-wrap-*, z-index:20): a side seat's
+   rotated nameplate can still clip the near end of its kita strip on a
+   short/narrow viewport or with a long name, and when it does the
+   nameplate should stay readable on top rather than the kita tiles
+   covering it. Still above the melds (.ml-*, z-index:15) — kita and a full
+   meld row could just touch for a seat with 4 melds AND 4 kita. */
+.kita-strip{position:absolute;display:flex;flex-direction:row;gap:0;align-items:flex-end;z-index:16;}
 .kita-strip:empty{display:none;}
 /* Bottom seat: anchored at the felt's horizontal CENTRE (left:50%) rather
    than tucked close to the nameplate — .pname has no max-width of its own
@@ -2680,14 +2686,19 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    display:none) and kita only ever renders in sanma, so this is dead —
    kept only so the element still has a sane position if that changes. */
 .kita-t{top:calc(var(--tsm-h) + 3vmin);left:15%;transform:rotate(180deg);}
-/* Left seat: just below its nameplate (top:15%); rotate about the bottom-
-   left corner so the strip grows straight down from a fixed oldest tile. */
-.kita-l{top:27%;left:calc(var(--tsm-h) + 3vmin);transform:rotate(90deg);transform-origin:bottom left;}
-/* Right seat: just above its nameplate (bottom:15%); rotate about the top-
-   left corner so it grows straight up. `left` (not `right`) so the oldest
-   tile — the first flex child — is the pinned one; the -var(--tmd-h) keeps
-   the rotated strip's far edge on the felt. */
-.kita-r{top:68%;left:calc(100% - (var(--tsm-h) + 3vmin) - var(--tmd-h));transform:rotate(-90deg);transform-origin:top left;}
+/* Left seat: below its nameplate (which sits at top:15% and runs downward).
+   30% clears a normal name with room to spare and only grazes a
+   max-length one; the z-index above covers whatever's left when a long
+   name or a small felt closes the gap entirely. Rotate about the
+   bottom-left corner so the strip grows straight down from a fixed oldest
+   tile. */
+.kita-l{top:30%;left:calc(var(--tsm-h) + 3vmin);transform:rotate(90deg);transform-origin:bottom left;}
+/* Right seat: above its nameplate (which sits at bottom:15% and runs
+   upward); 65% clears it the same way. Rotate about the top-left corner so
+   it grows straight up. `left` (not `right`) so the oldest tile — the first
+   flex child — is the pinned one; the -var(--tmd-h) keeps the rotated
+   strip's far edge on the felt. */
+.kita-r{top:65%;left:calc(100% - (var(--tsm-h) + 3vmin) - var(--tmd-h));transform:rotate(-90deg);transform-origin:top left;}
 .kita-strip .mg{outline:1.5px solid var(--gold, #c9a84c);outline-offset:-1px;border-radius:2px;}
 
 /* ── Dora panel ── */
