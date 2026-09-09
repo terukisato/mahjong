@@ -604,7 +604,7 @@ class Room {
         const hand14=[...hand13,{s,v,id:999990}];
         const rTsumo=detectYaku(hand14,melds,true,sw,rw,isRiichi,g.ippatsu[seat],isDblRiichi,false,false,false,false,false,false,wk,{kuitanAri});
         const rRon=detectYaku(hand14,melds,false,sw,rw,isRiichi,g.ippatsu[seat],isDblRiichi,false,false,false,false,false,false,wk,{kuitanAri});
-        const dora=countDora(hand14,g.dora)+countAkaDora(hand14);
+        const dora=countDora(hand14,g.dora,this.rules.sanma)+countAkaDora(hand14);
         const useTsumo=rTsumo.han>0&&(rRon.han===0||rTsumo.han>=rRon.han);
         const pick=useTsumo?rTsumo:rRon;
         if(pick.han===0) return {tile:wk,han:0,yaku:[],points:null,label:null};
@@ -639,10 +639,11 @@ class Room {
     // needs two more just to become a triplet), while calling Kita banks
     // it for a free +1 han later AND draws a replacement — strictly better
     // than either discarding it or holding it hoping to pair it up. Same
-    // gating as canKita in _sendState (this seat's own turn, full hand,
-    // the shared kita-rinshan pool not yet exhausted).
+    // Same gating as canKita in _sendState via _legalKitaIds (own turn, full
+    // hand, kita pool not exhausted, and — in riichi — only a North that
+    // keeps the locked wait, so this never nudges toward a chonbo).
     let kitaTip=null;
-    if(sanma&&g.turn===seat&&hand.length===fullHandSize&&g.kitaCount<4&&hand.some(t=>key(t)==='4z')){
+    if(sanma&&this._legalKitaIds(seat).length){
       kitaTip='You\'re holding North (北) — call Kita before discarding it. It banks a free bonus han and gives you a replacement draw, at no cost to your hand shape.';
     }
 
@@ -682,8 +683,8 @@ class Room {
     // this whole response evaluates against, post-recommended-discard when
     // one's on offer) plus this seat's own melds, so it matches whatever
     // hand the rest of the panel is describing.
-    const doraCount=countDora(hand13,g.dora)+countAkaDora(hand13)
-      +countDora(melds.flatMap(m=>m.tiles),g.dora)+countAkaDora(melds.flatMap(m=>m.tiles));
+    const doraCount=countDora(hand13,g.dora,this.rules.sanma)+countAkaDora(hand13)
+      +countDora(melds.flatMap(m=>m.tiles),g.dora,this.rules.sanma)+countAkaDora(melds.flatMap(m=>m.tiles));
 
     // Endgame awareness — a beginner will happily keep pushing a hand
     // that's nowhere close to tenpai right up until the wall runs out,
@@ -1006,8 +1007,12 @@ class Room {
         if(han>0){this._tsumo(seat);return;}
       }
       if(this.rules.sanma){
-        const kitaTile=hand.find(t=>key(t)==='4z');
-        if(kitaTile){this._kita(seat,kitaTile.id);return;}
+        // _legalKitaIds, not a raw 4z scan — in riichi it drops Norths whose
+        // removal would break the locked wait, so the bot never banks itself
+        // into a chonbo (and, since it's a real candidate list, never calls
+        // _kita only for it to no-op and strand the bot's turn).
+        const kitaIds=this._legalKitaIds(seat);
+        if(kitaIds.length){this._kita(seat,kitaIds[0]);return;}
       }
       if(!g.riichi[seat]&&!g.melds[seat].length&&g.scores[seat]>=1000){
         const tid=this._findRiichiTile(seat);
@@ -1487,7 +1492,7 @@ class Room {
       const doraPool=this._doraPool(winSeat,hand);
       const uraDora=g.riichi[winSeat]?this._countUraDora(doraPool):0;
       const kitaCount=g.kita[winSeat].length;
-      const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(doraPool);
+      const dc=countDora(doraPool,g.dora,this.rules.sanma)+uraDora+countAkaDora(doraPool);
       const totalHan=han+dc+kitaCount;
       const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
       const fu=this._computeFu(result,false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu);
@@ -1671,22 +1676,50 @@ class Room {
   }
 
   // ── Kita (sanma only) ────────────────────────────────────────────────────
+  // The North (4z) tiles this seat may legally bank as kita right now: its
+  // own turn, full (post-draw) hand, kita pool not exhausted. Normally every
+  // 4z in hand — but in RIICHI the hand is locked, so it's restricted to
+  // Norths whose removal leaves the hand tenpai on the exact same wait
+  // (mirrors the canAnkan riichi check). Banking a North that's part of the
+  // winning shape — the pair, or one of only two forming it — silently
+  // breaks tenpai and turns the eventual win into a chonbo; three+ Norths
+  // (pair/triplet with a spare) still pass, since removing one keeps the
+  // wait. Single source of truth for _sendState's canKita, _kita's own
+  // guard, and the bot's kita decision.
+  _legalKitaIds(seat){
+    const g=this.game;
+    if(!this.rules.sanma||!g||g.turn!==seat||g.kitaCount>=4) return [];
+    const hand=g.hands[seat];
+    const meldTileCount=g.melds[seat].reduce((n,m)=>n+(m.type==='kan'?4:3),0);
+    const numKans=g.melds[seat].filter(m=>m.type==='kan').length;
+    const fullHandSize=14-meldTileCount+numKans;
+    if(hand.length!==fullHandSize) return [];
+    let ids=hand.filter(t=>key(t)==='4z').map(t=>t.id);
+    if(g.riichi[seat]&&ids.length){
+      const lockedWait=waits(hand.filter(t=>t.id!==g.drawTile?.id),g.melds[seat],this.rules.sanma);
+      ids=ids.filter(id=>{
+        const after=waits(hand.filter(t=>t.id!==id),g.melds[seat],this.rules.sanma);
+        return after.length===lockedWait.length&&lockedWait.every(w=>after.includes(w));
+      });
+    }
+    return ids;
+  }
+
   // Banking a North (4z) tile: set it face-up (removed from hand, not part
   // of any meld), then take an immediate bonus draw. Each banked kita tile
   // is a flat +1 han bonus on this seat's eventual winning hand (applied in
   // _tsumo/_multiRon/_ron alongside dora), never a yaku on its own.
   //
-  // Still allowed once in riichi, unlike kakan (see _kakan above) — kakan's
-  // restriction exists because upgrading a pon to a kan can reveal a new
-  // dora indicator and change what's waited on, which is exactly what a
-  // riichi lock forbids. A 4z tile is never part of any wait/yaku structure
-  // in the first place (it can't complete a sequence or triplet-based wait
-  // the way a kakan candidate can), so banking one and drawing a
-  // replacement can't change the locked hand's wait at all — there's
-  // nothing here that actually needs re-deriving. The replacement draw
-  // itself still follows normal riichi tsumogiri rules (auto-discarded
-  // unless it's the winning tile) — see the auto-discard skip in
-  // script.js, which now checks canKita too so a post-riichi kita draw
+  // Allowed in riichi, but only for a North whose removal keeps the locked
+  // hand tenpai on the same wait — see _legalKitaIds. A 4z usually isn't
+  // part of any wait/yaku structure (it can't complete a sequence or a
+  // triplet-based wait the way a kakan candidate can), so banking one and
+  // redrawing normally can't touch the locked wait — but a North PAIR as
+  // the jantou is the exception: banking one of only two Norths there
+  // breaks tenpai and chonbos the win, so _legalKitaIds filters those out.
+  // The replacement draw itself still follows normal riichi tsumogiri rules
+  // (auto-discarded unless it's the winning tile) — see the auto-discard
+  // skip in script.js, which checks canKita so a post-riichi kita draw
   // isn't auto-discarded before the player gets to bank it.
   //
   // The replacement draw comes from the dead wall's OWN reserved 4-slot
@@ -1704,6 +1737,11 @@ class Room {
     const hand=g.hands[seat];
     const tile=hand.find(t=>t.id===tileId&&key(t)==='4z');
     if(!tile) return;
+    // In riichi the hand is locked: reject a kita that would change the
+    // locked wait (see _legalKitaIds) — banking a structurally-needed North
+    // silently breaks tenpai and chonbos the win. Enforced here, not just
+    // hidden from the UI, so a hacked client can't bypass it.
+    if(g.riichi[seat]&&!this._legalKitaIds(seat).includes(tileId)) return;
     g.hands[seat]=hand.filter(t=>t.id!==tileId);
     g.nagashi[seat]=false; // self-initiated action, same precedent as calling pon/chi/kan on your own turn
     this._broadcastAll({type:'kita',seat,name:this.seats[seat]?.name,count:g.kita[seat].length+1});
@@ -1843,7 +1881,7 @@ class Room {
     const g=this.game;
     // ura indicators: deadWall[9] through deadWall[9 + dora.length - 1]
     const uraIndicators=g.deadWall.slice(9,9+g.dora.length);
-    return countDora(hand,uraIndicators);
+    return countDora(hand,uraIndicators,this.rules.sanma);
   }
 
   // ── Riichi ─────────────────────────────────────────────────────────────────
@@ -2006,7 +2044,7 @@ class Room {
     const doraPool=this._doraPool(seat,hand);
     const uraDora=g.riichi[seat]?this._countUraDora(doraPool):0;
     const kitaCount=g.kita[seat].length;
-    const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(doraPool);
+    const dc=countDora(doraPool,g.dora,this.rules.sanma)+uraDora+countAkaDora(doraPool);
     const totalHan=han+dc+kitaCount;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
     const winKey=g.drawTile?key(g.drawTile):null;
@@ -2045,7 +2083,7 @@ class Room {
     const doraPool=this._doraPool(winSeat,hand);
     const uraDora=g.riichi[winSeat]?this._countUraDora(doraPool):0;
     const kitaCount=g.kita[winSeat].length;
-    const dc=countDora(doraPool,g.dora)+uraDora+countAkaDora(doraPool);
+    const dc=countDora(doraPool,g.dora,this.rules.sanma)+uraDora+countAkaDora(doraPool);
     const totalHan=han+dc+kitaCount;
     const hasPinfu=yakuList.some(y=>y.name==='Pinfu');
     const fu=this._computeFu(result,false,isMenzen(g.melds[winSeat]),key(tile),hasPinfu);
@@ -2836,15 +2874,11 @@ class Room {
           }).map(([k])=>k);
         }
       }
-      let canKita=[];
-      // g.wall.length is irrelevant now — the replacement draw comes from
-      // the dead wall's own reserved kita pool (see _completeKita), not
-      // the live wall. g.kitaCount<4 is the real bound (also matches
-      // _kita's own guard), though in practice it can never actually be
-      // reached — only 4 North tiles exist in the whole game to begin with.
-      if(this.rules.sanma&&g.turn===seat&&hand.length===fullHandSize&&g.kitaCount<4){
-        canKita=hand.filter(t=>key(t)==='4z').map(t=>t.id);
-      }
+      // g.wall.length is irrelevant — the replacement draw comes from the
+      // dead wall's own reserved kita pool (see _completeKita), not the live
+      // wall. In riichi this is filtered to Norths that keep the locked wait
+      // (see _legalKitaIds) so the button can't offer a chonbo.
+      const canKita=this._legalKitaIds(seat);
       let canKakan=[];
       if(g.turn===seat&&!g.riichi[seat]&&g.drawTile&&g.kanCount<4){
         const ponKeys=g.melds[seat].filter(m=>m.type==='pon').map(m=>key(m.tiles[0]));

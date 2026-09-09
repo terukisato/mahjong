@@ -817,6 +817,56 @@ test('Kita: uncontested (nobody waiting on North) still banks the tile and draws
 });
 
 // ══════════════════════════════════════════════════════════════════════════
+// A North (4z) forming the hand's PAIR is part of the winning shape —
+// banking it via kita after riichi silently breaks tenpai and turns the
+// eventual win into a chonbo. _legalKitaIds must not offer it and _kita
+// must reject it even when asked directly; three+ Norths (a spare beyond
+// the pair) stay bankable, since removing one keeps the same wait.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('Kita: a North that is the hand\'s pair cannot be banked after riichi (would break tenpai)', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  // Seat 0: riichi, tenpai on 1s/4s, with a North pair as the jantou.
+  const locked = [...pairT(4, 'z'), ...seq(1, 'm'), ...seq(4, 'p'), ...seq(7, 'p'), T(2, 's'), T(3, 's')];
+  g.riichi[0] = true;
+  g.drawTile = T(9, 'm'); // a blank, non-North draw
+  g.hands[0] = [...locked, g.drawTile];
+  g.turn = 0;
+
+  const northId = g.hands[0].find(t => t.v === 4 && t.s === 'z').id;
+  assert.deepStrictEqual(room._legalKitaIds(0), [], 'no legal kita — the only Norths form the pair');
+
+  const kitaBefore = g.kita[0].length;
+  const handBefore = g.hands[0].length;
+  room._kita(0, northId);
+  assert.strictEqual(g.kita[0].length, kitaBefore, 'kita on a pair North must be rejected server-side');
+  assert.strictEqual(g.hands[0].length, handBefore, 'the North must stay in hand');
+});
+
+test('Kita: with three Norths in riichi, any one is still bankable (wait preserved)', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  const locked = [...pairT(4, 'z'), ...seq(1, 'm'), ...seq(4, 'p'), ...seq(7, 'p'), T(2, 's'), T(3, 's')];
+  g.riichi[0] = true;
+  g.drawTile = T(4, 'z'); // drew the 3rd North
+  g.hands[0] = [...locked, g.drawTile];
+  g.turn = 0;
+
+  assert.strictEqual(room._legalKitaIds(0).length, 3, 'all three Norths keep the 1s/4s wait when any one is removed');
+});
+
+test('Kita: outside riichi every North in hand is bankable (no wait-preservation gate)', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.riichi[0] = false;
+  g.drawTile = T(9, 'm');
+  g.hands[0] = [...pairT(4, 'z'), ...seq(1, 'm'), ...seq(4, 'p'), ...seq(7, 'p'), T(2, 's'), T(3, 's'), g.drawTile];
+  g.turn = 0;
+  assert.strictEqual(room._legalKitaIds(0).length, 2, 'both pair Norths are offered when not locked by riichi');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
 // Banked kita tiles used to be entirely invisible to dora counting — once
 // _kita/_completeKita moves a North tile out of g.hands[seat] into its own
 // g.kita[seat] array, countDora(hand, ...) never sees it again, even when
@@ -860,6 +910,24 @@ test('Dora: banked kita tiles do NOT count when the indicator does not point to 
   room._endRound = (reason, winner, loser, hand, yakuList) => { logged = yakuList; };
   room._tsumo(1);
   assert.ok(!logged.some(y => y.name === 'Dora'), `expected no Dora entry, got ${JSON.stringify(logged)}`);
+});
+
+test('Dora: sanma 1m indicator points at 9m (not the non-existent 2m) — a 9m triplet scores 3 dora', () => {
+  const room = freshSanmaRoom(0);
+  const g = room.game;
+  g.turn = 1;
+  g.firstRound = false;
+  g.dora = [T(1, 'm')]; // sanma: 2m-8m don't exist, so 1m indicator -> 9m dora
+  // Toitoi shape with a 9m triplet, shanpon tenpai on 2s / 5z.
+  g.hands[1] = [...tri(1, 'p'), ...tri(4, 'p'), ...tri(9, 'm'), ...pairT(2, 's'), ...pairT(5, 'z')];
+  g.hands[0] = [...seq(1, 'p'), ...seq(4, 's'), ...seq(7, 's'), T(2, 'm'), T(9, 'm'), T(2, 's')];
+
+  let logged;
+  room._endRound = (reason, winner, loser, hand, yakuList) => { logged = yakuList; };
+  room._multiRon([1], 0, T(2, 's'));
+  const dora = logged.find(y => y.name === 'Dora');
+  assert.ok(dora, `expected a Dora entry, got ${JSON.stringify(logged)}`);
+  assert.strictEqual(dora.han, 3, 'all three 9m should count as dora under the sanma 1m<->9m cycle');
 });
 
 test('Ura Dora: a banked kita tile counts as ura dora when the ura indicator points to North', () => {

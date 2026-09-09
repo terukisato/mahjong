@@ -812,13 +812,19 @@ function evalDecomp(groups,hand14,melds,isTsumo,seatWind,roundWind,isRiichi,isIp
 // wrap 1(E)->2(S)->3(W)->4(N)->1, and dragons wrap independently
 // 5(White)->6(Green)->7(Red)->5 — a North indicator must point to East, not
 // spill over into White Dragon.
-function countDora(hand,doraIndicators){
+function countDora(hand,doraIndicators,sanma=false){
   let n=0;
   for(const ind of doraIndicators){
     let dv=ind.v+1;
     if(ind.s==='z'){
       if(ind.v<=4) dv=ind.v===4?1:dv;       // winds: 4(North) wraps to 1(East)
       else dv=ind.v===7?5:dv;               // dragons: 7(Chun) wraps to 5(Haku)
+    } else if(sanma&&ind.s==='m'){
+      // Sanma keeps only 1m/9m of the man suit (2m-8m are removed from the
+      // wall — see buildWall), so its dora cycle is just 1m -> 9m -> 1m.
+      // Without this a 1m indicator points at 2m, a tile that doesn't exist
+      // in sanma, and silently awards zero dora.
+      dv=ind.v===1?9:1;
     } else dv=dv>9?1:dv;
     n+=hand.filter(t=>t.s===ind.s&&t.v===dv).length;
   }

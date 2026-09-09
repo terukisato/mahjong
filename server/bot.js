@@ -150,7 +150,7 @@ function _shapeScore(c, bestSh, melds, ctx, vis, withUkeire){
   let s=0;
   for(let i=bestSh;i<c.shanten;i++) s+=_SHANTEN_STEP[Math.min(i,4)];
   const rem=c.rem;
-  s-=40*(countDora(rem, ctx.dora||[])+countAkaDora(rem));
+  s-=40*(countDora(rem, ctx.dora||[], ctx.sanma)+countAkaDora(rem));
   const yh=_yakuhaiSet(ctx);
   const cnt={};
   for(const t of rem){ const k=key(t); cnt[k]=(cnt[k]||0)+1; }
@@ -210,7 +210,7 @@ function _assessThreats(ctx, myHand, myMelds){
       const yh=_yakuhaiSet({seatWind:o.seatWind, roundWind:ctx.roundWind});
       val=1000;
       if(mk.some(k=>yh.has(k))) val+=2000;
-      val+=1500*countDora(o.melds.flatMap(m=>m.tiles||[]), ctx.dora||[]);
+      val+=1500*countDora(o.melds.flatMap(m=>m.tiles||[]), ctx.dora||[], ctx.sanma);
       if(nm>=3) val+=1500;
     } else {
       kind='silent';
@@ -282,7 +282,7 @@ function _estMyValue(cands, melds, ctx, bestSh){
         let han=yk.han;
         if(han===0 && isMenzen(melds)) han=1;   // riichi would supply the yaku
         if(han===0) continue;
-        han+=countDora(h14, ctx.dora||[])+countAkaDora(h14);
+        han+=countDora(h14, ctx.dora||[], ctx.sanma)+countAkaDora(h14);
         if(isMenzen(melds)) han+=1;             // riichi + realistic ura/ippatsu upside
         best=Math.max(best, _han2pts(han,40,(ctx.seatWind||0)===1));
       }
@@ -290,7 +290,7 @@ function _estMyValue(cands, melds, ctx, bestSh){
     return best||2000;
   }
   const rem=(cands[0]&&cands[0].rem)||[];
-  const dora=countDora(rem, ctx.dora||[])+countAkaDora(rem);
+  const dora=countDora(rem, ctx.dora||[], ctx.sanma)+countAkaDora(rem);
   return Math.max(1000, 2000 + 1500*dora + (isMenzen(melds)?1200:0) - bestSh*300);
 }
 
@@ -384,7 +384,7 @@ function chooseRiichiTile(hand14, melds=[], ctx={}){
       live+=Math.max(0, 4-(vis[wk]||0));
       const h14=[...x.rem,{s,v,id:999902}];
       const yk=detectYaku(h14,melds,false,c.seatWind||1,c.roundWind||1,true,false,false,false,false,false,false,false,false,wk,{kuitanAri:c.kuitanAri!==false});
-      val=Math.max(val, yk.han + countDora(h14, c.dora||[]) + countAkaDora(h14));
+      val=Math.max(val, yk.han + countDora(h14, c.dora||[], c.sanma) + countAkaDora(h14));
     }
     const danger=threats.length?_dealInCost(key(x.tile), threats, vis):0;
     const score=live*10 + val*6 - danger*0.4;
@@ -477,7 +477,7 @@ function _shouldRiichi(hand13, melds, ctx){
     if(rRon.han===0) uncoveredRon++;
     const yakuHan=Math.max(rTsumo.han,rRon.han);
     if(yakuHan===0) continue;
-    const dora=countDora(hand14,doraIndicators)+countAkaDora(hand14);
+    const dora=countDora(hand14,doraIndicators,sanma)+countAkaDora(hand14);
     bestHan=Math.max(bestHan,yakuHan+dora);
   }
 

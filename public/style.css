@@ -692,14 +692,31 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   background:linear-gradient(170deg,#fffdf4,#f8edd8);
   border:0.1vmin solid #c8a84a;border-bottom:0.2vmin solid #7a5c10;
   display:inline-flex;align-items:center;justify-content:center;}
+/* Opponent concealed hand — a tile seen from above: the pale top face fills
+   most of it, and the blue back face shows as a band along the near edge
+   (toward table centre). Same 0.2vmin thickness edge as the player's own
+   tiles (.tlg). #hdl / #hdt are counter-rotated 180deg (below) so that near
+   edge lands toward centre for every seat. (Previously a flat teal back.) */
 .tsm{
   display:inline-flex;
-  width:var(--tsm-w,16px);height:var(--tsm-h,22px);border-radius:0.2vmin;
-  background:linear-gradient(145deg,#1a5c70,#0e3a48);
-  border:0.1vmin solid #3a90aa;
-  flex-shrink:0;position:relative;}
-.tsm::before{content:'';position:absolute;inset:2px;border:0.1vmin solid rgba(255,255,255,.12);border-radius:0.15vmin;}
+  width:var(--tsm-w,16px);height:var(--tsm-h,22px);
+  border-radius:0.2vmin;
+  background:linear-gradient(180deg,
+    #fdf7e6 0%, #ecdcb6 68%,
+    #fff8e6 70%, #fff8e6 71%,
+    #37589f 72%, #223f7d 87%, #1a2c56 100%);
+  border:0.1vmin solid #c8a84a;
+  border-bottom:0.2vmin solid #12203c;
+  flex-shrink:0;position:relative;
+  box-shadow:0 0.15vmin 0.35vmin rgba(0,0,0,.4);}
+/* Inset frame on the blue back-face band. */
+.tsm::before{content:'';position:absolute;left:0.16vmin;right:0.16vmin;bottom:0.16vmin;top:76%;
+  border:0.1vmin solid rgba(255,255,255,.18);border-radius:0.1vmin;}
 .tsm.rot{width:var(--tsm-h,22px);height:var(--tsm-w,16px);}
+/* Left & top opponents share the same container rotation as their neighbour
+   opposite them, which would land the blue near-edge on the far side — spin
+   each row 180deg so the top face points outward toward its owner. */
+#hdl,#hdt{transform:rotate(180deg);}
 .tdora{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:0.4vmin;
   background:linear-gradient(170deg,#fffdf4,#f8edd8);border:0.1vmin solid #c8a84a;border-bottom:0.3vmin solid #7a5c10;
   display:inline-flex;align-items:center;justify-content:center;}

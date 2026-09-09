@@ -5590,12 +5590,16 @@ function renderState(m, prev){
   const root=document.documentElement;
   const tw=parseInt(root.style.getPropertyValue('--tlg-w'))||40;
   const th=parseInt(root.style.getPropertyValue('--tlg-h'))||56;
+  // The hand stays selectable (hover-lift, tap-to-highlight) even when it's
+  // not our turn — only the discard itself is gated (see clickTile /
+  // canDiscardNow). Riichi still locks the hand entirely.
+  const handInteractive=!m.riichi?.[mySeat];
   mainHand.forEach(t=>{
     const el=mkEl(t,'tlg',tw,th);
-    if(mine) el.classList.add('play');
+    if(handInteractive) el.classList.add('play');
     if(t.id===selId) el.classList.add('sel');
     el.dataset.tid=t.id;
-    if(mine && !m.riichi?.[mySeat]) el.onclick=()=>clickTile(t.id);
+    if(handInteractive) el.onclick=()=>clickTile(t.id);
     hc.appendChild(el);
   });
   if(drawTile&&mine){
@@ -5904,11 +5908,24 @@ function sendDiscardAction(tileId){
 // clicking the SAME tile again is what actually sends the discard. `discarding`
 // is a one-shot latch to swallow extra clicks between sending the action and
 // the next game_state confirming it, so a slow network can't double-discard.
+// True only when the server would actually accept a discard from us right
+// now: our own turn, no reaction window open, not locked into riichi. Tile
+// SELECTION is allowed any time (see clickTile) — only the discard is gated.
+function canDiscardNow(){
+  return !!(lastState && lastState.turn===mySeat && !lastState.pending && !lastState.riichi?.[mySeat]);
+}
 function clickTile(id){
   if(discarding) return;
   if(selId===id){
-    sendDiscardAction(id);
-    selId=null;
+    if(canDiscardNow()){
+      sendDiscardAction(id);
+      selId=null;
+    } else {
+      // Waiting for our turn — a second tap just clears the highlight
+      // instead of discarding.
+      selId=null;
+      $('hdb').querySelectorAll('.tlg').forEach(el=>el.classList.remove('sel'));
+    }
   } else {
     selId=id;
     $('hdb').querySelectorAll('.tlg').forEach(el=>{
@@ -6008,10 +6025,10 @@ function renderMagnifyHand(){
   const drawTile=m.drawTile||null;
   const allTiles=[...mainHand,...(drawTile?[drawTile]:[])];
   if(!allTiles.length) return;
-  // Only clickable-to-discard under the exact same conditions the compact
-  // hand row uses (your turn, not mid-riichi where the draw auto-selects/
-  // auto-discards instead) — otherwise this is a read-only zoomed view.
-  const clickable=m.turn===mySeat && !m.riichi?.[mySeat];
+  // Selectable under the same conditions as the compact hand row — any time
+  // outside riichi, whether or not it's our turn. The discard itself is
+  // still gated (canDiscardNow); off-turn this is select-only.
+  const clickable=!m.riichi?.[mySeat];
 
   // "The whole width of the table" means the visible green felt (.felt) —
   // NOT .table, which is a full-viewport wrapper (left:0;right:0) that
@@ -6086,12 +6103,11 @@ function renderMagnifyHand(){
   });
 }
 function magnifyTileClick(id){
-  const wasSelected=selId===id;
+  // Only a real discard (our turn) should close the magnifier — an off-turn
+  // second tap just deselects, so keep the view open and re-render.
+  const willDiscard=selId===id && canDiscardNow();
   clickTile(id);
-  // A discard was just sent (clickTile's own guard already applied) —
-  // close rather than leave the magnifier sitting over a hand that's
-  // about to change underneath it once the server confirms.
-  if(wasSelected) closeMagnify();
+  if(willDiscard) closeMagnify();
   else renderMagnifyHand();
 }
 
@@ -7830,7 +7846,10 @@ function updateTileSizes(){
   const dzWidth=base*0.26;          // discard zone is ~26% of felt width
   const mdW=Math.floor(dzWidth/6);  // 6 tiles per row
   const mdH=Math.round(mdW*1.38);   // maintain tile aspect ratio
-  const smW=Math.round(lgW*0.65);
+  // Opponent tiles are seen from the top, so they're the same WIDTH as the
+  // player's own tiles (--tlg-w) but shallower — only ~65% as tall, since the
+  // face is foreshortened at that viewing angle.
+  const smW=lgW;
   const smH=Math.round(lgH*0.65);
   root.style.setProperty('--tlg-w',lgW+'px');
   root.style.setProperty('--tlg-h',lgH+'px');

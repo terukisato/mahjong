@@ -1084,6 +1084,17 @@ test('dora: dragon indicator wraps within dragons only (Chun -> Haku, not East)'
   assert.strictEqual(countDora([T(1, 'z')], [T(7, 'z')]), 0);
 });
 
+test('dora: sanma man suit cycles 1m <-> 9m (2m-8m do not exist)', () => {
+  // 4-player: 1m indicator -> 2m dora, so three 9m score nothing.
+  assert.strictEqual(countDora([T(9, 'm'), T(9, 'm'), T(9, 'm')], [T(1, 'm')], false), 0);
+  // sanma: 1m indicator -> 9m dora.
+  assert.strictEqual(countDora([T(9, 'm'), T(9, 'm'), T(9, 'm')], [T(1, 'm')], true), 3);
+  // sanma: 9m indicator -> 1m dora (same as the normal 9->1 wrap).
+  assert.strictEqual(countDora([T(1, 'm'), T(1, 'm')], [T(9, 'm')], true), 2);
+  // sanma leaves the other suits alone.
+  assert.strictEqual(countDora([T(3, 'p')], [T(2, 'p')], true), 1);
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // Shanten (tiles-away-from-tenpai)
 // ══════════════════════════════════════════════════════════════════════════
