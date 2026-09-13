@@ -314,6 +314,24 @@
   <div class="about-body" id="advice-body">Loading…</div>
 </div>
 
+<!-- Jargon glossary popup — a small "glass" definition card opened by
+     clicking any dotted-underline term inside the Help panel above (see
+     jt()/jtYaku()/showJargonPopup in script.js). Deliberately a SIBLING of
+     #advice-modal out here, not inside #s-game with #player-popover: #s-game
+     is a .screen (position:fixed + z-index:10 — its own stacking context),
+     which caps everything inside it below .advice-panel's z-index:301
+     regardless of this popup's own (higher) z-index — it rendered behind
+     the Hand Advice panel until moved out here. Same "no backdrop element,
+     dismissed by outside click/Escape" convention as #player-popover;
+     positioned via inline left/top set at open time (positionJargonPopup). -->
+<div class="jargon-popup" id="jargon-popup" style="display:none;">
+  <div class="jargon-popup-head">
+    <span id="jargon-popup-term"></span><span id="jargon-popup-jp" class="yj"></span>
+    <button class="jargon-popup-close" onclick="closeJargonPopup()" title="Close">✕</button>
+  </div>
+  <div class="jargon-popup-desc" id="jargon-popup-desc"></div>
+</div>
+
 <!-- Magnifier — a dimmed full-screen overlay showing the player's own
      hand at a much larger tile size (see openMagnify/renderMagnifyHand in
      script.js). Tap-to-select/tap-again-to-discard on the enlarged tiles,

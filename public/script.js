@@ -2432,6 +2432,18 @@ function tileKeyLabel(k){
   const v=k.slice(0,-1),s=k.slice(-1);
   return `${v} ${TILE_SUIT_NAMES[s]||s}`;
 }
+// Same as tileKeyLabel, but for the Help panel specifically (see
+// renderAdvice) — the suit word ("Man"/"Pin"/"Sou") is wrapped as a jargon
+// term so a beginner can see what it means. Defined near JARGON_GLOSSARY/
+// jt() further down, but hung off tileKeyLabel here since it's the same
+// lookup just with the suit made clickable.
+function tileKeyLabelHtml(k){
+  if(HONOR_NAMES[k]) return escHtml(HONOR_NAMES[k]);
+  const v=k.slice(0,-1),s=k.slice(-1);
+  const suitName=TILE_SUIT_NAMES[s]||s;
+  const suitId={m:'man',p:'pin',s:'sou'}[s];
+  return `${escHtml(v)} ${suitId?jt(suitId,escHtml(suitName)):escHtml(suitName)}`;
+}
 // Anchors the panel's bottom-left corner just above the ❓ help button that
 // opened it (same getBoundingClientRect + inline left/top approach as
 // positionPlayerPopover, just anchored by the trigger button instead of a
@@ -2467,6 +2479,7 @@ function requestAdvice(){
 function toggleAdvice(){
   $('advice-modal').classList.remove('visible');
   $('advice-backdrop').classList.remove('visible');
+  closeJargonPopup();
 }
 // Small inline SVG for a single tile from its "<v><suit>" key — used inline
 // inside text rows (discard/wait lists) where a DOM element would be
@@ -2482,49 +2495,242 @@ function miniTileHTML(k,w=20,h=28,extraClass){
   if(extraClass) el.classList.add(extraClass);
   return `<span class="advice-mini-tile">${el.outerHTML}</span>`;
 }
+// ── Jargon glossary ("?" popups for beginner terms inside the Help panel) ──
+// General mahjong vocabulary that isn't a named yaku (yaku already have
+// their own card in YAKU_REFERENCE above) — id -> {term, jp, desc}. jt()
+// wraps a piece of already-safe HTML in a clickable span; jargonizeText()
+// auto-wraps every whole-word occurrence of these terms inside a block of
+// plain (already-escHtml'd) prose, e.g. the server-generated tip strings.
+// Clicking either opens #jargon-popup (showJargonPopup/positionJargonPopup
+// below), anchored the same way #player-popover anchors to a clicked
+// nameplate.
+const JARGON_GLOSSARY={
+  shanten:{term:'Shanten',jp:'向聴',desc:'How many tile swaps (discard + draw) your hand is away from tenpai. 0-shanten means you\'re already tenpai.'},
+  tenpai:{term:'Tenpai',jp:'聴牌',desc:'One tile away from completing your hand — you\'re just waiting to draw or call the tile that finishes it.'},
+  furiten:{term:'Furiten',jp:'振聴',desc:'You can\'t win by ron on ANY of your waits right now — either one of them is already sitting in your own discard pile, or you passed on a ron this go-around. Winning by tsumo (self-draw) is still fine.'},
+  riichi:{term:'Riichi',jp:'立直',desc:'Locking in an already-tenpai closed hand: you must discard whatever you draw from now on, but it guarantees a yaku and a shot at ura dora.'},
+  dora:{term:'Dora',jp:'ドラ',desc:'A bonus tile revealed each hand — every copy you hold adds +1 han to your score. Dora alone can\'t win a hand; you still need a real yaku.'},
+  uradora:{term:'Ura Dora',jp:'裏ドラ',desc:'Extra dora indicators revealed only if you win while in riichi — nobody, including you, sees them until then.'},
+  kita:{term:'Kita',jp:'北',desc:'Sanma only: set aside a North tile you\'re holding for an automatic +1 han bonus, then draw a replacement immediately.'},
+  han:{term:'Han',jp:'翻',desc:'The "value" score of a hand — yaku, dora, and other bonuses each add han. More han (or a higher-tier yaku) means more points.'},
+  fu:{term:'Fu',jp:'符',desc:'The "base points" of a hand — built from your groups, wait shape, and pair — combined with han to work out the final score.'},
+  yaku:{term:'Yaku',jp:'役',desc:'A named hand pattern (Riichi, Tanyao, Toitoi, …). You need at least one to legally win — a complete-looking hand with no yaku can\'t be declared.'},
+  tsumo:{term:'Tsumo',jp:'自摸',desc:'Winning by drawing the winning tile yourself, instead of off someone else\'s discard.'},
+  ron:{term:'Ron',jp:'ロン',desc:'Winning off a tile another player just discarded.'},
+  pon:{term:'Pon',jp:'ポン',desc:'Calling a discard to complete a triplet using two matching tiles from your own hand. Opens your hand.'},
+  chi:{term:'Chi',jp:'チー',desc:'Calling a discard from the player on your left to complete a sequence of three consecutive numbers. Opens your hand.'},
+  kan:{term:'Kan',jp:'カン',desc:'Declaring four of a kind — called or concealed. Reveals a new dora indicator and gives a bonus draw.'},
+  dealingin:{term:'Dealing In',desc:'Discarding the exact tile another player was waiting on and handing them the win (also called "feeding" a hand).'},
+  wall:{term:'Wall',jp:'山',desc:'The face-down stack of tiles players draw from each turn. Once it runs out, the round ends in a draw.'},
+  mangan:{term:'Mangan',jp:'満貫',desc:'A fixed high-value score tier (5 han, or fu high enough to cap out) — worth a flat amount regardless of the exact fu.'},
+  haneman:{term:'Haneman',jp:'跳満',desc:'The score tier above Mangan (6-7 han) — 1.5x a Mangan.'},
+  baiman:{term:'Baiman',jp:'倍満',desc:'The score tier above Haneman (8-10 han) — double a Mangan.'},
+  sanbaiman:{term:'Sanbaiman',jp:'三倍満',desc:'The score tier above Baiman (11-12 han) — triple a Mangan.'},
+  yakuman:{term:'Yakuman',jp:'役満',desc:'The highest score tier — either 13+ han, or one of a handful of named hands (like Kokushi Musou) that score this regardless of han.'},
+  wait:{term:'Wait',jp:'待ち',desc:'The tile (or tiles) that would complete your hand once you\'re tenpai — what you\'re "waiting" to draw or call.'},
+  // The three number suits — hooked up via tileKeyLabelHtml (wherever a
+  // tile like "3 Man" is shown) rather than the blind auto-linker below,
+  // same reasoning as "wait": these are common enough English words
+  // ("pin", "man") that scanning arbitrary prose for them would risk false
+  // matches having nothing to do with tiles.
+  man:{term:'Man',jp:'萬',desc:'One of the three number suits (1-9), sometimes called "characters" — each tile shows a numeral over 萬.'},
+  pin:{term:'Pin',jp:'筒',desc:'One of the three number suits (1-9), sometimes called "circles" or "dots" — each tile shows that many circles.'},
+  sou:{term:'Sou',jp:'索',desc:'One of the three number suits (1-9), sometimes called "bamboo" — the 1 tile is drawn as a bird instead of a bamboo stick.'},
+};
+// A handful of yaku shown in the advice panel share one YAKU_REFERENCE card
+// (every dragon/seat/round-wind triplet is filed there as just "Yakuhai") —
+// this maps those specific names to the card that actually explains them.
+const JARGON_YAKU_ALIAS={Haku:'Yakuhai',Hatsu:'Yakuhai',Chun:'Yakuhai','Seat Wind':'Yakuhai','Round Wind':'Yakuhai'};
+function jargonYakuEntry(name){
+  return YAKU_REFERENCE.find(y=>y.name===name)||YAKU_REFERENCE.find(y=>y.name===JARGON_YAKU_ALIAS[name])||null;
+}
+// Wraps already-safe HTML in a clickable jargon span for glossary id `id`.
+function jt(id,html){
+  return `<span class="jargon-term" data-jargon="g:${id}" tabindex="0" role="button">${html}</span>`;
+}
+// Same, but for a yaku name — looked up in YAKU_REFERENCE/its alias map
+// instead of JARGON_GLOSSARY. Falls back to plain escaped text (or an
+// unlinked pill, when asPill) if the name isn't recognized, so a popup is
+// never offered for nothing. `asPill` merges in .yc's pill styling for use
+// among the yaku badges elsewhere in this panel.
+function jtYaku(name,asPill){
+  const label=escHtml(name);
+  if(!jargonYakuEntry(name)) return asPill?`<span class="yc">${label}</span>`:label;
+  const cls=asPill?'yc jargon-term':'jargon-term';
+  return `<span class="${cls}" data-jargon="y:${escHtml(name)}" tabindex="0" role="button">${label}</span>`;
+}
+// Auto-links every whole-word occurrence of a JARGON_GLOSSARY term (or one
+// of its multi-word spoken forms, e.g. "dealing in") inside a block of
+// already-escaped plain prose — server-generated tips and discard/call
+// reasons. NOT run over player names or tile-key labels, which are left
+// alone (or wrapped individually via jt/jtYaku) at each call site instead.
+// man/pin/sou/wait are deliberately left out — see their comment in
+// JARGON_GLOSSARY above (too common a word to safely blind-scan for).
+const _JARGON_NO_AUTOLINK=new Set(['man','pin','sou','wait']);
+const _JARGON_AUTOLINK=Object.entries(JARGON_GLOSSARY)
+  .filter(([id])=>!_JARGON_NO_AUTOLINK.has(id))
+  .flatMap(([id,g])=>{
+    const extraWords={dealingin:['dealing in'],uradora:['ura dora']};
+    return (extraWords[id]||[g.term]).map(w=>({id,w}));
+  })
+  .sort((a,b)=>b.w.length-a.w.length); // longest phrase first, so "ura dora" wins over a bare "dora"
+const _JARGON_RE=new RegExp('\\b('+_JARGON_AUTOLINK.map(x=>x.w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')+')\\b','gi');
+function jargonizeText(escapedText){
+  return escapedText.replace(_JARGON_RE,match=>{
+    const hit=_JARGON_AUTOLINK.find(x=>x.w.toLowerCase()===match.toLowerCase());
+    return hit?jt(hit.id,match):match;
+  });
+}
+// A win-tier label from mahjong.js's handLabel() — either "Mangan 満貫" (etc.)
+// or, below Mangan, a plain "3 Han". The whole label becomes one clickable
+// term when its first word is a recognized score tier; otherwise it falls
+// back to the generic autolinker (which still catches "Han").
+function jtHandLabel(label){
+  const firstWord=(label.split(' ')[0]||'').toLowerCase();
+  return JARGON_GLOSSARY[firstWord]?jt(firstWord,escHtml(label)):jargonizeText(escHtml(label));
+}
+
+let jargonPopupAnchor=null;
+function showJargonPopup(anchorEl){
+  const id=anchorEl.dataset.jargon;
+  if(!id) return;
+  let entry=null;
+  if(id.startsWith('g:')) entry=JARGON_GLOSSARY[id.slice(2)]||null;
+  else if(id.startsWith('y:')){
+    const y=jargonYakuEntry(id.slice(2));
+    if(y) entry={term:id.slice(2),jp:y.jp,desc:y.desc};
+  }
+  if(!entry) return;
+  $('jargon-popup-term').textContent=entry.term;
+  $('jargon-popup-jp').textContent=entry.jp||'';
+  $('jargon-popup-desc').textContent=entry.desc;
+  jargonPopupAnchor=anchorEl;
+  positionJargonPopup(anchorEl);
+  $('jargon-popup').style.display='';
+}
+function closeJargonPopup(){
+  _jargonCancelHide();
+  jargonPopupAnchor=null;
+  const pop=$('jargon-popup'); if(pop) pop.style.display='none';
+}
+// Anchor-below/flip-above/clamp-to-viewport, same approach as
+// positionPlayerPopover — the clicked word can be anywhere inside the
+// (scrollable) advice panel, so this re-measures every time.
+function positionJargonPopup(anchorEl){
+  const pop=$('jargon-popup');
+  const r=anchorEl.getBoundingClientRect();
+  pop.style.display=''; // must be visible to measure its own size below
+  const pw=pop.offsetWidth||220, ph=pop.offsetHeight||100;
+  const margin=8;
+  let left=r.left+r.width/2-pw/2;
+  let top=r.bottom+8;
+  left=Math.max(margin,Math.min(left,window.innerWidth-pw-margin));
+  if(top+ph>window.innerHeight-margin) top=r.top-ph-8; // flip above if it'd overflow the bottom
+  top=Math.max(margin,top);
+  pop.style.left=left+'px';
+  pop.style.top=top+'px';
+}
+// Hover (mouse) / focus (keyboard) is the primary way to see a definition —
+// it should appear the instant the pointer lands on the word and vanish the
+// instant it leaves, like a tooltip, with no click needed. A short grace
+// timer on the way out is what lets the pointer cross the small gap between
+// the word and the popup below/above it (or coast between two adjacent
+// jargon words) without a flicker-close in between; entering either the new
+// word or the popup itself cancels it. Click is kept too — on mobile there's
+// no hover at all, but a tap already produces a synthetic mouseover in every
+// mainstream mobile browser, so this doubles as a tap-to-open target with no
+// double-firing risk (re-anchoring an already-open popup for the same word
+// is a no-op).
+let _jargonHideTimer=null;
+function _jargonCancelHide(){
+  if(_jargonHideTimer){ clearTimeout(_jargonHideTimer); _jargonHideTimer=null; }
+}
+function _jargonScheduleHide(){
+  _jargonCancelHide();
+  _jargonHideTimer=setTimeout(()=>{ _jargonHideTimer=null; closeJargonPopup(); },200);
+}
+// mouseover/mouseout (not mouseenter/mouseleave) specifically so this can be
+// delegated from document — .jargon-term spans are recreated on every
+// renderAdvice(), so a listener attached to the spans themselves would need
+// re-attaching every render.
+document.addEventListener('mouseover',e=>{
+  const term=e.target.closest('.jargon-term');
+  if(term){ _jargonCancelHide(); showJargonPopup(term); }
+});
+document.addEventListener('mouseout',e=>{
+  const term=e.target.closest('.jargon-term');
+  if(term&&!term.contains(e.relatedTarget)) _jargonScheduleHide();
+});
+document.addEventListener('focusin',e=>{
+  if(e.target.classList?.contains('jargon-term')){ _jargonCancelHide(); showJargonPopup(e.target); }
+});
+document.addEventListener('focusout',e=>{
+  if(e.target.classList?.contains('jargon-term')) _jargonScheduleHide();
+});
+// A single static element (unlike the terms above), so plain enter/leave —
+// no delegation needed, and this is what actually lets the pointer travel
+// from a word into the popup without it closing underneath the cursor.
+$('jargon-popup')?.addEventListener('mouseenter',_jargonCancelHide);
+$('jargon-popup')?.addEventListener('mouseleave',_jargonScheduleHide);
+// Click (see mobile note above) and Escape both still work as an explicit
+// override: click anywhere outside the popup/a term closes it right away
+// (no grace timer — the pointer isn't "in transit" to anywhere), Escape
+// closes it regardless of how it was opened.
+document.addEventListener('click',e=>{
+  const term=e.target.closest('.jargon-term');
+  if(term){ _jargonCancelHide(); showJargonPopup(term); return; }
+  if(!jargonPopupAnchor) return;
+  if(e.target.closest('#jargon-popup')) return;
+  closeJargonPopup();
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&jargonPopupAnchor) closeJargonPopup();
+});
+
 function renderAdvice(m){
+  closeJargonPopup(); // the panel is about to be torn down and rebuilt — don't leave a popup anchored to a span that's about to vanish
   const parts=[];
-  const doraTxt=m.doraCount>0?` You're holding ${m.doraCount} dora.`:'';
-  parts.push(`<div class="about-section-title">Shanten</div><div class="about-body">${
-    (m.isTenpai?'You\'re in tenpai — one tile away from a winning hand!':`You're ${m.shanten} tile${m.shanten===1?'':'s'} away from tenpai.`)
-  }${escHtml(doraTxt)}</div>`);
+  const doraTxt=m.doraCount>0?` You're holding ${m.doraCount} ${jt('dora','dora')}.`:'';
+  parts.push(`<div class="about-section-title">${jt('shanten','Shanten')}</div><div class="about-body">${
+    (m.isTenpai?`You're in ${jt('tenpai','tenpai')} — one tile away from a winning hand!`:`You're ${m.shanten} tile${m.shanten===1?'':'s'} away from ${jt('tenpai','tenpai')}.`)
+  }${doraTxt}</div>`);
 
   // Beginner traps/opportunities — surfaced right under the shanten line,
   // above the shape-specific sections below, since these matter regardless
   // of whether the hand is even close to tenpai.
   if(m.furiten){
-    parts.push(`<div class="advice-row advice-row-bad">⚠ You're in furiten — you can't win by ron right now (tsumo only) until it clears.</div>`);
+    parts.push(`<div class="advice-row advice-row-bad">⚠ You're in ${jt('furiten','furiten')} — you can't win by ${jt('ron','ron')} right now (${jt('tsumo','tsumo')} only) until it clears.</div>`);
   }
   if(m.wallLowTip){
-    parts.push(`<div class="advice-row advice-row-warn">⏳ ${escHtml(m.wallLowTip)}</div>`);
+    parts.push(`<div class="advice-row advice-row-warn">⏳ ${jargonizeText(escHtml(m.wallLowTip))}</div>`);
   }
   if(m.kitaTip){
-    parts.push(`<div class="advice-row advice-row-best">🀄 ${escHtml(m.kitaTip)}</div>`);
+    parts.push(`<div class="advice-row advice-row-best">🀄 ${jargonizeText(escHtml(m.kitaTip))}</div>`);
   }
   if(m.riichiTip){
-    parts.push(`<div class="advice-row advice-row-best">${escHtml(m.riichiTip)}</div>`);
+    parts.push(`<div class="advice-row advice-row-best">${jargonizeText(escHtml(m.riichiTip))}</div>`);
   }
   if(m.dangerTip){
     const oppList=m.dangerTip.opponents.join(', ');
     const safeTxt=m.dangerTip.safeKeys.length
-      ? `Safe tiles in your hand right now: ${m.dangerTip.safeKeys.map(tileKeyLabel).join(', ')}.`
+      ? `Safe tiles in your hand right now: ${m.dangerTip.safeKeys.map(tileKeyLabelHtml).join(', ')}.`
       : `None of your current tiles are confirmed safe against them yet.`;
-    parts.push(`<div class="advice-row advice-row-warn">🛡 ${escHtml(oppList)} ${m.dangerTip.opponents.length===1?'is':'are'} in riichi — pushing risks dealing in. ${safeTxt}</div>`);
+    parts.push(`<div class="advice-row advice-row-warn">🛡 ${escHtml(oppList)} ${m.dangerTip.opponents.length===1?'is':'are'} in ${jt('riichi','riichi')} — pushing risks ${jt('dealingin','dealing in')}. ${safeTxt}</div>`);
   }
 
   if(m.discards&&m.discards.length){
     const top=m.discards[0];
     const rows=m.discards.map((d,i)=>{
-      const waitTxt=d.shanten===0?` — waits on ${d.waitTiles.map(tileKeyLabel).join(', ')||'nothing yet'} (${d.waitCount} tile type${d.waitCount===1?'':'s'})`:'';
+      const waitTxt=d.shanten===0?` — ${jt('wait','waits')} on ${d.waitTiles.map(tileKeyLabelHtml).join(', ')||'nothing yet'} (${d.waitCount} tile type${d.waitCount===1?'':'s'})`:'';
       // Flags when THIS specific discard would give up a yaku another
       // candidate wouldn't (e.g. breaking a dragon pair you were holding
       // toward Yakuhai) — efficiency (shanten/waits) alone stays silent
       // about that trade-off otherwise.
       const lostTxt=d.lostYaku&&d.lostYaku.length
-        ? `<div class="advice-lost-yaku">⚠ Gives up potential: ${d.lostYaku.map(escHtml).join(', ')}</div>` : '';
-      return `<div class="advice-row${i===0?' advice-row-best':''}">${escHtml(tileKeyLabel(d.key))}${i===0?' (best)':''} → ${d.shanten===0?'tenpai':d.shanten+'-away'}${waitTxt}${lostTxt}</div>`;
+        ? `<div class="advice-lost-yaku">⚠ Gives up potential: ${d.lostYaku.map(y=>jtYaku(y)).join(', ')}</div>` : '';
+      return `<div class="advice-row${i===0?' advice-row-best':''}">${tileKeyLabelHtml(d.key)}${i===0?' (best)':''} → ${d.shanten===0?jt('tenpai','tenpai'):d.shanten+'-away'}${waitTxt}${lostTxt}</div>`;
     }).join('');
-    parts.push(`<div class="about-section"><div class="about-section-title">Suggested Discard</div><div class="about-body">Discard <b>${escHtml(tileKeyLabel(top.key))}</b> — it keeps your hand closest to tenpai.</div><div class="advice-list">${rows}</div></div>`);
+    parts.push(`<div class="about-section"><div class="about-section-title">Suggested Discard</div><div class="about-body">Discard <b>${tileKeyLabelHtml(top.key)}</b> — it keeps your hand closest to ${jt('tenpai','tenpai')}.</div><div class="advice-list">${rows}</div></div>`);
   }
 
   if(m.callAdvice&&m.callAdvice.length){
@@ -2537,27 +2743,29 @@ function renderAdvice(m){
       // Potential Yaku section uses, just for the post-call hand).
       let extra='';
       if(c.noYakuWarning){
-        extra=`<div class="advice-call-warning">⚠ Reaches tenpai, but with no yaku — you wouldn\'t be able to win on it as-is.</div>`;
+        extra=`<div class="advice-call-warning">⚠ Reaches ${jt('tenpai','tenpai')}, but with no ${jt('yaku','yaku')} — you wouldn\'t be able to win on it as-is.</div>`;
       } else if(c.yaku&&c.yaku.length){
-        const pills=c.yaku.map(y=>`<span class="yc" style="margin:2px;">${escHtml(y)}</span>`).join('');
+        const pills=c.yaku.map(y=>jtYaku(y,true)).join('');
         extra=`<div class="advice-call-yaku">Could win with: ${pills}</div>`;
       } else if(c.potential&&c.potential.length){
-        const hints=c.potential.map(p=>`<div class="advice-call-potential-item">${escHtml(p.name)} <span class="yj">${escHtml(p.jp)}</span> — ${escHtml(p.hint)}</div>`).join('');
+        const hints=c.potential.map(p=>`<div class="advice-call-potential-item">${jtYaku(p.name)} <span class="yj">${escHtml(p.jp)}</span> — ${jargonizeText(escHtml(p.hint))}</div>`).join('');
         extra=`<div class="advice-call-potential">${hints}</div>`;
       }
-      return `<div class="advice-row${c.recommend?' advice-row-best':' advice-row-bad'}">${c.recommend?'✓':'✗'} ${escHtml(c.type.toUpperCase())} — ${escHtml(c.reason)}${extra}</div>`;
+      const typeId=c.type.toLowerCase();
+      const typeLabel=JARGON_GLOSSARY[typeId]?jt(typeId,escHtml(c.type.toUpperCase())):escHtml(c.type.toUpperCase());
+      return `<div class="advice-row${c.recommend?' advice-row-best':' advice-row-bad'}">${c.recommend?'✓':'✗'} ${typeLabel} — ${jargonizeText(escHtml(c.reason))}${extra}</div>`;
     }).join('');
     parts.push(`<div class="about-section"><div class="about-section-title">Should You Call?</div><div class="advice-list">${rows}</div></div>`);
   }
 
   if(m.waits&&m.waits.length){
     const rows=m.waits.map(w=>{
-      const yakuPills=w.yaku.map(y=>`<span class="yc" style="margin:2px;">${escHtml(y)}</span>`).join('');
-      return `<div class="advice-wait"><div class="advice-wait-tile">${escHtml(tileKeyLabel(w.tile))}</div><div class="advice-wait-score">${w.han} Han${w.fu?', '+w.fu+' Fu':''} · ${escHtml(w.label)} · ${w.points.toLocaleString()} pts</div><div class="advice-wait-yaku">${yakuPills}</div></div>`;
+      const yakuPills=w.yaku.map(y=>jtYaku(y,true)).join('');
+      return `<div class="advice-wait"><div class="advice-wait-tile">${tileKeyLabelHtml(w.tile)}</div><div class="advice-wait-score">${w.han} ${jt('han','Han')}${w.fu?', '+w.fu+' '+jt('fu','Fu'):''} · ${jtHandLabel(w.label)} · ${w.points.toLocaleString()} pts</div><div class="advice-wait-yaku">${yakuPills}</div></div>`;
     }).join('');
-    parts.push(`<div class="about-section"><div class="about-section-title">Waits &amp; Potential Score</div>${rows}</div>`);
+    parts.push(`<div class="about-section"><div class="about-section-title">${jt('wait','Waits')} &amp; Potential Score</div>${rows}</div>`);
   } else if(m.potential&&m.potential.length){
-    const rows=m.potential.map(p=>`<div class="advice-row">${escHtml(p.name)} <span class="yj">${escHtml(p.jp)}</span> — ${escHtml(p.hint)}</div>`).join('');
+    const rows=m.potential.map(p=>`<div class="advice-row">${jtYaku(p.name)} <span class="yj">${escHtml(p.jp)}</span> — ${jargonizeText(escHtml(p.hint))}</div>`).join('');
     parts.push(`<div class="about-section"><div class="about-section-title">Potential Yaku</div><div class="advice-list">${rows}</div></div>`);
   }
 
