@@ -5971,14 +5971,12 @@ function startGame(m){
     const isSelfGuest=$('iname').value==='Guest';
     const pt=$('pt'+id); if(pt){ pt.textContent=i===0?(isSelfGuest?'':currentPlayerTitle):(p?.title||''); fitTitleText(pt); }
     if(i>0){const bt=$('bt'+id);if(bt)bt.textContent=p?.isBot?'CPU':'';}
-    // Icon + nameplate skin, visible to everyone at the table for the whole
-    // game (not just the lobby/5s roll-call — see gameStartIntro, and
-    // renderState below for mid-game re-syncs via seatIcons/
-    // seatNameplateSkins). Self mirrors refreshProfileDisplay's own
-    // isGuest handling — Guest always shows guestIconSvg/the plain skin
-    // regardless of whatever a previously-unlocked real profile had picked.
-    const iconHtml=i===0?(isSelfGuest?guestIconSvg:iconSvg(currentPlayerIcon)):iconSvg(p?.icon||'default');
-    const niEl=$('ni'+id); if(niEl) niEl.innerHTML=iconHtml;
+    // Nameplate skin, visible to everyone at the table for the whole game
+    // (not just the lobby/5s roll-call — see gameStartIntro, and
+    // renderState below for mid-game re-syncs via seatNameplateSkins).
+    // Self mirrors refreshProfileDisplay's own isGuest handling — Guest
+    // always shows the plain skin regardless of whatever a
+    // previously-unlocked real profile had picked.
     applyNameplateSkinClass($('np'+id),i===0?(isSelfGuest?'default':currentNameplateSkin):(p?.nameplateSkin||'default'));
     $('rs'+id).style.display='none';
   }
@@ -6173,22 +6171,16 @@ function renderState(m, prev){
       const wb=$('wb'+id);
       if(wb) wb.textContent=windLabels[m.seatWinds[abs]];
     }
-    // Re-applies icon/nameplate skin from THIS state tick's seatIcons/
-    // seatNameplateSkins (already sent every game_state — see room.js) —
-    // startGame's own game_start values are only a starting point; this is
-    // what makes a mid-hand equip (see equip_icon/equip_nameplate in
-    // index.js) actually show up for opponents without waiting for the next
-    // hand. Skipped for my own seat (abs===mySeat) — self already reflects
-    // the equip instantly via applyPlayerIcon/applyNameplateSkin, and
-    // seatIcons/seatNameplateSkins are keyed the same for every seat so
-    // there's nothing this would add for my own.
-    if(abs!==mySeat){
-      if(m.seatIcons?.[abs]!==undefined){
-        const niEl=$('ni'+id); if(niEl) niEl.innerHTML=iconSvg(m.seatIcons[abs]);
-      }
-      if(m.seatNameplateSkins?.[abs]!==undefined){
-        applyNameplateSkinClass($('np'+id),m.seatNameplateSkins[abs]);
-      }
+    // Re-applies nameplate skin from THIS state tick's seatNameplateSkins
+    // (already sent every game_state — see room.js) — startGame's own
+    // game_start values are only a starting point; this is what makes a
+    // mid-hand equip (see equip_nameplate in index.js) actually show up for
+    // opponents without waiting for the next hand. Skipped for my own seat
+    // (abs===mySeat) — self already reflects the equip instantly via
+    // applyNameplateSkin, and seatNameplateSkins is keyed the same for
+    // every seat so there's nothing this would add for my own.
+    if(abs!==mySeat && m.seatNameplateSkins?.[abs]!==undefined){
+      applyNameplateSkinClass($('np'+id),m.seatNameplateSkins[abs]);
     }
   }
 
