@@ -1254,7 +1254,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    --ui-vmin here matches .about-modal's own value exactly (both scoped
    locally, not on :root) so a cloned plate renders at the identical scale
    it would inside that modal. */
-.gs-layer{--ui-vmin:clamp(6px,min(1vw,1.6vh),12px);position:fixed;inset:0;z-index:210;
+.gs-layer{--ui-vmin:clamp(5px,min(1vw,1.4vh),12px);position:fixed;inset:0;z-index:210;
   pointer-events:none;display:flex;align-items:center;justify-content:center;}
 .gs-layer.blocking{pointer-events:auto;}
 .gs-scrim{position:absolute;inset:0;z-index:0;background:rgba(0,0,0,.85);
