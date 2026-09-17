@@ -44,7 +44,6 @@
       </div>
       <input id="vol-slider" class="sp-slider" type="range" min="0" max="100" value="30" oninput="setVolume(this.value)">
     </div>
-    <a href="#" class="hub-link" onclick="toggleGameMusicModal();return false;">Game Music ▸</a>
   </div>
   <!-- Voice section -->
   <div class="sp-section">
@@ -97,7 +96,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.15.3</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.16.0</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI and real opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -122,6 +121,7 @@
      stays a single fixed track for now, so it has no picker of its own. -->
 <div id="gamemusic-backdrop" class="about-backdrop" onclick="toggleGameMusicModal()"></div>
 <div id="gamemusic-modal" class="about-modal">
+  <button class="about-back" onclick="backToPersonalisation()">←</button>
   <button class="about-close" onclick="toggleGameMusicModal()">✕</button>
   <div class="about-title">Game Music</div>
   <div class="about-body">
@@ -402,16 +402,16 @@
        separate hub links below, clicking the thing itself IS the entry
        point now. -->
   <div class="about-title up-nameplate">
-    <span class="pnp-icon up-icon-btn" id="up-icon" onclick="toggleUserProfile();togglePlayerIconModal();" title="Change Player Icon"></span>
+    <span class="pnp-icon up-icon-btn" id="up-icon" onclick="leafOpenedFrom='userprofile';toggleUserProfile();togglePlayerIconModal();" title="Change Player Icon"></span>
     <span class="pnp-info">
       <span class="pnp-name" id="up-name"></span>
-      <span class="pnp-title up-title-btn" id="up-title" onclick="toggleUserProfile();toggleTitleModal();" title="Change Title"></span>
+      <span class="pnp-title up-title-btn" id="up-title" onclick="leafOpenedFrom='userprofile';toggleUserProfile();toggleTitleModal();" title="Change Title"></span>
     </span>
   </div>
   <div class="about-body">
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleFriendsModal();return false;">Friends</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleNotificationsModal();return false;">Notifications<span class="hub-badge" id="notif-hub-badge"></span></a>
-    <a href="#" class="hub-link" onclick="toggleUserProfile();toggleVoiceThemeModal();return false;">Voice Theme</a>
+    <a href="#" class="hub-link" onclick="toggleUserProfile();togglePersonalisationModal();return false;">Personalisation</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleUserStatsModal();return false;">My Stats</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();togglePlayHistoryModal();return false;">Play History</a>
     <a href="#" class="hub-link" onclick="toggleUserProfile();toggleAchievementsModal();return false;">Achievements</a>
@@ -420,12 +420,38 @@
   </div>
 </div>
 
-<!-- Player Icon — its own window, opened from the User Profile hub above.
-     "← Back" returns to the hub (see backToUserProfile) — ✕ exits out of
-     User Profile entirely, same as everywhere else. -->
+<!-- Personalisation — one consolidated sub-hub for every "pick your look/
+     sound" picker, opened from the User Profile hub above. Each link below
+     closes this and opens the actual picker, same two-step pattern the hub
+     itself uses (see e.g. togglePersonalisationModal();togglePlayerIconModal()).
+     Player Icon and Title stay ALSO reachable via the header's #up-icon/
+     #up-title quick-click (see #userprofile-modal above) — this page is an
+     additional, consistent entry point, not a replacement for that shortcut.
+     Game Music moved here from the Settings (gear) panel, where it used to
+     be the one "pick your look" picker siloed away from the other four. -->
+<div id="personalisation-backdrop" class="about-backdrop" onclick="togglePersonalisationModal()"></div>
+<div id="personalisation-modal" class="about-modal">
+  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-close" onclick="togglePersonalisationModal()">✕</button>
+  <div class="about-title">Personalisation</div>
+  <div class="about-body">
+    <a href="#" class="hub-link" onclick="leafOpenedFrom='personalisation';togglePersonalisationModal();togglePlayerIconModal();return false;">Player Icon</a>
+    <a href="#" class="hub-link" onclick="leafOpenedFrom='personalisation';togglePersonalisationModal();toggleTitleModal();return false;">Title</a>
+    <a href="#" class="hub-link" onclick="togglePersonalisationModal();toggleVoiceThemeModal();return false;">Voice Theme</a>
+    <a href="#" class="hub-link" onclick="togglePersonalisationModal();toggleNameplateModal();return false;">Nameplate</a>
+    <a href="#" class="hub-link" onclick="togglePersonalisationModal();toggleGameMusicModal();return false;">Game Music</a>
+  </div>
+</div>
+
+<!-- Player Icon — its own window, opened from the User Profile hub above
+     (directly, via #up-icon) or from Personalisation above. "← Back"
+     returns to whichever one of those actually opened it (see
+     leafOpenedFrom/backFromIconOrTitle in script.js) — the only two leaves
+     that need this, since they're the only ones with more than one entry
+     point. ✕ exits out of User Profile entirely, same as everywhere else. -->
 <div id="playericon-backdrop" class="about-backdrop" onclick="togglePlayerIconModal()"></div>
 <div id="playericon-modal" class="about-modal">
-  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-back" onclick="backFromIconOrTitle()">←</button>
   <button class="about-close" onclick="togglePlayerIconModal()">✕</button>
   <div class="about-title">Player Icon</div>
   <div class="about-body">
@@ -434,13 +460,13 @@
 </div>
 
 <!-- Title — same pattern as Player Icon above, opened by clicking #up-title
-     instead of a hub link. Only "Beginner" exists right now — also every
+     or from Personalisation. Only "Beginner" exists right now — also every
      profile's default (see TITLES in server/profiles.js) — more will be
      added later without this panel's structure needing to change; see
      renderTitles/applyPlayerTitle in script.js. -->
 <div id="title-backdrop" class="about-backdrop" onclick="toggleTitleModal()"></div>
 <div id="title-modal" class="about-modal">
-  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-back" onclick="backFromIconOrTitle()">←</button>
   <button class="about-close" onclick="toggleTitleModal()">✕</button>
   <div class="about-title">Title</div>
   <div class="about-body">
@@ -448,16 +474,32 @@
   </div>
 </div>
 
-<!-- Voice Theme — same pattern as Player Icon above. #voice-theme-list
-     keeps its id from before this moved — renderVoiceThemes targets it
-     unchanged, it just lives here now instead of inline in User Profile. -->
+<!-- Voice Theme — same pattern as Player Icon above, but reachable ONLY via
+     Personalisation now (no direct hub-link/header shortcut of its own), so
+     unlike Player Icon/Title its "← Back" can go straight there. #voice-
+     theme-list keeps its id from before this moved — renderVoiceThemes
+     targets it unchanged. -->
 <div id="voicetheme-backdrop" class="about-backdrop" onclick="toggleVoiceThemeModal()"></div>
 <div id="voicetheme-modal" class="about-modal">
-  <button class="about-back" onclick="backToUserProfile()">←</button>
+  <button class="about-back" onclick="backToPersonalisation()">←</button>
   <button class="about-close" onclick="toggleVoiceThemeModal()">✕</button>
   <div class="about-title">Voice Theme</div>
   <div class="about-body">
     <div id="voice-theme-list" class="sp-theme-list"></div>
+  </div>
+</div>
+
+<!-- Nameplate — same "← Back / ✕" pattern as Voice Theme above (reachable
+     only via Personalisation). Lists only OWNED skins (renderNameplateSkins);
+     buying a new one happens in the Store, opened from #coin-count (see
+     toggleStoreModal). -->
+<div id="nameplate-backdrop" class="about-backdrop" onclick="toggleNameplateModal()"></div>
+<div id="nameplate-modal" class="about-modal">
+  <button class="about-back" onclick="backToPersonalisation()">←</button>
+  <button class="about-close" onclick="toggleNameplateModal()">✕</button>
+  <div class="about-title">Nameplate</div>
+  <div class="about-body">
+    <div id="nameplate-list" class="nameplate-grid"></div>
   </div>
 </div>
 
@@ -635,16 +677,52 @@
   </div>
 </div>
 
-<!-- Store — opened by clicking the coin balance (#coin-count). Placeholder
-     for now; a customization shop that spends coins is a later feature
-     (economy.spend is stubbed server-side). See toggleStoreModal. -->
+<!-- Store — opened by clicking the coin balance (#coin-count). Two grids,
+     rendered by renderShopIcons/renderShopNameplates (see script.js) —
+     each item shows its tier and price/ownership state; clicking a card
+     opens #shop-preview-modal below rather than acting immediately. See
+     toggleStoreModal. -->
 <div id="store-backdrop" class="about-backdrop" onclick="toggleStoreModal()"></div>
 <div id="store-modal" class="about-modal">
   <button class="about-close" onclick="toggleStoreModal()">✕</button>
   <div class="about-title">Store</div>
   <div class="about-body">
-    <p class="store-soon">Coming soon…</p>
-    <p class="store-sub">Spend your coins on customization here.</p>
+    <p class="shop-section-label">Player Icons</p>
+    <div id="shop-icon-list" class="shop-grid"></div>
+    <p class="shop-section-label">Nameplates</p>
+    <div id="shop-nameplate-list" class="shop-grid"></div>
+  </div>
+</div>
+
+<!-- Shop item preview — opened by clicking any card in the Store above (see
+     openShopPreview/renderShopPreview in script.js). The stage
+     (#shop-preview-stage) is fully built by JS since an icon and a
+     nameplate skin preview genuinely differ, each shown the way it's
+     actually seen day-to-day rather than a single shared mock:
+       - Icon: the player's own profile plate (.up-nameplate/.pnp-*, same
+         markup and tier colour as the User Profile header) — icon+name+
+         title. That's where an icon is actually seen most, not the small
+         in-game seat badge.
+       - Nameplate skin: the in-game seat plate's own look (.np-preview/
+         .np-skin-*) — wind+name+title, no icon (that badge is a separate,
+         much smaller corner element on the real thing).
+     The action area (#shop-preview-action) is swapped in by
+     renderShopPreview: a "Buy for N coins" button (unowned and
+     affordable — see confirmBuyCosmetic, which prompts via uiConfirm
+     before ever spending anything), a plain "not enough coins" message
+     (unowned, unaffordable — no button, since buying it isn't actually
+     possible right now), an "Equip" button (owned, not equipped), or a
+     plain "Equipped" label (nothing to do). -->
+<div id="shop-preview-backdrop" class="about-backdrop" onclick="closeShopPreview()"></div>
+<div id="shop-preview-modal" class="about-modal">
+  <button class="about-close" onclick="closeShopPreview()">✕</button>
+  <div class="about-title" id="shop-preview-title"></div>
+  <div class="about-body">
+    <div class="shop-preview-meta">
+      <span class="shop-item-tier" id="shop-preview-tier"></span>
+    </div>
+    <div class="shop-preview-stage" id="shop-preview-stage"></div>
+    <div id="shop-preview-action"></div>
   </div>
 </div>
 
@@ -1244,7 +1322,7 @@
       <!-- ── Nameplate ── -->
         <div class="np-wrap-b">
           <div class="np-inner">
-            <div class="np" id="npb" onclick="openPlayerCardInGame('b',this)"><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div><div class="ptitle" id="ptb"></div></div><span id="statusdot-b" class="status-dot"></span></div>
+            <div class="np" id="npb" onclick="openPlayerCardInGame('b',this)"><span class="np-icon" id="nib"></span><div class="wb" id="wbb">？</div><div><div class="pname" id="pnb">—</div><div class="ptitle" id="ptb"></div></div><span id="statusdot-b" class="status-dot"></span></div>
           </div>
           <div class="act-overlay actbar" id="actbar"></div>
         </div>
@@ -1256,7 +1334,7 @@
         <div class="hr" id="hdt"></div>
       </div>
         <div class="np-wrap-t">
-          <div class="np" id="npt" onclick="openPlayerCardInGame('t',this)"><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="ptitle" id="ptt"></div><div class="btag" id="btt"></div></div></div>
+          <div class="np" id="npt" onclick="openPlayerCardInGame('t',this)"><span class="np-icon" id="nit"></span><div class="wb" id="wbt">？</div><div><div class="pname" id="pnt">—</div><div class="ptitle" id="ptt"></div><div class="btag" id="btt"></div></div></div>
         </div>
       <div class="mr ml-t" id="mlt"></div>
       <div class="kita-strip kita-t" id="kt"></div>
@@ -1266,7 +1344,7 @@
         <div class="hr" id="hdl"></div>
       </div>
         <div class="np-wrap-l">
-          <div class="np" id="npl" onclick="openPlayerCardInGame('l',this)"><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="ptitle" id="ptl"></div><div class="btag" id="btl"></div></div></div>
+          <div class="np" id="npl" onclick="openPlayerCardInGame('l',this)"><span class="np-icon" id="nil"></span><div class="wb" id="wbl">？</div><div><div class="pname" id="pnl">—</div><div class="ptitle" id="ptl"></div><div class="btag" id="btl"></div></div></div>
         </div>
       <div class="mr ml-l" id="mll"></div>
       <div class="kita-strip kita-l" id="kl"></div>
@@ -1277,7 +1355,7 @@
       </div>
         <div class="np-wrap-r">
           <div class="np-flip">
-            <div class="np" id="npr" onclick="openPlayerCardInGame('r',this)"><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="ptitle" id="ptr"></div><div class="btag" id="btr"></div></div></div>
+            <div class="np" id="npr" onclick="openPlayerCardInGame('r',this)"><span class="np-icon" id="nir"></span><div class="wb" id="wbr">？</div><div><div class="pname" id="pnr">—</div><div class="ptitle" id="ptr"></div><div class="btag" id="btr"></div></div></div>
           </div>
         </div>
       <div class="mr ml-r" id="mlr"></div>

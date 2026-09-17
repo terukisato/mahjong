@@ -747,6 +747,12 @@ function onMsg(m){
     unlockedTracks=m.stats?.unlockedTracks||['tea'];
     renderGameMusicList();
     renderAchievements(m.stats?.achievementsInfo);
+    // Shop ownership — same "refresh my unlocked-everything" round-trip as
+    // unlockedThemes/unlockedTitles above, just for bought (not earned)
+    // cosmetics (see cosmetics.getOwned in server/index.js's get_stats
+    // handler). Always includes the free defaults even before login.
+    ownedCosmetics=m.ownedCosmetics||{icons:playerIcons.map(i=>i.id),nameplates:['default']};
+    renderPlayerIcons();renderNameplateSkins();renderShopIcons();renderShopNameplates();
     // Combined wins (both variants — the nameplate is one identity, not
     // split by mode) drive the User Profile hub's nameplate tier — see
     // updateNameplateTier. m.stats.yonma/sanma.gamesWon are lifetime
@@ -855,6 +861,25 @@ function onMsg(m){
   // opens "View Results" (see showCoinReward, called from onGameOver).
   if(m.type==='coins'){
     updateCoins(m.balance);
+    // Shop purchase result (see buyCosmetic) — a different shape from the
+    // end-of-game payout below (ok/error/itemId instead of delta), reusing
+    // this same message type rather than inventing a new one since both are
+    // ultimately just "here's your new balance".
+    if(m.reason==='purchase'){
+      if(m.ok){
+        const type=ICON_CATALOG.some(i=>i.id===m.itemId)?'icons':'nameplates';
+        if(!ownedCosmetics[type].includes(m.itemId)) ownedCosmetics[type].push(m.itemId);
+        renderShopIcons();renderShopNameplates();renderPlayerIcons();renderNameplateSkins();
+        // If the preview modal is still open on the item that was just
+        // bought, refresh it in place too (Buy -> Equip) — it was closed
+        // out from under the confirm dialog otherwise stayed open on stale
+        // "Buy" state until the player closed and reopened it.
+        if(shopPreviewItem?.item?.id===m.itemId) renderShopPreview();
+      } else {
+        toast(m.error||'Could not buy that.');
+      }
+      return;
+    }
     if(m.delta>0){
       pendingCoinReward=m;
       // If the game-over results are already on screen (fast "View Results"
@@ -1012,12 +1037,39 @@ function toggleUserProfile(){
 // unconditionally clearing every child (not just the caller's own) so this
 // stays correct even if a future setting gets added here.
 function backToUserProfile(){
-  ['friends','notifications','playericon','title','voicetheme','userstats','playhistory','achievements','changeusername','changecode'].forEach(id=>{
+  ['friends','notifications','personalisation','playericon','title','voicetheme','nameplate','gamemusic','userstats','playhistory','achievements','changeusername','changecode'].forEach(id=>{
     $(id+'-modal').classList.remove('visible');
     $(id+'-backdrop').classList.remove('visible');
   });
   $('userprofile-modal').classList.add('visible');
   $('userprofile-backdrop').classList.add('visible');
+}
+
+// "← Back" from a leaf reached via Personalisation specifically (Voice
+// Theme, Nameplate, Game Music) — these have no other entry point since
+// Personalisation consolidated them (see togglePersonalisationModal), so
+// unlike Player Icon/Title below, their own "← Back" can always return
+// straight here rather than all the way up to the User Profile hub.
+function backToPersonalisation(){
+  ['playericon','title','voicetheme','nameplate','gamemusic'].forEach(id=>{
+    $(id+'-modal').classList.remove('visible');
+    $(id+'-backdrop').classList.remove('visible');
+  });
+  $('personalisation-modal').classList.add('visible');
+  $('personalisation-backdrop').classList.add('visible');
+}
+
+// Player Icon and Title are the only two leaves reachable from BOTH the
+// User Profile header's own quick-click (#up-icon/#up-title) AND
+// Personalisation — every other leaf only ever has one entry point now, so
+// only these two need to remember which one actually opened them. Each
+// entry point sets this immediately before navigating (see index.html);
+// "← Back" on either modal then calls backFromIconOrTitle instead of
+// hardcoding a destination the way every other leaf's back button does.
+let leafOpenedFrom='userprofile';
+function backFromIconOrTitle(){
+  if(leafOpenedFrom==='personalisation') backToPersonalisation();
+  else backToUserProfile();
 }
 
 // ── Coins ──────────────────────────────────────────────────────────────
@@ -1084,12 +1136,14 @@ function showCoinReward(){
   el.innerHTML=`Coins earned&nbsp;&nbsp;+${m.delta} ${coinIconSvg}${cap}`;
 }
 
-// Store — placeholder window opened by clicking the coin balance. A
-// customization shop that spends coins is a later feature (economy.spend is
-// already stubbed server-side).
+// Store — opened by clicking the coin balance. Re-renders both grids on
+// every open (not just on 'stats' refresh) so the afford/owned state can
+// never be stale against a balance that changed while the modal was closed
+// (e.g. a game finished and paid out coins).
 function toggleStoreModal(){
   const modal=$('store-modal'),backdrop=$('store-backdrop');
   const open=modal.classList.contains('visible');
+  if(!open){ renderShopIcons(); renderShopNameplates(); }
   modal.classList.toggle('visible',!open);
   backdrop.classList.toggle('visible',!open);
 }
@@ -1473,6 +1527,30 @@ function toggleVoiceThemeModal(){
   renderVoiceThemes();
   modal.classList.add('visible');
   backdrop.classList.add('visible');
+}
+
+// Same pattern as togglePlayerIconModal/toggleVoiceThemeModal above — picks
+// among OWNED nameplate skins only (see renderNameplateSkins); the Shop is
+// where a new one gets bought.
+function toggleNameplateModal(){
+  const modal=$('nameplate-modal');
+  const backdrop=$('nameplate-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  renderNameplateSkins();
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+// Personalisation — a plain toggle, same as the other hub sub-pages, but
+// with no render call of its own: its body is a static list of hub-links
+// (see #personalisation-modal in index.html), not data-driven content.
+function togglePersonalisationModal(){
+  const modal=$('personalisation-modal');
+  const backdrop=$('personalisation-backdrop');
+  const open=modal.classList.contains('visible');
+  modal.classList.toggle('visible',!open);
+  backdrop.classList.toggle('visible',!open);
 }
 
 // Fetches stats fresh each open (renderStats reveals it, via onMsg's
@@ -3385,6 +3463,10 @@ function onProfileUnlocked(m){
     try{ localStorage.setItem('mj-player-icon',currentPlayerIcon); }catch(e){}
     currentPlayerTitle=m.title||'Beginner';
     try{ localStorage.setItem('mj-player-title',currentPlayerTitle); }catch(e){}
+    // Same server-authoritative sync as icon/title above, for the nameplate
+    // skin (see profiles.getNameplateSkin).
+    currentNameplateSkin=m.nameplateSkin||'default';
+    try{ localStorage.setItem('mj-nameplate-skin',currentNameplateSkin); }catch(e){}
     // Voice theme is server-authoritative for a logged-in profile too now
     // (see profiles.getVoiceTheme) — sync it the same way, so it survives a
     // localStorage wipe / a different browser and can't drift from what the
@@ -4015,7 +4097,7 @@ function applyPlayerTitle(titleId){
   // re-checked there against this profile's own unlockedTitles) — a no-op
   // server-side if no profile's unlocked yet (e.g. this fires at page load
   // too, restoring the cached selection), same reasoning as
-  // applyPlayerIcon's set_profile_icon send.
+  // applyPlayerIcon's equip_icon send.
   wss({type:'set_profile_title',title:titleId});
   refreshProfileDisplay();
 }
@@ -4052,7 +4134,57 @@ const playerIcons=[
   {id:'chun', label:'Red Dragon', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="2" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="20" dominant-baseline="central" font-size="18" text-anchor="middle" fill="#e04040" font-family="\'Noto Serif JP\',serif">中</text></svg>'},
   {id:'hatsu', label:'Green Dragon', svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="2" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><text x="20" y="20" dominant-baseline="central" font-size="18" text-anchor="middle" fill="#4caf60" font-family="\'Noto Serif JP\',serif">發</text></svg>'},
 ];
+
+// Paid icons — same drawn-not-uploaded reasoning as playerIcons above, kept
+// as a separate list (rather than just appended to playerIcons) since these
+// are gated by ownedCosmetics.icons (see cosmetics.js server-side) instead
+// of being free personalization. id/price/tier must match server/
+// cosmetics.js's CATALOG.icon exactly — the server is what actually charges
+// the price, this only drives what the Shop/pickers render.
+const ICON_CATALOG=[
+  {id:'tsuki', label:'Moon', tier:'common', price:600, svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="2" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><circle cx="19" cy="20" r="9" fill="#f0d080"/><circle cx="24" cy="17" r="9" fill="#0a160c"/></svg>'},
+  {id:'neko', label:'Lucky Cat', tier:'common', price:700, svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="2" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><path d="M12,15 L16,20 L10,22 Z" fill="#f5edd8"/><path d="M28,15 L24,20 L30,22 Z" fill="#f5edd8"/><circle cx="20" cy="22" r="9" fill="#f5edd8"/><circle cx="16.5" cy="21" r="1.1" fill="#2a1c08"/><circle cx="23.5" cy="21" r="1.1" fill="#2a1c08"/><path d="M20,24 L18,26 L22,26 Z" fill="#e08090"/></svg>'},
+  {id:'koi', label:'Koi Fish', tier:'uncommon', price:1100, svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="2" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><path d="M9,21 Q20,9 31,17 Q23,21 31,25 Q20,33 9,21 Z" fill="#e08030"/><circle cx="14" cy="19" r="1.3" fill="#0a160c"/></svg>'},
+  {id:'kitsune', label:'Fox Mask', tier:'rare', price:1800, svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="2" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><path d="M20,9 L30,15 L26,30 L20,26 L14,30 L10,15 Z" fill="#f5edd8"/><circle cx="16.5" cy="18" r="1.2" fill="#2a1c08"/><circle cx="23.5" cy="18" r="1.2" fill="#2a1c08"/><path d="M20,21 L17.5,23.5 L22.5,23.5 Z" fill="#e08030"/></svg>'},
+  {id:'daruma', label:'Wish Doll', tier:'legendary', price:6000, svg:'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="36" height="36" rx="2" fill="#0a160c" stroke="var(--gold)" stroke-width="0.5"/><ellipse cx="20" cy="23" rx="11" ry="13" fill="#c62828"/><ellipse cx="20" cy="16" rx="7" ry="6" fill="#f5edd8"/><circle cx="17" cy="16" r="1.3" fill="#1a1a1a"/><circle cx="23" cy="16" r="1.3" fill="#1a1a1a"/><path d="M16,20 Q20,22 24,20" stroke="#1a1a1a" stroke-width="1" fill="none"/></svg>'},
+];
+
+// Purchasable nameplate skins for the in-game seat plate (.np) — cls is the
+// CSS modifier class applied alongside .np (see .np-skin-* in style.css,
+// which only ever override background/border/box-shadow/color, never the
+// row's own calibrated padding/gap/font-size). id/price/tier mirror
+// server/cosmetics.js's CATALOG.nameplate exactly, same reasoning as
+// ICON_CATALOG above.
+const NAMEPLATE_CATALOG=[
+  {id:'hai', label:'Tile Face', tier:'uncommon', price:1300, cls:'np-skin-hai'},
+  {id:'tatamiberi', label:'Woven Border', tier:'uncommon', price:1400, cls:'np-skin-tatamiberi'},
+  {id:'andon', label:'Lantern Glow', tier:'rare', price:2200, cls:'np-skin-andon'},
+  {id:'hyosatsu', label:'Lacquer Slab', tier:'rare', price:2600, cls:'np-skin-hyosatsu'},
+  {id:'kinpaku', label:'Gold Leaf', tier:'legendary', price:8000, cls:'np-skin-kinpaku'},
+];
+function nameplateSkinClass(skinId){
+  const item=NAMEPLATE_CATALOG.find(n=>n.id===skinId);
+  return item?item.cls:null;
+}
+// Swaps whichever .np-skin-* modifier class a seat's .np currently has for
+// the one matching skinId (none, for the plain 'default' skin) — used for
+// both the local player's own seat and every opponent's, in-game, so icon/
+// nameplate customization is actually visible during play and not just in
+// the lobby/results screens. See startGame/renderState below.
+function applyNameplateSkinClass(npEl,skinId){
+  if(!npEl) return;
+  npEl.classList.remove(...NAMEPLATE_CATALOG.map(n=>n.cls));
+  const cls=nameplateSkinClass(skinId);
+  if(cls) npEl.classList.add(cls);
+}
+
+// Which icons/nameplate skins this profile can actually equip — the free
+// defaults until the 'stats' response (see onMsg) fills in anything bought.
+// Same shape as server/cosmetics.js's getOwned().
+let ownedCosmetics={icons:playerIcons.map(i=>i.id),nameplates:['default']};
+
 let currentPlayerIcon='default';
+let currentNameplateSkin='default';
 
 // Guest's own fixed icon — deliberately NOT in playerIcons above: Guest has
 // no profile to persist a choice onto, so it isn't offered in the Player
@@ -4073,23 +4205,48 @@ const guestIconSvg='<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
 
 // Looks up any icon's SVG by id (falls back to Default for an unknown/
 // missing id) — used for the player's own icon grid, the picker's profile
-// cards, and the user-icon-btn mirror, so all three ever only need this.
+// cards, the user-icon-btn mirror, AND (unlike before paid icons existed)
+// every opponent's in-game seat badge too — so it has to check ICON_CATALOG
+// as well as the free playerIcons, since an opponent may have a paid icon
+// equipped that this client has never bought itself.
 function iconSvg(iconId){
-  return (playerIcons.find(i=>i.id===iconId)||playerIcons[0]).svg;
+  return (playerIcons.find(i=>i.id===iconId)||ICON_CATALOG.find(i=>i.id===iconId)||playerIcons[0]).svg;
 }
 
 function applyPlayerIcon(iconId){
+  // Guards against a stale/tampered click ever equipping something this
+  // profile hasn't bought — renderPlayerIcons below only ever offers owned
+  // icons as buttons in the first place, this is the belt-and-braces check.
+  if(!ownedCosmetics.icons.includes(iconId)) return;
   currentPlayerIcon=iconId;
   document.querySelectorAll('.icon-btn').forEach(b=>{
     b.classList.toggle('active',b.dataset.icon===iconId);
   });
   try{ localStorage.setItem('mj-player-icon',iconId); }catch(e){}
-  // Persists onto the profile itself (server-side, see profiles.setIcon)
-  // so the picker's cards show it correctly even before anyone unlocks
-  // this profile again — a no-op server-side if no profile's unlocked yet
-  // (e.g. this fires at page load too, restoring the cached selection).
-  wss({type:'set_profile_icon',icon:iconId});
+  // Persists onto the profile itself (server-side, see
+  // cosmetics.setEquippedIcon/profiles.setIcon) so the picker's cards show
+  // it correctly even before anyone unlocks this profile again — a no-op
+  // server-side if no profile's unlocked yet (e.g. this fires at page load
+  // too, restoring the cached selection). Renamed from 'set_profile_icon'
+  // now that equipping is ownership-gated server-side too.
+  wss({type:'equip_icon',icon:iconId});
   refreshProfileDisplay();
+  // Re-paints the Shop's own state (owned -> equipped) immediately rather
+  // than waiting for the next 'stats' round-trip — otherwise a just-bought
+  // item stays labeled "Owned" in the Shop even though it's now actually
+  // equipped (visible everywhere else: user-icon-btn, the nameplate, etc).
+  renderShopIcons();
+}
+
+function applyNameplateSkin(skinId){
+  if(!ownedCosmetics.nameplates.includes(skinId)) return;
+  currentNameplateSkin=skinId;
+  document.querySelectorAll('.nameplate-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.skin===skinId);
+  });
+  try{ localStorage.setItem('mj-nameplate-skin',skinId); }catch(e){}
+  wss({type:'equip_nameplate',skin:skinId});
+  renderShopNameplates();
 }
 
 // Mirrors the chosen icon/name/title onto the lobby's user-icon-btn (next
@@ -4158,7 +4315,11 @@ function updateNameplateTier(wins){
 function renderPlayerIcons(){
   const list=$('player-icon-list'); if(!list) return;
   list.innerHTML='';
-  playerIcons.forEach(ic=>{
+  // Owned paid icons (see ICON_CATALOG) show up here alongside the free
+  // set — this picker only ever lists what's already owned; the Shop
+  // (renderShopIcons below) is the only place a new one gets bought.
+  const owned=playerIcons.concat(ICON_CATALOG.filter(ic=>ownedCosmetics.icons.includes(ic.id)));
+  owned.forEach(ic=>{
     const btn=document.createElement('button');
     btn.className='icon-btn';
     btn.dataset.icon=ic.id;
@@ -4168,6 +4329,198 @@ function renderPlayerIcons(){
     list.appendChild(btn);
   });
   applyPlayerIcon(currentPlayerIcon);
+}
+
+// Nameplate skin picker (#nameplate-list, in the User Profile hub) — only
+// ever lists OWNED skins for equipping, same division of labor as
+// renderPlayerIcons above. Preview reuses the same .np-skin-* classes the
+// real in-game seat plate uses (see style.css) on a small fixed-size
+// .np-preview element rather than the real .np — .np's own sizing is
+// calibrated off --table-size, which is only meaningful inside the game
+// table (see .np's comment in style.css), so a modal preview needs its own
+// self-contained sizing instead.
+function renderNameplateSkins(){
+  const list=$('nameplate-list'); if(!list) return;
+  list.innerHTML='';
+  const plain={id:'default',label:'Plain',cls:null};
+  const owned=[plain].concat(NAMEPLATE_CATALOG.filter(np=>ownedCosmetics.nameplates.includes(np.id)));
+  owned.forEach(np=>{
+    const btn=document.createElement('button');
+    btn.className='nameplate-btn';
+    btn.dataset.skin=np.id;
+    btn.title=np.label;
+    const preview=document.createElement('div');
+    preview.className='np-preview'+(np.cls?' '+np.cls:'');
+    preview.innerHTML='<span class="npv-wind">東</span><span class="npv-name">Player</span>';
+    btn.appendChild(preview);
+    btn.onclick=()=>applyNameplateSkin(np.id);
+    list.appendChild(btn);
+  });
+  applyNameplateSkin(currentNameplateSkin);
+}
+
+// ── Shop ─────────────────────────────────────────────────────────────────
+// #store-modal's real content (was a hard-coded "Coming soon" placeholder,
+// see index.html). Two grids, each item showing its tier and one of three
+// states in place of a plain price: equipped (current pick), Purchased
+// (owned, not equipped), or the coin price (not yet owned). Every card
+// looks the same regardless of the player's current balance — there's
+// nothing trustworthy to grey out client-side anyway, since the actual
+// funds check only ever happens server-side when a purchase is confirmed.
+// Clicking any card — bought or not — opens the shared preview
+// (openShopPreview below) rather than acting immediately.
+function _shopItemState(owned,equipped){
+  return equipped?'equipped':(owned?'owned':'buy');
+}
+function _shopPriceLabel(state,price){
+  return state==='equipped'?'Equipped':(state==='owned'?'Purchased':price+' coins');
+}
+function renderShopIcons(){
+  const list=$('shop-icon-list'); if(!list) return;
+  list.innerHTML='';
+  ICON_CATALOG.forEach(ic=>{
+    const owned=ownedCosmetics.icons.includes(ic.id);
+    const state=_shopItemState(owned,owned&&currentPlayerIcon===ic.id);
+    const btn=document.createElement('button');
+    btn.className='shop-item shop-'+state;
+    btn.innerHTML=ic.svg+
+      '<span class="shop-item-label">'+ic.label+'</span>'+
+      '<span class="shop-item-tier '+ic.tier+'">'+ic.tier+'</span>'+
+      '<span class="shop-item-price">'+_shopPriceLabel(state,ic.price)+'</span>';
+    btn.onclick=()=>openShopPreview('icon',ic);
+    list.appendChild(btn);
+  });
+}
+function renderShopNameplates(){
+  const list=$('shop-nameplate-list'); if(!list) return;
+  list.innerHTML='';
+  NAMEPLATE_CATALOG.forEach(np=>{
+    const owned=ownedCosmetics.nameplates.includes(np.id);
+    const state=_shopItemState(owned,owned&&currentNameplateSkin===np.id);
+    const btn=document.createElement('button');
+    btn.className='shop-item shop-'+state;
+    const preview=document.createElement('div');
+    preview.className='np-preview '+np.cls;
+    preview.innerHTML='<span class="npv-wind">東</span><span class="npv-name">Player</span>';
+    btn.appendChild(preview);
+    const label=document.createElement('span'); label.className='shop-item-label'; label.textContent=np.label;
+    const tier=document.createElement('span'); tier.className='shop-item-tier '+np.tier; tier.textContent=np.tier;
+    const price=document.createElement('span'); price.className='shop-item-price';
+    price.textContent=_shopPriceLabel(state,np.price);
+    btn.appendChild(label);btn.appendChild(tier);btn.appendChild(price);
+    btn.onclick=()=>openShopPreview('nameplate',np);
+    list.appendChild(btn);
+  });
+}
+
+// ── Shop item preview ───────────────────────────────────────────────────
+// Opened by clicking any Shop card (see #shop-preview-modal in index.html).
+// An icon and a nameplate skin are shown differently — each the way it's
+// actually seen day-to-day, not a single shared mock:
+//   - Icon: the player's own profile plate, same markup/tier colour as the
+//     live User Profile header (.up-nameplate/.pnp-*) — icon+name+title.
+//     That plate (not the small in-game seat badge) is where an icon is
+//     actually seen most.
+//   - Nameplate skin: the in-game seat plate's own look (.np-preview/
+//     .np-skin-*) — wind+name+title, no icon (that badge is a separate,
+//     much smaller corner element on the real .np).
+// shopPreviewItem is tracked so a purchase's 'coins' response (see onMsg)
+// can refresh this in place (Buy -> Equip) if it's still open on the exact
+// item that was just bought.
+let shopPreviewItem=null;
+function openShopPreview(type,item){
+  shopPreviewItem={type,item};
+  renderShopPreview();
+  $('shop-preview-modal').classList.add('visible');
+  $('shop-preview-backdrop').classList.add('visible');
+}
+function closeShopPreview(){
+  shopPreviewItem=null;
+  $('shop-preview-modal').classList.remove('visible');
+  $('shop-preview-backdrop').classList.remove('visible');
+}
+function renderShopPreview(){
+  if(!shopPreviewItem) return;
+  const {type,item}=shopPreviewItem;
+  const isIcon=type==='icon';
+  const owned=isIcon?ownedCosmetics.icons.includes(item.id):ownedCosmetics.nameplates.includes(item.id);
+  const equipped=owned&&(isIcon?currentPlayerIcon===item.id:currentNameplateSkin===item.id);
+  const state=_shopItemState(owned,equipped);
+
+  $('shop-preview-title').textContent=item.label;
+  const tierEl=$('shop-preview-tier'); tierEl.className='shop-item-tier '+item.tier; tierEl.textContent=item.tier;
+
+  const isGuest=($('iname')?.value||'')==='Guest';
+  const displayName=($('iname')?.value||'').trim()||'Player';
+  const titleText=isGuest?'':currentPlayerTitle;
+  const stage=$('shop-preview-stage');
+  if(isIcon){
+    // Same tier this profile's own User Profile header is currently
+    // showing (see updateNameplateTier) — read straight off that live
+    // element rather than re-deriving it from wins, so this can never
+    // drift out of sync with what the player actually sees there.
+    const liveTier=document.querySelector('#userprofile-modal .up-nameplate');
+    const tierCls=liveTier&&['tier-silver','tier-gold','tier-platinum','tier-diamond'].find(c=>liveTier.classList.contains(c));
+    stage.innerHTML='<div class="up-nameplate'+(tierCls?' '+tierCls:'')+'">'+
+      '<span class="pnp-icon">'+item.svg+'</span>'+
+      '<span class="pnp-info">'+
+      '<span class="pnp-name">'+escHtml(displayName)+'</span>'+
+      '<span class="pnp-title">'+escHtml(titleText)+'</span>'+
+      '</span></div>';
+  } else {
+    stage.innerHTML='<div class="np-preview '+item.cls+'">'+
+      '<span class="npv-wind">東</span>'+
+      '<span class="npv-text">'+
+      '<span class="npv-name">'+escHtml(displayName)+'</span>'+
+      '<span class="npv-title">'+escHtml(titleText)+'</span>'+
+      '</span></div>';
+  }
+
+  const action=$('shop-preview-action');
+  action.innerHTML='';
+  if(state==='buy'){
+    if(myCoins<item.price){
+      const msg=document.createElement('p');
+      msg.className='shop-preview-insufficient';
+      msg.textContent="Not enough coins — you have "+myCoins+", this costs "+item.price+'.';
+      action.appendChild(msg);
+    } else {
+      const btn=document.createElement('button');
+      btn.className='bp'; btn.textContent='Buy for '+item.price+' coins';
+      btn.onclick=()=>confirmBuyCosmetic(item.id,item.label,item.price);
+      action.appendChild(btn);
+    }
+  } else if(state==='owned'){
+    const btn=document.createElement('button');
+    btn.className='bp'; btn.textContent='Equip';
+    // Re-renders in place (rather than closing) so the successful equip is
+    // visibly confirmed — the button becomes the plain "Equipped" label
+    // below on the very next render.
+    btn.onclick=()=>{ if(isIcon) applyPlayerIcon(item.id); else applyNameplateSkin(item.id); renderShopPreview(); };
+    action.appendChild(btn);
+  } else {
+    const status=document.createElement('p');
+    status.className='shop-preview-status'; status.textContent='Equipped';
+    action.appendChild(status);
+  }
+}
+
+// Guards every purchase behind the app's existing generic yes/no confirm
+// (see uiConfirm — also used for logout and removing a friend) rather than
+// spending coins on the bare click that opened the preview's Buy button,
+// since a single accidental tap would otherwise charge real coins with no
+// way back.
+function confirmBuyCosmetic(itemId,label,price){
+  uiConfirm('Buy '+label+' for '+price+' coins?',()=>buyCosmetic(itemId),'Buy');
+}
+
+// Sends the purchase attempt — the response (ok/error/new balance) comes
+// back on the existing 'coins' message (reason:'purchase', see onMsg),
+// which is what actually updates ownedCosmetics, re-renders the grids, and
+// (if still open on this exact item) refreshes the preview from Buy to
+// Equip.
+function buyCosmetic(itemId){
+  wss({type:'buy_cosmetic',itemId});
 }
 
 let fxEnabled=true;
@@ -5587,6 +5940,15 @@ function startGame(m){
     const isSelfGuest=$('iname').value==='Guest';
     const pt=$('pt'+id); if(pt){ pt.textContent=i===0?(isSelfGuest?'':currentPlayerTitle):(p?.title||''); fitTitleText(pt); }
     if(i>0){const bt=$('bt'+id);if(bt)bt.textContent=p?.isBot?'CPU':'';}
+    // Icon + nameplate skin, visible to everyone at the table for the whole
+    // game (not just the lobby/5s roll-call — see gameStartIntro, and
+    // renderState below for mid-game re-syncs via seatIcons/
+    // seatNameplateSkins). Self mirrors refreshProfileDisplay's own
+    // isGuest handling — Guest always shows guestIconSvg/the plain skin
+    // regardless of whatever a previously-unlocked real profile had picked.
+    const iconHtml=i===0?(isSelfGuest?guestIconSvg:iconSvg(currentPlayerIcon)):iconSvg(p?.icon||'default');
+    const niEl=$('ni'+id); if(niEl) niEl.innerHTML=iconHtml;
+    applyNameplateSkinClass($('np'+id),i===0?(isSelfGuest?'default':currentNameplateSkin):(p?.nameplateSkin||'default'));
     $('rs'+id).style.display='none';
   }
   // The fitNameplateText/fitTitleText calls above just measured against
@@ -5779,6 +6141,23 @@ function renderState(m, prev){
     if(m.seatWinds){
       const wb=$('wb'+id);
       if(wb) wb.textContent=windLabels[m.seatWinds[abs]];
+    }
+    // Re-applies icon/nameplate skin from THIS state tick's seatIcons/
+    // seatNameplateSkins (already sent every game_state — see room.js) —
+    // startGame's own game_start values are only a starting point; this is
+    // what makes a mid-hand equip (see equip_icon/equip_nameplate in
+    // index.js) actually show up for opponents without waiting for the next
+    // hand. Skipped for my own seat (abs===mySeat) — self already reflects
+    // the equip instantly via applyPlayerIcon/applyNameplateSkin, and
+    // seatIcons/seatNameplateSkins are keyed the same for every seat so
+    // there's nothing this would add for my own.
+    if(abs!==mySeat){
+      if(m.seatIcons?.[abs]!==undefined){
+        const niEl=$('ni'+id); if(niEl) niEl.innerHTML=iconSvg(m.seatIcons[abs]);
+      }
+      if(m.seatNameplateSkins?.[abs]!==undefined){
+        applyNameplateSkinClass($('np'+id),m.seatNameplateSkins[abs]);
+      }
     }
   }
 

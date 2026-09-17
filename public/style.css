@@ -496,6 +496,27 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .np.active{background:#222;border-color:#ffdd44;
   box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 16px rgba(255,221,68,.5);animation:glow 1.6s ease-in-out infinite;}
 @keyframes glow{0%,100%{box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 14px rgba(255,221,68,.4);}50%{box-shadow:0 0 0 2px rgba(255,221,68,.55),0 0 28px rgba(255,221,68,.7);}}
+/* Player icon badge (see startGame/renderState in script.js, populated via
+   iconSvg()) — top-left corner, deliberately NOT a flex child of .np: that
+   row's padding/gap/font-size are calibrated in the long tuning pass just
+   above balancing phone/4K extremes against the felt size, and a third flex
+   child would mean redoing that balance. Absolutely positioned instead,
+   same technique .typing-dots below already uses. Top-RIGHT is taken by
+   #statusdot-b (self's own tenpai/furiten dot, bottom seat only) — top-left
+   avoids that collision entirely, and only briefly/rarely overlaps
+   .typing-dots (chat activity is transient, this badge is permanent, so a
+   glancing overlap there is an acceptable trade rather than a real
+   conflict). pointer-events:none so it can never intercept the click that
+   opens this seat's player card (.np's own onclick).*/
+.np-icon{position:absolute;top:calc(var(--table-size) * -0.007);left:calc(var(--table-size) * -0.007);
+  width:clamp(14px,calc(var(--table-size) * 0.022),30px);height:clamp(14px,calc(var(--table-size) * 0.022),30px);
+  z-index:24;pointer-events:none;}
+.np-icon svg{width:100%;height:100%;display:block;border-radius:2px;}
+
+/* Nameplate skins live further down, right after .np-preview (see that
+   class's own comment for why: it and this block's selectors are both
+   single classes, so they have to stay in that relative order for the
+   skins to actually win the cascade against .np-preview's own defaults). */
 /* Chat "is typing…" indicator (see onTypingStatus in script.js, driven by
    room.js's typing()) — 3 real dot elements (.typing-dots span), not CSS
    `content`, specifically so each one can bounce on its own staggered
@@ -2313,12 +2334,130 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 .coin-reward:empty{display:none;}
 .coin-reward .coin-cap{opacity:.65;font-size:.82em;}
 
-/* Store modal placeholder (opened from #coin-count). */
-.store-soon{text-align:center;color:var(--gold);font-family:'Cinzel Decorative',serif;
-  font-size:calc(var(--ui-vmin, 7.2px) * 3);letter-spacing:calc(var(--ui-vmin, 7.2px) * .28);
-  margin:calc(var(--ui-vmin, 7.2px) * 3) 0 calc(var(--ui-vmin, 7.2px) * 1);}
-.store-sub{text-align:center;color:rgba(245,237,216,.5);
-  font-size:calc(var(--ui-vmin, 7.2px) * 1.5);margin:0 0 calc(var(--ui-vmin, 7.2px) * 2);}
+/* Store modal (opened from #coin-count) — see renderShopIcons/
+   renderShopNameplates in script.js. */
+.shop-section-label{color:var(--gold);font-family:'Cinzel Decorative',serif;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.4);letter-spacing:calc(var(--ui-vmin, 7.2px) * .14);
+  text-transform:uppercase;margin:calc(var(--ui-vmin, 7.2px) * 2) 0 calc(var(--ui-vmin, 7.2px) * .833);}
+.shop-section-label:first-child{margin-top:0;}
+.shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--ui-vmin, 7.2px) * 1.111);}
+.shop-item{display:flex;flex-direction:column;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .417);
+  background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:2px;
+  padding:calc(var(--ui-vmin, 7.2px) * .833);cursor:pointer;transition:all .2s;text-align:center;}
+.shop-item:hover{border-color:rgba(201,168,76,.5);}
+.shop-item svg{width:calc(var(--ui-vmin, 7.2px) * 4.5);height:calc(var(--ui-vmin, 7.2px) * 4.5);display:block;}
+.shop-item .np-preview{transform:scale(.85);}
+.shop-item-label{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:var(--cream);}
+.shop-item-tier{font-size:calc(var(--ui-vmin, 7.2px) * .972);text-transform:uppercase;letter-spacing:.05em;}
+.shop-item-tier.common{color:rgba(245,237,216,.55);}
+.shop-item-tier.uncommon{color:var(--jl);}
+.shop-item-tier.rare{color:var(--gl);}
+.shop-item-tier.legendary{color:#ffe066;text-shadow:0 0 4px rgba(255,224,102,.6);}
+.shop-item-price{font-size:calc(var(--ui-vmin, 7.2px) * 1.111);color:var(--gold);}
+/* .shop-equipped/.shop-owned: already yours — border reads "selected",
+   price line shows state instead of a cost. .shop-buy: for sale, shown
+   identically regardless of balance — the actual funds check only ever
+   happens server-side (cosmetics.purchase) when the player commits from
+   the preview's Buy button (see openShopPreview), so there's nothing
+   trustworthy to grey out here even if we wanted to. */
+.shop-item.shop-equipped{border-color:var(--gold);background:rgba(201,168,76,.2);}
+.shop-item.shop-owned:hover{border-color:var(--gl);}
+
+/* Nameplate skin picker (#nameplate-list) and the Shop's nameplate cards
+   both preview a skin via .np-preview — a small, self-contained stand-in
+   for the real in-game .np, since .np's own sizing is calibrated entirely
+   off --table-size (only meaningful inside the game table, see that
+   class's comment) and would render degenerate here. Only the .np-skin-*
+   background/border/box-shadow rules are shared with the real thing (see
+   those classes below) — every size/spacing value here is its own, fixed,
+   rem-based scale. */
+.nameplate-grid{display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .833);}
+.nameplate-btn{background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:2px;
+  padding:calc(var(--ui-vmin, 7.2px) * .556);cursor:pointer;transition:all .2s;display:flex;justify-content:center;}
+.nameplate-btn:hover{border-color:rgba(201,168,76,.5);}
+.nameplate-btn.active{border-color:var(--gold);}
+.np-preview{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem .9rem;
+  border-radius:1px;background:#1a1a1a;box-shadow:0 0 0 1px rgba(255,255,255,.08);}
+.np-preview .npv-wind{width:1.6rem;height:1.6rem;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-family:'Noto Serif JP',serif;
+  font-weight:900;font-size:.85rem;background:rgba(201,168,76,.18);color:var(--gl);
+  border:1px solid rgba(201,168,76,.45);}
+.np-preview .npv-text{display:flex;flex-direction:column;line-height:1.2;}
+.np-preview .npv-name{font-size:.85rem;font-weight:700;color:#fff;}
+/* Title line — only present in the big Shop preview (see
+   renderShopPreview), not the compact picker/grid thumbnails, which stay
+   wind+name only. Mirrors .ptitle's own gold/Cinzel look. */
+.np-preview .npv-title{font-size:.7rem;color:var(--gold);opacity:.8;font-family:'Cinzel Decorative',serif;}
+
+/* Nameplate skins — purchasable reskins of .np (see server/cosmetics.js's
+   CATALOG.nameplate and NAMEPLATE_CATALOG in script.js). Each one only ever
+   overrides background/box-shadow/color-type declarations, mirroring
+   .up-nameplate's own tier classes elsewhere in this file — never padding/
+   gap/font-size/width/height, so .np's own calibrated sizing (see its own
+   comment) stays untouched regardless of skin. box-shadow (not a real
+   `border`) for the same reason .np's own default chrome uses it: a real
+   border adds to the box's rendered size, box-shadow doesn't. Each rule
+   also targets .npv-wind/.npv-name so the exact same class works for both
+   the real in-game plate and the Shop/picker's .np-preview above —
+   deliberately placed AFTER .np-preview's own base rule: both are single-
+   class selectors, so with equal specificity the later one in the
+   stylesheet wins: a skin declared any earlier would lose its background/
+   box-shadow to .np-preview's plain #1a1a1a default the moment both
+   classes land on the same element. .np.np-skin-*.active re-asserts just
+   the background — .np.active's own background:#222 would otherwise stomp
+   every skin at the one moment (a seat's turn) it matters most to still
+   look like the skin; the glow itself (box-shadow/animation) is left to
+   the shared .active/@glow rule (well above, near .np's own definition),
+   unskinned on purpose so "it's this seat's turn" reads identically
+   regardless of cosmetic. */
+.np-skin-hai{background:linear-gradient(170deg,#fffdf4,#f0e8d0);box-shadow:0 0 0 1px var(--gold),0 0 0 3px #7a5c10,inset 0 1px 0 rgba(255,255,255,.5);}
+.np-skin-hai .pname,.np-skin-hai .npv-name{color:#1a1a1a;}
+.np-skin-hai .ptitle,.np-skin-hai .npv-title{color:#7a5c10;}
+.np-skin-hai .wb,.np-skin-hai .npv-wind{background:rgba(0,0,0,.06);color:#7a5c10;border-color:rgba(122,92,16,.4);}
+.np.np-skin-hai.active{background:linear-gradient(170deg,#fffdf4,#f0e8d0);}
+
+.np-skin-andon{background:radial-gradient(ellipse at 50% 40%,#fff3d0,#f0c878 70%,#c99a4a);box-shadow:0 0 0 1px #8a6b20,0 0 10px rgba(240,200,120,.5);}
+.np-skin-andon .pname,.np-skin-andon .npv-name{color:#3a2a10;}
+.np-skin-andon .ptitle,.np-skin-andon .npv-title{color:#6b5220;}
+.np-skin-andon .wb,.np-skin-andon .npv-wind{background:rgba(255,255,255,.3);color:#8a6b20;border-color:rgba(138,107,32,.4);}
+.np.np-skin-andon.active{background:radial-gradient(ellipse at 50% 40%,#fff3d0,#f0c878 70%,#c99a4a);}
+
+.np-skin-kinpaku{background:radial-gradient(ellipse at 30% 30%,#f5dc90,#d4af37 40%,#a8842a 70%,#f5dc90 100%);box-shadow:0 0 0 1px #6b5218;}
+.np-skin-kinpaku .pname,.np-skin-kinpaku .npv-name{color:#3a2a08;}
+.np-skin-kinpaku .ptitle,.np-skin-kinpaku .npv-title{color:#6b5218;}
+.np-skin-kinpaku .wb,.np-skin-kinpaku .npv-wind{background:rgba(0,0,0,.12);color:#5c4712;border-color:rgba(92,71,18,.4);}
+.np.np-skin-kinpaku.active{background:radial-gradient(ellipse at 30% 30%,#f5dc90,#d4af37 40%,#a8842a 70%,#f5dc90 100%);}
+
+.np-skin-hyosatsu{background:linear-gradient(170deg,#5a1414,#2c0a0a);box-shadow:0 0 0 1px var(--gold),inset 0 0 8px rgba(0,0,0,.5);}
+.np-skin-hyosatsu .pname,.np-skin-hyosatsu .npv-name{color:#f5edd8;}
+.np-skin-hyosatsu .ptitle,.np-skin-hyosatsu .npv-title{color:#e0b8b8;}
+.np-skin-hyosatsu .wb,.np-skin-hyosatsu .npv-wind{background:rgba(201,168,76,.2);color:var(--gl);border-color:var(--gold);}
+.np.np-skin-hyosatsu.active{background:linear-gradient(170deg,#5a1414,#2c0a0a);}
+
+.np-skin-tatamiberi{background:linear-gradient(170deg,#d4c896,#b8a870);box-shadow:0 0 0 1px #6b5220,0 0 0 3px #2a6b45;}
+.np-skin-tatamiberi .pname,.np-skin-tatamiberi .npv-name{color:#2a2408;}
+.np-skin-tatamiberi .ptitle,.np-skin-tatamiberi .npv-title{color:#4a4020;}
+.np-skin-tatamiberi .wb,.np-skin-tatamiberi .npv-wind{background:rgba(0,0,0,.08);color:#2a6b45;border-color:rgba(42,107,69,.4);}
+.np.np-skin-tatamiberi.active{background:linear-gradient(170deg,#d4c896,#b8a870);}
+
+/* Shop item preview (opened by clicking any Shop card, see openShopPreview
+   in script.js) — a bigger, standalone look at whichever item was
+   clicked, shown the way it's actually seen in play: an icon preview
+   reuses the real .up-nameplate/.pnp-* profile-plate markup (see that
+   class elsewhere in this file), a nameplate-skin preview reuses
+   .np-preview/.np-skin-* (scaled up here) with no icon. See
+   renderShopPreview's own comment for why the two differ. */
+.shop-preview-stage{display:flex;justify-content:center;padding:calc(var(--ui-vmin, 7.2px) * 3.5) 0 calc(var(--ui-vmin, 7.2px) * 2);}
+.shop-preview-stage .np-preview{transform:scale(1.6);}
+.shop-preview-meta{text-align:center;margin-bottom:calc(var(--ui-vmin, 7.2px) * 1.5);}
+.shop-preview-meta .shop-item-tier{display:block;margin-top:calc(var(--ui-vmin, 7.2px) * .417);}
+.shop-preview-status{text-align:center;color:var(--gl);font-size:calc(var(--ui-vmin, 7.2px) * 1.389);
+  padding:calc(var(--ui-vmin, 7.2px) * 1.111) 0;}
+/* Shown in place of the Buy button when the price is more than the
+   player's current balance — see renderShopPreview. A plain statement, not
+   an error: nothing was attempted, so nothing failed. */
+.shop-preview-insufficient{text-align:center;color:rgba(224,128,128,.9);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);
+  padding:calc(var(--ui-vmin, 7.2px) * 1.111) 0;}
 
 /* ── Friends panel & Notifications panel ── */
 .friends-my-id{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.111);flex-wrap:wrap;

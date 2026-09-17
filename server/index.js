@@ -6,9 +6,10 @@ const path=require('path');
 const {Room}=require('./room');
 const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats}=require('./stats');
 const {getHistory,getGameDetail,getRecentOpponents,deleteHistory,clearAllHistory}=require('./history');
-const {listProfiles,createProfile,verifyProfile,deleteProfile,setIcon,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,getIconById}=require('./profiles');
+const {listProfiles,createProfile,verifyProfile,deleteProfile,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,getNameplateSkin,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,getIconById}=require('./profiles');
 const friends=require('./friends');
 const coins=require('./economy');
+const cosmetics=require('./cosmetics');
 
 // Opens (creating if needed) the shared SQLite database every persistence
 // module above reads/writes through — see server/db.js. Called explicitly
@@ -200,12 +201,14 @@ wss.on('connection',(ws)=>{
     if(unlockedName){
       player.name=unlockedName;
       player.icon=getIcon(unlockedName);
+      player.nameplateSkin=getNameplateSkin(unlockedName);
       player.voiceTheme=getVoiceTheme(unlockedName);
       player.profileId=unlockedId;
       player.isGuest=false;
     } else {
       player.name='Guest'+Math.floor(1000+Math.random()*9000);
       player.icon='default';
+      player.nameplateSkin='default';
       player.profileId=null;
       player.isGuest=true;
     }
@@ -221,6 +224,7 @@ wss.on('connection',(ws)=>{
     if(unlockedName){
       player.name=unlockedName;
       player.icon=getIcon(unlockedName);
+      player.nameplateSkin=getNameplateSkin(unlockedName);
       player.title=getTitle(unlockedName);
       player.voiceTheme=getVoiceTheme(unlockedName);
       player.profileId=unlockedId;
@@ -228,6 +232,7 @@ wss.on('connection',(ws)=>{
     } else {
       player.name='Guest'+Math.floor(1000+Math.random()*9000);
       player.icon='default';
+      player.nameplateSkin='default';
       player.title=null;
       player.profileId=null;
       player.isGuest=true;
@@ -512,8 +517,12 @@ wss.on('connection',(ws)=>{
     if(msg.type==='get_stats'){
       // Uses this connection's own unlocked profile, never msg.name — same
       // reasoning as assignIdentity above, otherwise anyone could read any unlocked
-      // profile's stats just by naming it.
-      if(unlockedId) ws.send(JSON.stringify({type:'stats',name:unlockedName,stats:getStats(unlockedId)}));
+      // profile's stats just by naming it. ownedCosmetics rides alongside
+      // stats (not nested inside it — that shape belongs entirely to
+      // stats.js) since this is the same "refresh my unlocked-everything"
+      // round-trip the Shop/Player Icon/Nameplate pickers already use for
+      // unlockedThemes/unlockedTitles.
+      if(unlockedId) ws.send(JSON.stringify({type:'stats',name:unlockedName,stats:getStats(unlockedId),ownedCosmetics:cosmetics.getOwned(unlockedId)}));
     }
 
     // Play History list — summary rows only (no round detail, see
@@ -809,7 +818,7 @@ wss.on('connection',(ws)=>{
         unlockedName=name;
         unlockedId=getId(name);
         const daily=coins.claimDailyBonus(unlockedId);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:'default',title:'Beginner',voiceTheme:'Default',
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:'default',title:'Beginner',voiceTheme:'Default',nameplateSkin:'default',
           id:unlockedId,unread:0,coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
         goOnline();
         syncSeatedIdentity();
@@ -836,7 +845,7 @@ wss.on('connection',(ws)=>{
         const token=msg.remember?createRememberToken(name):undefined;
         // Daily login bonus — once per UTC day, on either unlock path.
         const daily=coins.claimDailyBonus(unlockedId);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),token,
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),nameplateSkin:getNameplateSkin(name),token,
           id:unlockedId,unread:friends.unreadCount(unlockedId),coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
         goOnline();
         syncSeatedIdentity();
@@ -853,7 +862,7 @@ wss.on('connection',(ws)=>{
         unlockedName=name;
         unlockedId=getId(name);
         const daily=coins.claimDailyBonus(unlockedId);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),silent:true,id:unlockedId,unread:friends.unreadCount(unlockedId),coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),nameplateSkin:getNameplateSkin(name),silent:true,id:unlockedId,unread:friends.unreadCount(unlockedId),coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
         goOnline();
         syncSeatedIdentity();
       } else {
@@ -881,12 +890,46 @@ wss.on('connection',(ws)=>{
       forgetRememberToken(String(msg.name||'').slice(0,20));
     }
 
-    // Persists an icon change from the User Profile panel onto the profile
-    // itself (see profiles.setIcon) — requires this connection to already
-    // be unlocked as that name, same as get_stats below; a client can't
-    // repaint someone else's profile without their code.
-    if(msg.type==='set_profile_icon'&&unlockedName){
-      setIcon(unlockedName,msg.icon);
+    // Equips an owned icon (see cosmetics.setEquippedIcon, which rejects
+    // anything not free or bought) and persists it onto the profile itself
+    // (profiles.setIcon) — requires this connection to already be unlocked
+    // as that name, same as get_stats below; a client can't repaint someone
+    // else's profile without their code. Named 'equip_icon' (was
+    // 'set_profile_icon') since ownership-gating changed its contract — the
+    // 6 free icons are still always allowed, cosmetics.js just treats them
+    // as pre-owned. Also updates the in-memory seated player.icon and, if
+    // currently seated, broadcasts the room so opponents see the change
+    // live instead of only on their next room join — previously this only
+    // ever persisted to the DB, so an already-seated opponent's view went
+    // stale until they rejoined.
+    if(msg.type==='equip_icon'&&unlockedId&&unlockedName){
+      const r=cosmetics.setEquippedIcon(unlockedId,unlockedName,msg.icon);
+      if(r.ok){
+        player.icon=msg.icon;
+        if(myRoom) myRoom._broadcastRoomUpdate();
+      }
+    }
+
+    // Same as equip_icon above, for the nameplate skin (profiles.
+    // setNameplateSkin / cosmetics.setEquippedNameplate).
+    if(msg.type==='equip_nameplate'&&unlockedId&&unlockedName){
+      const r=cosmetics.setEquippedNameplate(unlockedId,unlockedName,msg.skin);
+      if(r.ok){
+        player.nameplateSkin=msg.skin;
+        if(myRoom) myRoom._broadcastRoomUpdate();
+      }
+    }
+
+    // Buys one shop item (see cosmetics.purchase — server-authoritative
+    // price/ownership check, never trusts anything from the client but the
+    // item id). Reuses the existing 'coins' message shape the end-of-game
+    // payout already sends (see room.js's awardGameCoins call site and the
+    // client's onMsg 'coins' handler) rather than inventing a new response
+    // type — reason:'purchase' plus ok/error/itemId is all the client needs
+    // to update its own owned-cosmetics set and the Shop's rendering.
+    if(msg.type==='buy_cosmetic'&&unlockedId){
+      const r=cosmetics.purchase(unlockedId,msg.itemId);
+      ws.send(JSON.stringify({type:'coins',reason:'purchase',balance:r.balance,ok:r.ok,error:r.error,itemId:msg.itemId}));
     }
 
     // Same pattern as set_profile_icon above, for the Title picker in the
@@ -983,7 +1026,7 @@ wss.on('connection',(ws)=>{
         ws.send(JSON.stringify({type:'delete_profile_result',ok:false,error:'Invalid developer key'}));
       } else {
         const result=deleteProfile(msg.name);
-        if(result.ok){ deleteStats(result.id); deleteHistory(result.id); friends.purge(result.id); coins.purge(result.id); }
+        if(result.ok){ deleteStats(result.id); deleteHistory(result.id); friends.purge(result.id); coins.purge(result.id); cosmetics.purge(result.id); }
         ws.send(JSON.stringify({type:'delete_profile_result',ok:result.ok,error:result.error}));
       }
     }

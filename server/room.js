@@ -2927,6 +2927,7 @@ class Room {
         round:g.round,roundWind:g.roundWind,displayWind:Math.ceil(g.round/this.numPlayers),displayRound:((g.round-1)%this.numPlayers)+1,dealer:g.dealer,honba:g.honba,
         seatVoiceThemes:this.seats.map(p=>p?.voiceTheme||'Default'),
         seatIcons:this.seats.map(p=>p?.icon||'default'),
+        seatNameplateSkins:this.seats.map(p=>p?.nameplateSkin||'default'),
         riichiSticks:g.riichiSticks,
         dora:g.dora,wallCount:g.wall.length,waits:w,riichi:g.riichi,
         doubleRiichi:g.doubleRiichi,
@@ -2950,7 +2951,7 @@ class Room {
   _seatInfo(){ return this.seats.map(p=>{
     if(!p) return null;
     const st=getStats(p.profileId);
-    return {name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default',icon:p.icon||'default',title:p.title||null,difficulty:p.difficulty||null,
+    return {name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default',icon:p.icon||'default',nameplateSkin:p.nameplateSkin||'default',title:p.title||null,difficulty:p.difficulty||null,
       wins:(st.yonma.gamesWon||0)+(st.sanma.gamesWon||0),
       // Stable profile id, so the client can offer "+ Add Friend" on an
       // opponent's nameplate popover (see friends.js / addFriendFromPopover

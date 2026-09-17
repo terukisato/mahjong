@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   icon                TEXT NOT NULL DEFAULT 'default',
   title               TEXT NOT NULL DEFAULT 'Beginner',
   voice_theme         TEXT NOT NULL DEFAULT 'Default',
+  nameplate_skin      TEXT NOT NULL DEFAULT 'default',
   remember_salt       TEXT,
   remember_token_hash TEXT
 );
@@ -150,6 +151,18 @@ CREATE TABLE IF NOT EXISTS stats (
   profile_id TEXT PRIMARY KEY,
   data       TEXT NOT NULL
 );
+
+-- cosmetics.js — which shop items a profile owns. Not folded into profiles
+-- (which only ever holds the CURRENTLY EQUIPPED icon/title/voice_theme/
+-- nameplate_skin, one value each) since ownership is a growing set, not a
+-- single field — same "own table" reasoning as friend_edges above.
+CREATE TABLE IF NOT EXISTS cosmetic_purchases (
+  profile_id    TEXT NOT NULL,
+  item_id       TEXT NOT NULL,
+  purchased_at  INTEGER NOT NULL,
+  PRIMARY KEY (profile_id, item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_cosmetic_purchases_profile ON cosmetic_purchases(profile_id);
 `;
 
 // A profiles table created while the email sign-up feature existed may
@@ -172,6 +185,19 @@ function getDb() {
   // synchronous.
   _db.exec('PRAGMA journal_mode = WAL');
   _db.exec(SCHEMA);
+  // CREATE TABLE IF NOT EXISTS above only shapes a FRESH profiles table —
+  // an existing one (from before nameplate_skin existed) keeps whatever
+  // columns it already had. ADD COLUMN is the one schema change that's safe
+  // to apply after the fact (unlike dropping/renaming a column), so it's
+  // done here unconditionally rather than versioning the schema — SQLite
+  // has no ADD COLUMN IF NOT EXISTS, so a "duplicate column name" error
+  // (meaning a previous boot already added it) is the expected steady state
+  // and is swallowed; any other error still surfaces.
+  try {
+    _db.exec("ALTER TABLE profiles ADD COLUMN nameplate_skin TEXT NOT NULL DEFAULT 'default'");
+  } catch (e) {
+    if (!/duplicate column name/i.test(e.message || '')) throw e;
+  }
   return _db;
 }
 

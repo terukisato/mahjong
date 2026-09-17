@@ -137,11 +137,12 @@ function createProfile(name, code) {
   return { ok: true };
 }
 
-// Called whenever the owner changes their icon in the User Profile panel
-// (see 'set_profile_icon' in index.js, which requires this connection to
-// already be unlocked as `name`) — persisted on the profile itself rather
-// than just the browser's localStorage, so it's what the picker's cards
-// show for this name on any device, before anyone even enters a code.
+// Called whenever the owner changes their icon in the User Profile panel or
+// Shop (see 'equip_icon' in index.js, which requires this connection to
+// already be unlocked as `name` and checks ownership via cosmetics.js
+// before ever calling this) — persisted on the profile itself rather than
+// just the browser's localStorage, so it's what the picker's cards show for
+// this name on any device, before anyone even enters a code.
 function setIcon(name, icon) {
   getDb().prepare('UPDATE profiles SET icon = ? WHERE name = ?')
     .run(String(icon || 'default').slice(0, 20), name);
@@ -158,6 +159,26 @@ function getIcon(name) {
 function getIconById(id) {
   const row = getDb().prepare('SELECT icon FROM profiles WHERE id = ?').get(id);
   return row ? (row.icon || 'default') : 'default';
+}
+
+// Same pattern as setIcon/getIcon/getIconById above — the equipped nameplate
+// skin, persisted on the profile itself. Ownership (which skins this profile
+// is even allowed to equip) lives in cosmetics.js, not here — same division
+// of labor as setTitle/setVoiceTheme below, which only validate "is this a
+// recognized value at all", not "has this profile earned/bought it".
+function setNameplateSkin(name, skin) {
+  getDb().prepare('UPDATE profiles SET nameplate_skin = ? WHERE name = ?')
+    .run(String(skin || 'default').slice(0, 20), name);
+}
+
+function getNameplateSkin(name) {
+  const row = getDb().prepare('SELECT nameplate_skin FROM profiles WHERE name = ?').get(name);
+  return row ? (row.nameplate_skin || 'default') : 'default';
+}
+
+function getNameplateSkinById(id) {
+  const row = getDb().prepare('SELECT nameplate_skin FROM profiles WHERE id = ?').get(id);
+  return row ? (row.nameplate_skin || 'default') : 'default';
 }
 
 // Same pattern as setIcon/getIcon above — persisted on the profile itself,
@@ -287,4 +308,4 @@ function setCode(name, code) {
 }
 
 
-module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, getIconById, renameProfile, setCode, setTitle, getTitle, TITLES, setVoiceTheme, getVoiceTheme, VOICE_THEMES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById };
+module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, getIconById, setNameplateSkin, getNameplateSkin, getNameplateSkinById, renameProfile, setCode, setTitle, getTitle, TITLES, setVoiceTheme, getVoiceTheme, VOICE_THEMES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById };
