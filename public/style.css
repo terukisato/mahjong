@@ -2336,6 +2336,22 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 
 /* Store modal (opened from #coin-count) — see renderShopIcons/
    renderShopNameplates in script.js. */
+/* Balance readout — top-left. top AND left both match .about-modal's own
+   padding (see that rule) — the same inset .about-title's text box starts
+   from vertically, and the same left inset .shop-section-label ("PLAYER
+   ICONS") starts from horizontally, since neither .about-title nor
+   .about-body carry any extra margin/padding of their own beyond the
+   modal's. Lines up with both rather than .about-close's higher, further-in
+   corner-notch position (the ✕ deliberately sits above/right of that, in
+   the gold frame's corner cutout — this shouldn't copy it). Visible right
+   on the Store itself rather than only in the topbar corner behind this
+   modal. Same icon/number pairing as #coin-count (populated by the same
+   updateCoins() call, see script.js). */
+.shop-balance{position:absolute;top:calc(var(--ui-vmin, 7.2px) * 3.333);left:calc(var(--ui-vmin, 7.2px) * 3.333);
+  display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .5);
+  color:#e6dcc2;font-family:'Noto Serif JP',serif;font-weight:700;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.5);}
+.shop-balance .coin-icon{display:flex;align-items:center;}
 .shop-section-label{color:var(--gold);font-family:'Cinzel Decorative',serif;
   font-size:calc(var(--ui-vmin, 7.2px) * 1.4);letter-spacing:calc(var(--ui-vmin, 7.2px) * .14);
   text-transform:uppercase;margin:calc(var(--ui-vmin, 7.2px) * 2) 0 calc(var(--ui-vmin, 7.2px) * .833);}
@@ -2424,7 +2440,12 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 
 .np-skin-kinpaku{background:radial-gradient(ellipse at 30% 30%,#f5dc90,#d4af37 40%,#a8842a 70%,#f5dc90 100%);box-shadow:0 0 0 1px #6b5218;}
 .np-skin-kinpaku .pname,.np-skin-kinpaku .npv-name{color:#3a2a08;}
-.np-skin-kinpaku .ptitle,.np-skin-kinpaku .npv-title{color:#6b5218;}
+/* Darker than the other skins' title colour, and opacity re-asserted to 1
+   — the base .ptitle/.npv-title rules dim titles to 80% opacity, which on
+   every other (darker) skin still reads fine but on this pale-gold
+   background washed the title out to near-illegible: the 80% fade blends
+   an already gold-toned color further into the gold behind it. */
+.np-skin-kinpaku .ptitle,.np-skin-kinpaku .npv-title{color:#4a3208;opacity:1;}
 .np-skin-kinpaku .wb,.np-skin-kinpaku .npv-wind{background:rgba(0,0,0,.12);color:#5c4712;border-color:rgba(92,71,18,.4);}
 .np.np-skin-kinpaku.active{background:radial-gradient(ellipse at 30% 30%,#f5dc90,#d4af37 40%,#a8842a 70%,#f5dc90 100%);}
 
@@ -2451,6 +2472,8 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 .shop-preview-stage .np-preview{transform:scale(1.6);}
 .shop-preview-meta{text-align:center;margin-bottom:calc(var(--ui-vmin, 7.2px) * 1.5);}
 .shop-preview-meta .shop-item-tier{display:block;margin-top:calc(var(--ui-vmin, 7.2px) * .417);}
+.shop-preview-meta .shop-item-price{display:block;margin-top:calc(var(--ui-vmin, 7.2px) * .417);
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.25);}
 .shop-preview-status{text-align:center;color:var(--gl);font-size:calc(var(--ui-vmin, 7.2px) * 1.389);
   padding:calc(var(--ui-vmin, 7.2px) * 1.111) 0;}
 /* Shown in place of the Buy button when the price is more than the

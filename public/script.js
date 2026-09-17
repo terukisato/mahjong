@@ -1113,6 +1113,21 @@ const coinUnderlineSvg='<svg class="coin-underline" viewBox="0 0 260 24" preserv
   +'<polygon points="2,17 258,13 258,16.5 2,20.5" fill="url(#mjCoinUl)"/>'
   +'</svg>';
 
+// #shop-coin-icon/#shop-balance below need their OWN copy of these two SVGs
+// (the Store balance mirrors the topbar one) — but coinIconSvg/
+// coinUnderlineSvg's gradient ids (mjCoinFace/mjCoinEdge/mjCoinUl) are fixed,
+// not per-instance. Inserting a second copy with the SAME ids while
+// #store-modal is still display:none (it sits earlier in index.html's DOM
+// order than the topbar's #coin-count) makes that hidden copy the first
+// url(#mjCoinFace)-style match anywhere on the page — and a paint-server
+// reference into a display:none subtree doesn't resolve in every browser,
+// so the TOPBAR's own (visible, correct) coin icon/underline rendered
+// transparent until the Store was opened once and the hidden copy started
+// being laid out. Renaming this copy's ids up front avoids the collision
+// entirely rather than depending on DOM order or display state.
+const shopCoinIconSvg=coinIconSvg.replace(/mjCoinFace/g,'mjCoinFaceShop').replace(/mjCoinEdge/g,'mjCoinEdgeShop');
+const shopCoinUnderlineSvg=coinUnderlineSvg.replace(/mjCoinUl/g,'mjCoinUlShop');
+
 function updateCoins(n){
   myCoins=Math.max(0,n|0);
   const el=$('coin-amount'); if(el) el.textContent=myCoins.toLocaleString();
@@ -1122,6 +1137,16 @@ function updateCoins(n){
     if(box.dataset.ul!=='1'){ box.insertAdjacentHTML('afterbegin',coinUnderlineSvg); box.dataset.ul='1'; }
     box.style.display='';
   }
+  // Mirrors the topbar balance inside the Store modal itself (see
+  // #shop-balance in index.html) — visible right alongside the prices
+  // there instead of only in the corner behind the modal. Uses the
+  // separately-id'd shopCoinIconSvg/shopCoinUnderlineSvg above, not the
+  // plain constants — see that comment for why sharing ids broke the
+  // topbar's own rendering.
+  const shopEl=$('shop-coin-amount'); if(shopEl) shopEl.textContent=myCoins.toLocaleString();
+  const shopIc=$('shop-coin-icon'); if(shopIc&&shopIc.dataset.svg!=='1'){ shopIc.innerHTML=shopCoinIconSvg; shopIc.dataset.svg='1'; }
+  const shopBox=$('shop-balance');
+  if(shopBox&&shopBox.dataset.ul!=='1'){ shopBox.insertAdjacentHTML('afterbegin',shopCoinUnderlineSvg); shopBox.dataset.ul='1'; }
 }
 
 // Renders the "Coins earned +N" line on the game-over panel from
@@ -4449,6 +4474,9 @@ function renderShopPreview(){
 
   $('shop-preview-title').textContent=item.label;
   const tierEl=$('shop-preview-tier'); tierEl.className='shop-item-tier '+item.tier; tierEl.textContent=item.tier;
+  // Same tier/owned/equipped -> label logic the Store grid card uses — the
+  // action area below never needs to restate the price, this already has.
+  const priceEl=$('shop-preview-price'); priceEl.textContent=_shopPriceLabel(state,item.price);
 
   const isGuest=($('iname')?.value||'')==='Guest';
   const displayName=($('iname')?.value||'').trim()||'Player';
@@ -4480,13 +4508,16 @@ function renderShopPreview(){
   action.innerHTML='';
   if(state==='buy'){
     if(myCoins<item.price){
+      // Price is already stated just above (#shop-preview-price) — only
+      // the balance is worth repeating here, since the Store's own balance
+      // readout (#shop-balance) sits on the modal underneath this preview.
       const msg=document.createElement('p');
       msg.className='shop-preview-insufficient';
-      msg.textContent="Not enough coins — you have "+myCoins+", this costs "+item.price+'.';
+      msg.textContent='Not enough coins — you have '+myCoins.toLocaleString()+'.';
       action.appendChild(msg);
     } else {
       const btn=document.createElement('button');
-      btn.className='bp'; btn.textContent='Buy for '+item.price+' coins';
+      btn.className='bp'; btn.textContent='Buy';
       btn.onclick=()=>confirmBuyCosmetic(item.id,item.label,item.price);
       action.appendChild(btn);
     }

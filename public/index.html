@@ -681,11 +681,14 @@
      rendered by renderShopIcons/renderShopNameplates (see script.js) —
      each item shows its tier and price/ownership state; clicking a card
      opens #shop-preview-modal below rather than acting immediately. See
-     toggleStoreModal. -->
+     toggleStoreModal. #shop-balance mirrors the topbar's own #coin-count
+     (see updateCoins in script.js) so the player's balance is visible right
+     here next to the prices, not just in the corner behind this modal. -->
 <div id="store-backdrop" class="about-backdrop" onclick="toggleStoreModal()"></div>
 <div id="store-modal" class="about-modal">
   <button class="about-close" onclick="toggleStoreModal()">✕</button>
   <div class="about-title">Store</div>
+  <div class="shop-balance" id="shop-balance"><span class="coin-icon" id="shop-coin-icon"></span><span id="shop-coin-amount">0</span></div>
   <div class="about-body">
     <p class="shop-section-label">Player Icons</p>
     <div id="shop-icon-list" class="shop-grid"></div>
@@ -712,7 +715,10 @@
      before ever spending anything), a plain "not enough coins" message
      (unowned, unaffordable — no button, since buying it isn't actually
      possible right now), an "Equip" button (owned, not equipped), or a
-     plain "Equipped" label (nothing to do). -->
+     plain "Equipped" label (nothing to do). The price/ownership line
+     (#shop-preview-price) already states the cost — via the same
+     _shopPriceLabel used in the Store grid — so the action area itself
+     never needs to repeat the number. -->
 <div id="shop-preview-backdrop" class="about-backdrop" onclick="closeShopPreview()"></div>
 <div id="shop-preview-modal" class="about-modal">
   <button class="about-close" onclick="closeShopPreview()">✕</button>
@@ -720,6 +726,7 @@
   <div class="about-body">
     <div class="shop-preview-meta">
       <span class="shop-item-tier" id="shop-preview-tier"></span>
+      <span class="shop-item-price" id="shop-preview-price"></span>
     </div>
     <div class="shop-preview-stage" id="shop-preview-stage"></div>
     <div id="shop-preview-action"></div>
