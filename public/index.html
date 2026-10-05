@@ -109,6 +109,10 @@
       <p>Natsu "Daijoubu Ma" Hashimoto - Tester/Voice Actor</p>
     </div>
     <div class="about-section">
+      <div class="about-section-title">Contact</div>
+      <p><a href="#" onclick="toggleAbout();toggleFeedbackModal();return false;">Report a bug or contact the developer</a></p>
+    </div>
+    <div class="about-section">
       <div class="about-section-title">Legal</div>
       <p><a href="#" onclick="toggleTermsModal();return false;">Terms of Service</a> · <a href="#" onclick="togglePrivacyModal();return false;">Privacy Policy</a></p>
     </div>
@@ -778,7 +782,7 @@
     <p><em>Last updated: October 2026</em></p>
     <div class="about-section">
       <div class="about-section-title">What we store</div>
-      <p>Your display name; a salted hash of your password (never the plain text); your chosen icon, title, nameplate skin, and voice theme; your coin balance and the cosmetics you've bought; your game history, stats, and achievements; and your social data: your friends list, friend requests, and the players you've recently played with. No email address or other personal information is collected.</p>
+      <p>Your display name; a salted hash of your password (never the plain text); your chosen icon, title, nameplate skin, and voice theme; your coin balance and the cosmetics you've bought; your game history, stats, and achievements; and your social data: your friends list, friend requests, and the players you've recently played with; and any messages you send through the Contact form, along with your display name, the game version, and your browser type. No email address or other personal information is collected.</p>
     </div>
     <div class="about-section">
       <div class="about-section-title">Why</div>
@@ -794,12 +798,38 @@
     </div>
     <div class="about-section">
       <div class="about-section-title">Your choices</div>
-      <p>You can ask to have your account and its data deleted at any time by contacting the developer.</p>
+      <p>You can ask to have your account and its data deleted at any time by sending an account request from About &gt; Contact while logged in.</p>
     </div>
     <div class="about-section">
       <div class="about-section-title">Changes</div>
       <p>This policy may be updated as the game evolves; the "Last updated" date above will change whenever it does.</p>
     </div>
+  </div>
+</div>
+
+<!-- Contact / bug report — opened from About > Contact. Sent over the
+     socket as 'submit_feedback'; the server attaches the logged-in profile
+     (never trusted from the client) and stores it for Developer Settings >
+     Player Reports. "← Back" returns to About. -->
+<div id="feedback-backdrop" class="about-backdrop" onclick="toggleFeedbackModal()"></div>
+<div id="feedback-modal" class="about-modal">
+  <button class="about-back" onclick="toggleFeedbackModal();toggleAbout();">←</button>
+  <button class="about-close" onclick="toggleFeedbackModal()">✕</button>
+  <div class="about-title">Contact</div>
+  <div class="about-body">
+    <p>Found a bug, have a suggestion, or want your account deleted? Send a message here. Your display name, the game version, and your browser type are attached so the report can be followed up.</p>
+    <div class="ig"><label for="feedback-category">Topic</label>
+      <select id="feedback-category">
+        <option value="bug">Bug report</option>
+        <option value="feedback">Feedback / suggestion</option>
+        <option value="account">Account request (e.g. deletion)</option>
+      </select>
+    </div>
+    <div class="ig"><label for="feedback-message">Message</label>
+      <textarea id="feedback-message" maxlength="2000" rows="6" placeholder="What happened? What were you doing when it happened?"></textarea>
+    </div>
+    <div id="feedback-error" class="profile-error"></div>
+    <button class="bp" id="feedback-send" onclick="submitFeedback()">Send</button>
   </div>
 </div>
 
@@ -839,6 +869,7 @@
     <div id="devpanel-content" style="display:none;">
       <a href="#" class="hub-link" onclick="toggleDevPanel();toggleCreateProfileModal();return false;">Create Profile</a>
       <a href="#" class="hub-link" onclick="toggleDevPanel();toggleDeleteProfileModal();return false;">Delete Profile</a>
+      <a href="#" class="hub-link" onclick="toggleDevPanel();toggleFeedbackListModal();return false;">Player Reports</a>
       <!-- Clear All Play History — inline (arm/confirm row) rather than its
            own modal like Create/Delete Profile: those need a name/code
            input or a profile picker first, this needs no selection at all
@@ -900,6 +931,19 @@
     </div>
     <div id="devdelete-error" class="profile-error"></div>
     <button class="bp" id="dev-delete-btn" onclick="armDeleteProfile()" style="background:linear-gradient(135deg,#5a1a0a,#9a3a1a);border-color:#ff8040;">Delete Profile</button>
+  </div>
+</div>
+
+<!-- Player Reports (developer) — Contact-form submissions, newest first.
+     Same hub/back pattern as Create/Delete Profile; list_feedback and
+     delete_feedback are re-checked against DEV_SECRET server-side. -->
+<div id="feedback-list-backdrop" class="about-backdrop" onclick="toggleFeedbackListModal()"></div>
+<div id="feedback-list-modal" class="about-modal">
+  <button class="about-back" onclick="backToDevPanel()">←</button>
+  <button class="about-close" onclick="toggleFeedbackListModal()">✕</button>
+  <div class="about-title">Player Reports</div>
+  <div class="about-body">
+    <div id="feedback-list"></div>
   </div>
 </div>
 

@@ -10,6 +10,7 @@ const {listProfiles,createProfile,verifyProfile,deleteProfile,getIcon,renameProf
 const friends=require('./friends');
 const coins=require('./economy');
 const cosmetics=require('./cosmetics');
+const feedback=require('./feedback');
 
 // Opens (creating if needed) the shared SQLite database every persistence
 // module above reads/writes through — see server/db.js. Called explicitly
@@ -159,7 +160,25 @@ function pushFriendBadge(targetId){
 // object handed to Room (see room.js) — it stays the same object across
 // join/leave/reconnect-to-a-new-room within this connection's lifetime, so
 // Room can freely stash extra fields on it (seat, isBot, etc).
-wss.on('connection',(ws)=>{
+// Contact-form throttle, keyed by client IP (Railway's proxy puts the real
+// one first in x-forwarded-for) rather than by connection, so reconnecting
+// doesn't reset it: at most FEEDBACK_LIMIT reports per FEEDBACK_WINDOW_MS.
+const FEEDBACK_LIMIT=5;
+const FEEDBACK_WINDOW_MS=10*60*1000;
+const feedbackSends=new Map(); // ip -> [timestamps]
+function feedbackAllowed(ip){
+  const now=Date.now();
+  if(feedbackSends.size>1000){
+    for(const [k,ts] of feedbackSends) if(!ts.some(t=>now-t<FEEDBACK_WINDOW_MS)) feedbackSends.delete(k);
+  }
+  const recent=(feedbackSends.get(ip)||[]).filter(t=>now-t<FEEDBACK_WINDOW_MS);
+  if(recent.length>=FEEDBACK_LIMIT){ feedbackSends.set(ip,recent); return false; }
+  recent.push(now); feedbackSends.set(ip,recent);
+  return true;
+}
+
+wss.on('connection',(ws,req)=>{
+  const clientIp=String(req?.headers?.['x-forwarded-for']||'').split(',')[0].trim()||req?.socket?.remoteAddress||'';
   ws.isAlive=true;
   ws.on('pong',markAlive);
   let myRoom=null;
@@ -1026,7 +1045,7 @@ wss.on('connection',(ws)=>{
         ws.send(JSON.stringify({type:'delete_profile_result',ok:false,error:'Invalid developer key'}));
       } else {
         const result=deleteProfile(msg.name);
-        if(result.ok){ deleteStats(result.id); deleteHistory(result.id); friends.purge(result.id); coins.purge(result.id); cosmetics.purge(result.id); }
+        if(result.ok){ deleteStats(result.id); deleteHistory(result.id); friends.purge(result.id); coins.purge(result.id); cosmetics.purge(result.id); feedback.purge(result.id); }
         ws.send(JSON.stringify({type:'delete_profile_result',ok:result.ok,error:result.error}));
       }
     }
@@ -1043,6 +1062,31 @@ wss.on('connection',(ws)=>{
       } else {
         clearAllHistory();
         ws.send(JSON.stringify({type:'clear_all_history_result',ok:true}));
+      }
+    }
+
+    // Contact form (About > Contact). Name/profile come from this
+    // connection's unlocked profile, never the message, so a report can't
+    // be sent as someone else; guests are recorded as "Guest".
+    if(msg.type==='submit_feedback'){
+      if(!feedbackAllowed(clientIp)){
+        ws.send(JSON.stringify({type:'submit_feedback_result',ok:false,error:'Too many reports — please try again in a few minutes.'}));
+      } else {
+        ws.send(JSON.stringify({type:'submit_feedback_result',...feedback.submit({
+          profileId:unlockedId,name:unlockedName||'Guest',category:msg.category,
+          message:msg.message,version:msg.version,userAgent:msg.userAgent,
+        })}));
+      }
+    }
+
+    // Developer-only, same DEV_SECRET gate as create/delete_profile —
+    // read and dismiss Contact-form reports.
+    if(msg.type==='list_feedback'||msg.type==='delete_feedback'){
+      if(msg.devSecret!==DEV_SECRET){
+        ws.send(JSON.stringify({type:'feedback_list',ok:false,error:'Invalid developer key'}));
+      } else {
+        if(msg.type==='delete_feedback') feedback.remove(msg.id);
+        ws.send(JSON.stringify({type:'feedback_list',ok:true,reports:feedback.list()}));
       }
     }
 

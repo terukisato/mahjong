@@ -928,6 +928,8 @@ function onMsg(m){
   if(m.type==='create_profile_result'){onCreateProfileResult(m);return;}
   if(m.type==='delete_profile_result'){onDeleteProfileResult(m);return;}
   if(m.type==='clear_all_history_result'){onClearAllHistoryResult(m);return;}
+  if(m.type==='submit_feedback_result'){onSubmitFeedbackResult(m);return;}
+  if(m.type==='feedback_list'){renderFeedbackList(m);return;}
   if(m.type==='change_username_result'){onChangeUsernameResult(m);return;}
   if(m.type==='change_code_result'){onChangeCodeResult(m);return;}
   if(m.type==='advice'){renderAdvice(m);return;}
@@ -3687,6 +3689,8 @@ function backToDevPanel(){
   $('create-profile-backdrop').classList.remove('visible');
   $('delete-profile-modal').classList.remove('visible');
   $('delete-profile-backdrop').classList.remove('visible');
+  $('feedback-list-modal').classList.remove('visible');
+  $('feedback-list-backdrop').classList.remove('visible');
   $('devpanel-modal').classList.add('visible');
   $('devpanel-backdrop').classList.add('visible');
 }
@@ -3788,6 +3792,76 @@ function onClearAllHistoryResult(m){
     $('devclearhistory-error').style.color='';
     $('devclearhistory-error').textContent=m.error||'Failed to clear play history';
   }
+}
+
+// Contact form (About > Contact). The server decides who sent it from this
+// connection's unlocked profile; the client only adds the version string
+// and user agent to help reproduce bugs.
+function toggleFeedbackModal(){
+  const modal=$('feedback-modal');
+  const backdrop=$('feedback-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('feedback-error').textContent='';
+  $('feedback-error').style.color='';
+  $('feedback-send').disabled=false;
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+function submitFeedback(){
+  const message=$('feedback-message').value.trim();
+  if(!message){ $('feedback-error').style.color=''; $('feedback-error').textContent='Please write a message.'; return; }
+  if(!ws||ws.readyState!==1){ $('feedback-error').style.color=''; $('feedback-error').textContent='Not connected — please try again in a moment.'; return; }
+  $('feedback-send').disabled=true;
+  wss({type:'submit_feedback',category:$('feedback-category').value,message,
+    version:$('about-version').textContent.trim(),userAgent:navigator.userAgent});
+}
+
+function onSubmitFeedbackResult(m){
+  $('feedback-send').disabled=false;
+  if(m.ok){
+    $('feedback-error').style.color='#8fffb0';
+    $('feedback-error').textContent='Thanks — your message has been sent.';
+    $('feedback-message').value='';
+  } else {
+    $('feedback-error').style.color='';
+    $('feedback-error').textContent=m.error||'Failed to send message';
+  }
+}
+
+// Developer Settings > Player Reports.
+function toggleFeedbackListModal(){
+  const modal=$('feedback-list-modal');
+  const backdrop=$('feedback-list-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  $('feedback-list').innerHTML='<p>Loading…</p>';
+  wss({type:'list_feedback',devSecret:verifiedDevSecret});
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+const FEEDBACK_CATEGORY_LABELS={bug:'Bug',feedback:'Feedback',account:'Account'};
+
+function renderFeedbackList(m){
+  const el=$('feedback-list');
+  if(!m.ok){ el.innerHTML=`<p class="profile-error">${escHtml(m.error||'Failed to load reports')}</p>`; return; }
+  if(!m.reports.length){ el.innerHTML='<p>No reports.</p>'; return; }
+  el.innerHTML=m.reports.map(r=>`
+    <div class="feedback-item">
+      <div class="feedback-meta">
+        <span class="feedback-cat feedback-cat-${escHtml(r.category)}">${escHtml(FEEDBACK_CATEGORY_LABELS[r.category]||r.category)}</span>
+        ${escHtml(r.name)}${r.profileId?'':' (guest)'} · ${escHtml(new Date(r.ts).toLocaleString())} · ${escHtml(r.version)}
+      </div>
+      <div class="feedback-msg">${escHtml(r.message)}</div>
+      <div class="feedback-ua">${escHtml(r.userAgent)}</div>
+      <button class="feedback-dismiss" onclick="deleteFeedback(${Number(r.id)})">Dismiss</button>
+    </div>`).join('');
+}
+
+function deleteFeedback(id){
+  wss({type:'delete_feedback',devSecret:verifiedDevSecret,id});
 }
 
 // ════════════════════════════════════════════════════════════

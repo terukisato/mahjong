@@ -163,6 +163,21 @@ CREATE TABLE IF NOT EXISTS cosmetic_purchases (
   PRIMARY KEY (profile_id, item_id)
 );
 CREATE INDEX IF NOT EXISTS idx_cosmetic_purchases_profile ON cosmetic_purchases(profile_id);
+
+-- feedback.js — player bug reports / contact messages from the About
+-- panel's Contact form, read back in Developer Settings. profile_id is NULL
+-- for a guest; name is a snapshot of the display name at send time so a
+-- report stays readable after a rename.
+CREATE TABLE IF NOT EXISTS feedback (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts          INTEGER NOT NULL,
+  profile_id  TEXT,
+  name        TEXT NOT NULL,
+  category    TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  version     TEXT NOT NULL DEFAULT '',
+  user_agent  TEXT NOT NULL DEFAULT ''
+);
 `;
 
 // A profiles table created while the email sign-up feature existed may
