@@ -1,26 +1,14 @@
 'use strict';
 // Regression test suite for the bot AI (server/bot.js) — difficulty
 // dispatch, shanten + value based discard/react logic, 'hard' push/fold
-// defense, and 'hard' riichi-tile choice. Plain Node assertions, no
-// framework, same style as mahjong.test.js/room.test.js — run with:
-//   node server/bot.test.js
+// defense, and 'hard' riichi-tile choice. node:test + assert, same
+// style as mahjong.test.js/room.test.js — run with:
+//   node --test server/bot.test.js
 
 const assert = require('assert');
+const { test } = require('node:test');
 const { bestDiscard, botReact, shouldRiichi, chooseRiichiTile } = require('./bot');
 const { shanten, key } = require('./mahjong');
-
-let pass = 0, fail = 0;
-const failures = [];
-
-function test(name, fn) {
-  try {
-    fn();
-    pass++;
-  } catch (e) {
-    fail++;
-    failures.push({ name, error: e.message });
-  }
-}
 
 // ── Tile helpers ─────────────────────────────────────────────────────────────
 let _id = 0;
@@ -283,14 +271,3 @@ test('shouldRiichi: mid-value + mid-width breaks the tie on table placement', ()
   assert.strictEqual(shouldRiichi(hand13, [], { ...baseCtx, doraIndicators: dora, placement: 'lead' }), false);
   assert.strictEqual(shouldRiichi(hand13, [], { ...baseCtx, doraIndicators: dora, placement: 'behind' }), true);
 });
-
-// ══════════════════════════════════════════════════════════════════════════
-// Summary
-// ══════════════════════════════════════════════════════════════════════════
-
-console.log(`\n${pass} passed, ${fail} failed`);
-if (failures.length) {
-  console.log('\nFailures:');
-  for (const f of failures) console.log(`  ✗ ${f.name}\n    ${f.error}`);
-  process.exitCode = 1;
-}

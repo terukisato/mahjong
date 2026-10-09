@@ -1,24 +1,12 @@
 'use strict';
-// Regression test suite for achievements.js — plain Node assertions, no
-// framework, same convention as room.test.js/mahjong.test.js/bot.test.js.
-// Run with: node server/achievements.test.js
+// Regression test suite for achievements.js — node:test + assert, same
+// convention as room.test.js/mahjong.test.js/bot.test.js.
+// Run with: node --test server/achievements.test.js
 
 const assert = require('assert');
+const { test } = require('node:test');
 const { ACHIEVEMENTS, applyUnlocks } = require('./achievements');
 const { TITLES } = require('./profiles');
-
-let pass = 0, fail = 0;
-const failures = [];
-
-function test(name, fn) {
-  try {
-    fn();
-    pass++;
-  } catch (e) {
-    fail++;
-    failures.push({ name, error: e.message });
-  }
-}
 
 function mkVariant(overrides = {}) {
   return Object.assign({
@@ -215,10 +203,3 @@ test('client titles picker (public/script.js) exactly matches profiles.js TITLES
   assert.deepStrictEqual(TITLES.filter(t => !clientSet.has(t)), [], 'TITLES missing from client picker');
   assert.deepStrictEqual(clientIds.filter(t => !titleSet.has(t)), [], 'client picker has titles not in TITLES');
 });
-
-console.log(`\n${pass} passed, ${fail} failed`);
-if (failures.length) {
-  console.log('\nFailures:');
-  for (const f of failures) console.log(`  ✗ ${f.name}\n    ${f.error}`);
-  process.exitCode = 1;
-}

@@ -4,7 +4,7 @@
 // new logic: pairwise recording of real-profile seats only, newest-first
 // ordering, the per-profile cap, and purge-on-delete cleanup. Same
 // plain-assertion convention as friends.test.js/stats.test.js. Run with:
-// node server/history.test.js
+// node --test server/history.test.js
 //
 // DATA_DIR is read once, at module load, so set it to a fresh temp dir
 // BEFORE requiring anything that opens the database.
@@ -12,16 +12,11 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
+const { test } = require('node:test');
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-history-test-'));
 const { createProfile, getId } = require('./profiles');
 const H = require('./history');
-
-let pass = 0, fail = 0;
-const failures = [];
-function test(name, fn) {
-  try { fn(); pass++; } catch (e) { fail++; failures.push({ name, error: e.message }); }
-}
 
 for (const n of ['Ann', 'Ben', 'Cy', 'Deb']) createProfile(n, 'code1234');
 const A = getId('Ann'), B = getId('Ben'), C = getId('Cy'), D = getId('Deb');
@@ -77,9 +72,3 @@ test('deleteHistory scrubs the id from both sides of the graph', () => {
   assert.strictEqual(H.getRecentOpponents(B).length, 0);
   assert.strictEqual(H.getRecentOpponents(A).some(r => r.id === B), false);
 });
-
-console.log(`\nhistory.test.js: ${pass} passed, ${fail} failed`);
-if (fail) {
-  for (const f of failures) console.log(`  ✗ ${f.name}\n    ${f.error}`);
-  process.exit(1);
-}

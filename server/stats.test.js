@@ -6,7 +6,7 @@
 // only, per design — see _emptyStats' own comment), so these tests verify
 // it indirectly through which achievements actually unlock. Same plain-
 // assertion convention as achievements.test.js/room.test.js/mahjong.test.js.
-// Run with: node server/stats.test.js
+// Run with: node --test server/stats.test.js
 //
 // DATA_DIR is read once, at module load, by stats.js/profiles.js — set it
 // to a fresh temp directory BEFORE requiring stats.js so these tests never
@@ -15,15 +15,11 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
+const { test } = require('node:test');
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-stats-test-'));
 const { recordGameResult, getStats } = require('./stats');
 
-let pass = 0, fail = 0;
-const failures = [];
-function test(name, fn) {
-  try { fn(); pass++; } catch (e) { fail++; failures.push({ name, error: e.message }); }
-}
 let nextId = 0;
 const freshId = () => `p${nextId++}`;
 
@@ -116,10 +112,3 @@ test('the streak is combined across variants — a 3-seat (sanma) deal-in resets
   const a = getStats(id).achievements;
   assert.strictEqual(a['safe_player_30'], undefined, 'the sanma deal-in should have reset the combined streak');
 });
-
-console.log(`\n${pass} passed, ${fail} failed`);
-if (failures.length) {
-  console.log('\nFailures:');
-  for (const f of failures) console.log(`  ✗ ${f.name}\n    ${f.error}`);
-  process.exitCode = 1;
-}

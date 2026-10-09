@@ -1,22 +1,10 @@
 'use strict';
 // Regression test suite for yaku detection (server/mahjong.js).
-// Plain Node assertions, no framework — run with: node server/mahjong.test.js
+// node:test + assert — run with: node --test server/mahjong.test.js
 
 const assert = require('assert');
+const { test } = require('node:test');
 const { detectYaku, waitFu, isWin, countDora, calcFu, isMenzen, basePoints, waits, shanten, buildWall } = require('./mahjong');
-
-let pass = 0, fail = 0;
-const failures = [];
-
-function test(name, fn) {
-  try {
-    fn();
-    pass++;
-  } catch (e) {
-    fail++;
-    failures.push({ name, error: e.message });
-  }
-}
 
 // ── Tile helpers ─────────────────────────────────────────────────────────────
 let _id = 0;
@@ -1191,14 +1179,3 @@ test('waits(..., sanma=true): never reports a wait on 2m-8m', () => {
   assert.ok(!sanmaWaits.includes('4m'), 'sanma waits must never include a dropped tile like 4m');
   assert.ok(!sanmaWaits.some(w => w.endsWith('m') && w !== '1m' && w !== '9m'));
 });
-
-// ══════════════════════════════════════════════════════════════════════════
-// Summary
-// ══════════════════════════════════════════════════════════════════════════
-
-console.log(`\n${pass} passed, ${fail} failed`);
-if (failures.length) {
-  console.log('\nFailures:');
-  for (const f of failures) console.log(`  ✗ ${f.name}\n    ${f.error}`);
-  process.exitCode = 1;
-}

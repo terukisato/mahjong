@@ -2,7 +2,7 @@
 // Regression tests for friends.js — the request/accept/decline/remove
 // lifecycle, crossed-request auto-accept, unread notification counting, and
 // purge-on-profile-delete cleanup. Same plain-assertion convention as
-// stats.test.js/room.test.js/mahjong.test.js. Run with: node server/friends.test.js
+// stats.test.js/room.test.js/mahjong.test.js. Run with: node --test server/friends.test.js
 //
 // DATA_DIR is read once, at module load, by profiles.js/friends.js — set it
 // to a fresh temp directory BEFORE requiring either so these tests never
@@ -11,16 +11,11 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
+const { test } = require('node:test');
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-friends-test-'));
 const { createProfile, getId } = require('./profiles');
 const F = require('./friends');
-
-let pass = 0, fail = 0;
-const failures = [];
-function test(name, fn) {
-  try { fn(); pass++; } catch (e) { fail++; failures.push({ name, error: e.message }); }
-}
 
 // Four real profiles to work with.
 for (const n of ['Alice', 'Bob', 'Carol', 'Dave']) createProfile(n, 'code1234');
@@ -104,9 +99,3 @@ test('list helpers hydrate name + icon', () => {
   const carol = list.find(x => x.id === C);
   assert.ok(carol && carol.name === 'Carol' && typeof carol.icon === 'string');
 });
-
-console.log(`\nfriends.test.js: ${pass} passed, ${fail} failed`);
-if (fail) {
-  for (const f of failures) console.log(`  ✗ ${f.name}\n    ${f.error}`);
-  process.exit(1);
-}

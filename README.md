@@ -18,7 +18,7 @@ Requires Node.js 18+.
 npm install
 npm start    # production server on http://localhost:3000
 npm run dev  # same, with nodemon auto-restart
-npm test     # run the yaku/scoring regression suite
+npm test     # run the full test suite (node:test)
 ```
 
 Open `http://localhost:3000` in a browser (or several tabs/devices, for a real multiplayer match) and click **Find Match**.
@@ -31,7 +31,7 @@ server/
   room.js         Game state machine: turns, calls, scoring, round/game lifecycle
   mahjong.js      Pure game logic: tile decomposition, win checking, yaku/fu/scoring
   bot.js          Simple heuristic AI for empty seats
-  mahjong.test.js Regression test suite for mahjong.js (plain Node assertions, no framework)
+  *.test.js       node:test suites, one per module (mahjong, room, bot, stats, …)
 public/
   index.html      All screens (lobby, table, results) in one page
   script.js       Client state, WebSocket handling, rendering, SVG tile art
@@ -51,7 +51,18 @@ There is no build step — `public/` is served as static files directly.
 
 ## Testing
 
-`npm test` runs `server/mahjong.test.js`, a from-scratch regression suite (no test framework dependency) covering every yaku, several edge cases that are easy to get subtly wrong (ron- vs tsumo-completed triplets for sanankou/suuankou, wait-shape requirements for pinfu, dealer double-wind, dora indicator wraparound for honors, etc.), and the dora/fu helpers. Run it after any change to `server/mahjong.js`.
+Tests use Node's built-in test runner (`node:test` + `assert`), so there are no test dependencies. Every `server/*.test.js` file is picked up automatically.
+
+```bash
+npm test                # run every suite once
+npm run test:watch      # re-run on file changes
+npm run test:coverage   # run with a coverage report; fails below 80% line coverage
+node --test --test-name-pattern="Pinfu" server/mahjong.test.js   # run matching tests only
+```
+
+The suites cover yaku/fu/dora detection (`mahjong.test.js`), payments and round flow on the real `Room` class (`room.test.js`), bot decisions, achievements, stats, economy, friends and history. Tests that touch persistence point `DATA_DIR` at a fresh temp directory, so they never read or write the real database.
+
+**CI:** `.github/workflows/ci.yml` runs `npm ci`, `npm audit --audit-level=high` and `npm run test:coverage` on every push to `master`/`test` and on every pull request.
 
 ## Deployment
 

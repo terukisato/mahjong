@@ -2,7 +2,7 @@
 // Regression tests for economy.js — the daily login bonus, placement payout
 // math (base + performance bonus, quick-match multiplier), the daily earn
 // cap, spend, and purge. Same plain-assertion convention as
-// friends.test.js / stats.test.js. Run with: node server/economy.test.js
+// friends.test.js / stats.test.js. Run with: node --test server/economy.test.js
 //
 // DATA_DIR is read once, at module load — set it to a fresh temp directory
 // BEFORE requiring economy.js so these tests never touch server/data.
@@ -10,15 +10,11 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
+const { test } = require('node:test');
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-economy-test-'));
 const E = require('./economy');
 
-let pass = 0, fail = 0;
-const failures = [];
-function test(name, fn) {
-  try { fn(); pass++; } catch (e) { fail++; failures.push({ name, error: e.message }); }
-}
 let n = 0;
 const freshId = () => `p${n++}`;
 
@@ -105,9 +101,3 @@ test('purge removes the wallet', () => {
   E.purge(id);
   assert.strictEqual(E.getBalance(id), 0);
 });
-
-console.log(`\neconomy.test.js: ${pass} passed, ${fail} failed`);
-if (fail) {
-  for (const f of failures) console.log(`  ✗ ${f.name}\n    ${f.error}`);
-  process.exit(1);
-}

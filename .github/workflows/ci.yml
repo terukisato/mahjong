@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [master, test]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch/PR supersedes any run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Fails the build on known high/critical advisories in dependencies.
+      - run: npm audit --audit-level=high
+
+      # Runs the full node:test suite and fails if server line coverage
+      # drops below the floor set in package.json's test:coverage script.
+      - run: npm run test:coverage

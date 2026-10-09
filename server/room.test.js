@@ -2,25 +2,19 @@
 // Regression test suite for room.js's financial logic (payment formulas —
 // tsumo/ron splits, honba, riichi sticks, nagashi mangan, tenpai payments).
 // Drives the real Room class directly (not a mock) so these tests exercise
-// the exact code path the live server runs. Plain Node assertions, no
-// framework — run with: node server/room.test.js
+// the exact code path the live server runs. node:test +
+// assert — run with: node --test server/room.test.js
 
 const assert = require('assert');
+const { test, mock } = require('node:test');
 const { Room } = require('./room');
+
+// Room schedules real setTimeouts (bot turns, round transitions, chankan
+// windows). Every test here is synchronous and drives the Room's methods
+// directly, so none of them should ever fire. Left real, they kept the
+// process alive and played bot games for ~50s after the last assertion.
+mock.timers.enable({ apis: ['setTimeout'] });
 const { basePoints } = require('./mahjong');
-
-let pass = 0, fail = 0;
-const failures = [];
-
-function test(name, fn) {
-  try {
-    fn();
-    pass++;
-  } catch (e) {
-    fail++;
-    failures.push({ name, error: e.message });
-  }
-}
 
 let _id = 10000;
 function T(v, s) { return { v, s, id: _id++ }; }
@@ -1282,14 +1276,3 @@ test('Play Again works after the host reconnects mid-game', () => {
   assert.ok(Array.isArray(booted), 'hostStartPlayAgain fires for the reconnected host');
   assert.strictEqual(room.phase, 'playing', 'a fresh game actually started');
 });
-
-// ══════════════════════════════════════════════════════════════════════════
-// Summary
-// ══════════════════════════════════════════════════════════════════════════
-
-console.log(`\n${pass} passed, ${fail} failed`);
-if (failures.length) {
-  console.log('\nFailures:');
-  for (const f of failures) console.log(`  ✗ ${f.name}\n    ${f.error}`);
-  process.exitCode = 1;
-}
