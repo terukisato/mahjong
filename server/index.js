@@ -6,7 +6,7 @@ const path=require('path');
 const {Room}=require('./room');
 const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats}=require('./stats');
 const {getHistory,getGameDetail,getRecentOpponents,deleteHistory,clearAllHistory}=require('./history');
-const {listProfiles,createProfile,verifyProfile,deleteProfile,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,getNameplateSkin,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,getIconById}=require('./profiles');
+const {listProfiles,createProfile,verifyProfile,deleteProfile,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,getNameplateSkin,getCallStyle,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,getIconById}=require('./profiles');
 const friends=require('./friends');
 const coins=require('./economy');
 const cosmetics=require('./cosmetics');
@@ -221,6 +221,7 @@ wss.on('connection',(ws,req)=>{
       player.name=unlockedName;
       player.icon=getIcon(unlockedName);
       player.nameplateSkin=getNameplateSkin(unlockedName);
+      player.callStyle=getCallStyle(unlockedName);
       player.voiceTheme=getVoiceTheme(unlockedName);
       player.profileId=unlockedId;
       player.isGuest=false;
@@ -228,6 +229,7 @@ wss.on('connection',(ws,req)=>{
       player.name='Guest'+Math.floor(1000+Math.random()*9000);
       player.icon='default';
       player.nameplateSkin='default';
+      player.callStyle='default';
       player.profileId=null;
       player.isGuest=true;
     }
@@ -244,6 +246,7 @@ wss.on('connection',(ws,req)=>{
       player.name=unlockedName;
       player.icon=getIcon(unlockedName);
       player.nameplateSkin=getNameplateSkin(unlockedName);
+      player.callStyle=getCallStyle(unlockedName);
       player.title=getTitle(unlockedName);
       player.voiceTheme=getVoiceTheme(unlockedName);
       player.profileId=unlockedId;
@@ -252,6 +255,7 @@ wss.on('connection',(ws,req)=>{
       player.name='Guest'+Math.floor(1000+Math.random()*9000);
       player.icon='default';
       player.nameplateSkin='default';
+      player.callStyle='default';
       player.title=null;
       player.profileId=null;
       player.isGuest=true;
@@ -837,7 +841,7 @@ wss.on('connection',(ws,req)=>{
         unlockedName=name;
         unlockedId=getId(name);
         const daily=coins.claimDailyBonus(unlockedId);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:'default',title:'Beginner',voiceTheme:'Default',nameplateSkin:'default',
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:'default',title:'Beginner',voiceTheme:'Default',nameplateSkin:'default',callStyle:'default',
           id:unlockedId,unread:0,coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
         goOnline();
         syncSeatedIdentity();
@@ -864,7 +868,7 @@ wss.on('connection',(ws,req)=>{
         const token=msg.remember?createRememberToken(name):undefined;
         // Daily login bonus — once per UTC day, on either unlock path.
         const daily=coins.claimDailyBonus(unlockedId);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),nameplateSkin:getNameplateSkin(name),token,
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),nameplateSkin:getNameplateSkin(name),callStyle:getCallStyle(name),token,
           id:unlockedId,unread:friends.unreadCount(unlockedId),coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
         goOnline();
         syncSeatedIdentity();
@@ -881,7 +885,7 @@ wss.on('connection',(ws,req)=>{
         unlockedName=name;
         unlockedId=getId(name);
         const daily=coins.claimDailyBonus(unlockedId);
-        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),nameplateSkin:getNameplateSkin(name),silent:true,id:unlockedId,unread:friends.unreadCount(unlockedId),coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
+        ws.send(JSON.stringify({type:'profile_unlocked',ok:true,name,icon:getIcon(name),title:getTitle(name),voiceTheme:getVoiceTheme(name),nameplateSkin:getNameplateSkin(name),callStyle:getCallStyle(name),silent:true,id:unlockedId,unread:friends.unreadCount(unlockedId),coins:daily.balance,dailyBonus:daily.granted?daily.amount:0}));
         goOnline();
         syncSeatedIdentity();
       } else {
@@ -935,6 +939,17 @@ wss.on('connection',(ws,req)=>{
       const r=cosmetics.setEquippedNameplate(unlockedId,unlockedName,msg.skin);
       if(r.ok){
         player.nameplateSkin=msg.skin;
+        if(myRoom) myRoom._broadcastRoomUpdate();
+      }
+    }
+
+    // Same as equip_nameplate above, for the win/riichi call style (see
+    // cosmetics.setEquippedCallStyle). Pushed to the room like the other
+    // cosmetics so every seat plays this player's style on their calls.
+    if(msg.type==='equip_callstyle'&&unlockedId&&unlockedName){
+      const r=cosmetics.setEquippedCallStyle(unlockedId,unlockedName,msg.style);
+      if(r.ok){
+        player.callStyle=msg.style;
         if(myRoom) myRoom._broadcastRoomUpdate();
       }
     }

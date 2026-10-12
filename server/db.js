@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   title               TEXT NOT NULL DEFAULT 'Beginner',
   voice_theme         TEXT NOT NULL DEFAULT 'Default',
   nameplate_skin      TEXT NOT NULL DEFAULT 'default',
+  call_style          TEXT NOT NULL DEFAULT 'default',
   remember_salt       TEXT,
   remember_token_hash TEXT
 );
@@ -201,17 +202,19 @@ function getDb() {
   _db.exec('PRAGMA journal_mode = WAL');
   _db.exec(SCHEMA);
   // CREATE TABLE IF NOT EXISTS above only shapes a FRESH profiles table —
-  // an existing one (from before nameplate_skin existed) keeps whatever
+  // an existing one (from before nameplate_skin/call_style existed) keeps whatever
   // columns it already had. ADD COLUMN is the one schema change that's safe
   // to apply after the fact (unlike dropping/renaming a column), so it's
   // done here unconditionally rather than versioning the schema — SQLite
   // has no ADD COLUMN IF NOT EXISTS, so a "duplicate column name" error
   // (meaning a previous boot already added it) is the expected steady state
   // and is swallowed; any other error still surfaces.
-  try {
-    _db.exec("ALTER TABLE profiles ADD COLUMN nameplate_skin TEXT NOT NULL DEFAULT 'default'");
-  } catch (e) {
-    if (!/duplicate column name/i.test(e.message || '')) throw e;
+  for (const col of ["nameplate_skin TEXT NOT NULL DEFAULT 'default'", "call_style TEXT NOT NULL DEFAULT 'default'"]) {
+    try {
+      _db.exec('ALTER TABLE profiles ADD COLUMN ' + col);
+    } catch (e) {
+      if (!/duplicate column name/i.test(e.message || '')) throw e;
+    }
   }
   return _db;
 }

@@ -4,6 +4,10 @@
 :root{
   --jade:#1a6b45;--jl:#2a9e67;--jd:#0d3d28;
   --gold:#c9a84c;--gl:#f0d080;--gd:#8a6b20;--cream:#f5edd8;
+  /* The game's backdrop — jade glow low-left, gold glow high-right over deep
+     green. Shared by the title screen's .bg, the win cutscene (.cs-dim) and
+     the standings card (#s-end.re-standings-screen). */
+  --bg-theme:radial-gradient(ellipse at 20% 85%,rgba(26,107,69,.3),transparent 55%),radial-gradient(ellipse at 80% 15%,rgba(201,168,76,.14),transparent 55%),radial-gradient(ellipse at 50% 50%,rgba(12,35,20,.85),#040a05 100%);
   /* Responsive tile sizes via CSS vars — JS updates these on resize */
   --tlg-w:40px;--tlg-h:56px;
   --tmd-w:28px;--tmd-h:36px;
@@ -28,7 +32,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 *::-webkit-scrollbar-thumb{background:rgba(201,168,76,.5);border-radius:4px;}
 *::-webkit-scrollbar-thumb:hover{background:var(--gold);}
 /* ════ BACKGROUND LAYERS ════ */
-.bg{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse at 20% 85%,rgba(26,107,69,.3),transparent 55%),radial-gradient(ellipse at 80% 15%,rgba(201,168,76,.14),transparent 55%),radial-gradient(ellipse at 50% 50%,rgba(12,35,20,.85),#040a05 100%);}
+.bg{position:fixed;inset:0;z-index:0;background:var(--bg-theme);}
 .screen{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;}
 .screen.hidden{display:none!important;}
 #s-end.hidden{display:none!important;}
@@ -280,10 +284,29 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    normal-to-large screen, only shrinking further on small phones (floor
    still 6px). */
 .topbar{--ui-vmin:clamp(6px,1vmin,7.5px);
-  position:fixed;top:0;left:0;right:0;height:36px;background:rgba(3,10,5,.97);border-bottom:1px solid rgba(201,168,76,.18);display:flex;align-items:center;justify-content:space-between;padding:0 10px;z-index:50;}
-.tb-title{font-family:'Noto Serif JP',serif;font-size:calc(var(--ui-vmin) * 1.944);color:var(--gold);letter-spacing:calc(var(--ui-vmin) * .278);}
+  position:fixed;top:0;left:0;right:0;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;z-index:50;
+  /* "Gilded trim": a lacquer-box edge — a bright gold rule along the
+     bottom with a fainter second rule just under it (::after). */
+  background:linear-gradient(#0d110e,#050806);box-shadow:inset 0 -1px 0 rgba(201,168,76,.65);}
+.topbar::after{content:'';position:absolute;left:0;right:0;bottom:-4px;height:1px;background:rgba(201,168,76,.3);pointer-events:none;}
+.tb-title{display:flex;align-items:baseline;gap:calc(var(--ui-vmin) * .8);white-space:nowrap;
+  font-family:'Noto Serif JP',serif;font-size:calc(var(--ui-vmin) * 1.944);color:var(--gold);letter-spacing:calc(var(--ui-vmin) * .278);}
+/* 雀心 in the START button's gold leaf. */
+.tb-jp{font-weight:900;background:linear-gradient(115deg,#b5903f 0%,#ffe9b0 48%,#cfa74d 100%);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.tb-en{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin) * 1.35);letter-spacing:.28em;}
+/* Whose turn, between two small gold diamond studs. */
 .tb-st{font-size:calc(var(--ui-vmin) * 1.944);color:rgba(245,237,216,.5);max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.tb-st.my{color:#ffdd44;font-weight:700;animation:pulse 1.5s infinite;}
+.tb-st::before,.tb-st::after{content:'◆';font-size:.5em;color:rgba(201,168,76,.6);margin:0 1em;vertical-align:.25em;}
+.tb-st.my{color:var(--gl);font-weight:700;text-shadow:0 0 8px rgba(240,208,128,.45);animation:pulse 1.5s infinite;}
+/* Leave: a small slanted plate like the action buttons (.ba) — the
+   button is the red edge, ::before (same slant, inset) the fill. */
+.topbar .bl{position:relative;isolation:isolate;display:inline-flex;align-items:center;
+  padding:0 calc(var(--ui-vmin) * 2.2);height:calc(var(--ui-vmin) * 3.611);border:none;border-radius:0;background:#d44;color:#ffd8d8;
+  font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin) * 1.45);letter-spacing:.12em;cursor:pointer;white-space:nowrap;flex-shrink:0;
+  clip-path:polygon(calc(var(--ui-vmin) * 1.1) 0,100% 0,calc(100% - var(--ui-vmin) * 1.1) 100%,0 100%);}
+.topbar .bl::before{content:'';position:absolute;z-index:-1;inset:1.5px 2px;background:#5a1010;
+  clip-path:polygon(calc(var(--ui-vmin) * .95) 0,100% 0,calc(100% - var(--ui-vmin) * .95) 100%,0 100%);}
+.topbar .bl:hover{filter:brightness(1.2);}
 .bl{padding:0 calc(var(--ui-vmin) * 1.389);height:calc(var(--ui-vmin) * 3.611);background:rgba(120,20,20,.8);border:1px solid rgba(200,60,60,.4);border-radius:6px;color:rgba(255,180,180,.85);font-size:calc(var(--ui-vmin) * 1.806);cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
 .bl:hover{background:rgba(160,30,30,.9);}
 
@@ -293,15 +316,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
 /* Sanma (3-player): no seat sits directly across (toimen), so that
    player-area is hidden — script.js toggles this class on .table once per
-   game, from game_start's numPlayers. The centre score panel's top strip
-   (.ctr-score-top) is deliberately NOT included here: it's one of four
-   ridge-bordered segments that visually close into a single rectangular
-   frame (see .ctr/.ctr-score), not a per-player element on its own —
-   hiding the whole strip leaves that frame open on one side. Its content
-   (the score value and riichi-stick icon) IS hidden below, via
-   visibility:hidden rather than display:none, so the frame segment stays
-   in place but reads as empty rather than showing a "—" placeholder or a
-   stray riichi stick for a seat nobody occupies. */
+   game, from game_start's numPlayers. In the centre panel the top seat's
+   score and riichi stick are hidden below (visibility:hidden, so the
+   layout doesn't shift) rather than showing a "—" placeholder or a stray
+   riichi stick for a seat nobody occupies. */
 .table.sanma .pa-t,
 .table.sanma .np-wrap-t,
 .table.sanma .ml-t,
@@ -344,47 +362,86 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   border:none;
   box-shadow:inset 0 0 60px rgba(0,0,0,.4);}
 
-/* ── Centre info panel (round/wind/scores) ── */
+/* ── Centre info panel (round / remaining wall / scores) ──
+   A square in the nameplates' own #1a1a1a (see .np), same size as before, sized inside in cqw (container-type)
+   so every piece scales with the panel itself. In the middle: the round
+   (東1) over the remaining wall (残 68), inside a gauge ring (#cd-arc) that
+   drains as the wall runs down (--p set in updateCenterPanel). Along each
+   edge, inside that seat's rotated layer: its score centred, with its
+   riichi stick above it; the current player's score is lit gold. All the
+   Japanese here is Noto Serif JP, the 雀心 logo's font (.logo-k). No
+   outer box-shadow: one spread past the panel's edges darkened the discard
+   rows right beside it. Diagonal hairlines (::before) run from each corner
+   to the gauge, splitting the panel into one triangular area per seat. */
 .ctr{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  z-index:1;pointer-events:none;
-  background:#1a1a1a;
+  z-index:1;pointer-events:none;container-type:inline-size;
   width:min(26vmin,26%);height:min(26vmin,26%);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:0;overflow:hidden;
-  border-radius:1px;}
-/* Score strip rows — double line separator using border + box-shadow.
-   `solid`, not `ridge` — ridge fakes a bevel by splitting the border into
-   algorithmically lightened/darkened halves, which is barely visible at
-   a sub-2px width on a phone (reads as a flat line, the intended look)
-   but becomes an obviously two-toned, visibly LIGHTER band once this
-   vmin-scaled width grows past a few px on a large/4K screen. Same color
-   and width, just without the fake-3D split, so it reads as the same
-   flat rgb(72,72,72) at every screen size instead of correct-looking on
-   mobile and washed-out on desktop. */
-.ctr-score{width:100%;height:20%;text-align:center;
-  border: solid 0.4vmin rgb(72, 72, 72);background:#1a1a1a;}
-.ctr-mid{display:flex;align-items:center;justify-content:center;
-  width:calc(min(26vmin,26%) - 2 * min(5vmin,38px));
-  height:calc(min(26vmin,26%) - 2 * min(5vmin,38px));
-  flex-shrink:0;position:relative;box-sizing:border-box;}
-/* Centre info */
-.ctr-score-val{display:flex;font-size:2.1vmin;font-weight:700;align-items:center;
-  color:rgba(240,208,128,.9);letter-spacing:0;justify-content:center;padding-top:2%}
-.ctr-info{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
-.cw{font-family:'Noto Serif JP',serif;font-weight:900;
-  color:#f0d080;line-height:1;position:relative;z-index:1;
-  text-shadow:0 0 14px rgba(201,168,76,.6),0 0 4px rgba(0,0,0,.8);
-  display:flex;flex-direction:row;align-items:baseline;gap:3px;}
-#cw-wind{font-size:clamp(28px,5vmin,5vmin);}
-#cw-kyoku{font-size:clamp(12px,2vmin,2vmin);opacity:0.75;letter-spacing:1px;}
-.ci{font-size:clamp(7px,1.5vmin,15px);letter-spacing:2px;color:rgba(245,237,216,.35);
-  margin-top:2px;position:relative;z-index:1;}
-.cwl{font-size:clamp(9px,1.8vmin,15px);color:#2a9e67;font-weight:700;
-  margin-top:1px;position:relative;z-index:1;}
+  padding:0;overflow:hidden;border-radius:2px;
+  background:#1a1a1a;
+  border:1px solid rgba(201,168,76,.35);}
+.ctr::before{content:'';position:absolute;inset:0;pointer-events:none;
+  --ln:transparent calc(50% - .35cqw),rgba(201,168,76,.45) calc(50% - .35cqw) calc(50% + .35cqw),transparent calc(50% + .35cqw);
+  background:linear-gradient(45deg,var(--ln)),linear-gradient(-45deg,var(--ln));
+  -webkit-mask:radial-gradient(circle,transparent 30cqw,#000 30.2cqw);mask:radial-gradient(circle,transparent 30cqw,#000 30.2cqw);}
+/* Wall gauge: gold for what's left, a faint track for what's been drawn. */
+.cd-arc{--p:100;position:absolute;left:50%;top:50%;translate:-50% -50%;width:56cqw;height:56cqw;border-radius:50%;
+  background:conic-gradient(from 180deg,var(--gl) calc(var(--p) * 1%),rgba(245,237,216,.1) 0);
+  -webkit-mask:radial-gradient(circle,transparent 25.6cqw,#000 25.8cqw);mask:radial-gradient(circle,transparent 25.6cqw,#000 25.8cqw);}
+/* Each seat's layer covers the whole panel, rotated toward that seat (see
+   .ctr-score-top/-left/-right below), so all four read from their own
+   player's side. */
+.ctr-score{position:absolute;inset:0;z-index:1;}
+/* The seat's own triangle (edge to centre), faintly lit on its turn. */
+.ctr-score::before{content:'';position:absolute;inset:0;clip-path:polygon(0 100%,100% 100%,50% 50%);
+  background:rgba(240,208,128,.1);opacity:0;transition:opacity .3s;
+  -webkit-mask:radial-gradient(circle,transparent 30cqw,#000 30.2cqw);mask:radial-gradient(circle,transparent 30cqw,#000 30.2cqw);}
+.ctr-score.cd-on::before{opacity:1;}
+/* Each edge: the score centred, its riichi stick (.rs-*) just above it,
+   between the score and the gauge. */
+.ctr-score-val{position:absolute;left:14cqw;right:14cqw;bottom:3.5cqw;text-align:center;white-space:nowrap;
+  font-family:'Noto Serif JP',serif;font-weight:700;font-size:7.6cqw;line-height:1.2;font-variant-numeric:tabular-nums;
+  color:rgba(245,237,216,.85);transition:color .3s,text-shadow .3s;}
+.ctr-score.cd-on .ctr-score-val{color:var(--gl);text-shadow:0 0 2cqw rgba(240,208,128,.55);}
+/* Middle: the round over the remaining wall, inside the gauge. */
+.ctr-mid{position:absolute;z-index:2;left:50%;top:50%;translate:-50% -50%;display:flex;align-items:center;justify-content:center;}
+.ctr-info{display:flex;flex-direction:column;align-items:center;gap:1.4cqw;}
+.cw{display:flex;align-items:baseline;font-family:'Noto Serif JP',serif;font-weight:900;line-height:1;color:var(--gl);}
+#cw-wind,#cw-kyoku{font-size:16cqw;}
+.ci:empty{display:none;}
+.cwl{font-family:'Noto Serif JP',serif;font-weight:700;font-size:8.5cqw;line-height:1;letter-spacing:.06em;color:rgba(245,237,216,.85);white-space:nowrap;}
+/* Small panels (phones, where the square is ~80-100px): the same layout
+   with type about 60% larger. The gauge keeps its desktop size so the
+   score + stick stack still fits between it and each edge. */
+@container (max-width:150px){
+  .ctr-info{gap:1.6cqw;}
+  #cw-wind,#cw-kyoku{font-size:18cqw;}
+  .cwl{font-size:12.5cqw;letter-spacing:0;}
+  .ctr-score-val{bottom:2cqw;font-size:12.5cqw;line-height:1;}
+  .ctr-score.cd-on .ctr-score-val{text-decoration:underline;text-decoration-thickness:1.2cqw;text-underline-offset:1.6cqw;}
+}
+@media (prefers-reduced-motion:reduce){.ctr-score-val,.ctr-score::before{transition:none;}}
+
 /* ── Dora indicator strip ── */
 .dora-slot{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:5px;border:1px dashed rgba(201,168,76,.25);
   background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;}
 .dora-slot.filled{border:none;background:none;padding:0;}
+/* Kan dora reveal (animatePlaced in script.js; durations mirrored there as
+   DORA_FLIP_MS / DORA_GLOW_MS). The indicator turns over edge-on: its
+   ::after is the tile back (.kan-back's blue) for the first half, then drops
+   away so the face opens out. The slot then flashes gold. The glow stays
+   within ~1vmin since #dora-panel scrolls (overflow-y:auto) and would clip
+   anything wider. */
+.dora-flip{animation:dora-flip 480ms cubic-bezier(.45,0,.25,1) both;}
+.dora-flip::after{content:'';position:absolute;inset:0;z-index:1;border-radius:inherit;
+  background:linear-gradient(135deg,#1a3a6a,#0d1f3a);animation:dora-flip-back 480ms both;animation-delay:inherit;}
+@keyframes dora-flip{0%{scale:1 1}50%{scale:0 1.06}100%{scale:1 1}}
+@keyframes dora-flip-back{0%,49.9%{opacity:1}50%,100%{opacity:0}}
+.dora-slot.dora-new{border-radius:5px;animation:dora-new 1s ease-out both;}
+@keyframes dora-new{
+  0%,45%{box-shadow:0 0 0 0 rgba(240,208,128,0)}
+  58%{box-shadow:0 0 0 .3vmin #f0d080,0 0 1.2vmin rgba(240,208,128,.9)}
+  100%{box-shadow:0 0 0 .3vmin rgba(240,208,128,0),0 0 1.2vmin rgba(240,208,128,0)}}
+@media (prefers-reduced-motion:reduce){.dora-flip,.dora-flip::after,.dora-slot.dora-new{animation:none;}.dora-flip::after{display:none;}}
 /* Ankan face-down tiles */
 .kan-back{
   width:var(--tmd-w,26px);height:var(--tmd-h,36px);
@@ -498,9 +555,9 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   position:relative;
   z-index:20;transition:all .25s;flex-shrink:0;white-space:nowrap;
   box-shadow:0 0 0 1px #222,inset 0 1px 0 rgba(255,255,255,.04);}
-.np.active{background:#222;border-color:#ffdd44;
-  box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 16px rgba(255,221,68,.5);animation:glow 1.6s ease-in-out infinite;}
-@keyframes glow{0%,100%{box-shadow:0 0 0 2px rgba(255,221,68,.3),0 0 14px rgba(255,221,68,.4);}50%{box-shadow:0 0 0 2px rgba(255,221,68,.55),0 0 28px rgba(255,221,68,.7);}}
+/* Whose turn it is shows on the centre panel (lit score + seat triangle),
+   so the plate itself only lightens a touch — no pulsing gold frame. */
+.np.active{background:#222;}
 /* Nameplate skins live further down, right after .np-preview (see that
    class's own comment for why: it and this block's selectors are both
    single classes, so they have to stay in that relative order for the
@@ -689,7 +746,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   transition:transform .12s ease,box-shadow .12s ease;}
 .tlg.play{cursor:pointer;pointer-events:auto;}
 .tlg.play:hover,.tlg.play:active{transform:translateY(-1vmin);box-shadow:2px 12px 18px rgba(0,0,0,.7),inset 0 2px 0 rgba(255,255,255,.95);z-index:20;}
-.tlg.sel{transform:translateY(-1vmin);box-shadow:0 0 0 0.2vmin #00ffaa,2px 12px 18px rgba(0,0,0,.75);z-index:25;}
+/* Selected: lifted with a deeper shadow only — no coloured outline ring. */
+.tlg.sel{transform:translateY(-1vmin);box-shadow:2px 12px 18px rgba(0,0,0,.75);z-index:25;}
 
 /* Draw tile — far right, taller glow, shimmer animation */
 .tlg.drw{
@@ -749,6 +807,44 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .mg .called-stack .kakan-add{position:absolute;bottom:calc(var(--tmd-w,26px) - 1vmin);left:50%;transform:translateX(-50%) rotate(-90deg);z-index:3;}
 .mr{display:flex;gap:0;align-items:flex-end;flex-shrink:0;}
 
+/* Tile placement animations — classes added by animatePlaced() in
+   script.js, which also mirrors these durations (PLACE_DROP_MS /
+   PLACE_SLIDE_MS) so an animation can resume mid-flight after renderState
+   rebuilds the DOM. Both animate the standalone scale/translate properties
+   rather than transform, so tiles that already carry a transform of their
+   own (.dz-riichi's rotate, .called, .kakan-add) keep it untouched.
+   tile-drop: discards, kita and the kakan 4th tile — set down from above:
+     starts enlarged (closer to the eye) with a soft halo shadow, lands with a
+     small squash and settles. The halo is a centred blur, not an offset
+     shadow, so it reads the same in every seat's rotated zone.
+   meld-slide: a new meld group slides in from its owner's left toward the
+     right edge of their meld row (each .ml-* container is already rotated to
+     its owner, so "left" is the owner's own left for every seat). */
+.tile-drop{animation:tile-drop 340ms cubic-bezier(.3,.7,.4,1) both;}
+@keyframes tile-drop{
+  0%  {opacity:0;scale:1.7;filter:drop-shadow(0 0 8px rgba(0,0,0,.55));}
+  55% {opacity:1;scale:.94;filter:drop-shadow(0 0 2px rgba(0,0,0,.35));}
+  78% {scale:1.03;}
+  100%{opacity:1;scale:1;filter:none;}
+}
+.meld-slide{animation:meld-slide 420ms cubic-bezier(.2,.9,.3,1.12) both;}
+@keyframes meld-slide{
+  0%  {opacity:0;translate:calc(var(--tmd-w,26px) * -4) 0;}
+  45% {opacity:1;}
+  100%{opacity:1;translate:0 0;}
+}
+/* tile-draw: a freshly drawn tile slides in from the wall side (toward the
+   table centre) into its hand row. That's -Y for my own tiles (.tlg) and +Y
+   for opponents' (.tsm, whose near edge already faces the centre). */
+.tile-draw{animation:tile-draw 300ms cubic-bezier(.2,.8,.3,1) both;}
+.tsm.tile-draw{--draw-dir:1;}
+@keyframes tile-draw{
+  0%  {opacity:0;translate:0 calc(var(--draw-dir,-1) * 90%);}
+  50% {opacity:1;}
+  100%{opacity:1;translate:0 0;}
+}
+@media (prefers-reduced-motion:reduce){.tile-drop,.meld-slide,.tile-draw{animation:none;}}
+
 /* ════════════════════════════════════════════════════════════
    ACTION BAR & BUTTONS
    ════════════════════════════════════════════════════════════ */
@@ -804,34 +900,54 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    .wb's icon (28px→22px) for height, proportionally for padding/font — a
    button label is short, all-caps text (TSUMO/RIICHI/PON/...), which stays
    legible well below the old floor, same as .wb's icon did. */
-.ba{padding:0 clamp(7px,calc(var(--table-size) * 0.009091),20px);height:clamp(22px,calc(var(--table-size) * 0.03636),64px);border:none;border-radius:clamp(4px,calc(var(--table-size) * 0.005455),10px);
+.ba{--ba-h:clamp(22px,calc(var(--table-size) * 0.03636),64px);--ba-cut:calc(var(--ba-h) * .32);--ba-edge:calc(var(--ba-h) * .045);
+  --ba-bg:#333;--ba-bd:#666;color:var(--cream);
+  position:relative;isolation:isolate;overflow:hidden;
+  padding:0 calc(var(--ba-h) * .64);height:var(--ba-h);border:none;border-radius:0;
   font-family:'Cinzel Decorative',serif;font-size:clamp(9px,calc(var(--table-size) * 0.014545),26px);
-  letter-spacing:0.1vmin;cursor:pointer;transition:all .15s;font-weight:700;white-space:nowrap;
-  flex-shrink:0;box-shadow:0 0.4vmin 1.4vmin rgba(0,0,0,.6);}
-.ba:hover{filter:brightness(1.2);transform:translateY(--0.3vmin);box-shadow:0 0.6vmin 2vmin rgba(0,0,0,.7);}
-.ba:active{transform:translateY(0);}
-.ba:disabled{opacity:.3;cursor:default;transform:none;filter:none;}
+  letter-spacing:.12em;cursor:pointer;transition:filter .15s;font-weight:700;white-space:nowrap;flex-shrink:0;
+  /* F5 "slant": a forward-leaning parallelogram. The button itself is the
+     edge colour; ::before, inset by --ba-edge with the same slant, holds
+     the fill — clip-path can't take a border. It also clips box-shadow,
+     so the drop shadow lives on the row (.actbar / .chi-picker) as a
+     filter instead. */
+  background:var(--ba-bd);
+  clip-path:polygon(var(--ba-cut) 0,100% 0,calc(100% - var(--ba-cut)) 100%,0 100%);}
+.ba::before{content:'';position:absolute;z-index:-1;inset:var(--ba-edge) calc(var(--ba-edge) * 1.5);background:var(--ba-bg);
+  clip-path:polygon(calc(var(--ba-cut) - var(--ba-edge)) 0,100% 0,calc(100% - var(--ba-cut) + var(--ba-edge)) 100%,0 100%);}
+/* The call's kanji (BA_KANJI in script.js), ghosted large behind the label
+   and pushed toward the right edge, where the slant crops it. */
+.ba-kj{position:absolute;z-index:-1;right:calc(var(--ba-h) * .2);top:50%;translate:0 -50%;
+  font-family:'Noto Serif JP',serif;font-weight:900;font-style:normal;font-size:calc(var(--ba-h) * .95);line-height:1;
+  letter-spacing:0;color:currentColor;opacity:.2;pointer-events:none;}
+.ba:hover{filter:brightness(1.2);}
+.ba:disabled{opacity:.3;cursor:default;filter:none;}
 .hint{display:none;}
-.bdis{background:#8a1818;color:#ffd8d8;border:0.2vmin solid #d44;}
-.btsu{background:#8a6500;color:#fff8d0;border:0.2vmin solid #f0d060;font-weight:900;}
-.brii{background:#1e1e8a;color:#d0d0ff;border:0.2vmin solid #77f;}
-.bron{background:#aa1010;color:#fff;border:0.2vmin solid #f66;box-shadow:0 0 1vmin rgba(220,50,50,.6);font-weight:900;}
-.bchi{background:#145a14;color:#c0ffc0;border:0.2vmin solid #4d4;}
-.bpon{background:#6a3800;color:#ffe0b0;border:0.2vmin solid #ca0;}
-.bkan{background:linear-gradient(135deg,#3a0a5a,#6a1a9a);color:#e8d0ff;border:0.2vmin solid #a060d0;}
-/* Matches .call-banner[data-type="kita"]'s accent colours, same pairing
-   convention as .bpon/.bchi/.bkan/.brii all matching their own banners. */
-.bkita{background:linear-gradient(135deg,#0a3a45,#0a6a80);color:#b0f0ff;border:0.2vmin solid #20b0c0;}
-.bpas{background:rgba(40,40,40,.95);color:rgba(245,237,216,.7);border:0.2vmin solid rgba(255,255,255,.2);}
-/* Chonbo (rules.chonbo) "attempt" declare — deliberately muted/dashed
-   rather than a bold solid colour like the other action buttons, so it
-   visually recedes instead of inviting a tap; the real confirmation is
-   the declare-picker popup this opens (.declare-picker-confirm below,
-   which DOES use the full warning colour, since that tap is the actual
+.bdis{--ba-bg:#8a1818;--ba-bd:#d44;color:#ffd8d8;}
+.btsu{--ba-bg:#8a6500;--ba-bd:#f0d060;color:#fff8d0;font-weight:900;}
+.brii{--ba-bg:#1e1e8a;--ba-bd:#77f;color:#d0d0ff;}
+/* Ron can't glow outside its own edge any more (clip-path), so its fill
+   is lit from inside instead. */
+.bron{--ba-bg:radial-gradient(ellipse at 50% 35%,#d42020,#aa1010 70%);--ba-bd:#f66;color:#fff;font-weight:900;}
+.bchi{--ba-bg:#145a14;--ba-bd:#4d4;color:#c0ffc0;}
+.bpon{--ba-bg:#6a3800;--ba-bd:#ca0;color:#ffe0b0;}
+.bkan{--ba-bg:linear-gradient(135deg,#3a0a5a,#6a1a9a);--ba-bd:#a060d0;color:#e8d0ff;}
+/* Kita's teal — the same accent the kita call glow uses (.cg-kita), like
+   .bpon/.bchi/.bkan matching their own calls. */
+.bkita{--ba-bg:linear-gradient(135deg,#0a3a45,#0a6a80);--ba-bd:#20b0c0;color:#b0f0ff;}
+.bpas{--ba-bg:#282828;--ba-bd:#555;color:rgba(245,237,216,.7);}
+/* Kyuushu Kyuuhai — previously had no rule of its own at all (rendered as
+   the browser's default grey button). */
+.bkyu{--ba-bg:linear-gradient(135deg,#3a3a3a,#4a4a4a);--ba-bd:#777;color:#f5edd8;}
+/* Chonbo (rules.chonbo) "attempt" declare — deliberately muted rather than
+   a bold solid colour like the other action buttons, so it visually
+   recedes instead of inviting a tap; the real confirmation is the
+   declare-picker popup this opens (.declare-picker-confirm below, which
+   DOES use the full warning colour, since that tap is the actual
    deliberate commit). */
-.bchonbo{background:rgba(90,30,10,.55);color:#ffb080;border:0.2vmin dashed rgba(255,128,64,.6);opacity:.8;}
+.bchonbo{--ba-bg:#3a1a0c;--ba-bd:rgba(255,128,64,.6);color:#ffb080;opacity:.8;}
 .bchonbo:hover{opacity:1;}
-.declare-picker-confirm{background:linear-gradient(135deg,#5a1a0a,#9a3a1a);color:#ffd0b0;border:0.2vmin solid #ff8040;}
+.declare-picker-confirm{--ba-bg:linear-gradient(135deg,#5a1a0a,#9a3a1a);--ba-bd:#ff8040;color:#ffd0b0;}
 
 /* ════════════════════════════════════════════════════════════
    CHAT
@@ -1022,8 +1138,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    exactly, so JS's setTimeout(...,4000) removal lands right as it
    finishes fading rather than cutting it off mid-animation. */
 /* z-index:150 — above every table/game element (nameplates/tiles/action
-   bar top out around 60) but below the call banner (.cb-layer:205, pon/
-   chii/kan/riichi), round-start card (.rs-layer:210), game-start roll
+   bar top out around 60) but below the round-start card (.rs-layer:210), game-start roll
    call (.gs-layer:210), toast (.tc:200), loading overlay (#game-loading:
    200), and the end-game panel (#s-end:250) — a reaction shouldn't ever
    cover any of those. */
@@ -1074,123 +1189,20 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .toast{background:rgba(0,0,0,.9);border:2px solid var(--gold);border-radius:12px;padding:12px 28px;font-family:'Cinzel Decorative',serif;font-size:clamp(14px,4vw,20px);letter-spacing:3px;color:var(--gl);text-align:center;animation:ta 2.8s ease forwards;box-shadow:0 0 50px rgba(201,168,76,.4);margin-bottom:8px;}
 @keyframes ta{0%{opacity:0;transform:scale(.8) translateY(18px)}15%{opacity:1;transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(1.05) translateY(-8px)}}
 
-/* ── Call banner (pon/kan/chi/riichi) — slides in from the bottom-left and settles across the felt ── */
-.cb-layer{position:fixed;inset:0;z-index:205;pointer-events:none;
-  display:flex;align-items:center;justify-content:center;overflow:hidden;}
-.call-banner{
-  --accent:var(--gl);--accent-strong:var(--gold);--accent-glow:rgba(201,168,76,.4);
-  /* A rotated rectangle can only ever land ONE diagonal pair of corners on a
-     fixed-width bounding box — the other pair is inset by H*sin(angle) no
-     matter the width. To get all four corners flush with the table, the
-     banner is a parallelogram instead: left/right edges stay vertical (so
-     both left corners and both right corners sit exactly on the table's
-     edges by construction) and the tilt comes from slanted top/bottom edges,
-     offset by W*tan(4deg) so the slant reads as an equivalent ~4deg lean. */
-  /* --table-size (110vmin) is deliberately allowed to overflow the
-     viewport by up to 10% — fine for .wood-table, a background element
-     that's meant to bleed off-screen, but not for a banner that needs to
-     stay fully on-screen and readable. Cap it to the table size or 100%
-     of the viewport WIDTH, whichever is smaller — not viewport height
-     too: --table-size is also used as .wood-table's height (a square),
-     but here it only ever drives the banner's width, so a vh-based cap
-     would bind on perfectly ordinary landscape screens where the
-     banner's actual (much shorter) height was never at risk of
-     overflowing. On a narrow/portrait screen (e.g. a phone, where width
-     is the smaller dimension) --table-size itself already exceeds the
-     viewport width — that's fine for .wood-table, which is allowed to
-     bleed off both edges, but the banner should use the full width
-     right up to the screen edge rather than leaving extra margin, so
-     it reads closer to the table's own (bleeding) size instead of
-     looking small next to it. Every other measurement (slant, font
-     sizes, min-height) derives from this SAME variable as a fixed ratio
-     of it, so whichever constraint ends up binding, everything scales
-     down together instead of one dimension getting capped while others
-     keep scaling off the uncapped --table-size. */
-  --cb-size:min(var(--table-size), 100vw);
-  --cb-slant:calc(var(--cb-size) * tan(4deg));
-  --cb-poly:polygon(0% var(--cb-slant), 100% 0, 100% calc(100% - var(--cb-slant)), 0% 100%);
-  /* .cb-layer is a flex container, and flex items shrink to fit it by
-     default (min-width:auto) — flex-shrink:0 makes sure the banner always
-     renders at exactly --cb-size rather than being squeezed further. */
-  position:relative;width:var(--cb-size);flex-shrink:0;
-  /* Same ratio to --cb-size as the label font below (18/110), so height
-     and label size are always locked together regardless of which
-     constraint --cb-size is currently hitting. */
-  min-height:calc(var(--cb-size) * 0.16364);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  /* A CSS `border` draws a rectangle, which then gets chopped by clip-path —
-     along the slanted edges it shows up as a jagged rectangular fragment
-     instead of a line that follows the diagonal. Instead, the accent colour
-     fills the whole outer polygon (acting as the border) and an inset
-     pseudo-element, clipped to the same polygon shape, sits on top with the
-     real background — leaving a clean accent-coloured ring that hugs the
-     slant on every edge. */
-  background:var(--accent-strong);border-radius:0;
-  /* Vertical padding must be >= the slant, otherwise the diagonal corners
-     cut into the label/name near the left and right edges instead of just
-     trimming blank padding. */
-  padding:calc(var(--cb-slant) + 10px) 22px;
-  box-shadow:0 12px 34px rgba(0,0,0,.65),0 0 40px var(--accent-glow);
-  clip-path:var(--cb-poly);
-  animation:cb-slide 2.24s cubic-bezier(.22,.9,.3,1) forwards;
-}
-.call-banner::before{content:'';position:absolute;inset:2px;
-  background:linear-gradient(155deg,rgba(18,18,18,.96),rgba(4,4,4,.98));
-  clip-path:var(--cb-poly);z-index:0;}
-.call-banner .cb-content{position:relative;z-index:1;
-  display:flex;flex-direction:column;align-items:center;gap:2px;
-  /* Same angle as --cb-slant (W*tan(4deg)) so the text leans with the
-     banner's slanted top/bottom edges instead of sitting dead level. */
-  transform:rotate(-4deg);}
-.call-banner .cb-label{font-family:'Noto Serif JP',serif;font-weight:900;
-  /* calc() off --cb-size (not plain vmin) so the label shrinks in lockstep
-     whenever --cb-size hits its 92vw/92vh cap, instead of continuing to
-     scale with vmin past the point the box itself has stopped growing. */
-  font-size:calc(var(--cb-size) * 0.16364);letter-spacing:.08em;color:var(--accent);
-  /* Fixed (not 1em) on purpose — .cb-label-long below shrinks font-size but
-     deliberately does NOT touch line-height, so its line box (and therefore
-     the whole banner's flex-sized height, since .call-banner has no fixed
-     height of its own) stays identical to every other call type. Without
-     this, a 1em line-height would shrink right along with the smaller font
-     and the double-riichi banner would end up visibly shorter than a pon/
-     kan/chi/riichi banner. */
-  line-height:calc(var(--cb-size) * 0.16364);}
-/* ダブルリーチ is twice the character count of every other call-banner
-   label — same scaling basis as .cb-label above, just half the ratio so it
-   fits the same banner width on one line instead of wrapping (see the
-   cb-label-long toggle in callBanner, script.js). Only font-size shrinks;
-   line-height is inherited unchanged from .cb-label above so the banner's
-   height matches every other call type. */
-.call-banner .cb-label.cb-label-long{font-size:calc(var(--cb-size) * 0.082);}
-.call-banner .cb-name{font-family:'Cinzel Decorative',serif;
-  font-size:calc(var(--cb-size) * 0.01455);letter-spacing:2px;color:rgba(245,237,216,.7);}
-.call-banner .cb-name b{color:var(--accent-strong);}
-.call-banner[data-type="pon"]{--accent:#ffe0b0;--accent-strong:#ca0;--accent-glow:rgba(202,170,0,.4);}
-.call-banner[data-type="kan"]{--accent:#e8d0ff;--accent-strong:#a060d0;--accent-glow:rgba(160,96,208,.4);}
-.call-banner[data-type="chi"]{--accent:#c0ffc0;--accent-strong:#4d4;--accent-glow:rgba(68,221,68,.35);}
-.call-banner[data-type="riichi"]{--accent:#d0d0ff;--accent-strong:#77f;--accent-glow:rgba(119,119,255,.4);}
-.call-banner[data-type="kita"]{--accent:#b0f0ff;--accent-strong:#20b0c0;--accent-glow:rgba(32,176,192,.4);}
-/* Tsumo/Ron — the hand-ending win itself, shown via the same callBanner()
-   used for pon/kan/chi/riichi (see onEnd in script.js) rather than a
-   separate banner, so it gets the identical full-width slide-in treatment.
-   Warm gold for Tsumo (a self-draw, no "victim") vs a hotter red for Ron
-   (a direct hit off another player's discard) — same warm/aggressive split
-   as most riichi games use for these two. */
-.call-banner[data-type="tsumo"]{--accent:#ffe9b0;--accent-strong:#d4a017;--accent-glow:rgba(212,160,23,.5);}
-.call-banner[data-type="ron"]{--accent:#ffb8b0;--accent-strong:#c62828;--accent-glow:rgba(198,40,40,.5);}
-/* Double/triple ron (see ronBanners in script.js) plays one full-size
-   .call-banner per winner in this exact same spot, one after another —
-   no separate stacking/scaling styles needed here, since exactly one is
-   ever in the DOM at a time. */
-@keyframes cb-slide{
-  0%{opacity:0;transform:translate(-58vw,42vh) scale(.55);}
-  20%{opacity:.90;}
-  32%{transform:translate(0,0) scale(1);}
-  84%{opacity:.90;transform:translate(0,0) scale(1);}
-  100%{opacity:0;transform:translate(0,-1.2vh) scale(.97);}
-}
+/* ── Pon/chi/kan/kita cue (see callGlow in script.js) — the caller's edge of
+   the felt glows in the call's colour, behind their tiles (it's .felt's first
+   child). No text: the side says who called, the colour says what. Sized off
+   --felt-size like the rest of the table; 1.5s. ── */
+.cg-pon{--cg:#e3b84a;}.cg-chi{--cg:#4fbf72;}.cg-kan{--cg:#a77be0;}.cg-kita{--cg:#2bb3c4;}
+.cg-edge{position:absolute;pointer-events:none;opacity:0;animation:cg-glow 1.5s ease forwards;
+  --cg-depth:calc(var(--felt-size) * .16);}
+.cg-edge.cg-b{left:0;right:0;bottom:0;height:var(--cg-depth);background:linear-gradient(0deg,var(--cg),transparent);}
+.cg-edge.cg-t{left:0;right:0;top:0;height:var(--cg-depth);background:linear-gradient(180deg,var(--cg),transparent);}
+.cg-edge.cg-l{top:0;bottom:0;left:0;width:var(--cg-depth);background:linear-gradient(90deg,var(--cg),transparent);}
+.cg-edge.cg-r{top:0;bottom:0;right:0;width:var(--cg-depth);background:linear-gradient(270deg,var(--cg),transparent);}
+@keyframes cg-glow{0%{opacity:0}15%{opacity:.55}75%{opacity:.4}100%{opacity:0}}
 @media (prefers-reduced-motion:reduce){
-  .call-banner{animation:none;opacity:.85;transform:none;}
+  .cg-edge{animation:none;opacity:.45;}
 }
 
 /* ── Round-start title card — ink brush-in, sits above #game-loading (z-index
@@ -1207,40 +1219,36 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    "東2局" announcement. Toggled by roundStartBanner() in script.js,
    on for exactly as long as the scrim/plate are in the DOM. */
 .rs-layer.blocking{pointer-events:auto;}
-.rs-scrim{position:absolute;inset:0;z-index:0;background:rgba(0,0,0,.85);
+/* Styled like the roll call and the standings card: the cutscene's themed
+   backdrop, the game type, a brush 東二局 stamp (cs-stamp) with spaced
+   romaji, and one ink strip (re-st-row) with the dealer and honba. */
+.rs-layer{--ui-vmin:clamp(5px,min(1vw,1.4vh),12px);}
+.rs-scrim{position:absolute;inset:0;z-index:0;
+  background:repeating-linear-gradient(45deg,rgba(201,168,76,.025) 0 2px,transparent 2px 6px),var(--bg-theme);background-color:#060c07;
   opacity:0;animation:rs-scrim-hold 3.2s ease forwards;}
-.rs-plate{position:relative;z-index:1;display:flex;flex-direction:column;
-  align-items:center;gap:6px;
-  /* Plain vmin (no clamp min/max) — same fix as the call banner: a px
-     cap on padding/font-size would stop scaling before the others do at
-     large or small resolutions and throw them out of proportion with
-     each other. */
-  padding:6vmin 9vmin;
+.rs-plate{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:calc(var(--ui-vmin) * .6);
+  width:min(calc(var(--ui-vmin) * 56),94vw);
   animation:rs-hold 3.2s ease forwards;}
-.rs-wind{font-family:'Noto Serif JP',serif;font-weight:900;color:var(--gl);
-  font-size:16vmin;line-height:1;
-  text-shadow:0 0 30px rgba(201,168,76,.55),0 0 60px rgba(201,168,76,.25);
-  opacity:0;animation:rs-wind-in 1s cubic-bezier(.2,.8,.3,1) forwards;}
-.rs-sub{font-family:'Cinzel Decorative',serif;letter-spacing:.12em;color:var(--cream);
-  font-size:2.4vmin;display:flex;align-items:center;gap:10px;
-  opacity:0;animation:rs-fade-up .5s ease forwards;animation-delay:.55s;}
-.rs-sub i{color:var(--gold);font-style:normal;opacity:.7;}
-.rs-start{font-family:'Cinzel Decorative',serif;letter-spacing:.4em;text-transform:uppercase;
-  font-size:1.6vmin;color:rgba(245,237,216,.5);
-  /* Starts once .rs-sub's own .55s-delay + .5s fade has finished, so the
-     round info reads first and 開始 follows as a distinct beat rather than
-     fading in alongside it. */
-  opacity:0;animation:rs-fade-up .5s ease forwards;animation-delay:1.15s;}
-@keyframes rs-wind-in{
-  0%{opacity:0;filter:blur(10px);transform:scale(1.3);}
-  60%{opacity:1;filter:blur(0);}
-  100%{opacity:1;transform:scale(1);}
-}
-@keyframes rs-fade-up{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+.rs-sub{font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--ui-vmin) * 1.8);letter-spacing:.25em;
+  color:rgba(245,237,216,.75);opacity:0;animation:cs-drop-in .25s ease .28s forwards;}
+.rs-kanji{font-family:'Noto Serif JP',serif;font-weight:900;font-size:calc(var(--ui-vmin) * 11);line-height:1.1;letter-spacing:.06em;white-space:nowrap;
+  color:var(--gl);text-shadow:0 .6vmin 0 var(--gd);opacity:0;animation:cs-stamp .38s cubic-bezier(.2,1.6,.4,1) .12s forwards;}
+.rs-romaji{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin) * 1.7);letter-spacing:.55em;
+  color:var(--gold);opacity:0;animation:cs-rise .25s ease .34s forwards;}
+.rs-strip{align-self:stretch;display:flex;align-items:center;justify-content:center;gap:calc(var(--ui-vmin) * 2.4);
+  margin-top:calc(var(--ui-vmin) * 1.8);padding:calc(var(--ui-vmin) * 1.2) calc(var(--ui-vmin) * 4);
+  background:linear-gradient(90deg,transparent,rgba(11,13,12,.92) 8%,rgba(11,13,12,.92) 92%,transparent);
+  clip-path:polygon(2% 0,100% 0,98% 100%,0 100%);
+  opacity:0;animation:re-st-row .45s cubic-bezier(.2,1.3,.4,1) .6s forwards;}
+.rs-strip>span{display:flex;align-items:baseline;gap:calc(var(--ui-vmin) * 1);min-width:0;}
+.rs-strip b{flex:none;font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--ui-vmin) * 2.6);line-height:1;color:var(--gl);}
+.rs-v{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin) * 2);color:var(--cream);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rs-strip>i{flex:none;width:1px;align-self:stretch;background:rgba(201,168,76,.4);}
 @keyframes rs-hold{0%,78%{opacity:1;}100%{opacity:0;}}
 @keyframes rs-scrim-hold{0%{opacity:0;}12%,78%{opacity:1;}100%{opacity:0;}}
 @media (prefers-reduced-motion:reduce){
-  .rs-plate,.rs-wind,.rs-sub,.rs-start,.rs-scrim{animation:none;opacity:1;filter:none;transform:none;}
+  .rs-plate,.rs-plate>*,.rs-scrim{animation:none;opacity:1;transform:none;}
 }
 
 /* ── Game-start roll call — shown once per game, right after the FIRST real
@@ -1262,38 +1270,61 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .gs-layer{--ui-vmin:clamp(5px,min(1vw,1.4vh),12px);position:fixed;inset:0;z-index:210;
   pointer-events:none;display:flex;align-items:center;justify-content:center;}
 .gs-layer.blocking{pointer-events:auto;}
-.gs-scrim{position:absolute;inset:0;z-index:0;background:rgba(0,0,0,.85);
+/* Styled as the win cutscene's standings card (.re-standings): the same
+   themed backdrop, a brush stamp heading, and one ink strip per seat
+   sliding in (re-st-row), reusing the cutscene's keyframes. */
+.gs-scrim{position:absolute;inset:0;z-index:0;
+  background:repeating-linear-gradient(45deg,rgba(201,168,76,.025) 0 2px,transparent 2px 6px),var(--bg-theme);background-color:#060c07;
   opacity:0;animation:rs-scrim-hold 5s ease forwards;}
 .gs-plate{position:relative;z-index:1;display:flex;flex-direction:column;
-  align-items:center;gap:calc(var(--ui-vmin) * 2);
-  padding:calc(var(--ui-vmin) * 5) calc(var(--ui-vmin) * 8);
-  max-height:calc(100vh - 48px);overflow-y:auto;
+  align-items:center;gap:calc(var(--ui-vmin) * 1.8);
+  width:min(calc(var(--ui-vmin) * 64),94vw);padding-block:calc(var(--ui-vmin) * 2.5);
+  max-height:calc(100vh - 48px);overflow-y:auto;overflow-x:hidden;
   opacity:0;animation:rs-hold 5s ease forwards;}
-.gs-title{font-family:'Cinzel Decorative',serif;letter-spacing:.35em;text-transform:uppercase;
-  font-size:calc(var(--ui-vmin) * 2);color:var(--gold);
-  opacity:0;animation:rs-fade-up .5s ease forwards;animation-delay:.1s;}
-.gs-rows{display:flex;flex-direction:column;align-items:center;
-  gap:calc(var(--ui-vmin) * 1.6);margin-top:calc(var(--ui-vmin) * 1.5);}
-/* Wind badge sits OUTSIDE the cloned .up-nameplate, not inside it — the
-   seat wind is this game's seating, not part of a player's profile
-   identity, so it doesn't belong baked into their profile plate the way
-   the in-game .np nameplate bakes it in. */
-.gs-row{display:flex;align-items:center;gap:calc(var(--ui-vmin) * 1.6);
-  opacity:0;animation:rs-fade-up .5s ease forwards;}
-.gs-row .gs-wind{font-family:'Noto Serif JP',serif;font-weight:900;color:var(--gl);
-  font-size:calc(var(--ui-vmin) * 2.6);width:calc(var(--ui-vmin) * 3.2);
-  text-align:center;flex:none;
-  text-shadow:0 0 12px rgba(201,168,76,.5);}
-/* Fixed width (not just the plate's own natural content width) so all 3/4
-   seats line up as an even column regardless of name length — .pnp-name/
-   .pnp-title already come with white-space:nowrap+ellipsis from their
-   shared base rule, so a name too long for this just truncates instead of
-   growing the plate. Scoped to .gs-rows rather than touching .up-nameplate
-   itself, which also renders un-widthed (sized to its own content) in the
-   User Profile hub header and the Rankings player-card modal. */
-.gs-rows .up-nameplate{width:calc(var(--ui-vmin) * 26);}
+.gs-head{display:flex;flex-direction:column;align-items:center;gap:calc(var(--ui-vmin) * .5);}
+.gs-sub{font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--ui-vmin) * 1.7);letter-spacing:.25em;
+  color:rgba(245,237,216,.75);opacity:0;animation:cs-drop-in .25s ease .28s forwards;}
+.gs-kanji{font-family:'Noto Serif JP',serif;font-weight:900;font-size:calc(var(--ui-vmin) * 6.2);line-height:1.1;letter-spacing:.08em;
+  color:var(--gl);text-shadow:0 .5vmin 0 var(--gd);opacity:0;animation:cs-stamp .38s cubic-bezier(.2,1.6,.4,1) .12s forwards;}
+.gs-romaji{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin) * 1.6);letter-spacing:.55em;
+  color:var(--gold);opacity:0;animation:cs-rise .25s ease .34s forwards;}
+.gs-rows{display:flex;flex-direction:column;align-self:stretch;gap:calc(var(--ui-vmin) * .6);}
+/* Wind sits OUTSIDE the cloned .up-nameplate — the seat wind is this
+   game's seating, not part of a player's profile identity. */
+.gs-row{position:relative;display:flex;align-items:center;gap:calc(var(--ui-vmin) * 2);
+  padding:calc(var(--ui-vmin) * 1) calc(var(--ui-vmin) * 3.5);
+  background:linear-gradient(90deg,transparent,rgba(11,13,12,.92) 6%,rgba(11,13,12,.92) 94%,transparent);
+  clip-path:polygon(2% 0,100% 0,98% 100%,0 100%);
+  opacity:0;animation:re-st-row .45s cubic-bezier(.2,1.3,.4,1) forwards;}
+.gs-row.gs-me::after{content:'';position:absolute;left:4%;right:6%;bottom:0;height:2px;background:var(--gold);}
+.gs-row .gs-wind{flex:none;width:calc(var(--ui-vmin) * 4.4);text-align:center;
+  font-family:'Noto Serif JP',serif;font-weight:900;font-size:calc(var(--ui-vmin) * 3.8);line-height:1;color:var(--cream);}
+.gs-row.gs-dealer .gs-wind{color:var(--gl);text-shadow:0 .3vmin 0 var(--gd);}
+/* Unboxed player tag (playerTag in script.js) on the roll call and the
+   game-over standings: icon, name and title straight on the ink strip, the
+   tier shown as metal lettering — the name filled with the tier metal, the
+   icon frame and title in its colour. Bronze (no tier class) is the default.
+   --m1/--m2/--m3 run light→dark down the letters; --mt is the flat colour. */
+.pl-tag{--m1:#f0b47a;--m2:#a86e38;--m3:#5a3518;--mt:#d9965a;
+  display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.4);flex:1 1 auto;min-width:0;}
+.pl-tag.tier-silver{--m1:#ffffff;--m2:#b5b7be;--m3:#5c5d63;--mt:#d6d8de;}
+.pl-tag.tier-gold{--m1:#fff3c0;--m2:#d9a640;--m3:#7a5410;--mt:#f0c860;}
+.pl-tag.tier-platinum{--m1:#ffffff;--m2:#a9d0da;--m3:#4f7680;--mt:#bfe2ea;}
+.pl-tag.tier-diamond{--m1:#ffffff;--m2:#8fd3f0;--m3:#3a7fb0;--mt:#bfe8fb;}
+.pl-icon{flex:none;width:calc(var(--ui-vmin, 7.2px) * 5.2);height:calc(var(--ui-vmin, 7.2px) * 5.2);}
+.pl-icon svg{display:block;width:100%;height:100%;}
+/* Every free icon (and the guest icon) opens with its gold frame rect, the
+   only rect drawn with a stroke; paid icons' art is left alone. */
+.pl-icon svg>rect[stroke]:first-child{stroke:var(--mt);}
+.pl-who{display:flex;flex-direction:column;min-width:0;}
+.pl-name{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin, 7.2px) * 2.1);line-height:1.25;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  color:transparent;background:linear-gradient(180deg,var(--m1) 0%,var(--m2) 55%,var(--m3) 100%);-webkit-background-clip:text;background-clip:text;
+  filter:drop-shadow(0 calc(var(--ui-vmin, 7.2px) * .2) 0 rgba(0,0,0,.6));}
+.pl-title{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);letter-spacing:.14em;line-height:1.3;min-height:1.3em;color:var(--mt);opacity:.85;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 @media (prefers-reduced-motion:reduce){
-  .gs-plate,.gs-title,.gs-row,.gs-scrim{animation:none;opacity:1;}
+  .gs-plate,.gs-head>*,.gs-row,.gs-scrim{animation:none;opacity:1;}
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1368,6 +1399,85 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    otherwise applies here by inheritance, same "success" colour used for
    an actual winner. */
 .re-offender{color:#e07070;}
+.re-ord{display:inline-block;font-weight:700;margin-right:calc(var(--ui-vmin, 7.2px) * 1.389);}
+/* Placement change (see reorderEndStandings): the new placement pops in,
+   and a row that climbed flashes gold on the name as it slides up. */
+.re-rank-pop{animation:cs-han-pop .4s cubic-bezier(.2,1.6,.4,1);}
+.re-rank-up .re-pname{animation:re-rank-flash 1.4s ease;}
+@keyframes re-rank-flash{0%,35%{color:var(--gl);text-shadow:0 0 calc(var(--ui-vmin, 7.2px) * 1.2) rgba(240,208,128,.7);}}
+@media (prefers-reduced-motion:reduce){.re-rank-pop,.re-rank-up .re-pname{animation:none;}}
+.re-ord-jp{display:none;}
+.re-tag{display:inline-block;margin-left:calc(var(--ui-vmin, 7.2px) * .833);padding:0 calc(var(--ui-vmin, 7.2px) * .694);
+  border:1px solid currentColor;border-radius:4px;vertical-align:middle;
+  font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin, 7.2px) * 1);letter-spacing:1px;}
+.re-tag b{font-family:'Noto Serif JP',serif;font-weight:900;margin-right:.4em;letter-spacing:.05em;}
+.re-tag-win{color:var(--gl);}
+
+/* ── Standings card after a tsumo/ron (see setEndStandings in script.js).
+   The win cutscene has already shown the hand, yaku and payments, so only
+   placement, score and gain/loss remain, styled as the cutscene's closing
+   frame rather than a separate panel: the same themed backdrop, a brush
+   順位 stamp (reusing the cutscene's cs-stamp/cs-rise keyframes), rows as
+   ink strips that slide in one after another with brush placement
+   numerals, and a hanko-style Win tag. Rows enter in the previous
+   placement order and slide into the new one (reorderEndStandings). ── */
+#s-end.re-standings-screen{background:repeating-linear-gradient(45deg,rgba(201,168,76,.025) 0 2px,transparent 2px 6px),var(--bg-theme);background-color:#060c07;overflow-x:hidden;}
+/* A larger --ui-vmin than #s-end's own (6px–10px) scales the whole card up
+   at once — heading, rows, numerals, tags, buttons — for readability. The
+   6px floor matches #s-end's, so phones (width-bound, names already tight)
+   stay as they were. */
+.rec.re-standings{--ui-vmin:clamp(6px,1.35vmin,13.5px);background:none;border:none;box-shadow:none;
+  padding-block:0 calc(var(--ui-vmin, 7.2px) * 2);width:min(calc(var(--ui-vmin, 7.2px) * 78), 96vw);}
+.rec.re-standings::before{display:none;}
+.rec.re-standings .ret,.rec.re-standings .re-win-content,.rec.re-standings .re-winner-nav,.rec.re-standings .re-tenpai{display:none;}
+
+.re-st-head{position:relative;display:grid;place-items:center;
+  height:calc(var(--ui-vmin, 7.2px) * 15);margin-bottom:calc(var(--ui-vmin, 7.2px) * 1);}
+.re-st-text{position:relative;display:flex;flex-direction:column;align-items:center;
+  gap:calc(var(--ui-vmin, 7.2px) * .4);}
+.re-st-kanji{font-family:'Noto Serif JP',serif;font-weight:900;font-size:calc(var(--ui-vmin, 7.2px) * 7);line-height:1;
+  letter-spacing:.08em;color:var(--gl);text-shadow:0 .5vmin 0 var(--gd);
+  opacity:0;animation:cs-stamp .38s cubic-bezier(.2,1.6,.4,1) .12s forwards;}
+.re-st-romaji{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin, 7.2px) * 1.6);
+  letter-spacing:.55em;color:var(--gold);opacity:0;animation:cs-rise .25s ease .34s forwards;}
+.re-st-round{order:-1;font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--ui-vmin, 7.2px) * 1.7);letter-spacing:.25em;
+  color:rgba(245,237,216,.75);opacity:0;animation:cs-drop-in .25s ease .28s forwards;}
+
+.rec.re-standings .st{margin:0;display:flex;flex-direction:column;gap:calc(var(--ui-vmin, 7.2px) * .8);}
+.rec.re-standings .st tbody{display:contents;}
+.rec.re-standings .st tr{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;
+  column-gap:calc(var(--ui-vmin, 7.2px) * 2);padding:calc(var(--ui-vmin, 7.2px) * 1) calc(var(--ui-vmin, 7.2px) * 3.5);
+  background:linear-gradient(90deg,transparent,rgba(11,13,12,.92) 6%,rgba(11,13,12,.92) 94%,transparent);
+  clip-path:polygon(2% 0,100% 0,98% 100%,0 100%);
+  opacity:0;animation:re-st-row .45s cubic-bezier(.2,1.3,.4,1) forwards;}
+.rec.re-standings .st tr:nth-child(1){animation-delay:.5s;}
+.rec.re-standings .st tr:nth-child(2){animation-delay:.62s;}
+.rec.re-standings .st tr:nth-child(3){animation-delay:.74s;}
+.rec.re-standings .st tr:nth-child(4){animation-delay:.86s;}
+@keyframes re-st-row{from{opacity:0;transform:translateX(-6vmin)}to{opacity:1;transform:none}}
+.rec.re-standings .st tr.re-row-win{background:linear-gradient(90deg,transparent,rgba(46,34,8,.94) 6%,rgba(20,16,6,.94) 94%,transparent);}
+.rec.re-standings .st tr.re-row-win::after,.rec.re-standings .st tr.re-row-dealin::after{content:'';position:absolute;
+  left:4%;right:6%;bottom:0;height:2px;background:var(--gold);}
+.rec.re-standings .st tr.re-row-dealin::after{background:#c8322a;}
+.rec.re-standings .st td{border:none;padding:0;font-size:calc(var(--ui-vmin, 7.2px) * 1.9);}
+.rec.re-standings .st td:first-child{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.2);min-width:0;}
+.rec.re-standings .re-ord-jp{display:inline-block;flex:none;width:calc(var(--ui-vmin, 7.2px) * 4);text-align:center;
+  font-family:'Noto Serif JP',serif;font-weight:900;font-size:calc(var(--ui-vmin, 7.2px) * 3.6);line-height:1;color:var(--cream);}
+.rec.re-standings .st tr:nth-child(1) .re-ord-jp{color:var(--gl);text-shadow:0 .3vmin 0 var(--gd);}
+.rec.re-standings .re-ord{margin-right:0;flex:none;font-family:'Cinzel Decorative',serif;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.1);letter-spacing:.15em;opacity:.75;}
+.rec.re-standings .re-pname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--cream);}
+.rec.re-standings .st td:nth-child(2){text-align:right;font-variant-numeric:tabular-nums;color:rgba(245,237,216,.85);font-weight:400;}
+.rec.re-standings .st td:last-child{width:auto;min-width:calc(var(--ui-vmin, 7.2px) * 9);}
+.rec.re-standings .re-delta{font-family:'Noto Serif JP',serif;font-weight:900;font-size:calc(var(--ui-vmin, 7.2px) * 2.1);font-variant-numeric:tabular-nums;}
+.rec.re-standings .re-delta-pos{color:var(--gl);text-shadow:0 .25vmin 0 var(--gd);}
+.rec.re-standings .re-delta-neg{color:#f08a80;}
+.rec.re-standings .re-tag{flex:none;margin-left:0;padding:.2em .65em;border-radius:3px;font-size:calc(var(--ui-vmin, 7.2px) * 1.2);}
+.rec.re-standings .re-tag-win{background:#c8322a;border-color:#e9a49e;color:var(--cream);transform:rotate(-3deg);}
+
+@media (prefers-reduced-motion:reduce){
+  .rec.re-standings .st tr,.re-st-kanji,.re-st-romaji,.re-st-round{animation:none;opacity:1;}
+}
 .re-dora-row{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:6px;}
 .re-dora-lbl{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:var(--gold);letter-spacing:1px;}
 .re-ura-lbl{color:#f88;margin-left:6px;}
@@ -1388,63 +1498,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .lbl-yakuman {background:rgba(201,168,76,.18);border:1px solid rgba(201,168,76,.6);color:var(--gold);box-shadow:0 0 10px rgba(201,168,76,.3);}
 .lbl-double-yakuman{background:rgba(201,168,76,.28);border:1px solid rgba(201,168,76,.9);color:var(--gold);box-shadow:0 0 16px rgba(201,168,76,.55),0 0 32px rgba(201,168,76,.2);font-size:calc(var(--ui-vmin, 7.2px) * 1.5);letter-spacing:2px;}
 
-/* ── Yakuman/double-yakuman flash (see playYakumanFx in script.js) — a
-   bigger, more dramatic moment than an ordinary win, playing BEFORE the
-   normal call-banner announcement rather than replacing it. Plain vmin
-   (no --ui-vmin clamp) for the same reason .call-banner/.rs-plate use it:
-   this is meant to read as one specific size relative to the whole
-   screen, not scale with a panel's own local UI-density variable. ── */
-/* Palette is per-yakuman: playYakumanFx sets --ym-ink / --ym-glow /
-   --ym-glow2 / --ym-accent (the last three are "r,g,b" triples used inside
-   rgba()) / --ym-scrim-a / --ym-scrim-b on .yakuman-layer from the matched
-   YAKUMAN_THEMES entry. The fallbacks here reproduce the original gold
-   flash for any code path that appends layer content without setting them. */
-.yakuman-layer{position:fixed;inset:0;z-index:216;pointer-events:none;
-  display:flex;align-items:center;justify-content:center;
-  --ym-ink:var(--gl,#ffe9a8);--ym-glow:255,215,100;--ym-glow2:255,180,40;
-  --ym-accent:255,140,0;--ym-scrim-a:rgba(70,45,0,.6);--ym-scrim-b:rgba(0,0,0,.93);}
-.yakuman-layer.blocking{pointer-events:auto;}
-.yakuman-scrim{position:absolute;inset:0;z-index:0;
-  background:radial-gradient(circle,var(--ym-scrim-a),var(--ym-scrim-b) 70%);
-  opacity:0;animation:yakuman-scrim-hold 4.4s ease forwards;}
-.yakuman-burst{position:relative;z-index:2;display:flex;flex-direction:column;
-  align-items:center;gap:1.5vmin;}
-.yakuman-eyebrow{font-family:'Noto Serif JP',serif;font-weight:700;
-  font-size:3.4vmin;line-height:1;letter-spacing:.35em;
-  color:rgba(var(--ym-glow),.9);text-shadow:0 0 20px rgba(var(--ym-glow),.6);
-  opacity:0;animation:rs-fade-up .5s ease .3s forwards;}
-.yakuman-eyebrow.double{color:rgba(var(--ym-accent),.95);letter-spacing:.15em;}
-.yakuman-text{font-family:'Noto Serif JP',serif;font-weight:900;
-  font-size:16vmin;line-height:1;color:var(--ym-ink);
-  text-shadow:0 0 40px rgba(var(--ym-glow),.9),0 0 90px rgba(var(--ym-glow2),.6),
-    0 0 140px rgba(var(--ym-accent),.35);
-  opacity:0;
-  animation:yakuman-burst-in 1s cubic-bezier(.2,.9,.25,1.4) forwards,
-    yakuman-pulse 1.4s ease-in-out 1s infinite;}
-/* Longer headlines (the yaku's own kanji, or ダブル役満) shrink to keep the
-   burst reading as the same overall size/impact rather than growing wider
-   — same reasoning as .cb-label-long elsewhere. */
-.yakuman-text.long{font-size:11vmin;letter-spacing:.03em;}
-.yakuman-text.xlong{font-size:7.6vmin;letter-spacing:.02em;}
-.yakuman-text.double{font-size:11vmin;letter-spacing:.05em;
-  text-shadow:0 0 40px rgba(var(--ym-glow),.95),0 0 100px rgba(var(--ym-glow2),.7),
-    0 0 160px rgba(var(--ym-accent),.45);}
-.yakuman-sub{font-family:'Cinzel Decorative',serif;letter-spacing:.4em;
-  text-transform:uppercase;color:rgba(var(--ym-glow),.85);font-size:1.8vmin;
-  text-align:center;opacity:0;animation:rs-fade-up .6s ease .55s forwards;}
-@keyframes yakuman-burst-in{
-  0%{opacity:0;transform:scale(.3) rotate(-4deg);filter:blur(14px);}
-  55%{opacity:1;transform:scale(1.12) rotate(1deg);filter:blur(0);}
-  75%{transform:scale(.97) rotate(-.5deg);}
-  100%{opacity:1;transform:scale(1) rotate(0);}
-}
-@keyframes yakuman-pulse{
-  0%,100%{filter:drop-shadow(0 0 0 transparent);}
-  50%{filter:drop-shadow(0 0 25px rgba(var(--ym-glow),.6));}
-}
-@keyframes yakuman-scrim-hold{0%{opacity:0;}10%,82%{opacity:1;}100%{opacity:0;}}
-
-/* ── Per-yakuman particle motif (see spawnYakumanMotif). One <span> per
+/* ── Per-yakuman particle motif (see spawnYakumanMotif), used by the win
+   cutscene's yakuman tier step. One <span> per
    particle, absolutely placed inside .yakuman-motif; JS seeds --sz/--dur/
    --delay/--rot and the per-particle vectors (--dx/--dy/--tilt), CSS runs
    the chosen keyframe via --motion. --tint is the particle's fill. ── */
@@ -1499,7 +1554,6 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   100%{opacity:0;transform:translate3d(128vw,var(--dy,0),0) rotate(var(--tilt,-8deg));}
 }
 @media (prefers-reduced-motion:reduce){
-  .yakuman-text,.yakuman-sub,.yakuman-eyebrow,.yakuman-scrim{animation:none;opacity:1;filter:none;transform:none;}
   .yakuman-motif{display:none;}
 }
 .yl{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-bottom:12px;}
@@ -1508,20 +1562,30 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .st{width:100%;border-collapse:collapse;margin:10px 0;}.st td{padding:calc(var(--ui-vmin, 7.2px) * .75) calc(var(--ui-vmin, 7.2px) * 1.5);font-size:calc(var(--ui-vmin, 7.2px) * 1.5);border-bottom:1px solid rgba(201,168,76,.1);text-align:left;}
 .st td:last-child{text-align:right;font-weight:700;color:var(--gl);}.st tr.w td{color:var(--gl);font-size:calc(var(--ui-vmin, 7.2px) * 1.625);}
 .st tr.l td{color:#e07070;font-size:calc(var(--ui-vmin, 7.2px) * 1.625);}
-/* Game-over/bankruptcy final standings (see onGameOver in script.js) —
-   each placement cell pairs a medal-coloured ordinal with a cloned
-   .up-nameplate/.pnp-* plate instead of the plain "1. Name" text .st
-   normally renders. td.re-final-cell (not just .re-final-cell) matches
-   .st td's own specificity so this reliably overrides its padding/
-   text-align rather than losing the tie-break to source order. The
-   nameplate's own pnp-name/pnp-title colors are explicit, so .st tr.w/.l's
-   row-wide recolor (still applying to the plain-text score cell beside it)
-   doesn't bleed into them. */
-td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.2);
-  padding-top:calc(var(--ui-vmin, 7.2px) * .5);padding-bottom:calc(var(--ui-vmin, 7.2px) * .5);}
-.re-final-ordinal{font-family:'Cinzel Decorative',serif;font-weight:700;
-  font-size:calc(var(--ui-vmin, 7.2px) * 1.5);flex:none;width:calc(var(--ui-vmin, 7.2px) * 3);}
-.re-final-cell .up-nameplate{width:calc(var(--ui-vmin, 7.2px) * 24);}
+/* Game-over/bankruptcy final standings (see onGameOver in script.js) — the
+   standings card (.re-standings) plus .re-final, laid out like the
+   game-start roll call's strips (.gs-row): a brush placement numeral sized
+   like the seat wind there, the player's unboxed tag (.pl-tag), and the
+   score. Every strip is the same plain ink; first place's numeral and score
+   are gold (as the dealer's 東 is on the roll call), and my own row has the
+   gold underline (as .gs-me). The brush numeral alone carries the place, so
+   the small "1st" label is hidden. */
+.rec.re-final .st tr{grid-template-columns:minmax(0,1fr) auto;padding:calc(var(--ui-vmin, 7.2px) * 1) calc(var(--ui-vmin, 7.2px) * 3.5);}
+.rec.re-final .st tr.re-row-me::after{content:'';position:absolute;left:4%;right:6%;bottom:0;height:2px;background:var(--gold);}
+.rec.re-final .re-ord{display:none;}
+.rec.re-final .st td:first-child{gap:calc(var(--ui-vmin, 7.2px) * 2);}
+.rec.re-final .re-ord-jp{width:calc(var(--ui-vmin, 7.2px) * 4.4);font-size:calc(var(--ui-vmin, 7.2px) * 3.8);}
+.rec.re-final .st .pl-tag{text-align:left;}
+.rec.re-final .st td:nth-child(2){font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--ui-vmin, 7.2px) * 2.2);}
+.rec.re-final .st tr:nth-child(1) td:nth-child(2){color:var(--gl);text-shadow:0 .25vmin 0 var(--gd);}
+/* Space between the last strip and the buttons (View Results on the final
+   round's standings, Play Again / Leave Room on game over). */
+.rec.re-standings .reb{margin-top:calc(var(--ui-vmin, 7.2px) * 3.2);}
+/* Phones: the strips give their padding to the name so it isn't cut short. */
+@media (max-width:520px){
+  .rec.re-final .st tr{padding-inline:calc(var(--ui-vmin, 7.2px) * 1.5);column-gap:calc(var(--ui-vmin, 7.2px) * 1.2);}
+  .rec.re-final .st td:first-child{gap:calc(var(--ui-vmin, 7.2px) * 1.2);}
+}
 .wt{display:flex;flex-direction:column;align-items:center;gap:4px;margin:10px 0;}
 .re-tenpai{display:flex;flex-direction:column;gap:8px;margin:10px 0;}
 .re-tenpai-row{display:flex;flex-direction:column;align-items:center;gap:4px;}
@@ -1529,6 +1593,37 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 /* Riichi-stick/honba pot carrying into next round — hidden (no text, no
    margin/border) when the round ended the game or nothing's on the table,
    set in onEnd() (script.js). */
+/* Strip section of the standings card (.re-standings.re-strips, see
+   END_CARD_HEADS / renderEndTiles): one ink strip per line above the rows —
+   an exhaustive draw's tenpai hands (or 全員不聴), the chonbo offender, or
+   the nagashi mangan seats — each a brush label (<b>) then the name, with an
+   optional note or the hand's tiles under it. They slide in before the
+   standings rows, which wait for them (their delays shift by .4s here). */
+.rec.re-standings.re-strips .re-tenpai{display:flex;gap:calc(var(--ui-vmin, 7.2px) * .8);margin:0 0 calc(var(--ui-vmin, 7.2px) * 1.8);}
+.re-strips .re-tenpai-row{position:relative;gap:calc(var(--ui-vmin, 7.2px) * .8);padding:calc(var(--ui-vmin, 7.2px) * 1.1) calc(var(--ui-vmin, 7.2px) * 3.5);
+  background:linear-gradient(90deg,transparent,rgba(11,13,12,.92) 6%,rgba(11,13,12,.92) 94%,transparent);
+  clip-path:polygon(2% 0,100% 0,98% 100%,0 100%);
+  opacity:0;animation:re-st-row .45s cubic-bezier(.2,1.3,.4,1) calc(.35s + var(--i, 0) * .14s) forwards;}
+.re-strips .re-tenpai-row .re-tile-row{align-self:stretch;}
+.re-strips .re-tenpai-name{display:flex;align-items:baseline;gap:calc(var(--ui-vmin, 7.2px) * 1);
+  font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin, 7.2px) * 1.7);letter-spacing:.08em;color:var(--cream);}
+.re-strips .re-tenpai-name b{font-family:'Noto Serif JP',serif;font-weight:700;font-size:1.4em;letter-spacing:.02em;color:var(--gl);}
+.re-strip-note{font-size:calc(var(--ui-vmin, 7.2px) * 1.35);letter-spacing:.08em;color:rgba(245,237,216,.62);text-align:center;}
+/* Chonbo: the offender's strip is ruled and labelled in vermilion. */
+.re-strips .re-strip-bad b{color:#f08a80;}
+.re-strips .re-strip-bad::after{content:'';position:absolute;left:4%;right:6%;bottom:0;height:2px;background:#c8322a;}
+.rec.re-strips .st tr:nth-child(1){animation-delay:.9s;}
+.rec.re-strips .st tr:nth-child(2){animation-delay:1.02s;}
+.rec.re-strips .st tr:nth-child(3){animation-delay:1.14s;}
+.rec.re-strips .st tr:nth-child(4){animation-delay:1.26s;}
+.rec.re-standings .re-tag-tenpai{background:rgba(201,168,76,.12);border-color:rgba(240,208,128,.6);color:var(--gl);transform:rotate(-3deg);}
+.rec.re-standings .re-tag-chonbo{background:#3a0d0a;border-color:#c8322a;color:#f6c7c1;transform:rotate(-3deg);}
+/* Phones: tags show only their kanji (和了 / 聴牌 / 流満 / 罰) so the name keeps its room. */
+@media (max-width:520px){
+  .rec.re-standings .re-tag{font-size:0;padding:.25em .5em;}
+  .rec.re-standings .re-tag b{margin-right:0;font-size:calc(var(--ui-vmin, 7.2px) * 1.4);}
+}
+@media (prefers-reduced-motion:reduce){.re-strips .re-tenpai-row{animation:none;opacity:1;}}
 .re-carryover{font-size:calc(var(--ui-vmin, 7.2px) * 1.375);color:var(--gold);letter-spacing:.5px;
   padding-top:8px;margin-top:4px;border-top:1px solid rgba(201,168,76,.15);}
 .re-carryover:empty{display:none;padding:0;margin:0;border:none;}
@@ -2410,10 +2505,8 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    classes land on the same element. .np.np-skin-*.active re-asserts just
    the background — .np.active's own background:#222 would otherwise stomp
    every skin at the one moment (a seat's turn) it matters most to still
-   look like the skin; the glow itself (box-shadow/animation) is left to
-   the shared .active/@glow rule (well above, near .np's own definition),
-   unskinned on purpose so "it's this seat's turn" reads identically
-   regardless of cosmetic. */
+   look like the skin. (The turn's pulsing gold frame was removed; the
+   centre panel shows whose turn it is.) */
 .np-skin-hai{background:linear-gradient(170deg,#fffdf4,#f0e8d0);box-shadow:0 0 0 1px var(--gold),0 0 0 3px #7a5c10,inset 0 1px 0 rgba(255,255,255,.5);}
 .np-skin-hai .pname,.np-skin-hai .npv-name{color:#1a1a1a;}
 .np-skin-hai .ptitle,.np-skin-hai .npv-title{color:#7a5c10;}
@@ -2793,8 +2886,11 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 .yakuref-desc{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:rgba(245,237,216,.65);line-height:1.5;}
 
 /* ── Topbar inline elements ── */
-.tb-right .settings-icon-btn{position:static;z-index:auto;}
-.tb-mode-label{font-size:calc(var(--ui-vmin) * 1.389);opacity:.8;margin-left:6px;}
+.tb-right .settings-icon-btn{position:static;z-index:auto;color:var(--gold);
+  width:calc(var(--ui-vmin) * 3.6);height:calc(var(--ui-vmin) * 3.6);display:flex;align-items:center;justify-content:center;
+  border:1px solid rgba(201,168,76,.45);border-radius:2px;box-sizing:border-box;font-size:calc(var(--ui-vmin) * 2.4);letter-spacing:0;line-height:1;}
+.tb-mode-label{align-self:center;font-size:calc(var(--ui-vmin) * 1.3);line-height:1.35;padding:0 calc(var(--ui-vmin) * .8);border:1px solid rgba(201,168,76,.5);letter-spacing:calc(var(--ui-vmin) * .14);}
+.tb-mode-label:empty{display:none;}
 .tb-version{font-size:calc(var(--ui-vmin) * 1.25);opacity:.65;margin-left:6px;letter-spacing:calc(var(--ui-vmin) * .139);font-family:var(--font-sans);}
 .about-version{font-size:calc(var(--ui-vmin, 7.2px) * 1.389);opacity:.95;margin-left:calc(var(--ui-vmin, 7.2px) * .833);letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);font-family:var(--font-sans);}
 .tb-right{display:flex;align-items:center;gap:6px;}
@@ -2810,34 +2906,20 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    small, throwing the two out of proportion with each other. */
 .gl-label{font-size:clamp(9px,2vmin,13px);letter-spacing:3px;color:rgba(245,237,216,.45);font-family:'Cinzel Decorative',serif;}
 
-/* ── Centre score positions ── */
-.ctr-score-top{position:absolute;top:0;transform:rotate(180deg);z-index:1;}
-.ctr-score-left{position:absolute;left:-40%;transform:rotate(90deg);z-index:4;clip-path:inset(0 0 0 20%);}
-.ctr-score-right{position:absolute;right:-40%;transform:rotate(-90deg);z-index:2;}
-.ctr-score-bottom{position:absolute;bottom:0;z-index:3;}
-.ctr-mid-rel{position:absolute;}
+/* ── Centre score layers: each turned to face its seat (bottom = me) ── */
+.ctr-score-top{transform:rotate(180deg);}
+.ctr-score-left{transform:rotate(90deg);}
+.ctr-score-right{transform:rotate(-90deg);}
 
-/* ── Riichi stick positions ── */
-/* top:50% + translateY(-50%) instead of a bottom:0.3vmin anchor — the old
-   anchor left the stick offset from its row's centre (.ctr-score, the
-   same box for all four sides; rotate(90/-90deg) on .ctr-score-left/
-   -right just remaps which screen axis "vertical" ends up on, so the
-   same bottom-anchor offset showed up as a Y gap for top/bottom seats
-   and an X gap for left/right seats). Percentage-based positioning is
-   resolution-independent by construction — no vmin/px value to fall out
-   of proportion at another screen size. (Pixel-matching this to
-   .ctr-score-val's own padding-shifted centre made it sit noticeably
-   high in practice, so this centers on the row's own box instead.) */
-.rs-bottom{display:none;position:absolute;top:50%;right:1.45vmin;transform:translateY(-50%);z-index:16;}
-.rs-top{display:none;position:absolute;top:50%;right:1.45vmin;transform:translateY(-50%);z-index:16;}
-.rs-left{display:none;position:absolute;top:50%;right:1.45vmin;transform:translateY(-50%);z-index:16;}
-.rs-right{display:none;position:absolute;top:50%;right:1.45vmin;transform:translateY(-50%);z-index:16;}
-
-/* ── Riichi stick size ── */
-.rs-bottom svg{width:6vmin;height:auto;display:block;}
-.rs-top svg{width:6vmin;height:auto;display:block;}
-.rs-left svg{width:6vmin;height:auto;display:block;}
-.rs-right svg{width:6vmin;height:auto;display:block;}
+/* ── Riichi sticks: centred just above the seat's score, between it and
+   the wall gauge, inside that seat's rotated layer (so .rs-drop's +Y is
+   the player's own side for every seat). ── */
+.rs-bottom,.rs-top,.rs-left,.rs-right{display:none;position:absolute;left:50%;translate:-50% 0;bottom:14cqw;z-index:16;}
+.rs-bottom svg,.rs-top svg,.rs-left svg,.rs-right svg{width:24cqw;height:auto;display:block;}
+@container (max-width:150px){
+  .rs-bottom,.rs-top,.rs-left,.rs-right{bottom:15cqw;}
+  .rs-bottom svg,.rs-top svg,.rs-left svg,.rs-right svg{width:22cqw;}
+}
 
 /* ── Meld containers ── */
 .ml-b{position:absolute;bottom:0;right:0;display:flex;flex-direction:row;align-items:flex-end;z-index:15;}
@@ -2848,7 +2930,8 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 /* ── Nameplates positions ── */
 .np-wrap-b{position:absolute;bottom:calc(var(--tlg-h) + 3vmin);left:15%;display:flex;gap:1vmin;align-items:flex-end;}
 .np-inner{display:flex;align-items:center;position:relative;}
-.actbar{transform:translateY(-50%);display:flex;align-items:center;gap:1vmin;white-space:nowrap;}
+.actbar{transform:translateY(-50%);display:flex;align-items:center;gap:clamp(1px,calc(var(--table-size) * 0.0025),4px);white-space:nowrap;
+  filter:drop-shadow(0 .4vmin .7vmin rgba(0,0,0,.55));}
 .np-wrap-t{position:absolute;top:calc(var(--tsm-h) + 3vmin);right:15%;transform:rotate(180deg);z-index:20;}
 .np-wrap-l{position:absolute;top:15%;left:calc(var(--tsm-h) + 3vmin);transform:translateX(-50%) rotate(90deg);transform-origin:center bottom;z-index:20;}
 .np-wrap-r{position:absolute;bottom:15%;right:calc(var(--tsm-h) + 3vmin);transform:translateX(50%) rotate(90deg);transform-origin:center top;z-index:20;}
@@ -2892,6 +2975,12 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    hidden) keeps an actual overflow reachable by scrolling rather than
    silently clipped. */
 .kita-b{bottom:calc(var(--tlg-h) + 3vmin);left:50%;max-width:38%;overflow-x:auto;overflow-y:hidden;}
+/* While a kita tile is dropping in (.tile-drop starts it at 1.7x scale with a
+   halo), that overflow clipping cut the enlarged tile off and even flashed a
+   scrollbar, so it didn't read like the same drop a discard gets. Lift the
+   clip for the drop's duration — the strip holds at most 4 tiles, so it has
+   nothing scrolled to lose in practice. */
+.kita-b:has(.tile-drop){overflow:visible;}
 /* kita-t: the top seat never exists in sanma (.table.sanma .kita-t is
    display:none) and kita only ever renders in sanma, so this is dead —
    kept only so the element still has a sane position if that changes. */
@@ -2926,7 +3015,7 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
    the first game_state arrived. */
 #dora-panel{--ui-vmin:clamp(6px,1vmin,10px);
   position:fixed;top:44px;left:8px;z-index:80;pointer-events:none;
-  background:rgba(8,25,12,.97);border:2px solid rgba(201,168,76,.5);border-radius:12px;
+  background:rgba(8,25,12,.97);border:2px solid rgba(201,168,76,.5);border-radius:3px;
   padding:calc(var(--ui-vmin) * 1.944) calc(var(--ui-vmin) * 2.222) calc(var(--ui-vmin) * 2.222);
   display:none;flex-direction:column;
   max-height:calc(100vh - 54px);overflow-y:auto;
@@ -3032,6 +3121,28 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
   padding-left:clamp(10px, 2.5vw, calc(var(--ui-vmin, 7.2px) * 2.5));padding-right:clamp(10px, 2.5vw, calc(var(--ui-vmin, 7.2px) * 2.5));
   background:linear-gradient(135deg,rgba(120,20,20,.9),rgba(60,10,10,.95));border:1px solid rgba(200,60,60,.6);color:rgba(255,214,214,.95);}
 .reb-btn-red:hover{box-shadow:0 10px 28px rgba(160,30,30,.45);border-color:rgba(255,120,120,.8);}
+/* Results-panel buttons in the cutscene theme (overrides the pills above):
+   each is a slanted ink strip like the standings rows, ruled top and bottom
+   by a hairline (--rb-rule), with a brush kanji label from data-jp ahead of
+   the Cinzel text. Play Again / Start New Game / View Results are the gold-
+   tinted ink of a winner's strip; Leave Room is plain ink ruled vermilion. */
+#s-end .reb-btn{--rb-rule:var(--gl);--rb-bg:rgba(46,34,8,.96);--rb-bg2:rgba(20,16,6,.96);--rb-hover:rgba(84,62,14,.97);
+  display:flex;align-items:center;justify-content:center;gap:calc(var(--ui-vmin, 7.2px) * 1);
+  padding:calc(var(--ui-vmin, 7.2px) * 1.3) clamp(12px, 2.6vw, calc(var(--ui-vmin, 7.2px) * 2.8));
+  border:none;border-radius:0;color:var(--gl);
+  background:linear-gradient(90deg,transparent,var(--rb-bg) 7%,var(--rb-bg2) 93%,transparent);
+  box-shadow:inset 0 1px 0 var(--rb-rule),inset 0 -1px 0 var(--rb-rule);
+  clip-path:polygon(3% 0,100% 0,97% 100%,0 100%);
+  font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin, 7.2px) * 1.45);letter-spacing:.1em;white-space:nowrap;
+  transition:background .2s,color .2s,transform .2s;}
+#s-end .reb-btn::before{content:attr(data-jp);flex:none;font-family:'Noto Serif JP',serif;font-weight:700;font-size:1.5em;line-height:1;letter-spacing:.02em;}
+#s-end .reb-btn:hover{transform:translateY(-2px);box-shadow:inset 0 1px 0 var(--rb-rule),inset 0 -1px 0 var(--rb-rule);
+  background:linear-gradient(90deg,transparent,var(--rb-hover) 7%,var(--rb-bg) 93%,transparent);color:#fff3c4;}
+#s-end .reb-btn:disabled{opacity:.45;transform:none;}
+#s-end .reb-btn-red{--rb-rule:#c8322a;--rb-bg:rgba(11,13,12,.94);--rb-bg2:rgba(11,13,12,.94);--rb-hover:rgba(58,12,10,.96);color:rgba(245,237,216,.85);}
+#s-end .reb-btn-red::before{color:#f08a80;}
+#s-end .reb-btn-red:hover{color:var(--cream);}
+#s-end .reb-btn:focus-visible{outline:2px solid var(--gl);outline-offset:3px;}
 
 /* ── Mode button sub-label ── */
 .mode-sub{font-size:calc(var(--ui-vmin, 7.2px) * 1.25);letter-spacing:calc(var(--ui-vmin, 7.2px) * .139);opacity:.9;}
@@ -3122,3 +3233,382 @@ td.re-final-cell{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) 
 .feedback-dismiss{margin-top:calc(var(--ui-vmin, 7.2px) * .833);background:none;border:1px solid rgba(201,168,76,.4);color:var(--gold);
   font-size:calc(var(--ui-vmin, 7.2px) * 1.25);padding:calc(var(--ui-vmin, 7.2px) * .417) calc(var(--ui-vmin, 7.2px) * 1.111);cursor:pointer;}
 .feedback-dismiss:hover{border-color:var(--gold);}
+
+/* ── Win cutscene (see playWinCutscene / csFlashCall in
+   script.js) — ink slash + brush-kanji stamp, hand flip-up, yaku, limit
+   tier and point count-up, then the results panel. The display pieces
+   (slash, kanji, points, tiles) use plain vmin like the call banners: a
+   whole-screen moment sized to the screen. Small supporting text uses the
+   clamped --ui-vmin so it stays legible on phones and never balloons on
+   4K. --ym-* are set from YAKUMAN_THEMES on the yakuman tier step; the
+   fallbacks here are _default's gold. ── */
+.cs-layer{position:fixed;inset:0;z-index:216;pointer-events:none;overflow:hidden;
+  --ui-vmin:clamp(6px,1vmin,10px);
+  --ym-ink:var(--gl,#f0d080);--ym-glow:255,215,100;--ym-glow2:255,180,40;--ym-accent:255,140,0;
+  --ym-scrim-a:rgba(70,45,0,.6);--ym-scrim-b:rgba(0,0,0,.93);}
+.cs-layer.blocking{pointer-events:auto;cursor:pointer;}
+.cs-layer.cs-shake{animation:cs-shake .42s ease-out;}
+.cs-layer.cs-shake-big{animation:cs-shake-big .7s ease-out;}
+@keyframes cs-shake{0%,100%{transform:none}20%{transform:translate(-1.2vmin,.6vmin)}40%{transform:translate(1vmin,-.8vmin)}60%{transform:translate(-.6vmin,.4vmin)}80%{transform:translate(.3vmin,-.2vmin)}}
+@keyframes cs-shake-big{0%,100%{transform:none}10%{transform:translate(-2.2vmin,1.4vmin) rotate(-.4deg)}25%{transform:translate(2vmin,-1.6vmin) rotate(.4deg)}40%{transform:translate(-1.5vmin,1vmin)}55%{transform:translate(1.1vmin,-.7vmin)}70%{transform:translate(-.6vmin,.4vmin)}85%{transform:translate(.3vmin,-.2vmin)}}
+
+/* The game's themed backdrop (--bg-theme, the title screen's look) with a
+   faint gold hatch. Translucent while a call/riichi slash plays over the
+   table (.on), fully opaque once a win's hand reveal starts (.heavy) —
+   the cutscene and the standings card after it are their own screen, not
+   a dim over the board (the solid base matches body, since --bg-theme's
+   centre is only 85% opaque). A yakuman lays its theme's scrim over the top.
+   Inset past the edges so the shake never shows the table at the border. */
+.cs-dim{position:absolute;inset:-4vmin;opacity:0;transition:opacity .3s;
+  background:repeating-linear-gradient(45deg,rgba(201,168,76,.025) 0 2px,transparent 2px 6px),var(--bg-theme);background-color:#060c07;}
+.cs-dim.on{opacity:.6;}
+.cs-dim.heavy{opacity:1;}
+.cs-dim.ym{opacity:1;background:radial-gradient(circle,var(--ym-scrim-a),var(--ym-scrim-b) 70%),var(--bg-theme);background-color:#060c07;}
+
+/* Slash + headline. Everything enters on CSS delays: slash wipe 0ms,
+   kanji stamp 120ms, eyebrow 280ms, romaji 340ms, name 450ms, seal 600ms. */
+.cs-call{position:absolute;inset:0;z-index:3;display:grid;place-items:center;}
+/* At least tall enough for the call's small lines, whose --ui-vmin size has a
+   floor (so they stay readable on phones) while the band itself scales with
+   vmin. The band's curved edges leave only ~65% of its height clear in the
+   middle, so this leaves the kanji, romaji and name a margin from them. */
+.cs-slash{--cs-bh:max(42vmin,calc(var(--ui-vmin,7.2px) * 32));position:absolute;left:-6%;width:112%;top:50%;height:var(--cs-bh);margin-top:calc(var(--cs-bh) / -2);transform:rotate(-4deg);
+  clip-path:inset(0 100% 0 0);animation:cs-wipe-in .3s cubic-bezier(.7,0,.2,1) forwards;}
+.cs-call.out .cs-slash{animation:cs-wipe-out .28s ease-in forwards;}
+/* Default call style: the jade band's gold hairlines (a yakuman tints them its theme colour) */
+.cs-edge{fill:none;stroke:var(--gold,#c9a84c);}
+.cs-tone-ym .cs-edge{stroke:rgb(var(--ym-accent));}
+.cs-text{position:relative;display:flex;flex-direction:column;align-items:center;gap:.8vmin;transform:rotate(-4deg);transition:opacity .2s;}
+.cs-call.out .cs-text{opacity:0;}
+.cs-kanji{font-family:'Noto Serif JP',serif;font-weight:900;line-height:1;white-space:nowrap;letter-spacing:.06em;color:var(--cream,#f5edd8);
+  opacity:0;animation:cs-stamp .38s cubic-bezier(.2,1.6,.4,1) .12s forwards;}
+.cs-len1,.cs-len2{font-size:17vmin;}
+.cs-len3{font-size:14vmin;}
+.cs-len4{font-size:11.5vmin;}
+.cs-len5,.cs-len6{font-size:8.6vmin;letter-spacing:.02em;}
+.cs-tone-call .cs-len1,.cs-tone-call .cs-len2{font-size:14vmin;}
+.cs-tone-call .cs-len4,.cs-tone-call .cs-len5{font-size:10vmin;}
+.cs-tone-call .cs-kanji,.cs-tone-gold .cs-kanji{color:var(--gl,#f0d080);text-shadow:0 .5vmin 0 var(--gd,#8a6b20);}
+.cs-tone-ym .cs-kanji{color:var(--ym-ink);
+  text-shadow:0 0 3vmin rgba(var(--ym-glow),.9),0 0 7vmin rgba(var(--ym-glow2),.55),0 0 12vmin rgba(var(--ym-accent),.35);}
+.cs-romaji{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin,7.2px) * 2.6);
+  letter-spacing:.55em;color:var(--gold,#c9a84c);text-align:center;opacity:0;animation:cs-rise .25s ease .34s forwards;}
+.cs-tone-ym .cs-romaji{color:rgba(var(--ym-glow),.9);letter-spacing:.4em;}
+/* Kept to the band's flat middle: its curved, tilted edges clip a line that
+   runs near the screen's sides, so very long names (a double ron on a phone)
+   end in an ellipsis instead. */
+.cs-name{max-width:70vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(var(--ui-vmin,7.2px) * 2.2);letter-spacing:.1em;color:rgba(245,237,216,.8);
+  opacity:0;animation:cs-rise .25s ease .45s forwards;}
+.cs-eyebrow{font-family:'Noto Serif JP',serif;font-weight:700;font-size:3.4vmin;line-height:1;letter-spacing:.35em;
+  color:rgba(var(--ym-glow),.95);text-shadow:0 0 2vmin rgba(var(--ym-glow),.6);opacity:0;animation:cs-drop-in .25s ease .28s forwards;}
+.cs-eyebrow.double{color:rgb(var(--ym-accent));letter-spacing:.15em;}
+.cs-seal{position:absolute;right:-9vmin;top:-1vmin;width:8vmin;height:8vmin;display:grid;place-items:center;
+  background:#c8322a;color:var(--cream,#f5edd8);border:.3vmin solid #e9a49e;border-radius:.9vmin;
+  font-family:'Noto Serif JP',serif;font-weight:900;font-size:2.8vmin;line-height:1.05;writing-mode:vertical-rl;
+  opacity:0;animation:cs-seal .32s cubic-bezier(.3,1.6,.5,1) .6s forwards;}
+@keyframes cs-wipe-in{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes cs-wipe-out{from{clip-path:inset(0 0 0 0)}to{clip-path:inset(0 0 0 100%)}}
+@keyframes cs-stamp{0%{opacity:0;transform:scale(2.6)}50%{opacity:1}100%{opacity:1;transform:scale(1)}}
+@keyframes cs-rise{from{opacity:0;transform:translateY(1vmin)}to{opacity:1;transform:none}}
+@keyframes cs-drop-in{from{opacity:0;transform:translateY(-1vmin)}to{opacity:1;transform:none}}
+@keyframes cs-seal{0%{opacity:0;transform:scale(2.4) rotate(25deg)}100%{opacity:1;transform:rotate(9deg)}}
+
+/* Hand reveal, yaku and points */
+.cs-reveal{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2.6vmin;padding:4vmin 4vw;opacity:0;transition:opacity .25s;}
+.cs-reveal.on{opacity:1;}
+.cs-who{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin,7.2px) * 2.4);letter-spacing:.3em;color:var(--gold,#c9a84c);}
+.cs-hand{display:flex;align-items:flex-end;gap:.4vmin;}
+.cs-flip{position:relative;flex:none;perspective:60vmin;}
+.cs-flip-in{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .42s cubic-bezier(.3,1.45,.5,1);}
+.cs-flip.down .cs-flip-in{transform:rotateY(180deg);}
+.cs-flip-in>.cs-face,.cs-flip-in>.cs-back{position:absolute;inset:0;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden;}
+.cs-flip-in>.cs-back{transform:rotateY(180deg);}
+.cs-win-tile{margin-left:1.6vmin;}
+.cs-win-tile:not(.down) .cs-face{box-shadow:0 0 0 .35vmin var(--gl,#f0d080),0 0 2.4vmin rgba(240,208,128,.7);animation:cs-pulse 1.4s ease-in-out infinite;}
+@keyframes cs-pulse{50%{box-shadow:0 0 0 .35vmin rgba(240,208,128,.35),0 0 1vmin rgba(240,208,128,.3)}}
+.cs-melds{display:flex;align-items:flex-end;gap:.4vmin;margin-left:1.6vmin;opacity:0;transition:opacity .3s;}
+.cs-melds.on{opacity:1;}
+.cs-melds .re-kan-back{width:var(--cs-tw);height:var(--cs-th);}
+.cs-dora{display:flex;align-items:center;gap:.6vmin;font-size:calc(var(--ui-vmin,7.2px) * 1.7);letter-spacing:.15em;color:rgba(245,237,216,.6);}
+.cs-dora:empty{display:none;}
+.cs-dora span{margin:0 .6vmin 0 1.4vmin;}
+.cs-yaku{display:flex;flex-wrap:wrap;justify-content:center;gap:1vmin 1.4vmin;max-width:min(110vmin,92vw);}
+.cs-y{display:flex;align-items:baseline;gap:1vmin;padding:.8vmin 1.6vmin;border:1px solid rgba(201,168,76,.35);border-radius:4px;
+  background:rgba(10,24,16,.7);opacity:0;transform:translateX(-2vmin);transition:opacity .24s,transform .24s cubic-bezier(.2,1.3,.4,1);}
+.cs-y.in{opacity:1;transform:none;}
+.cs-yj{font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--ui-vmin,7.2px) * 2.4);color:var(--cream,#f5edd8);}
+.cs-yn{font-size:calc(var(--ui-vmin,7.2px) * 1.6);color:rgba(245,237,216,.6);}
+.cs-yh{font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--ui-vmin,7.2px) * 2);color:var(--gl,#f0d080);}
+.cs-pts{display:flex;flex-direction:column;align-items:center;gap:.6vmin;opacity:0;transform:scale(.9);
+  transition:opacity .25s,transform .4s cubic-bezier(.2,1.5,.4,1);}
+.cs-pts.on{opacity:1;transform:none;}
+/* margin-bottom clears the number's drop shadow and the comma's tail off
+   the han line below. display:block because the number sits inside
+   .cs-pts-num (for the stamp), where an inline <b> would drop the margin. */
+.cs-pts b{display:block;margin-bottom:2.2vmin;font-family:'Noto Serif JP',serif;font-weight:900;font-size:9vmin;line-height:1;color:var(--gl,#f0d080);
+  font-variant-numeric:tabular-nums;text-shadow:0 .5vmin 0 var(--gd,#8a6b20);}
+.cs-pts span{font-size:calc(var(--ui-vmin,7.2px) * 1.9);letter-spacing:.2em;color:rgba(245,237,216,.65);}
+/* Limit-tier hanko (see csBuildStamp / runWinCutscene in script.js) — a
+   vermilion 白文 seal (cream characters cut out of a solid red face, like
+   the START button's 始) pressed down beside the points once they've counted
+   up. It sits off to the right of the number so it never pushes the layout.
+   Each tier is bigger and lands harder (--st size; ring from haneman,
+   splatter from baiman, double border from sanbaiman, gold rim and glow for
+   yakuman). .go plays the press; .still is the finished frame's static
+   impression. The impact lands at 55% of cs-stamp-press, which
+   CS_STAMP_IMPACT in script.js mirrors to time the shake and thud. */
+.cs-pts-num{position:relative;}
+.cs-stamp{--st:11vmin;--ink:#c8322a;position:absolute;left:100%;top:50%;width:var(--st);height:var(--st);
+  margin:calc(var(--st) / -2) 0 0 calc(var(--st) * .3);pointer-events:none;}
+.cs-stamp.t-haneman{--st:12.5vmin;}
+.cs-stamp.t-baiman{--st:14vmin;}
+.cs-stamp.t-sanbaiman{--st:15vmin;}
+.cs-stamp.t-yakuman,.cs-stamp.t-double-yakuman{--st:17vmin;--ink:#b5231c;}
+.cs-stamp-ink{position:absolute;inset:0;width:100%;height:100%;overflow:visible;opacity:0;transform:rotate(-8deg);}
+/* Fill set here, not as an svg attribute: var() in a presentation attribute
+   isn't supported everywhere. */
+.cs-stamp-face{fill:var(--ink);}
+.cs-stamp-ink text{font-family:'Noto Serif JP',serif;font-weight:900;fill:var(--cream,#f5edd8);
+  text-anchor:middle;dominant-baseline:central;}
+.cs-stamp.t-yakuman.go,.cs-stamp.t-double-yakuman.go,.cs-stamp.t-yakuman.still,.cs-stamp.t-double-yakuman.still{
+  filter:drop-shadow(0 0 2.4vmin rgba(var(--ym-glow),.55));}/* Double yakuman's ×2 tab on the seal's corner. */
+.cs-stamp-x2{position:absolute;right:calc(var(--st) * -.16);bottom:calc(var(--st) * -.1);padding:.2em .45em;opacity:0;
+  border-radius:.3em;background:var(--gl,#f0d080);color:#5a1010;font-family:'Noto Serif JP',serif;font-weight:900;font-style:normal;
+  font-size:calc(var(--st) * .17);line-height:1;transform:rotate(-8deg);}
+.cs-stamp.go .cs-stamp-ink{animation:cs-stamp-press .5s cubic-bezier(.5,0,.6,1) forwards;}
+@keyframes cs-stamp-press{
+  0%  {opacity:0;transform:translateY(-5vmin) scale(2.6) rotate(-24deg);}
+  20% {opacity:1;}
+  55% {opacity:1;transform:scale(.9) rotate(-7deg);animation-timing-function:cubic-bezier(.2,1.4,.4,1);}
+  100%{opacity:1;transform:scale(1) rotate(-8deg);}
+}
+.cs-stamp.go .cs-stamp-x2{animation:cs-stamp-x2 .25s ease .55s forwards;}
+@keyframes cs-stamp-x2{from{opacity:0;scale:1.6}to{opacity:1;scale:1}}
+.cs-stamp.still .cs-stamp-ink,.cs-stamp.still .cs-stamp-x2{opacity:1;}
+/* Impact: an ink ring spreading out from under the seal (haneman up). */
+.cs-stamp-ring{position:absolute;inset:0;border:calc(var(--st) * .05) solid var(--ink);border-radius:calc(var(--st) * .12);opacity:0;transform:rotate(-8deg);}
+.cs-stamp.go:not(.t-mangan) .cs-stamp-ring{animation:cs-stamp-ring .55s ease-out .27s forwards;}
+@keyframes cs-stamp-ring{0%{opacity:.75;transform:rotate(-8deg) scale(1)}100%{opacity:0;transform:rotate(-8deg) scale(1.9)}}
+/* Splatter: ink flecks thrown out on impact (baiman up). */
+.cs-stamp-dot{position:absolute;left:50%;top:50%;width:var(--d);height:var(--d);margin:calc(var(--d) / -2);border-radius:50%;
+  background:var(--ink);opacity:0;}
+.cs-stamp.go:is(.t-baiman,.t-sanbaiman,.t-yakuman,.t-double-yakuman) .cs-stamp-dot{animation:cs-stamp-fleck .5s cubic-bezier(.1,.8,.3,1) .27s forwards;}
+@keyframes cs-stamp-fleck{0%{opacity:1;transform:rotate(var(--a)) translateX(calc(var(--st) * .3))}
+  70%{opacity:.9}100%{opacity:0;transform:rotate(var(--a)) translateX(var(--r))}}
+@media (prefers-reduced-motion:reduce){
+  .cs-stamp.go .cs-stamp-ink,.cs-stamp.go .cs-stamp-x2{animation:none;opacity:1;}
+  .cs-stamp.go .cs-stamp-ring,.cs-stamp.go .cs-stamp-dot{animation:none;}
+}
+.cs-skip{position:absolute;right:2vmin;bottom:2vmin;z-index:4;font-size:calc(var(--ui-vmin,7.2px) * 1.6);letter-spacing:.15em;color:rgba(245,237,216,.5);}
+
+/* Ron snatch (playRonSnatch in script.js): the ron tile glows in the
+   discarder's pond, then its flying copy sits in a fixed layer just under
+   #cs-layer (216) so the cutscene's dim covers it. */
+.ron-snatch-layer{position:fixed;inset:0;z-index:215;pointer-events:none;}
+.ron-snatch{position:absolute;margin:0;transform-origin:center center;box-shadow:0 .4vmin 1.2vmin rgba(0,0,0,.55);}
+.tile.ron-hot{box-shadow:0 0 0 .35vmin var(--gl,#f0d080),0 0 2vmin rgba(240,208,128,.75);}
+
+/* Riichi stick is put down on the table (onRiichi adds .rs-drop to the svg),
+   moving in from below: each stick sits in its seat's .ctr-score row,
+   which is already rotated toward that player, so +Y here is that player's
+   own side — the stick comes from the declarer's hand for every seat. */
+.rs-drop{animation:rs-drop .6s cubic-bezier(.3,1.5,.5,1);}
+@keyframes rs-drop{0%{opacity:0;transform:translateY(14vmin) rotate(-25deg) scale(1.4)}60%{opacity:1}100%{opacity:1;transform:none}}
+
+@media (prefers-reduced-motion:reduce){
+  .cs-layer.cs-shake,.cs-layer.cs-shake-big,.rs-drop{animation:none;}
+  .cs-flip-in{transition:none;}
+}
+/* Win cutscene: double/triple ron arrows on the finished frame, the stacked
+   points lines (score/limit, payment, honba + sticks), the call step's
+   dealt-in line, and a dim that appears without fading in. */
+.cs-who{display:flex;align-items:center;gap:calc(var(--ui-vmin,7.2px) * 1.2);}
+.cs-nav{background:rgba(0,0,0,.4);border:1px solid rgba(201,168,76,.35);border-radius:50%;cursor:pointer;
+  width:calc(var(--ui-vmin,7.2px) * 3.2);height:calc(var(--ui-vmin,7.2px) * 3.2);display:grid;place-items:center;
+  color:var(--gold,#c9a84c);font-size:calc(var(--ui-vmin,7.2px) * 1.3);line-height:1;}
+.cs-nav:hover{border-color:var(--gold,#c9a84c);background:rgba(201,168,76,.15);}
+.cs-nav:focus-visible{outline:2px solid var(--gl,#f0d080);outline-offset:2px;}
+.cs-pts span:empty{display:none;}
+.cs-pts span+span{font-size:calc(var(--ui-vmin,7.2px) * 1.7);letter-spacing:.12em;color:rgba(245,237,216,.55);}
+.cs-dim.instant{transition:none;}
+/* Win cutscene: the itemized dora rows (Dora/Ura Dora/Aka Dora/Kita) as
+   their own vermilion-edged group, and the running han total that pops
+   up as each yaku/dora row lands. */
+.cs-y-dora{border-color:rgba(200,50,42,.6);background:rgba(40,10,8,.6);}
+.cs-y-dora .cs-yh{color:#f0a090;}
+.cs-han{display:flex;align-items:baseline;gap:calc(var(--ui-vmin,7.2px) * .8);opacity:0;transition:opacity .25s;
+  font-size:calc(var(--ui-vmin,7.2px) * 1.8);letter-spacing:.12em;color:rgba(245,237,216,.65);}
+.cs-han.on{opacity:1;}
+.cs-han b{font-family:'Noto Serif JP',serif;font-weight:900;font-size:calc(var(--ui-vmin,7.2px) * 3.4);
+  color:var(--gl,#f0d080);font-variant-numeric:tabular-nums;display:inline-block;}
+.cs-han b.pop{animation:cs-han-pop .32s cubic-bezier(.2,1.6,.4,1);}
+@keyframes cs-han-pop{0%{transform:scale(1.6)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.cs-han b.pop{animation:none;}}
+/* Win cutscene: drains under "Tap to continue" over CS_FINAL_HOLD (its
+   duration is set inline), showing when the standings card will take over. */
+.cs-skip{display:flex;flex-direction:column;align-items:flex-end;gap:calc(var(--ui-vmin,7.2px) * .5);}
+.cs-hold-bar{display:block;width:100%;height:2px;background:var(--gold,#c9a84c);transform-origin:left;
+  animation:cs-hold-drain linear forwards;}
+@keyframes cs-hold-drain{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media (prefers-reduced-motion:reduce){.cs-hold-bar{animation:none;opacity:.5;}}
+/* Between-rounds Ready (see startRoundReadyCountdown in script.js): sits in
+   the bottom-right corner like the win cutscene's "Tap to continue", with
+   the same draining gold bar (cs-hold-drain) over ROUND_READY_MS. Once
+   pressed (or auto-sent) it settles to "Waiting…" and the bar disappears;
+   #ready-status above it shows how many players are ready. */
+.re-next{position:fixed;right:calc(var(--ui-vmin, 7.2px) * 2.5);bottom:calc(var(--ui-vmin, 7.2px) * 2.5);z-index:5;
+  display:flex;flex-direction:column;align-items:flex-end;gap:calc(var(--ui-vmin, 7.2px) * .6);}
+.re-next[hidden]{display:none;}
+.re-next .ready-status{margin:0;text-align:right;font-size:calc(var(--ui-vmin, 7.2px) * 1.3);}
+.re-next-btn{background:rgba(11,13,12,.85);border:1px solid var(--gold);border-radius:2px;cursor:pointer;
+  padding:calc(var(--ui-vmin, 7.2px) * .8) calc(var(--ui-vmin, 7.2px) * 2.4);
+  font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin, 7.2px) * 1.7);
+  letter-spacing:.3em;color:var(--gl);transition:background .2s,box-shadow .2s;}
+.re-next-btn:hover:not(:disabled){background:rgba(201,168,76,.15);box-shadow:0 0 calc(var(--ui-vmin, 7.2px) * 2) rgba(201,168,76,.4);}
+.re-next-btn:focus-visible{outline:2px solid var(--gl);outline-offset:2px;}
+.re-next-btn:disabled{cursor:default;color:rgba(245,237,216,.55);border-color:rgba(201,168,76,.35);}
+.re-next-bar{display:block;align-self:stretch;height:2px;background:var(--gold);transform-origin:left;
+  animation:cs-hold-drain linear forwards;}
+.re-next.waiting .re-next-bar{visibility:hidden;}
+@media (prefers-reduced-motion:reduce){.re-next-bar{animation:none;opacity:.5;}}
+/* ── Win/riichi call styles (see CS_STYLES / CALLSTYLE_CATALOG in
+   script.js). The default jade band uses .cs-slash above; every store style
+   plays on a 16:10 .cs-stage that fills as much of the screen as it can,
+   sized in cqw so each style keeps the same proportions everywhere. Names
+   and small lines take max(cqw, --ui-vmin) so they stay readable when the
+   stage is only phone-width. Keyframes are csx-* to keep clear of the rest
+   of the stylesheet. ── */
+.cs-defs{position:absolute;width:0;height:0;overflow:hidden;}
+.cs-layer.cs-preview{z-index:500;}
+.cs-stage{position:absolute;left:50%;top:50%;width:min(100vw,160vh);aspect-ratio:16/10;transform:translate(-50%,-50%);
+  container-type:inline-size;overflow:hidden;transition:opacity .3s;}
+.cs-call.cs-styled.out .cs-stage{opacity:0;}
+.cs-stage .stack,.cs-stage .col{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.4cqw;}
+.cs-stage .k{font-family:'Noto Serif JP',serif;font-weight:900;font-size:var(--kz,16cqw);line-height:1;letter-spacing:.06em;white-space:nowrap;color:var(--cream,#f5edd8);
+  animation:csx-stamp .4s cubic-bezier(.2,1.6,.4,1) both;}
+.cs-stage .r{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:max(2.4cqw,calc(var(--ui-vmin,7.2px) * 1.6));letter-spacing:.5em;padding-left:.5em;
+  color:var(--gold,#c9a84c);white-space:nowrap;animation:csx-rise .3s ease .35s both;}
+.cs-stage .nm{max-width:90cqw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:max(2cqw,calc(var(--ui-vmin,7.2px) * 1.8));letter-spacing:.1em;color:rgba(245,237,216,.85);text-shadow:0 .2cqw .6cqw rgba(0,0,0,.7);
+  animation:csx-rise .3s ease .45s both;}
+@keyframes csx-stamp{0%{opacity:0;transform:scale(2.4)}55%{opacity:1}100%{opacity:1;transform:none}}
+@keyframes csx-rise{from{opacity:0;transform:translateY(1.2cqw)}to{opacity:1;transform:none}}
+@keyframes csx-fade{from{opacity:0}to{opacity:1}}
+
+/* Folding fan (sensu) — white lettering over gold/jade ribs */
+.cs-st-sensu .fan{position:absolute;left:50%;bottom:8cqw;width:80cqw;transform:translateX(-50%);}
+.cs-st-sensu .fan svg{display:block;width:100%;height:auto;overflow:visible;}
+.cs-st-sensu .rib{transform-box:view-box;transform-origin:100px 104px;animation:csx-fan .6s cubic-bezier(.2,.9,.3,1) both;animation-delay:calc(var(--i) * .02s);}
+.cs-st-sensu .stack{padding-top:14cqw;}
+.cs-st-sensu .k{color:#fff;text-shadow:0 .4cqw 0 rgba(0,0,0,.6);animation-delay:.42s;}
+.cs-st-sensu .r{animation-delay:.6s;}.cs-st-sensu .nm{animation-delay:.7s;}
+/* the romaji and names sit over the gold/jade ribs, so lift them off it */
+.cs-st-sensu .r{color:#fff3c4;}
+.cs-st-sensu .r,.cs-st-sensu .nm{text-shadow:0 .2cqw .3cqw rgba(0,0,0,.95),0 0 1.4cqw rgba(0,0,0,.85);}
+@keyframes csx-fan{from{transform:rotate(0deg);opacity:.2}}
+
+/* Paper lantern (chōchin) */
+.cs-st-lantern .col{gap:1.6cqw;}
+.cs-st-lantern .hang{display:flex;flex-direction:column;align-items:center;transform-origin:50% 0;
+  animation:csx-drop .5s cubic-bezier(.3,1.3,.5,1) both,csx-swing 1.6s ease-out .5s forwards;}
+.cs-st-lantern .cord{width:.3cqw;height:4cqw;background:#2a2a2a;}
+.cs-st-lantern .cap{position:relative;z-index:1;width:12cqw;height:2.4cqw;border-radius:.4cqw;background:linear-gradient(#2b2b2b,#111);}
+.cs-st-lantern .body{width:22cqw;height:30cqw;margin:-.6cqw 0;border-radius:46% / 32%;display:grid;place-items:center;
+  background:repeating-linear-gradient(0deg,rgba(60,0,0,.22) 0 .25cqw,transparent .25cqw 2.6cqw),radial-gradient(ellipse at 50% 45%,#ff7a4a,#c8322a 55%,#7a1712);
+  box-shadow:0 0 6cqw rgba(255,110,60,.45);animation:csx-glow 1.6s ease-in-out .5s both;}
+.cs-st-lantern .k{writing-mode:vertical-rl;color:#1a0d08;font-size:min(10cqw,calc(28cqw / var(--n,2)));animation:csx-fade .3s ease .3s both;}
+.cs-st-lantern .r{animation-delay:.6s;}.cs-st-lantern .nm{animation-delay:.7s;}
+@keyframes csx-drop{from{transform:translateY(-70cqw)}to{transform:none}}
+@keyframes csx-swing{0%{transform:rotate(7deg)}25%{transform:rotate(-5deg)}50%{transform:rotate(3deg)}75%{transform:rotate(-1.5deg)}100%{transform:none}}
+@keyframes csx-glow{0%,100%{box-shadow:0 0 6cqw rgba(255,110,60,.45)}50%{box-shadow:0 0 11cqw rgba(255,140,80,.75)}}
+
+/* Noren curtain — one indigo panel per character */
+.cs-st-noren{--pw:min(16cqw,calc(60cqw / var(--n,2)));}
+.cs-st-noren .col{gap:0;}
+.cs-st-noren .pole{position:relative;z-index:1;width:calc(var(--n,2) * var(--pw) + (var(--n,2) - 1) * .6cqw + 6cqw);height:1.8cqw;border-radius:.9cqw;background:linear-gradient(#6b4a2c,#3a2414);}
+.cs-st-noren .panels{display:flex;gap:.6cqw;margin-bottom:2cqw;}
+.cs-st-noren .pn{width:var(--pw);height:32cqw;transform-origin:50% 0;display:grid;place-items:center;
+  background:linear-gradient(#22386b,#152449);box-shadow:inset 0 2.2cqw 0 #101b38,inset 0 -.6cqw 0 #101b38;
+  animation:csx-curtain .55s cubic-bezier(.3,1.2,.5,1) both,csx-sway 1.4s ease-out forwards;
+  animation-delay:calc(var(--i) * .1s),calc(var(--i) * .1s + .55s);}
+.cs-st-noren .pn span{font-family:'Noto Serif JP',serif;font-weight:900;font-size:calc(var(--pw) * .62);color:var(--cream,#f5edd8);}
+.cs-st-noren .r{animation-delay:calc(var(--n,2) * .1s + .45s);}
+.cs-st-noren .nm{margin-top:1cqw;animation-delay:calc(var(--n,2) * .1s + .55s);}
+@keyframes csx-curtain{from{transform:scaleY(0)}to{transform:none}}
+@keyframes csx-sway{0%{transform:skewX(4deg)}40%{transform:skewX(-2.5deg)}70%{transform:skewX(1deg)}100%{transform:none}}
+
+/* Point sticks (tenbō) */
+.cs-st-tenbou .sticks{position:relative;width:70cqw;height:9cqw;}
+.cs-st-tenbou .tb-stick{position:absolute;left:0;right:0;top:50%;height:3.2cqw;margin-top:-1.6cqw;border-radius:1.6cqw;
+  background:linear-gradient(#fff,#e4ded0);box-shadow:0 .5cqw 0 #b9b2a0,0 1cqw 2cqw rgba(0,0,0,.5);}
+.cs-st-tenbou .tb-stick::before{content:"";position:absolute;left:50%;top:50%;width:2cqw;height:2cqw;margin:-1cqw;border-radius:50%;background:#c8322a;
+  box-shadow:-7cqw 0 0 -.4cqw #161616,7cqw 0 0 -.4cqw #161616,-12cqw 0 0 -.4cqw #161616,12cqw 0 0 -.4cqw #161616;}
+.cs-st-tenbou .st1{transform:rotate(-8deg);animation:csx-stickL .45s cubic-bezier(.3,1.4,.5,1) both;}
+.cs-st-tenbou .st2{transform:rotate(8deg);animation:csx-stickR .45s cubic-bezier(.3,1.4,.5,1) .08s both;}
+.cs-st-tenbou .k{text-shadow:0 .5cqw 0 rgba(0,0,0,.6);animation-delay:.35s;}
+.cs-st-tenbou .r{animation-delay:.55s;}.cs-st-tenbou .nm{animation-delay:.65s;}
+@keyframes csx-stickL{from{transform:translateX(-120cqw) rotate(-30deg)}to{transform:rotate(-8deg)}}
+@keyframes csx-stickR{from{transform:translateX(120cqw) rotate(30deg)}to{transform:rotate(8deg)}}
+
+/* Fireworks (hanabi) */
+.cs-st-hanabi .fws{position:absolute;inset:0;}
+.cs-st-hanabi .fw{position:absolute;width:0;height:0;}
+.cs-st-hanabi .trail{position:absolute;left:-.15cqw;top:0;width:.3cqw;height:14cqw;background:linear-gradient(#f0d080,transparent);opacity:0;
+  animation:csx-trail .4s ease-out both;animation-delay:var(--d);}
+.cs-st-hanabi .sp{position:absolute;left:-.5cqw;top:-.5cqw;width:1cqw;height:1cqw;border-radius:50%;background:var(--c);box-shadow:0 0 1.2cqw var(--c);opacity:0;
+  animation:csx-pop 1.1s cubic-bezier(.1,.7,.3,1) both;animation-delay:calc(var(--d) + .35s);}
+.cs-st-hanabi .stack{padding-top:16cqw;}
+.cs-st-hanabi .k{color:var(--gl,#f0d080);text-shadow:0 .5cqw 0 var(--gd,#8a6b20),0 0 3cqw rgba(240,208,128,.4);animation-delay:.45s;}
+.cs-st-hanabi .r{animation-delay:.7s;}.cs-st-hanabi .nm{animation-delay:.8s;}
+@keyframes csx-trail{0%{opacity:0;transform:translateY(24cqw)}40%{opacity:1}100%{opacity:0;transform:none}}
+@keyframes csx-pop{0%{opacity:1;transform:rotate(var(--a)) translateX(0)}70%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) translateX(var(--R))}}
+
+/* Cherry blossoms (sakura) */
+.cs-st-sakura .petals{position:absolute;inset:0;overflow:hidden;}
+.cs-st-sakura .pt{position:absolute;top:-8cqw;width:calc(2.2cqw * var(--s));height:calc(1.6cqw * var(--s));border-radius:150% 0 150% 0;
+  background:linear-gradient(135deg,#ffe2ea,#f29bb2);opacity:0;animation:csx-petal var(--t) linear both;animation-delay:var(--d);}
+.cs-st-sakura .k{text-shadow:0 0 3cqw rgba(242,155,178,.65),0 .4cqw 0 rgba(0,0,0,.4);animation:csx-bloom .8s ease-out .3s both;}
+.cs-st-sakura .r{animation-delay:.75s;}.cs-st-sakura .nm{animation-delay:.85s;}
+@keyframes csx-petal{0%{opacity:0;transform:translate(0,0) rotate(0)}10%{opacity:1}85%{opacity:1}100%{opacity:0;transform:translate(var(--dx),80cqw) rotate(var(--rot))}}
+@keyframes csx-bloom{from{opacity:0;transform:scale(.85);filter:blur(1cqw)}to{opacity:1;transform:none;filter:none}}
+
+/* Lightning strike (kaminari) */
+.cs-st-kaminari .flash{position:absolute;inset:0;background:#fffbe6;opacity:0;animation:csx-flash .55s ease-out .18s both;}
+.cs-st-kaminari .bolt{position:absolute;left:50%;top:-2cqw;width:26cqw;transform:translateX(-50%);overflow:visible;}
+.cs-st-kaminari .bolt-path{fill:none;stroke:#fffbe6;stroke-width:3;stroke-linejoin:miter;stroke-dasharray:420;
+  filter:drop-shadow(0 0 4px #9fdcff) drop-shadow(0 0 10px #f0d080);
+  animation:csx-strike .22s linear both,csx-boltfade .5s ease .45s forwards;}
+.cs-st-kaminari .stack{padding-top:12cqw;}
+.cs-st-kaminari .k{color:var(--gl,#f0d080);text-shadow:0 0 2cqw rgba(159,220,255,.6),0 .5cqw 0 var(--gd,#8a6b20);
+  animation:csx-fade .05s .24s both,csx-zap 1s steps(1) .3s both;}
+.cs-st-kaminari .r{animation-delay:.5s;}.cs-st-kaminari .nm{animation-delay:.6s;}
+@keyframes csx-strike{from{stroke-dashoffset:420;opacity:1}to{stroke-dashoffset:0;opacity:1}}
+@keyframes csx-boltfade{from{opacity:1}to{opacity:0}}
+@keyframes csx-flash{0%{opacity:0}10%{opacity:.85}30%{opacity:.1}45%{opacity:.6}100%{opacity:0}}
+@keyframes csx-zap{0%,20%,40%{text-shadow:0 0 4cqw #bfe8ff,0 .5cqw 0 #8a6b20}10%,30%{text-shadow:none}100%{text-shadow:0 0 2cqw rgba(159,220,255,.6),0 .5cqw 0 #8a6b20}}
+
+@media (prefers-reduced-motion:reduce){
+  .cs-stage *{animation:none!important;}
+}
+
+/* Store: call style swatches (grid card + preview), each in its style's colours */
+.cs-swatch{display:grid;place-items:center;width:calc(var(--ui-vmin, 7.2px) * 4.5);height:calc(var(--ui-vmin, 7.2px) * 4.5);
+  border:1px solid rgba(201,168,76,.5);background:#0b1a12;}
+.cs-swatch b{font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--ui-vmin, 7.2px) * 1.7);line-height:1;color:var(--gl);white-space:nowrap;}
+.cs-sw-default{background:linear-gradient(#14583c,#072117);border-color:var(--gold);}
+.cs-sw-noren{background:linear-gradient(#22386b,#152449);}
+.cs-sw-noren b{color:var(--cream);}
+.cs-sw-lantern{background:radial-gradient(ellipse at 50% 45%,#ff7a4a,#c8322a 60%,#7a1712);}
+.cs-sw-lantern b{color:#1a0d08;}
+.cs-sw-tenbou{background:linear-gradient(#fff,#e4ded0);}
+.cs-sw-tenbou b{color:#c8322a;}
+.cs-sw-sakura{background:linear-gradient(135deg,#ffe2ea,#f29bb2);}
+.cs-sw-sakura b{color:#7a1f3a;}
+.cs-sw-sensu{background:repeating-conic-gradient(from -90deg at 50% 100%,#1a6b45 0 15deg,#c9a84c 15deg 30deg);}
+.cs-sw-sensu b{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.7);}
+.cs-sw-kaminari{background:radial-gradient(circle,#2a3550,#0b0d12);}
+.cs-sw-kaminari b{color:#fffbe6;text-shadow:0 0 6px #9fdcff;}
+.cs-sw-hanabi{background:radial-gradient(circle at 30% 30%,rgba(240,208,128,.5) 0 8%,transparent 9%),radial-gradient(circle at 72% 40%,rgba(255,122,90,.5) 0 7%,transparent 8%),#0b0d12;}
+.cs-preview-card{display:flex;flex-direction:column;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.5);}
+.cs-preview-card .cs-swatch{width:calc(var(--ui-vmin, 7.2px) * 9);height:calc(var(--ui-vmin, 7.2px) * 9);}
+.cs-preview-card .cs-swatch b{font-size:calc(var(--ui-vmin, 7.2px) * 3.4);}

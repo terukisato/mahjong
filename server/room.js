@@ -1503,7 +1503,11 @@ class Room {
       // winner's open melds and correctly gate their own ura dora display
       // (see the unified `winners` array built in _endRound) — neither was
       // needed back when only the primary winner was ever shown at all.
-      results.push({winSeat,hand,yakuList,han:totalHan,rawHan:han,fu,pay,uraDora,dc,kitaCount,
+      // Every winner's yakuList carries the itemized Dora/Ura Dora/Aka
+      // Dora/Kita rows (see _buildYakuList), not just the primary's — the
+      // client's win cutscene lists each winner's yaku against their han.
+      const displayYaku=this._buildYakuList([...yakuList],dc,uraDora,countAkaDora(doraPool),kitaCount);
+      results.push({winSeat,hand,yakuList:displayYaku,han:totalHan,rawHan:han,fu,pay,uraDora,dc,kitaCount,
         melds:g.melds[winSeat],riichi:!!g.riichi[winSeat]});
     }
     if(!results.length){
@@ -1543,9 +1547,7 @@ class Room {
 
     // Build combined yaku display (show first winner's hand info in round_end, extras in extras)
     const primary=results[0];
-    const primaryAkaDora=countAkaDora(this._doraPool(primary.winSeat,primary.hand));
-    const yl=this._buildYakuList(primary.yakuList,primary.dc,primary.uraDora,primaryAkaDora,primary.kitaCount);
-    this._endRound('ron',primary.winSeat,loseSeat,primary.hand,yl,primary.han,primary.fu,totalLoss,
+    this._endRound('ron',primary.winSeat,loseSeat,primary.hand,primary.yakuList,primary.han,primary.fu,totalLoss,
       results.length>1?results.slice(1):null,prevScores,g.melds[primary.winSeat],this._isKazoeYakuman(primary.rawHan,primary.han));
   }
 
@@ -2706,6 +2708,9 @@ class Room {
   // simultaneously. Dealer-repeat rule: dealer stays if THEY qualified.
   _resolveNagashi(nagashiSeats){
     const g=this.game;
+    // Before the payments, so the results card can show each seat's
+    // gain/loss and count the scores up (same as _endRound's prevScores).
+    const prevScores=[...g.scores];
     // Nagashi Mangan: scored exactly like a tsumo mangan (2000 base points,
     // same ×1/×2 tsumo split as any other tsumo win) — dealer-as-winner
     // collects double from everyone, dealer-as-payer pays double.
@@ -2739,7 +2744,7 @@ class Room {
     // outcome — every seat's discards were exhausted, nobody called ron/
     // tsumo on a discard — so riichi sticks are never claimed here either.
     const newHonba=g.honba+1;
-    const nagashiPayload={type:'round_end',reason:'nagashi',nagashiSeats,scores:g.scores,
+    const nagashiPayload={type:'round_end',reason:'nagashi',nagashiSeats,scores:g.scores,prevScores,
       playerNames:this.seats.map(p=>p?.name||'—'),dora:g.dora,gameOver:nagashiGameOver,
       honba:newHonba,riichiSticks:g.riichiSticks};
     this._broadcastAll(nagashiPayload);
@@ -2928,6 +2933,9 @@ class Room {
         seatVoiceThemes:this.seats.map(p=>p?.voiceTheme||'Default'),
         seatIcons:this.seats.map(p=>p?.icon||'default'),
         seatNameplateSkins:this.seats.map(p=>p?.nameplateSkin||'default'),
+        // Each seat's equipped win/riichi call style — the client stages a
+        // seat's ツモ/ロン/リーチ in that seat's style (see csCall in script.js).
+        seatCallStyles:this.seats.map(p=>p?.callStyle||'default'),
         riichiSticks:g.riichiSticks,
         dora:g.dora,wallCount:g.wall.length,waits:w,riichi:g.riichi,
         doubleRiichi:g.doubleRiichi,
@@ -2951,7 +2959,7 @@ class Room {
   _seatInfo(){ return this.seats.map(p=>{
     if(!p) return null;
     const st=getStats(p.profileId);
-    return {name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default',icon:p.icon||'default',nameplateSkin:p.nameplateSkin||'default',title:p.title||null,difficulty:p.difficulty||null,
+    return {name:p.name,isBot:!!p.isBot,voiceTheme:p.voiceTheme||'Default',icon:p.icon||'default',nameplateSkin:p.nameplateSkin||'default',callStyle:p.callStyle||'default',title:p.title||null,difficulty:p.difficulty||null,
       wins:(st.yonma.gamesWon||0)+(st.sanma.gamesWon||0),
       // Stable profile id, so the client can offer "+ Add Friend" on an
       // opponent's nameplate popover (see friends.js / addFriendFromPopover

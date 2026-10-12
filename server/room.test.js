@@ -59,6 +59,17 @@ test('Nagashi Mangan: non-dealer winner collects 4000 from dealer + 2000 from ea
   assert.deepStrictEqual(g.scores, [21000, 33000, 23000, 23000]);
 });
 
+test('Nagashi Mangan: round_end carries the pre-payment prevScores (results card gain/loss)', () => {
+  const room = freshRoom(0);
+  const sent = [];
+  room._broadcastAll = msg => sent.push(msg);
+  room._resolveNagashi([false, true, false, false]);
+  const end = sent.find(msg => msg.type === 'round_end');
+  assert.ok(end, 'round_end should be broadcast');
+  assert.deepStrictEqual(end.prevScores, [25000, 25000, 25000, 25000]);
+  assert.deepStrictEqual(end.scores.map((s, i) => s - end.prevScores[i]), [-4000, 8000, -2000, -2000]);
+});
+
 // Pinfu-shaped 13-tile tenpai hand (4 sequences + non-yakuhai pair, ryanmen
 // wait on 6m/9m) + its winning tile. Guaranteed >0 han (pinfu, +menzen tsumo
 // when won by self-draw) without depending on riichi/yakuhai/dora, so these
@@ -647,6 +658,26 @@ test('doubleRon=true (default): both simultaneous ron winners are paid', () => {
   room._multiRon([1, 2], 0, tile);
   assert.ok(g.scores[1] > prev[1]);
   assert.ok(g.scores[2] > prev[2]);
+});
+
+test('double ron: every winner\'s yakuList itemizes its dora, and adds up to that winner\'s han', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  g.dora = [{ v: 8, s: 'p', id: -1 }]; // → 9p is dora; both hands hold the 9p pair
+  g.hands[1] = pinfuTenpai13();
+  g.hands[2] = pinfuTenpai13().map(t => ({ ...t, id: _id++ }));
+  const sent = [];
+  room._broadcastAll = msg => sent.push(msg);
+  room._multiRon([1, 2], 0, winTile());
+  const end = sent.find(msg => msg.type === 'round_end');
+  assert.ok(end, 'round_end should be broadcast');
+  assert.strictEqual(end.winners.length, 2);
+  for (const w of end.winners) {
+    const doraRow = w.yakuList.find(y => y.name === 'Dora');
+    assert.ok(doraRow, `seat ${w.winSeat} should have a Dora row`);
+    assert.strictEqual(doraRow.han, 2);
+    assert.strictEqual(w.yakuList.reduce((n, y) => n + y.han, 0), w.han, `seat ${w.winSeat} rows should sum to its han`);
+  }
 });
 
 test('nagashiMangan=false: exhaustive draw never calls _resolveNagashi', () => {

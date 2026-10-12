@@ -751,8 +751,9 @@ function onMsg(m){
     // unlockedThemes/unlockedTitles above, just for bought (not earned)
     // cosmetics (see cosmetics.getOwned in server/index.js's get_stats
     // handler). Always includes the free defaults even before login.
-    ownedCosmetics=m.ownedCosmetics||{icons:playerIcons.map(i=>i.id),nameplates:['default']};
-    renderPlayerIcons();renderNameplateSkins();renderShopIcons();renderShopNameplates();
+    ownedCosmetics=m.ownedCosmetics||{icons:playerIcons.map(i=>i.id),nameplates:['default'],callStyles:['default']};
+    if(!ownedCosmetics.callStyles) ownedCosmetics.callStyles=['default'];
+    renderPlayerIcons();renderNameplateSkins();renderShopIcons();renderShopNameplates();renderShopCallStyles();
     // Combined wins (both variants — the nameplate is one identity, not
     // split by mode) drive the User Profile hub's nameplate tier — see
     // updateNameplateTier. m.stats.yonma/sanma.gamesWon are lifetime
@@ -867,9 +868,10 @@ function onMsg(m){
     // ultimately just "here's your new balance".
     if(m.reason==='purchase'){
       if(m.ok){
-        const type=ICON_CATALOG.some(i=>i.id===m.itemId)?'icons':'nameplates';
+        const type=ICON_CATALOG.some(i=>i.id===m.itemId)?'icons':(CALLSTYLE_CATALOG.some(c=>c.id===m.itemId)?'callStyles':'nameplates');
+        if(!ownedCosmetics[type]) ownedCosmetics[type]=['default'];
         if(!ownedCosmetics[type].includes(m.itemId)) ownedCosmetics[type].push(m.itemId);
-        renderShopIcons();renderShopNameplates();renderPlayerIcons();renderNameplateSkins();
+        renderShopIcons();renderShopNameplates();renderShopCallStyles();renderPlayerIcons();renderNameplateSkins();
         // If the preview modal is still open on the item that was just
         // bought, refresh it in place too (Buy -> Equip) — it was closed
         // out from under the confirm dialog otherwise stayed open on stale
@@ -969,10 +971,10 @@ function onMsg(m){
     }
   }
   else if(m.type==='riichi'){onRiichi(m);}
-  else if(m.type==='kan'){callBanner('kan',m.name||'Player','カン');}
-  else if(m.type==='pon'){callBanner('pon',m.name||'Player','ポン');}
-  else if(m.type==='chi'){callBanner('chi',m.name||'Player','チー');}
-  else if(m.type==='kita'){callBanner('kita',m.name||'Player','北');}
+  else if(m.type==='kan'){callGlow('kan',m.seat);}
+  else if(m.type==='pon'){callGlow('pon',m.seat);}
+  else if(m.type==='chi'){callGlow('chi',m.seat);}
+  else if(m.type==='kita'){callGlow('kita',m.seat);}
   else if(m.type==='chat'){showChatMsg(m.name,m.text,m.color,m.id);}
   else if(m.type==='emoji_react'){showEmojiPopup(m.seat,m.emoji);}
   else if(m.type==='msg_react'){onMsgReact(m);}
@@ -1170,7 +1172,7 @@ function showCoinReward(){
 function toggleStoreModal(){
   const modal=$('store-modal'),backdrop=$('store-backdrop');
   const open=modal.classList.contains('visible');
-  if(!open){ renderShopIcons(); renderShopNameplates(); }
+  if(!open){ renderShopIcons(); renderShopNameplates(); renderShopCallStyles(); }
   modal.classList.toggle('visible',!open);
   backdrop.classList.toggle('visible',!open);
 }
@@ -3494,6 +3496,9 @@ function onProfileUnlocked(m){
     // skin (see profiles.getNameplateSkin).
     currentNameplateSkin=m.nameplateSkin||'default';
     try{ localStorage.setItem('mj-nameplate-skin',currentNameplateSkin); }catch(e){}
+    // Same for the equipped win/riichi call style (see profiles.getCallStyle).
+    currentCallStyle=m.callStyle||'default';
+    try{ localStorage.setItem('mj-call-style',currentCallStyle); }catch(e){}
     // Voice theme is server-authoritative for a logged-in profile too now
     // (see profiles.getVoiceTheme) — sync it the same way, so it survives a
     // localStorage wipe / a different browser and can't drift from what the
@@ -4261,6 +4266,20 @@ const NAMEPLATE_CATALOG=[
   {id:'hyosatsu', label:'Lacquer Slab', tier:'rare', price:2600, cls:'np-skin-hyosatsu'},
   {id:'kinpaku', label:'Gold Leaf', tier:'legendary', price:8000, cls:'np-skin-kinpaku'},
 ];
+// Win/riichi call styles — how this player's ツモ/ロン/リーチ is staged in
+// the cutscene, seen by everyone at the table (see CS_STYLES). id/price/tier
+// mirror server/cosmetics.js's CATALOG.callstyle exactly; 'default' (the
+// jade band) is free and always owned.
+const CALLSTYLE_CATALOG=[
+  {id:'default', label:'Jade Band', jp:'翠', tier:'common', price:0},
+  {id:'noren', label:'Noren Curtain', jp:'暖簾', tier:'common', price:1000},
+  {id:'lantern', label:'Paper Lantern', jp:'提灯', tier:'uncommon', price:1200},
+  {id:'tenbou', label:'Point Sticks', jp:'点棒', tier:'uncommon', price:1200},
+  {id:'sakura', label:'Cherry Blossoms', jp:'桜', tier:'rare', price:2200},
+  {id:'sensu', label:'Folding Fan', jp:'扇子', tier:'rare', price:2400},
+  {id:'kaminari', label:'Lightning Strike', jp:'雷', tier:'rare', price:3000},
+  {id:'hanabi', label:'Fireworks', jp:'花火', tier:'legendary', price:6500},
+];
 function nameplateSkinClass(skinId){
   const item=NAMEPLATE_CATALOG.find(n=>n.id===skinId);
   return item?item.cls:null;
@@ -4280,10 +4299,11 @@ function applyNameplateSkinClass(npEl,skinId){
 // Which icons/nameplate skins this profile can actually equip — the free
 // defaults until the 'stats' response (see onMsg) fills in anything bought.
 // Same shape as server/cosmetics.js's getOwned().
-let ownedCosmetics={icons:playerIcons.map(i=>i.id),nameplates:['default']};
+let ownedCosmetics={icons:playerIcons.map(i=>i.id),nameplates:['default'],callStyles:['default']};
 
 let currentPlayerIcon='default';
 let currentNameplateSkin='default';
+let currentCallStyle='default';
 
 // Guest's own fixed icon — deliberately NOT in playerIcons above: Guest has
 // no profile to persist a choice onto, so it isn't offered in the Player
@@ -4337,6 +4357,15 @@ function applyPlayerIcon(iconId){
   renderShopIcons();
 }
 
+// Equips an owned call style (server re-checks ownership, see
+// equip_callstyle in index.js) and repaints the Store.
+function applyCallStyle(styleId){
+  if(!(ownedCosmetics.callStyles||['default']).includes(styleId)) return;
+  currentCallStyle=styleId;
+  try{ localStorage.setItem('mj-call-style',styleId); }catch(e){}
+  wss({type:'equip_callstyle',style:styleId});
+  renderShopCallStyles();
+}
 function applyNameplateSkin(skinId){
   if(!ownedCosmetics.nameplates.includes(skinId)) return;
   currentNameplateSkin=skinId;
@@ -4512,6 +4541,29 @@ function renderShopNameplates(){
   });
 }
 
+// Call styles grid — each card shows a small swatch in the style's colours
+// with its Japanese name; the preview (openShopPreview) can play it for real.
+function _callStylePriceLabel(state,item){
+  return item.price===0&&state==='owned'?'Free':_shopPriceLabel(state,item.price);
+}
+function renderShopCallStyles(){
+  const list=$('shop-callstyle-list'); if(!list) return;
+  list.innerHTML='';
+  const owned=ownedCosmetics.callStyles||['default'];
+  CALLSTYLE_CATALOG.forEach(cs=>{
+    const isOwned=owned.includes(cs.id);
+    const state=_shopItemState(isOwned,isOwned&&currentCallStyle===cs.id);
+    const btn=document.createElement('button');
+    btn.className='shop-item shop-'+state;
+    btn.innerHTML='<span class="cs-swatch cs-sw-'+cs.id+'"><b>'+cs.jp+'</b></span>'+
+      '<span class="shop-item-label">'+cs.label+'</span>'+
+      '<span class="shop-item-tier '+cs.tier+'">'+cs.tier+'</span>'+
+      '<span class="shop-item-price">'+_callStylePriceLabel(state,cs)+'</span>';
+    btn.onclick=()=>openShopPreview('callstyle',cs);
+    list.appendChild(btn);
+  });
+}
+
 // ── Shop item preview ───────────────────────────────────────────────────
 // Opened by clicking any Shop card (see #shop-preview-modal in index.html).
 // An icon and a nameplate skin are shown differently — each the way it's
@@ -4541,22 +4593,30 @@ function closeShopPreview(){
 function renderShopPreview(){
   if(!shopPreviewItem) return;
   const {type,item}=shopPreviewItem;
-  const isIcon=type==='icon';
-  const owned=isIcon?ownedCosmetics.icons.includes(item.id):ownedCosmetics.nameplates.includes(item.id);
-  const equipped=owned&&(isIcon?currentPlayerIcon===item.id:currentNameplateSkin===item.id);
+  const isIcon=type==='icon', isCall=type==='callstyle';
+  const ownedList=isIcon?ownedCosmetics.icons:(isCall?(ownedCosmetics.callStyles||['default']):ownedCosmetics.nameplates);
+  const current=isIcon?currentPlayerIcon:(isCall?currentCallStyle:currentNameplateSkin);
+  const owned=ownedList.includes(item.id);
+  const equipped=owned&&current===item.id;
   const state=_shopItemState(owned,equipped);
 
   $('shop-preview-title').textContent=item.label;
   const tierEl=$('shop-preview-tier'); tierEl.className='shop-item-tier '+item.tier; tierEl.textContent=item.tier;
   // Same tier/owned/equipped -> label logic the Store grid card uses — the
   // action area below never needs to restate the price, this already has.
-  const priceEl=$('shop-preview-price'); priceEl.textContent=_shopPriceLabel(state,item.price);
+  const priceEl=$('shop-preview-price'); priceEl.textContent=isCall?_callStylePriceLabel(state,item):_shopPriceLabel(state,item.price);
 
   const isGuest=($('iname')?.value||'')==='Guest';
   const displayName=($('iname')?.value||'').trim()||'Player';
   const titleText=isGuest?'':currentPlayerTitle;
   const stage=$('shop-preview-stage');
-  if(isIcon){
+  if(isCall){
+    // A call style is motion, so the preview plays it for real over the
+    // Store (previewCallStyle) — the swatch is just its at-a-glance card.
+    stage.innerHTML='<div class="cs-preview-card"><span class="cs-swatch cs-sw-'+item.id+'"><b>'+item.jp+'</b></span>'+
+      '<button class="bp" type="button">Play preview</button></div>';
+    stage.querySelector('button').onclick=()=>previewCallStyle(item.id);
+  } else if(isIcon){
     // Same tier this profile's own User Profile header is currently
     // showing (see updateNameplateTier) — read straight off that live
     // element rather than re-deriving it from wins, so this can never
@@ -4601,7 +4661,7 @@ function renderShopPreview(){
     // Re-renders in place (rather than closing) so the successful equip is
     // visibly confirmed — the button becomes the plain "Equipped" label
     // below on the very next render.
-    btn.onclick=()=>{ if(isIcon) applyPlayerIcon(item.id); else applyNameplateSkin(item.id); renderShopPreview(); };
+    btn.onclick=()=>{ if(isIcon) applyPlayerIcon(item.id); else if(isCall) applyCallStyle(item.id); else applyNameplateSkin(item.id); renderShopPreview(); };
     action.appendChild(btn);
   } else {
     const status=document.createElement('p');
@@ -4840,8 +4900,8 @@ function playYakumanSfx(preset){
 }
 
 // Per-yakuman visual+audio identity, keyed by the exact yaku `name` from
-// detectYaku (server/mahjong.js). Each theme sets the flash's palette
-// (--ym-* custom props on #yakuman-layer), the falling/rising/radiating
+// detectYaku (server/mahjong.js). Each theme sets the win cutscene's tier
+// palette (--ym-* custom props on #cs-layer), the falling/rising/radiating
 // particle motif (shape + motion + tint list, see spawnYakumanMotif), the
 // headline kanji/romaji, and a YAKUMAN_SOUNDS preset. Anything not listed
 // here (e.g. Kazoe Yakuman, or a future yakuman) falls back to `_default`,
@@ -4928,13 +4988,8 @@ const YAKUMAN_THEMES={
     shape:'leaf',motion:'ym-rise',tints:['#e6ffb8','#cdf08a','#ffe0a8'],sound:'divine'},
 };
 
-// Full manual override hook — takes total control of the flash for a yaku
-// name (called as fn(isDouble), builds its own #yakuman-layer content).
-// Empty by default: every yakuman goes through the themed path below.
-const YAKUMAN_ANIMATIONS={};
-
-// Scatter one motif's worth of particles across #yakuman-layer for the
-// hold duration. cfg is a YAKUMAN_THEMES entry (shape / motion / tints /
+// Scatter one motif's worth of particles across the cutscene layer for
+// the yakuman tier step (see runWinCutscene). cfg is a YAKUMAN_THEMES entry (shape / motion / tints /
 // count). CSS (.ym-particle + @keyframes ym-fall/rise/radiate/gale) does
 // the animating; this only seeds randomised start positions, sizes,
 // durations and per-particle vectors via inline custom props.
@@ -4980,61 +5035,562 @@ function spawnYakumanMotif(layer,cfg){
   return wrap;
 }
 
-// Yakuman/double-yakuman flash (see onEnd) — a bigger, more dramatic
-// moment than the normal call-banner win announcement, playing BEFORE it
-// rather than replacing it. yakuNames is every yaku name across every
-// qualifying winner (a double/triple ron could have more than one); the
-// most specific one that has a YAKUMAN_THEMES entry drives the palette,
-// motif and sound (preferring a `double`-flagged theme when isDouble).
-function playYakumanFx(isDouble,yakuNames){
-  const names=yakuNames||[];
-  const override=names.map(n=>YAKUMAN_ANIMATIONS[n]).find(Boolean);
-  if(override) return override(isDouble);
-  const layer=$('yakuman-layer'); if(!layer) return;
-  const themed=names.filter(n=>YAKUMAN_THEMES[n]);
-  const key=themed.find(n=>YAKUMAN_THEMES[n].double)||themed[0];
-  const theme=(key&&YAKUMAN_THEMES[key])||YAKUMAN_THEMES._default;
-  const named=theme!==YAKUMAN_THEMES._default;
-  layer.innerHTML='';
-  const st=layer.style;
-  st.setProperty('--ym-ink',theme.ink);
-  st.setProperty('--ym-glow',theme.glow);
-  st.setProperty('--ym-glow2',theme.glow2||theme.glow);
-  st.setProperty('--ym-accent',theme.accent||theme.glow2||theme.glow);
-  st.setProperty('--ym-scrim-a',theme.scrimA);
-  st.setProperty('--ym-scrim-b',theme.scrimB||'rgba(0,0,0,.93)');
-
-  const scrim=document.createElement('div');scrim.className='yakuman-scrim';
-  layer.appendChild(scrim);
-  spawnYakumanMotif(layer,{...theme,count:(theme.count||26)+(isDouble?12:0)});
-
-  const burst=document.createElement('div');burst.className='yakuman-burst';
-  if(named){
-    const eb=document.createElement('div');
-    eb.className='yakuman-eyebrow'+(isDouble?' double':'');
-    eb.textContent=isDouble?'ダブル役満':'役満';
-    burst.appendChild(eb);
-  }
-  const text=document.createElement('div');
-  const label=named?theme.jp:(isDouble?'ダブル役満':'役満');
-  text.className='yakuman-text'+((isDouble&&!named)?' double':'')
-    +(label.length>=7?' xlong':label.length>=4?' long':'');
-  text.textContent=label;
-  const sub=document.createElement('div');sub.className='yakuman-sub';
-  sub.textContent=named?theme.romaji:(isDouble?'DOUBLE YAKUMAN':'YAKUMAN');
-  burst.appendChild(text);burst.appendChild(sub);
-  layer.appendChild(burst);
-  layer.classList.add('blocking');
-
-  playYakumanSfx(isDouble&&theme.soundDouble?theme.soundDouble:theme.sound);
-  setTimeout(()=>{
-    layer.innerHTML='';layer.classList.remove('blocking');
-  },YAKUMAN_FX_HOLD);
+// ── Win cutscene (#cs-layer) ───────────────────────────────────────────
+// One sequenced "big moment" in place of the old tsumo/ron call banners
+// and the standalone yakuman flash: the ツモ/ロン call → (ron) the tile
+// snatch → the winning hand flips up tile by tile → yaku tick in → a
+// yakuman's themed band (palette, particle motif and sound) → points count
+// up and the limit-tier hanko presses in, then onEnd's results panel takes
+// over. Riichi has no banner; its stick just drops onto the table
+// (onRiichi). csFlashCall remains for the Store's call-style preview.
+// A win can be skipped with a tap/click or Space/Enter/Esc. Every pending
+// step checks csRun, so a skip, a newer cutscene or clearCutscene()
+// (leaving the table) cancels whatever is still queued.
+let csRun=0, csSkip=null, csResize=null;
+// The default call (call style 'default'): a deep jade band — gradient
+// #cs-jade, defined once in index.html so every band can reference it —
+// with thin gold hairlines along both edges (.cs-edge).
+const CS_SLASH_SVG='<svg class="cs-slash" viewBox="0 0 1000 220" preserveAspectRatio="none" aria-hidden="true">'
+  +'<path fill="url(#cs-jade)" d="M0,74 C110,44 290,34 520,40 C720,46 870,30 1000,22 L1000,168 C870,190 710,176 520,182 C320,190 140,200 0,164Z"/>'
+  +'<path class="cs-edge" d="M0,74 C110,44 290,34 520,40 C720,46 870,30 1000,22" stroke-width="1.6" vector-effect="non-scaling-stroke"/>'
+  +'<path class="cs-edge" d="M0,164 C140,200 320,190 520,182 C710,176 870,190 1000,168" stroke-width="1.6" vector-effect="non-scaling-stroke"/>'
+  +'</svg>';
+function csWait(ms,id){return new Promise((res,rej)=>setTimeout(()=>id===csRun?res():rej(new Error('cs-cancel')),ms));}
+function csKey(e){ if(csSkip&&(e.key===' '||e.key==='Enter'||e.key==='Escape')){ e.preventDefault(); csSkip(); } }
+function clearCutscene(){
+  csRun++; csSkip=null;
+  document.removeEventListener('keydown',csKey);
+  if(csResize){ window.removeEventListener('resize',csResize); csResize=null; }
+  const l=$('cs-layer'); if(!l) return;
+  l.innerHTML=''; l.className='cs-layer'; l.removeAttribute('style'); l.onclick=null;
 }
-// Held on screen before the normal win banner(s) get their turn — see
-// onEnd, which also folds this into WIN_BANNER_DELAY so the results panel
-// waits for the flash too, not just the banner(s) after it.
-const YAKUMAN_FX_HOLD=4400;
+function csShake(l,big){ l.classList.remove('cs-shake','cs-shake-big'); void l.offsetWidth; l.classList.add(big?'cs-shake-big':'cs-shake'); }
+function csDim(l){ const d=document.createElement('div'); d.className='cs-dim'; l.appendChild(d); void d.offsetWidth; return d; }
+
+// Slash + headline block. o: {kanji, romaji, name, eyebrow, double,
+// seal, tone:'call'|'gold'|'ym', style}. style is the caller's equipped call
+// style (CALLSTYLE_CATALOG); anything but 'default' stages the call in that
+// style instead (CS_STYLES). Every entrance is CSS animation-delay, so it
+// needs no timers here.
+function csCall(o){
+  const c=document.createElement('div');
+  const build=o.style&&o.style!=='default'&&CS_STYLES[o.style];
+  if(build){
+    const n=[...o.kanji].length;
+    c.className='cs-call cs-styled';
+    c.innerHTML=`<div class="cs-stage cs-st-${o.style}" style="--n:${n};--kz:${n<=1?18:n===2?16:n===3?13:n===4?10.5:8}cqw">${build(o)}</div>`;
+    return c;
+  }
+  c.className='cs-call cs-tone-'+(o.tone||'call');
+  const len=Math.min([...o.kanji].length,6);
+  c.innerHTML=CS_SLASH_SVG+'<div class="cs-text">'
+    +(o.eyebrow?`<div class="cs-eyebrow${o.double?' double':''}">${escHtml(o.eyebrow)}</div>`:'')
+    +`<div class="cs-kanji cs-len${len}">${escHtml(o.kanji)}</div>`
+    +`<div class="cs-romaji">${escHtml(o.romaji)}</div>`
+    +(o.name?`<div class="cs-name">${escHtml(o.name)}</div>`:'')
+    +(o.seal?'<div class="cs-seal">雀心</div>':'')+'</div>';
+  return c;
+}
+function csHideCall(c){ if(!c) return; c.classList.add('out'); setTimeout(()=>c.remove(),320); }
+
+// Store call styles (see CALLSTYLE_CATALOG / CATALOG.callstyle in
+// server/cosmetics.js). Each builds the inner HTML of a 16:10 .cs-stage
+// sized in cqw (see .cs-stage / .cs-st-* in style.css), so every style keeps
+// its proportions on any screen.
+const csNames=o=>o.name?`<div class="nm">${escHtml(o.name)}</div>`:'';
+const csText=o=>`<div class="k">${escHtml(o.kanji)}</div><div class="r">${escHtml(o.romaji)}</div>`+csNames(o);
+const csRand=(a,b)=>(a+Math.random()*(b-a)).toFixed(2);
+const CS_STYLES={
+  // Folding fan: 12 gold/jade ribs snap open behind white lettering.
+  sensu:o=>{
+    const n=12,step=180/n,R=96,cx=100,cy=104,pt=a=>[cx+R*Math.cos(a*Math.PI/180),cy-R*Math.sin(a*Math.PI/180)];
+    const [x1,y1]=pt(180),[x2,y2]=pt(180-step);
+    let ribs='';
+    for(let i=0;i<n;i++) ribs+=`<path class="rib" style="--i:${i};transform:rotate(${i*step}deg)" d="M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 0 1 ${x2.toFixed(1)},${y2.toFixed(1)} Z" fill="${i%2?'#c9a84c':'#1a6b45'}" stroke="${i%2?'#8a6b20':'#0d3d28'}" stroke-width=".6"/>`;
+    return `<div class="fan"><svg viewBox="0 0 200 106" aria-hidden="true">${ribs}<circle cx="100" cy="104" r="3" fill="#c9a84c"/></svg></div><div class="stack">${csText(o)}</div>`;
+  },
+  // Paper lantern: drops in on its cord, swings, glows; call down its side.
+  lantern:o=>`<div class="col"><div class="hang"><div class="cord"></div><div class="cap"></div><div class="body"><div class="k">${escHtml(o.kanji)}</div></div><div class="cap"></div></div><div class="r">${escHtml(o.romaji)}</div>${csNames(o)}</div>`,
+  // Noren: an indigo curtain, one panel per character, unfurls and sways.
+  noren:o=>`<div class="col"><div class="pole"></div><div class="panels">${[...o.kanji].map((ch,i)=>`<div class="pn" style="--i:${i}"><span>${escHtml(ch)}</span></div>`).join('')}</div><div class="r">${escHtml(o.romaji)}</div>${csNames(o)}</div>`,
+  // Point sticks: two scoring sticks fly in and cross under the call.
+  tenbou:o=>`<div class="stack"><div class="k">${escHtml(o.kanji)}</div><div class="sticks"><div class="tb-stick st1"></div><div class="tb-stick st2"></div></div><div class="r">${escHtml(o.romaji)}</div>${csNames(o)}</div>`,
+  // Fireworks: three rockets rise and burst into 16 sparks each.
+  hanabi:o=>{
+    const bursts=[[24,32,0,['#f0d080','#ffe9a8']],[76,28,.22,['#ff7a5a','#f0d080']],[50,22,.44,['#9fe8d0','#f5edd8']]];
+    const fw=bursts.map(([x,y,d,cols])=>`<div class="fw" style="left:${x}%;top:${y}%;--d:${d}s"><div class="trail"></div>`
+      +Array.from({length:16},(_,i)=>`<div class="sp" style="--a:${i*22.5}deg;--R:${(11+Math.random()*5).toFixed(1)}cqw;--c:${cols[i%2]}"></div>`).join('')+'</div>').join('');
+    return `<div class="fws">${fw}</div><div class="stack">${csText(o)}</div>`;
+  },
+  // Cherry blossoms: petals drift across while the call blooms into focus.
+  sakura:o=>`<div class="petals">${Array.from({length:34},()=>`<div class="pt" style="left:${csRand(-15,95)}%;--d:${csRand(0,.9)}s;--t:${csRand(1.8,2.6)}s;--dx:${csRand(8,30)}cqw;--rot:${csRand(360,900)}deg;--s:${csRand(.7,1.3)}"></div>`).join('')}</div><div class="stack">${csText(o)}</div>`,
+  // Lightning strike: a bolt hits the call, the screen flashes, it crackles.
+  kaminari:o=>`<div class="flash"></div><svg class="bolt" viewBox="0 0 120 160" aria-hidden="true"><path class="bolt-path" d="M70,0 L44,64 L66,64 L36,150 L90,52 L66,52 L86,0"/></svg><div class="stack">${csText(o)}</div>`,
+};
+// Store styles hold a little longer than the jade band — they have more to
+// show (a lantern settling, fireworks bursting).
+const csCallHold=style=>style&&style!=='default'&&CS_STYLES[style]?1600:1250;
+// The call style equipped by the player in a seat — from the last
+// game_state (seatCallStyles, see room.js), 'default' for bots and guests.
+const csSeatStyle=seat=>lastState?.seatCallStyles?.[seat]||'default';
+
+// A call that plays over the table and clears itself (now only the Store
+// preview, which lifts the layer above the Store modal with .cs-preview).
+function csFlashCall(o,preview){
+  const l=$('cs-layer'); if(!l||csSkip) return; // a win cutscene owns the layer
+  const id=++csRun;
+  l.innerHTML=''; l.className='cs-layer'+(preview?' cs-preview':''); l.removeAttribute('style');
+  const dim=csDim(l); dim.classList.add('on');
+  const c=csCall(o);
+  l.appendChild(c);
+  const hold=csCallHold(o.style);
+  setTimeout(()=>{ if(id===csRun) csShake(l,false); },200);
+  setTimeout(()=>{ if(id!==csRun) return; csHideCall(c); dim.classList.remove('on'); },hold);
+  setTimeout(()=>{ if(id===csRun){ l.innerHTML=''; l.className='cs-layer'; } },hold+400);
+}
+function previewCallStyle(style){
+  const name=($('iname')?.value||'').trim()||'Player';
+  csFlashCall({kanji:'ツモ',romaji:'TSUMO',name:name+' wins',style},true);
+}
+
+// The most specific yaku that has a theme drives the palette, motif and
+// sound, preferring a `double`-flagged one; anything unthemed (e.g. Kazoe
+// Yakuman) falls back to _default's gold.
+function pickYakumanTheme(yakuNames){
+  const themed=(yakuNames||[]).filter(n=>YAKUMAN_THEMES[n]);
+  const key=themed.find(n=>YAKUMAN_THEMES[n].double)||themed[0];
+  return (key&&YAKUMAN_THEMES[key])||YAKUMAN_THEMES._default;
+}
+// Hand tile size for the reveal: as big as 7.5vmin, shrunk so the whole
+// hand (plus melds) stays on one line, keeping the --tmd aspect ratio.
+function csTileSize(count){
+  const r=document.documentElement;
+  const dw=parseInt(r.style.getPropertyValue('--tmd-w'))||26, dh=parseInt(r.style.getPropertyValue('--tmd-h'))||36;
+  const vmin=Math.min(window.innerWidth,window.innerHeight)/100;
+  const fitW=(window.innerWidth*.92-(count-1)*vmin*.4)/count;
+  const w=Math.max(14,Math.floor(Math.min(vmin*7.5,fitW)));
+  return {w,h:Math.round(w*dh/dw)};
+}
+function csFlipTile(t,w,h){
+  const f=document.createElement('div'); f.className='cs-flip down';
+  f.style.width=w+'px'; f.style.height=h+'px';
+  const inner=document.createElement('div'); inner.className='cs-flip-in';
+  const face=mkEl(t,'tmd',w,h); face.classList.add('cs-face');
+  const back=document.createElement('div'); back.className='kan-back cs-back';
+  inner.append(face,back); f.appendChild(inner);
+  return f;
+}
+// rAF drives the count-up, but rAF stalls in a background tab, so a plain
+// timer also lands the final value — the cutscene never hangs waiting on it.
+function csCount(el,to,ms,id){
+  return new Promise(res=>{ const t0=performance.now(); let over=false;
+    const end=()=>{ if(over) return; over=true; if(id===csRun) el.textContent=to.toLocaleString(); res(); };
+    setTimeout(end,ms+50);
+    (function f(t){ if(over) return; if(id!==csRun) return end();
+      const p=Math.min(1,(t-t0)/ms);
+      el.textContent=Math.round(to*(1-Math.pow(1-p,3))).toLocaleString();
+      p<1?requestAnimationFrame(f):end(); })(t0); });
+}
+
+// How long the finished frame holds before the standings card, when the
+// sequence plays through on its own — long enough to read the hand, yaku
+// and payment lines. The "Tap to continue" hint's bar drains over it.
+const CS_FINAL_HOLD=8000;
+// Gap between yaku/dora rows landing, and the slower pace for a named
+// yakuman's one or two rows.
+const CS_YAKU_STEP=450, CS_YAKU_STEP_YAKUMAN=650;
+const csSeatName=m=>s=>s===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[s]||`Seat ${s}`);
+// Smallest hand first, so in a double/triple ron the biggest win (often a
+// yakuman) is the climax rather than being upstaged by what follows it.
+const csWinnerOrder=m=>[...(m.winners||[])].sort((a,b)=>(a.han||0)-(b.han||0));
+const csIsYakuman=l=>!!l&&(l.cls==='lbl-yakuman'||l.cls==='lbl-double-yakuman');
+const CS_DORA_ROWS=new Set(['Dora','Ura Dora','Aka Dora','Kita']);
+
+// "Ron · dealt in by Aki", or the tsumo split ("3,000 / 6,000", "4,000
+// all") worked back from each payer's score change minus their honba share.
+// prevScores is taken after this hand's riichi sticks were paid, so the
+// deltas are pure payments.
+function csPayLine(m,w){
+  if(m.reason==='ron') return `Ron · dealt in by ${csSeatName(m)(m.loser)}`;
+  if(!m.prevScores||!m.scores) return 'Tsumo';
+  const honba=lastState?.honba||0;
+  const paid=m.scores.map((s,i)=>i===w.winSeat?0:(m.prevScores[i]-s)-honba*100).filter(v=>v>0);
+  if(!paid.length) return 'Tsumo';
+  const uniq=[...new Set(paid)].sort((a,b)=>a-b);
+  return 'Tsumo · '+(uniq.length===1?`${uniq[0].toLocaleString()} all`:uniq.map(v=>v.toLocaleString()).join(' / '));
+}
+// The honba and riichi sticks folded into the primary winner's gain. The
+// round_end message only carries the NEXT round's pot, so this reads the
+// last game_state (lastState), which still describes the hand just won.
+function csBonusLine(m,w){
+  if(w.winSeat!==m.winner) return '';
+  const honba=lastState?.honba||0, sticks=lastState?.riichiSticks||0;
+  const parts=[];
+  if(honba) parts.push(`${honba} honba`);
+  if(sticks) parts.push(`${sticks} riichi stick${sticks>1?'s':''} (+${(sticks*1000).toLocaleString()})`);
+  return parts.length?'Includes '+parts.join(' · '):'';
+}
+
+// Limit-tier hanko pressed beside the points (see .cs-stamp in style.css).
+// Built hidden for the animated run (runWinCutscene adds .go) or already
+// printed (.still) for the finished frame. Double yakuman shows the 役満
+// seal with a ×2 tab rather than squeezing ダブル役満 onto it.
+const CS_STAMP_IMPACT=275; // 55% of cs-stamp-press's .5s — when the seal hits
+function csBuildStamp(limit,still){
+  const tier=limit.cls.replace('lbl-','');
+  return csSeal(tier==='double-yakuman'?'役満':limit.label,tier,still);
+}
+// Any hanko: txt is its characters (stacked top to bottom), tier a .t-*
+// size/style class (the limit tiers).
+function csSeal(txt,tier,still){
+  const s=document.createElement('div');
+  s.className=`cs-stamp t-${tier}`+(still?' still':'');
+  s.setAttribute('aria-hidden','true');
+  const flecks=Array.from({length:9},(_,i)=>
+    `<i class="cs-stamp-dot" style="--a:${Math.round(i*40+Math.random()*24)}deg;--r:calc(var(--st) * ${csRand(.75,1.15)});--d:calc(var(--st) * ${csRand(.04,.09)})"></i>`).join('');
+  // The face is an svg on a 0-100 viewBox, a clean impression (the user
+  // asked for no ink-distortion texture). Characters stack top to bottom
+  // like a vertical seal; the inner hairline frame doubles from sanbaiman
+  // up, and a yakuman seal gets a gold rim outside it.
+  const chars=[...txt], fs=chars.length>2?30:38, step=chars.length>2?28.5:38, y0=50-step*(chars.length-1)/2;
+  const ym=tier==='yakuman'||tier==='double-yakuman';
+  const frame=(o,w)=>`<rect x="${o}" y="${o}" width="${100-2*o}" height="${100-2*o}" rx="${Math.max(2,7-o/2)}" fill="none" stroke="#e9a49e" stroke-width="${w}"/>`;
+  const face=`<svg class="cs-stamp-ink" viewBox="-6 -6 112 112"><g>`
+    +(ym?'<rect x="-3.5" y="-3.5" width="107" height="107" rx="9" fill="none" stroke="#f0d080" stroke-width="3"/>':'')
+    +`<rect class="cs-stamp-face" x="0" y="0" width="100" height="100" rx="7"/>`
+    +frame(6,2.4)+(['sanbaiman','double-yakuman'].includes(tier)?frame(10,1.4):'')
+    +chars.map((ch,i)=>`<text x="50" y="${y0+i*step}" font-size="${fs}">${escHtml(ch)}</text>`).join('')
+    +'</g></svg>';
+  s.innerHTML=`<i class="cs-stamp-ring"></i>${flecks}${face}`
+    +(tier==='double-yakuman'?'<i class="cs-stamp-x2">×2</i>':'');
+  return s;
+}
+// The seal's thud — a low pitch-dropping body plus a short muffled slap,
+// heavier for the bigger tiers. Same FX gain stage/toggle as the discard
+// click and roll-call chime (it's a table sound, not a voice line).
+function playStampSfx(heavy){
+  if(!discardSfxEnabled) return;
+  try{
+    const ctx=getFxAudioCtx().ctx, out=getDiscardGainNode();
+    if(ctx.state==='suspended') ctx.resume();
+    const now=ctx.currentTime, len=heavy?.32:.22;
+    const osc=ctx.createOscillator(); osc.type='sine';
+    osc.frequency.setValueAtTime(heavy?150:190,now);
+    osc.frequency.exponentialRampToValueAtTime(heavy?42:60,now+len);
+    const env=ctx.createGain();
+    env.gain.setValueAtTime(heavy?.9:.65,now);
+    env.gain.exponentialRampToValueAtTime(.0001,now+len);
+    osc.connect(env); env.connect(out); osc.start(now); osc.stop(now+len+.02);
+    const nDur=.06, buf=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*nDur),ctx.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+    const n=ctx.createBufferSource(); n.buffer=buf;
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=heavy?900:1300;
+    const nEnv=ctx.createGain(); nEnv.gain.value=heavy?.7:.5;
+    n.connect(lp); lp.connect(nEnv); nEnv.connect(out); n.start(now);
+  }catch(e){}
+}
+
+// One winner's reveal block: name, hand (+ melds), dora/ura dora, yaku and
+// points. Built face-down/hidden for the animated run, or fully shown
+// (o.instant) for the finished frame a tap jumps to. o.onNav adds prev/next
+// arrows for a double/triple ron on that finished frame.
+function csBuildReveal(m,w,o){
+  const limit=limitLabel(w.han||0,w.fu||0);
+  const gain=m.prevScores&&m.scores?m.scores[w.winSeat]-m.prevScores[w.winSeat]:(w.pay||0);
+  const rv=document.createElement('div'); rv.className='cs-reveal'+(o.instant?' on':'');
+  rv.innerHTML='<div class="cs-who"></div><div class="cs-hand"></div><div class="cs-dora"></div><div class="cs-yaku"></div>'
+    +'<div class="cs-pts"><div class="cs-pts-num"><b>0</b></div><span></span><span></span><span></span></div>';
+  const who=rv.querySelector('.cs-who');
+  const label=document.createElement('span');
+  label.textContent=csSeatName(m)(w.winSeat)+(o.count>1?` · ${o.index+1} / ${o.count}`:'');
+  if(o.onNav&&o.count>1){
+    const arrow=(txt,d,aria)=>{ const b=document.createElement('button'); b.type='button'; b.className='cs-nav';
+      b.textContent=txt; b.setAttribute('aria-label',aria);
+      b.onclick=e=>{ e.stopPropagation(); o.onNav(d); }; return b; };
+    who.append(arrow('◀',-1,'Previous winner'),label,arrow('▶',1,'Next winner'));
+  } else who.appendChild(label);
+
+  const hand=(w.hand||[]).filter(Boolean), melds=w.melds||[];
+  const meldTiles=melds.reduce((n,md)=>n+(md.kanType==='ankan'?4:md.tiles.length),0);
+  const {w:tw,h:th}=csTileSize(hand.length+meldTiles+(melds.length?1:0));
+  const handEl=rv.querySelector('.cs-hand');
+  handEl.style.setProperty('--cs-tw',tw+'px'); handEl.style.setProperty('--cs-th',th+'px');
+  const flips=hand.map(t=>{ const f=csFlipTile(t,tw,th); if(o.instant) f.classList.remove('down'); handEl.appendChild(f); return f; });
+  flips.at(-1)?.classList.add('cs-win-tile'); // the winning tile is always last in w.hand
+  if(melds.length){
+    const mg=document.createElement('div'); mg.className='cs-melds'+(o.instant?' on':'');
+    for(const md of melds) appendEndPanelMeld(mg,md,tw,th);
+    handEl.appendChild(mg);
+  }
+  const dora=rv.querySelector('.cs-dora');
+  const dw=Math.max(12,Math.round(tw*.6)), dh=Math.round(th*.6);
+  const doraGroup=(lbl,tiles)=>{ if(!tiles?.length) return;
+    const s=document.createElement('span'); s.textContent=lbl; dora.appendChild(s);
+    for(const t of tiles) dora.appendChild(mkEl(t,'tmd',dw,dh)); };
+  doraGroup('Dora',m.dora);
+  if(w.riichi) doraGroup('Ura Dora',m.uraDora);
+
+  // Yaku rows, then the server's itemized Dora/Ura Dora/Aka Dora/Kita rows
+  // (see _buildYakuList in room.js), styled as their own group. The
+  // running han total (.cs-han) ticks up as each row lands; it's left out
+  // for a named yakuman, whose rows aren't counted in han.
+  const yk=rv.querySelector('.cs-yaku');
+  const rows=(w.yakuList||[]).map(y=>{
+    const row=document.createElement('div');
+    row.className='cs-y'+(CS_DORA_ROWS.has(y.name)?' cs-y-dora':'')+(o.instant?' in':'');
+    row.dataset.han=y.han||0;
+    const hanTxt=y.han>=26?'ダブル役満':y.han>=13?'役満':`${y.han} Han`;
+    row.innerHTML=`<span class="cs-yj">${escHtml(y.jp||y.name)}</span><span class="cs-yn">${escHtml(y.name)}</span><span class="cs-yh">${hanTxt}</span>`;
+    yk.appendChild(row); return row;
+  });
+  let hanTotal=null;
+  if(!(w.yakuList||[]).some(y=>y.han>=13)){
+    hanTotal=document.createElement('div'); hanTotal.className='cs-han'+(o.instant?' on':'');
+    hanTotal.innerHTML=`<span>合計</span><b>${o.instant?w.han:0}</b><span>Han</span>`;
+    yk.after(hanTotal);
+  }
+
+  const pts=rv.querySelector('.cs-pts'), [l1,l2,l3]=pts.querySelectorAll(':scope>span');
+  const stamp=limit?csBuildStamp(limit,o.instant):null;
+  if(stamp) pts.querySelector('.cs-pts-num').appendChild(stamp);
+  l1.textContent=csIsYakuman(limit)?`${limit.en} · ${limit.label}`
+    :`${w.han} Han`+(w.fu?` · ${w.fu} Fu`:'')+(limit?` · ${limit.en} ${limit.label}`:'');
+  l2.textContent=csPayLine(m,w);
+  l3.textContent=csBonusLine(m,w);
+  if(o.instant){ pts.classList.add('on'); pts.querySelector('b').textContent=gain.toLocaleString(); }
+  return {rv,flips,rows,hanTotal,pts,gain,limit,stamp};
+}
+
+// done() shows the standings card. A tap (or Space/Enter/Esc) while the
+// sequence is still animating jumps to the finished frame — every winner's
+// hand, yaku and points shown at once — instead of past it, so skipping
+// never hides anything; the next tap continues. Played through on its own,
+// the finished frame holds CS_FINAL_HOLD and continues by itself. Never
+// called after clearCutscene, which means the player left the table.
+function playWinCutscene(m,done){
+  const l=$('cs-layer'), winners=m.winners||[];
+  if(!l||!winners.length){ done(); return; }
+  clearCutscene();
+  const id=csRun;
+  let finished=false, final=false;
+  const finish=()=>{ if(finished) return; finished=true; clearCutscene(); done(); };
+  const advance=()=>{ if(final) return finish(); final=true; csRun++; csFinalFrame(m,l); };
+  csSkip=advance; l.onclick=advance;
+  document.addEventListener('keydown',csKey);
+  l.className='cs-layer blocking';
+  l.innerHTML='<div class="cs-skip">Tap to skip</div>';
+  runWinCutscene(m,l,id)
+    .then(()=>{
+      final=true;
+      const hint=l.querySelector('.cs-skip');
+      hint.textContent='Tap to continue';
+      const bar=document.createElement('i'); bar.className='cs-hold-bar';
+      bar.style.animationDuration=CS_FINAL_HOLD+'ms';
+      hint.appendChild(bar);
+      return csWait(CS_FINAL_HOLD,id);
+    })
+    .then(finish,e=>{ if(e?.message!=='cs-cancel') finish(); });
+}
+
+// Ron snatch — between the cutscene's ロン call and the hand reveal (see
+// runWinCutscene), the ron tile glows in the discarder's pond, then a copy
+// of it lifts off and flies into each
+// winner's hand (one copy per winner on a double/triple ron), turning to
+// face the winner on the way. Only when the ron tile really is the last
+// discard in that pond: a chankan (robbed kakan) or robbed kita never
+// reached the pond, so those go straight to the cutscene. The copies live
+// in a fixed layer just under #cs-layer, so the cutscene's dim covers them;
+// clearRonSnatch removes it when the cutscene ends or the player leaves
+// (clearActiveBanners). Sequenced on timers, not on the animations'
+// .finished, so a background tab (where animations can stall) never holds
+// the round end up.
+// HOLD: how long the snatched tile rests in the winner's hand, in plain
+// view, before the reveal darkens the table.
+const RON_SNATCH_LIFT=320, RON_SNATCH_FLY=620, RON_SNATCH_HOLD=1100;
+let ronSnatchRun=0;
+function clearRonSnatch(){
+  ronSnatchRun++;
+  document.querySelectorAll('.ron-snatch-layer').forEach(e=>e.remove());
+  document.querySelectorAll('.ron-hot').forEach(e=>e.classList.remove('ron-hot'));
+}
+// Summed rotation of an element and its ancestors, in degrees — the seat
+// containers (.dz*, .pa-*, #hd*) are all rotated toward their owners.
+function screenRotation(el){
+  let a=0;
+  for(let e=el;e&&e!==document.documentElement;e=e.parentElement){
+    const t=getComputedStyle(e).transform;
+    if(t&&t!=='none'){ const mx=new DOMMatrixReadOnly(t); a+=Math.atan2(mx.b,mx.a)*180/Math.PI; }
+  }
+  return a;
+}
+function playRonSnatch(m,done){
+  clearRonSnatch();
+  const id=ronSnatchRun;
+  const winners=(m.winners||[]).filter(w=>w.hand?.length);
+  const tileObj=(lastState?.discards?.[m.loser]||[]).at(-1);
+  const seatId=s=>P[(s-mySeat+numSeats)%numSeats];
+  const src=[...($('dz'+seatId(m.loser))?.querySelectorAll('.tmd')||[])].at(-1);
+  if(!winners.length||!tileObj||!src||tileObj.id!==winners[0].hand.at(-1)?.id
+    ||matchMedia('(prefers-reduced-motion: reduce)').matches){ done(); return; }
+  // A seat's facing is its discard zone's rotation (0 for me).
+  const facing=s=>screenRotation($('dz'+seatId(s)));
+  const centre=r=>({x:r.left+r.width/2,y:r.top+r.height/2});
+  // Just past the winner's own right-hand end of their hand row (where a
+  // drawn tile sits) — picked by direction, not DOM order, since each
+  // opponent's row is rotated differently (the right seat's last DOM tile
+  // is at their LEFT, by the nameplate). Their right is their facing
+  // rotated from screen-right: +x for me, up for the right seat, etc.
+  const handDest=s=>{
+    const tiles=[...($(s===mySeat?'hdb':'hd'+seatId(s))?.querySelectorAll(s===mySeat?'.tlg':'.tsm')||[])];
+    if(!tiles.length) return null;
+    const angle=facing(s), th=angle*Math.PI/180, ux=Math.cos(th), uy=Math.sin(th);
+    const cs=tiles.map(t=>centre(t.getBoundingClientRect()));
+    const end=cs.reduce((a,b)=>b.x*ux+b.y*uy>a.x*ux+a.y*uy?b:a);
+    const step=cs.length>1?Math.hypot(cs[1].x-cs[0].x,cs[1].y-cs[0].y):tiles[0].offsetWidth;
+    return {x:end.x+ux*step*1.4,y:end.y+uy*step*1.4,w:tiles[0].offsetWidth,angle};
+  };
+  const layer=document.createElement('div'); layer.className='ron-snatch-layer';
+  document.body.appendChild(layer);
+  src.classList.add('ron-hot');
+  setTimeout(()=>{
+    if(id!==ronSnatchRun) return;
+    const c0=centre(src.getBoundingClientRect()), w=src.offsetWidth, h=src.offsetHeight, a0=facing(m.loser);
+    const lift=Math.min(innerWidth,innerHeight)*.08;
+    src.style.visibility='hidden';
+    for(const win of winners){
+      const d=handDest(win.winSeat); if(!d) continue;
+      // Plain tile in flight and in the hand — only the pond tile glows.
+      const c=mkElMd(tileObj); c.classList.add('ron-snatch');
+      c.style.left=(c0.x-w/2)+'px'; c.style.top=(c0.y-h/2)+'px';
+      layer.appendChild(c);
+      // Shortest turn to the winner's facing; never shrinks below pond
+      // size, so it stays readable beside an opponent's small hand tiles.
+      const dx=d.x-c0.x, dy=d.y-c0.y, da=((d.angle-a0)%360+540)%360-180, sc=Math.max(1,d.w/w);
+      c.animate([
+        {transform:`translate(0,0) rotate(${a0}deg) scale(1)`},
+        {transform:`translate(${dx*.4}px,${dy*.4-lift}px) rotate(${a0+da*.5}deg) scale(1.5)`,offset:.45},
+        {transform:`translate(${dx}px,${dy}px) rotate(${a0+da}deg) scale(${sc})`}
+      ],{duration:RON_SNATCH_FLY,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'});
+    }
+    setTimeout(()=>{ if(id===ronSnatchRun) playDiscardSfx(); },RON_SNATCH_FLY-40);
+    setTimeout(()=>{ if(id===ronSnatchRun) done(); },RON_SNATCH_FLY+RON_SNATCH_HOLD);
+  },RON_SNATCH_LIFT);
+}
+
+function csFinalFrame(m,l){
+  l.innerHTML='<div class="cs-skip">Tap to continue</div>';
+  l.removeAttribute('style'); l.className='cs-layer blocking';
+  const dim=csDim(l); dim.classList.add('instant','heavy');
+  const order=csWinnerOrder(m);
+  let idx=order.length-1;
+  const show=()=>{
+    l.querySelector('.cs-reveal')?.remove();
+    l.appendChild(csBuildReveal(m,order[idx],{instant:true,index:idx,count:order.length,
+      onNav:d=>{ idx=(idx+d+order.length)%order.length; show(); }}).rv);
+  };
+  show();
+  // Tile sizes are baked in at build time (see csTileSize), so re-fit the
+  // frame if the window resizes or the phone rotates while it's up —
+  // debounced, since resize can fire before the new size has settled.
+  let t=null;
+  csResize=()=>{ clearTimeout(t); t=setTimeout(()=>{ if(csResize) show(); },150); };
+  window.addEventListener('resize',csResize);
+}
+
+async function runWinCutscene(m,l,id){
+  const name=csSeatName(m);
+  const names=(m.winners||[]).map(x=>name(x.winSeat));
+  const order=csWinnerOrder(m);
+
+  // 1 — call: who won (who dealt in shows on the points line later)
+  const dim=csDim(l); dim.classList.add('on');
+  // Staged in the (primary) winner's equipped call style.
+  const callStyle=csSeatStyle(m.winner);
+  let c=csCall({kanji:m.reason==='tsumo'?'ツモ':'ロン',romaji:m.reason==='tsumo'?'TSUMO':'RON',
+    name:names.join(' · ')+(names.length>1?' win':' wins'),style:callStyle});
+  l.appendChild(c);
+  await csWait(200,id); csShake(l,false);
+  await csWait(csCallHold(callStyle),id); csHideCall(c);
+  // Ron: once the call clears, lift the dim off the table and let the ron
+  // tile fly from the discarder's pond to the winner(s) before the reveal.
+  if(m.reason==='ron'){
+    dim.classList.remove('on');
+    await new Promise(res=>playRonSnatch(m,res));
+    await csWait(0,id); // a skip during the snatch has moved on to the finished frame
+  }
+  dim.classList.add('heavy');
+
+  // 2-5 for each winner: hand reveal → yaku → limit tier → points
+  let prev=null;
+  for(let i=0;i<order.length;i++){
+    const w=order[i];
+    const {rv,flips,rows,hanTotal,pts,gain,limit,stamp}=csBuildReveal(m,w,{index:i,count:order.length});
+    if(prev){ prev.classList.remove('on'); const p=prev; setTimeout(()=>p.remove(),260); await csWait(260,id); }
+    // a previous winner's yakuman theme doesn't carry over
+    l.removeAttribute('style'); dim.classList.remove('ym'); l.querySelectorAll('.yakuman-motif').forEach(e=>e.remove());
+    l.appendChild(rv); void rv.offsetWidth; rv.classList.add('on'); prev=rv;
+    await csWait(250,id);
+    for(const f of flips.slice(0,-1)){ f.classList.remove('down'); await csWait(60,id); }
+    await csWait(220,id);
+    flips.at(-1)?.classList.remove('down');
+    rv.querySelector('.cs-melds')?.classList.add('on');
+    await csWait(550,id);
+
+    const isYm=csIsYakuman(limit);
+    // One row at a time (CS_YAKU_STEP apart), a beat's pause before the dora
+    // group starts, and the han total popping up by each row's han as it lands.
+    hanTotal?.classList.add('on');
+    let han=0, doraStarted=false;
+    for(const row of rows){
+      if(row.classList.contains('cs-y-dora')&&!doraStarted){ doraStarted=true; await csWait(350,id); }
+      row.classList.add('in');
+      if(hanTotal){
+        han+=Number(row.dataset.han)||0;
+        const b=hanTotal.querySelector('b'); b.textContent=han;
+        b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+      }
+      await csWait(isYm&&rows.length<=2?CS_YAKU_STEP_YAKUMAN:CS_YAKU_STEP,id);
+    }
+    await csWait(380,id);
+
+    // A yakuman still gets its themed band (palette, motif, sound) here;
+    // every limit tier — mangan up, yakuman included — is then stamped
+    // beside the points once they've counted up (below). Mangan–sanbaiman
+    // used to get a gold band here too, dropped so the tier isn't announced
+    // twice in a row.
+    if(isYm){
+      const isDouble=limit.cls==='lbl-double-yakuman';
+      const theme=pickYakumanTheme((w.yakuList||[]).map(y=>y.name));
+      const named=theme!==YAKUMAN_THEMES._default;
+      const st=l.style;
+      st.setProperty('--ym-ink',theme.ink); st.setProperty('--ym-glow',theme.glow);
+      st.setProperty('--ym-glow2',theme.glow2||theme.glow); st.setProperty('--ym-accent',theme.accent||theme.glow2||theme.glow);
+      st.setProperty('--ym-scrim-a',theme.scrimA); st.setProperty('--ym-scrim-b',theme.scrimB||'rgba(0,0,0,.93)');
+      dim.classList.add('ym');
+      spawnYakumanMotif(l,{...theme,count:(theme.count||26)+(isDouble?12:0)});
+      playYakumanSfx(isDouble&&theme.soundDouble?theme.soundDouble:theme.sound);
+      c=csCall({tone:'ym',seal:true,double:isDouble,
+        kanji:named?theme.jp:limit.label,romaji:named?theme.romaji:limit.en.toUpperCase(),
+        eyebrow:named?limit.label:''});
+      l.appendChild(c);
+      await csWait(220,id); csShake(l,true);
+      await csWait(2000,id); csHideCall(c);
+      await csWait(250,id);
+    }
+
+    pts.classList.add('on');
+    await csCount(pts.querySelector('b'),gain,isYm?1300:900,id);
+    if(stamp){
+      await csWait(220,id);
+      stamp.classList.add('go');
+      await csWait(CS_STAMP_IMPACT,id);
+      const heavy=!['lbl-mangan','lbl-haneman'].includes(limit.cls);
+      csShake(l,heavy); playStampSfx(heavy);
+      await csWait(isYm?900:650,id);
+    }
+    await csWait(i<order.length-1?1800:400,id);
+  }
+}
 
 function setFxVolume(val){
   fxVolume=(val/100)*4; // 0-100 slider maps to 0-4.0 gain
@@ -5630,9 +6186,10 @@ function pressReady(){
   wss({type:'ready'});
 }
 
-// Leaving mid-round can catch a call banner (riichi/pon/kan/chi) or the
-// round-start card still mid-animation — both live in page-level fixed
-// overlays (.cb-layer/.rs-layer, see index.html), NOT scoped inside
+// Leaving mid-round can catch a call cue (the pon/chi/kan/kita glow, the
+// riichi/win cutscene) or the round-start card still mid-animation — the
+// cutscene and card live in page-level fixed overlays (#cs-layer/.rs-layer,
+// see index.html), NOT scoped inside
 // #s-game, so show()'s screen-swapping back to the lobby doesn't hide them
 // on its own; they'd otherwise just sit there until their own setTimeout
 // happens to fire. The round-start card is the more serious case: while
@@ -5640,7 +6197,9 @@ function pressReady(){
 // taps on the board underneath it — left in place after leaving, it
 // silently eats every click on the LOBBY screen too until that timer fires.
 function clearActiveBanners(){
-  const cb=$('cb-layer'); if(cb) cb.querySelectorAll('.call-banner').forEach(el=>el.remove());
+  document.querySelectorAll('.cg-edge').forEach(el=>el.remove()); // pon/chi/kan/kita glow
+  clearRonSnatch();
+  clearCutscene();
   const rs=$('rs-layer'); if(rs){ rs.innerHTML=''; rs.classList.remove('blocking'); }
   const gs=$('gs-layer'); if(gs){ gs.innerHTML=''; gs.classList.remove('blocking'); }
   roundStartBannerActive=false;
@@ -5651,6 +6210,7 @@ function clearActiveBanners(){
 
 function resetLobby(){
   clearActiveBanners();
+  hideRoundReady();
   setResume(null);
   mySeat=-1;inGame=false;selId=null;lastState=null;isReady=false;discarding=false;
   pendingDiscardTileId=null;discardRetryArmed=false;suppressDiscardSfxOnce=false;clearTimeout(discardWatchdog);
@@ -5875,6 +6435,23 @@ function fitDiscardZone(dz,id){
   }
 }
 
+// Unboxed player tag for the ink-strip cards (the game-start roll call and
+// the game-over standings): icon, name and title straight on the strip, in
+// place of the boxed .up-nameplate, whose metal plate stood apart from the
+// cutscene backdrop. The tier (tierCls from nameplateTierClass, '' or null
+// for bronze) now shows as metal lettering: the name in the tier metal,
+// with the icon frame and title in the same colour (see .pl-tag).
+function playerTag({iconHtml,name,title,tierCls}){
+  const tag=document.createElement('span');
+  tag.className='pl-tag'+(tierCls?' '+tierCls:'');
+  const icon=document.createElement('span');icon.className='pl-icon';icon.innerHTML=iconHtml;
+  const who=document.createElement('span');who.className='pl-who';
+  const nm=document.createElement('span');nm.className='pl-name';nm.textContent=name;
+  const tt=document.createElement('span');tt.className='pl-title';tt.textContent=title||'';
+  who.append(nm,tt); tag.append(icon,who);
+  return tag;
+}
+
 // Roll-call card introducing every seated player. Fired once the game has
 // actually finished loading (the first real game_state has arrived and been
 // rendered — see the game_state branch in onMsg, which calls this right
@@ -5885,17 +6462,10 @@ function fitDiscardZone(dz,id){
 // pendingBannerGameState, checked in onMsg) rather than a parallel one —
 // both need the identical "hold further game_state until this card clears"
 // behavior, just for a different card.
-// Rows clone .up-nameplate/.pnp-* — the same icon+name+title plate as the
-// User Profile hub header and the Rankings player-card modal (see
-// #userprofile-modal in index.html and renderPlayerCard above) — rather
-// than the in-game .np nameplate, so this introduces each player by their
-// actual profile identity, not their at-the-table plate. Self's tier class
-// (bronze/silver/gold/.../diamond — see nameplateTierClass) is copied
-// straight off the User Profile hub's own element since that's already
-// kept current all session (updateNameplateTier); opponents/bots have no
-// tier available synchronously here (that needs a get_player_stats
-// round-trip — see openPlayerCardInGame), so they render at the plain
-// default (bronze) look.
+// Each row is the player's profile identity (icon, name, title, tier — see
+// playerTag) rather than their in-game .np nameplate. Self's tier class is
+// copied straight off the User Profile hub's own element, which is kept
+// current all session (updateNameplateTier).
 function gameStartIntro(m){
   const layer=$('gs-layer'); if(!layer) return;
   layer.innerHTML='';
@@ -5907,41 +6477,39 @@ function gameStartIntro(m){
   gsChimeTimers.forEach(clearTimeout); gsChimeTimers.length=0;
   const scrim=document.createElement('div');scrim.className='gs-scrim';
   const plate=document.createElement('div');plate.className='gs-plate';
-  const title=document.createElement('div');title.className='gs-title';title.textContent='対局開始';
+  // Same heading as the win cutscene's standings card (.re-st-head): a
+  // brush stamp with spaced romaji under it and the game type above.
+  const seatCount=m.numPlayers||4;
+  const title=document.createElement('div');title.className='gs-head';
+  title.innerHTML=`<div class="gs-sub">${m.gameMode==='hanchan'?'半荘戦':'東風戦'} · ${seatCount===3?'三人麻雀':'四人麻雀'}</div>`
+    +'<div class="gs-kanji">対局開始</div><div class="gs-romaji">MATCH START</div>';
   const rows=document.createElement('div');rows.className='gs-rows';
   const windLabels=['東','南','西','北'];
   const dealer=m.dealer??0;
   const seats=m.seats||[];
-  const seatCount=m.numPlayers||4;
   const isSelfGuest=$('iname').value==='Guest';
   const selfTierEl=document.querySelector('#userprofile-modal .up-nameplate');
   const selfTierCls=selfTierEl&&['tier-silver','tier-gold','tier-platinum','tier-diamond'].find(c=>selfTierEl.classList.contains(c));
   for(let i=0;i<seatCount;i++){
     const abs=(mySeat+i)%seatCount, p=seats[abs], isMe=i===0;
     const row=document.createElement('div');
-    row.className='gs-row';
-    const delayMs=300+i*180;
+    // Ink strip per seat; the dealer (always 東) gets a gold wind, and my own
+    // row the gold underline the standings card uses.
+    const isDealer=abs===dealer;
+    row.className='gs-row'+(isDealer?' gs-dealer':'')+(isMe?' gs-me':'');
+    const delayMs=500+i*180;
     row.style.animationDelay=(delayMs/1000)+'s';
     gsChimeTimers.push(setTimeout(playNameplateSfx,delayMs)); // lines the chime up with this row's own fade-in
     const wind=document.createElement('div');wind.className='gs-wind';
     wind.textContent=windLabels[(abs-dealer+seatCount)%seatCount];
-    const np=document.createElement('div');
-    // Self reads its tier off the User Profile hub's own live element (same
-    // as before); opponents/bots now get theirs from m.seats[abs].wins —
-    // added server-side (see _seatInfo in room.js) specifically so this no
-    // longer has to fall back to the plain bronze default for everyone but
-    // the local player.
-    const tierCls=isMe?selfTierCls:nameplateTierClass(p?.wins||0);
-    np.className='up-nameplate'+(tierCls?' '+tierCls:'');
-    const icon=document.createElement('span');icon.className='pnp-icon';
-    icon.innerHTML=isMe?(isSelfGuest?guestIconSvg:iconSvg(currentPlayerIcon)):iconSvg(p?.icon||'default');
-    const info=document.createElement('span');info.className='pnp-info';
-    const pname=document.createElement('span');pname.className='pnp-name';
-    pname.textContent=isMe?($('iname').value.trim()||'Player'):(p?.name||'—');
-    const ptitle=document.createElement('span');ptitle.className='pnp-title';
-    ptitle.textContent=isMe?(isSelfGuest?'':currentPlayerTitle):(p?.isBot?'CPU':(p?.title||''));
-    info.appendChild(pname);info.appendChild(ptitle);
-    np.appendChild(icon);np.appendChild(info);
+    // Self reads its tier off the User Profile hub's own live element;
+    // opponents/bots get theirs from m.seats[abs].wins (see _seatInfo in
+    // room.js) — both drive the tier metal of the unboxed player tag.
+    const np=playerTag({
+      iconHtml:isMe?(isSelfGuest?guestIconSvg:iconSvg(currentPlayerIcon)):iconSvg(p?.icon||'default'),
+      name:isMe?($('iname').value.trim()||'Player'):(p?.name||'—'),
+      title:isMe?(isSelfGuest?'':currentPlayerTitle):(p?.isBot?'CPU':(p?.title||'')),
+      tierCls:isMe?selfTierCls:nameplateTierClass(p?.wins||0)});
     row.appendChild(wind);row.appendChild(np);
     rows.appendChild(row);
   }
@@ -5985,8 +6553,7 @@ function startGame(m){
   // straight into the new game and block discarding from turn one.
   discarding=false; pendingDiscardTileId=null; discardRetryArmed=false; suppressDiscardSfxOnce=false; clearTimeout(discardWatchdog);
   declareWarningShown=false; // chonbo's declare-confirm message shows once per game, not once per browser session
-  // Restore Ready button visibility for new game
-  const btn=$('bround-ready'); if(btn){ btn.style.display=''; btn.disabled=false; btn.textContent='✓ Ready'; btn.style.opacity='1'; }
+  hideRoundReady(); // between-rounds Ready corner (see startRoundReadyCountdown)
   const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='none';
   const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display='none';
   pendingGameOver=null;
@@ -5994,7 +6561,7 @@ function startGame(m){
   // Play Again panel — reachable here via hostStartPlayAgain restarting
   // the SAME room straight into a fresh game_start (no lobby round-trip),
   // so it needs resetting same as the buttons above.
-  const paBtn=$('bplay-again'); if(paBtn){ paBtn.style.display='none'; paBtn.disabled=false; paBtn.textContent='↻ Play Again'; }
+  const paBtn=$('bplay-again'); if(paBtn){ paBtn.style.display='none'; paBtn.disabled=false; paBtn.textContent='Play Again'; }
   const startBtn=$('bplay-again-start'); if(startBtn){ startBtn.style.display='none'; startBtn.disabled=true; }
   const paStatus=$('play-again-status'); if(paStatus) paStatus.textContent='';
   playAgainSeats=[]; lastGameOverNames=null;
@@ -6091,14 +6658,7 @@ function startGame(m){
   // appended to document.body rather than inside #actbar.
   const bar=$('actbar'); if(bar){bar.innerHTML='';bar.classList.remove('visible');}
   ['chi-picker','riichi-picker','ankan-picker','declare-picker'].forEach(id=>{const el=$(id);if(el)el.remove();});
-  // Set seat winds based on dealer
-  const windLabels=['東','南','西','北'];
-  const dealer=m.dealer??0;
-  for(let i=0;i<numSeats;i++){
-    const abs=(mySeat+i)%numSeats, id=P[i];
-    const wb=$('wb'+id);
-    if(wb) wb.textContent=windLabels[(abs-dealer+numSeats)%numSeats];
-  }
+  setSeatWinds(m.dealer??0); // seat-wind badges on the nameplates
   // Paint starting scores immediately from game_start's own scores (all
   // equal — 25000 yonma / 35000 sanma, see room.js's start()) rather than
   // leaving the centre panel blank until the first game_state arrives —
@@ -6111,7 +6671,7 @@ function startGame(m){
     for(let i=0;i<numSeats;i++){
       const abs=(mySeat+i)%numSeats,id=P[i];
       const ctrEl=$(ctrIds[id]);
-      if(ctrEl&&m.scores[abs]!==undefined) ctrEl.textContent=m.scores[abs];
+      if(ctrEl&&m.scores[abs]!==undefined) ctrEl.textContent=m.scores[abs].toLocaleString('en-US');
     }
   }
   // Show game mode in topbar
@@ -6186,6 +6746,81 @@ function onPlayerLeft(m){
 }
 
 
+// Tile placement animations (.tile-drop / .meld-slide in style.css — keep
+// these durations in sync with the CSS). renderState rebuilds every tile
+// from scratch on each game_state, and a follow-up state (a reaction
+// prompt, the next draw, the server echo of an optimistic discard) often
+// lands well inside an animation's run time — so instead of just tagging
+// the element once, each placement's start time is remembered here by key
+// and every rebuild re-applies the class with a negative animation-delay,
+// letting the fresh element pick the animation up exactly where the old one
+// left off rather than snapping to its end (or restarting it).
+// Keys: 'd'+tileId discard, 'n'+tileId kita, 'm'/'k'+seat+'-'+meldIndex
+// meld slide / kakan drop, 'w'+tileId my draw, 'w'+seat+'-'+wall+'-'+count
+// an opponent's draw (.tile-draw). Tile ids and meld indices only repeat in a later
+// hand, so an `isNew` placement re-arms its key only once the old entry is
+// PLACE_REARM_MS stale — not merely finished — otherwise an optimistic
+// discard whose server echo is slower than the animation (still "new"
+// relative to the last real state) would play the drop a second time.
+const PLACE_DROP_MS=340, PLACE_SLIDE_MS=420, PLACE_DRAW_MS=300, PLACE_REARM_MS=8000;
+// Kan dora reveal (.dora-flip / .dora-new in style.css).
+const DORA_FLIP_MS=480, DORA_GLOW_MS=1000;
+const placeAnims=new Map();
+// The tile at a seat's own right-hand end of its hand row — by direction,
+// not DOM order, since each opponent's row is rotated differently (see
+// handDest in playRonSnatch). Their right is screen-right turned by their
+// facing.
+function handRightEnd(row,id){
+  const a=row.firstElementChild,b=row.lastElementChild;
+  if(!a||a===b) return b;
+  const th=screenRotation($('dz'+id))*Math.PI/180;
+  const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();
+  return (rb.left-ra.left)*Math.cos(th)+(rb.top-ra.top)*Math.sin(th)>=0?b:a;
+}
+function animatePlaced(el,key,cls,dur,isNew){
+  if(!el) return;
+  const now=performance.now();
+  let t0=placeAnims.get(key);
+  if(isNew&&(t0==null||now-t0>=PLACE_REARM_MS)){
+    t0=now; placeAnims.set(key,t0);
+    for(const [k,t] of placeAnims) if(now-t>=PLACE_REARM_MS) placeAnims.delete(k);
+  }
+  if(t0==null) return;
+  const elapsed=now-t0;
+  if(elapsed>=dur) return;
+  el.classList.add(cls);
+  el.style.animationDelay=`${-elapsed}ms`;
+}
+
+// Centre panel (see .ctr / .cd-* in style.css): the round and remaining
+// wall in the middle inside a gauge ring that drains as the wall runs down
+// (measured against the largest wall count seen this hand — a new hand is
+// spotted by the wall count going back up), and the current player's score
+// lit along its edge.
+let cdWallMax=0;
+// Seat-wind badges on the nameplates (.wb). windOf(abs) → 0-3 (東南西北).
+function setSeatWindsBy(windOf){
+  const winds=['東','南','西','北'];
+  for(let i=0;i<numSeats;i++){
+    const abs=(mySeat+i)%numSeats, wb=$('wb'+P[i]);
+    if(wb) wb.textContent=winds[windOf(abs)]??'';
+  }
+}
+// Before a round's first game_state (game/round start), from the dealer.
+function setSeatWinds(dealer){ setSeatWindsBy(abs=>(abs-dealer+numSeats)%numSeats); }
+function updateCenterPanel(m,prev){
+  // Server sends seatWinds[absIndex] = wind index (0=East..3=North).
+  if(m.seatWinds) setSeatWindsBy(abs=>m.seatWinds[abs]);
+  for(let i=0;i<numSeats;i++){
+    const abs=(mySeat+i)%numSeats;
+    $('ctr-s-'+P[i])?.parentElement.classList.toggle('cd-on',m.turn===abs);
+  }
+  const wall=m.wallCount||0;
+  if(!prev||wall>(prev.wallCount??-1)) cdWallMax=wall;
+  cdWallMax=Math.max(cdWallMax,wall);
+  $('cd-arc')?.style.setProperty('--p',cdWallMax?(wall/cdWallMax*100).toFixed(1):0);
+}
+
 // RENDER STATE — called every time a game_state message arrives (`m` = new
 // state, `prev` = the previous game_state, or undefined on the first call).
 // This is a full re-render, not a diff/patch — every seat's UI panel, hand,
@@ -6208,7 +6843,8 @@ function renderState(m, prev){
   $('cw-wind').textContent = windChar[dispWind-1];
   $('cw-kyoku').textContent = dispRound;
   $('ci').textContent = '';
-  $('cwl').textContent=`${m.wallCount} tiles`;
+  $('cwl').textContent=`残 ${m.wallCount}`;
+  updateCenterPanel(m,prev);
   const h=m.honba||0,rs=m.riichiSticks||0;
   const riichiCountEl=$('stick-riichi-count'); if(riichiCountEl) riichiCountEl.textContent=rs;
   const honbaCountEl=$('stick-honba-count'); if(honbaCountEl) honbaCountEl.textContent=h;
@@ -6221,7 +6857,15 @@ function renderState(m, prev){
     const d=(m.dora||[])[di];
     if(d){
       slot.innerHTML='';slot.className='dora-slot filled';
-      slot.appendChild(mkElDora(d));
+      const dEl=mkElDora(d);
+      slot.appendChild(dEl);
+      // A newly revealed (kan) dora indicator flips face-up and its slot
+      // flashes gold. Indices only grow within a hand, so "past the last
+      // state's count" is new; the first indicator of a hand never counts
+      // (prev is the previous hand, with at least as many).
+      const isNew=!!prev&&di>=(prev.dora||[]).length;
+      animatePlaced(dEl,'dora'+di,'dora-flip',DORA_FLIP_MS,isNew);
+      animatePlaced(slot,'dora'+di,'dora-new',DORA_GLOW_MS,isNew);
     } else {
       slot.innerHTML='';slot.className='dora-slot';
     }
@@ -6236,15 +6880,10 @@ function renderState(m, prev){
     const abs=(mySeat+i)%numSeats,id=P[i];
     if(m.scores?.[abs]!==undefined){
       const ctrEl=$(ctrIds[id]);
-      if(ctrEl) ctrEl.textContent=m.scores[abs];
+      if(ctrEl) ctrEl.textContent=m.scores[abs].toLocaleString('en-US');
     }
     $('np'+id).classList.toggle('active',m.turn===abs);
     if(m.riichi?.[abs]) $('rs'+id).style.display='block';
-    // Seat wind: server sends seatWinds[absIndex] = wind index (0=East..3=North)
-    if(m.seatWinds){
-      const wb=$('wb'+id);
-      if(wb) wb.textContent=windLabels[m.seatWinds[abs]];
-    }
     // Re-applies nameplate skin from THIS state tick's seatNameplateSkins
     // (already sent every game_state — see room.js) — startGame's own
     // game_start values are only a starting point; this is what makes a
@@ -6299,6 +6938,7 @@ function renderState(m, prev){
     // below and a manual discard becomes the only way to pass.
     if(m.riichi?.[mySeat]){ el.classList.add('sel'); selId=drawTile.id; }
     hc.appendChild(el);
+    animatePlaced(el,'w'+drawTile.id,'tile-draw',PLACE_DRAW_MS,!!prev&&prev.drawTile?.id!==drawTile.id);
     // Auto-discard after riichi — unless tsumo/ankan/kyuushu/kita is
     // available. canKita is included since it's still legal mid-riichi
     // (see _kita's comment in room.js) — without this check, drawing a
@@ -6346,6 +6986,12 @@ function renderState(m, prev){
       b.className='tile tsm';
       hd.appendChild(b);
     }
+    // A draw (hand grew since the last state — a kan's replacement tile
+    // included) animates the tile at the owner's right-hand end.
+    const prevCnt=prev?.oppHandSizes?.[abs];
+    const key='w'+abs+'-'+m.wallCount+'-'+cnt;
+    if((prevCnt!=null&&cnt>prevCnt)||placeAnims.has(key))
+      animatePlaced(handRightEnd(hd,id),key,'tile-draw',PLACE_DRAW_MS,prevCnt!=null&&cnt>prevCnt);
   });
 
   // Discards — 6 tiles per row, riichi tile rotated 90° from player's perspective
@@ -6423,6 +7069,11 @@ function renderState(m, prev){
     const abs=(mySeat+i)%numSeats,id=P[i];
     const dz=$(dzMap[id]);dz.innerHTML='';
     const tiles=m.discards?.[abs]||[];
+    // A tile is newly placed if it wasn't in this seat's pile last state —
+    // matched by id, not by count, since a called tile leaves the pile
+    // (room.js filters it out) and a count diff would then miss the next
+    // discard. No `prev` (first state / reconnect) → nothing animates.
+    const prevIds=new Set((prev?.discards?.[abs]||[]).map(t=>t.id));
     let row=null;
     tiles.forEach((t,idx)=>{
       if(idx%6===0){
@@ -6436,18 +7087,29 @@ function renderState(m, prev){
         // CSS class handles the rotation; margin compensates for size change
         el.classList.add('dz-riichi');
       }
+      animatePlaced(el,'d'+t.id,'tile-drop',PLACE_DROP_MS,!!prev&&!prevIds.has(t.id));
       row.appendChild(el);
     });
     fitDiscardZone(dz,id);
   }
 
   // My melds (bottom) — anchor bottom-right, first meld rightmost, grows leftward
+  // A meld is new if its index wasn't there last state (melds only ever
+  // append within a hand); a pon at the same index turning into a kakan
+  // drops just the added 4th tile instead of re-sliding the whole group.
+  const animateMeld=(g,meld,prevMeld,seat,idx)=>{
+    animatePlaced(g,'m'+seat+'-'+idx,'meld-slide',PLACE_SLIDE_MS,!!prev&&!prevMeld);
+    if(meld.kanType==='kakan'){
+      animatePlaced(g.querySelector('.kakan-add'),'k'+seat+'-'+idx,'tile-drop',PLACE_DROP_MS,!!prevMeld&&prevMeld.kanType!=='kakan');
+    }
+  };
   const ml=$('mlb');ml.innerHTML='';
-  for(const meld of(m.myMelds||[])){
+  (m.myMelds||[]).forEach((meld,idx)=>{
     const g=document.createElement('div');g.className='mg';
     renderMeld(g, meld, mySeat);
+    animateMeld(g,meld,prev?.myMelds?.[idx],mySeat,idx);
     ml.prepend(g);
-  }
+  });
   // Opponent melds
   P.slice(1).map((id,idx)=>[idx+1,id]).forEach(([i,id])=>{
     const abs=(mySeat+i)%numSeats;
@@ -6455,7 +7117,7 @@ function renderState(m, prev){
     if(!ml2) return;
     ml2.innerHTML='';
     const melds=m.melds?.[abs]||[];
-    for(const meld of melds){
+    melds.forEach((meld,idx)=>{
       const g=document.createElement('div');g.className='mg';
       // No extra flip needed here — renderMeld's dir is computed against
       // the meld owner's own kamicha/shimocha regardless of which screen
@@ -6463,10 +7125,11 @@ function renderState(m, prev){
       // rotation (.ml-t 180°, .ml-l 90°, .ml-r -90°) already carries that
       // row to the correct on-screen position on its own (see renderMeld).
       renderMeld(g, meld, abs);
+      animateMeld(g,meld,prev?.melds?.[abs]?.[idx],abs,idx);
       if(id==='t') ml2.prepend(g); // top: anchor top-left, first meld leftmost, grows right
       else if(id==='l') ml2.prepend(g); // left: anchor bottom-left, first meld at bottom, grows up
       else ml2.prepend(g);          // right: anchor top-right, first meld at top, grows down
-    }
+    });
   });
 
   // Kita (sanma only) — banked North tiles, shown face-up in their own
@@ -6480,9 +7143,11 @@ function renderState(m, prev){
       const abs=(mySeat+i)%numSeats,id=P[i];
       const kEl=$('k'+id); if(!kEl) continue;
       kEl.innerHTML='';
+      const prevKita=new Set((prev?.kita?.[abs]||[]).map(t=>t.id));
       for(const t of(m.kita[abs]||[])){
         const g=document.createElement('div');g.className='mg';
         g.appendChild(mkElMd(t));
+        animatePlaced(g,'n'+t.id,'tile-drop',PLACE_DROP_MS,!!prev&&!prevKita.has(t.id));
         kEl.appendChild(g);
       }
     }
@@ -6545,7 +7210,11 @@ function optimisticDiscard(tileId){
     const count=(lastState.discards&&lastState.discards[mySeat]||[]).length;
     let row=dz.lastElementChild;
     if(!row||count%6===0){ row=document.createElement('div'); row.className='dz-row'; dz.appendChild(row); }
-    row.appendChild(mkElMd(tileObj));
+    // Starts the drop now; the authoritative renderState picks it up
+    // mid-flight via the same key rather than replaying it.
+    const tEl=mkElMd(tileObj);
+    animatePlaced(tEl,'d'+tileId,'tile-drop',PLACE_DROP_MS,true);
+    row.appendChild(tEl);
   }
   const bar=$('actbar'); if(bar){ bar.innerHTML=''; bar.classList.remove('visible'); }
   ['chi-picker','riichi-picker','ankan-picker','declare-picker'].forEach(id=>$(id)?.remove());
@@ -7244,7 +7913,14 @@ document.addEventListener('click',e=>{
   picker.remove();
 });
 
-function ab(c,l,cls,fn){const b=document.createElement('button');b.className='ba '+cls;b.textContent=l;b.onclick=fn;c.appendChild(b);}
+// Each action's kanji, ghosted behind its label (.ba-kj in style.css).
+const BA_KANJI={btsu:'摸',brii:'立',bron:'和',bpon:'碰',bchi:'吃',bkan:'槓',bkita:'北',bdis:'打',bpas:'過',bkyu:'九',bchonbo:'宣'};
+function ab(c,l,cls,fn){
+  const b=document.createElement('button');b.className='ba '+cls;b.textContent=l;
+  const k=BA_KANJI[cls];
+  if(k){ const i=document.createElement('i'); i.className='ba-kj'; i.setAttribute('aria-hidden','true'); i.textContent=k; b.appendChild(i); }
+  b.onclick=fn;c.appendChild(b);
+}
 function hint(c,t){const h=document.createElement('span');h.className='hint';h.textContent=t;c.appendChild(h);}
 
 // "<v><suit>" tile key (e.g. "3m") -> a plain tile object usable by tsvg/mkEl.
@@ -7769,9 +8445,14 @@ function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(
 
 // NOTIFICATIONS — riichi announcements, toasts
 function onRiichi(m){
-  $('rs'+pid(m.seat)).style.display='block';
-  const label=m.isDouble?'ダブルリーチ':'リーチ';
-  callBanner('riichi',m.name||'Player',label);
+  const stick=$('rs'+pid(m.seat));
+  stick.style.display='block';
+  // Drop the stick onto the table (.rs-drop animates the inner svg, since
+  // the wrapper's own transform positions it).
+  const svg=stick.querySelector('svg');
+  if(svg){ svg.classList.remove('rs-drop'); void svg.getBoundingClientRect(); svg.classList.add('rs-drop'); }
+  // No リーチ banner — the stick dropping (plus the riichi voice line from
+  // renderState) is the whole announcement.
 }
 function toast(msg){
   const tc=$('tc'),t=document.createElement('div');
@@ -7779,99 +8460,41 @@ function toast(msg){
   tc.appendChild(t);setTimeout(()=>t.remove(),3000);
 }
 
-// Builds one call-banner DOM node — shared by callBanner's single-banner
-// path and ronBanners' multi-winner one below, so both produce identically
-// styled/worded banners without duplicating the label/name markup.
-function buildCallBannerEl(type,name,label){
-  const b=document.createElement('div');
-  b.className='call-banner';b.dataset.type=type;
-  const content=document.createElement('div');content.className='cb-content';
-  const lb=document.createElement('span');lb.className='cb-label';lb.textContent=label;
-  // ダブルリーチ (6 chars) is twice as long as every other call-banner label
-  // (リーチ/ポン/カン/チー/北, all <=3) — at the shared font-size it wraps
-  // onto a second line inside the fixed-width banner. Shrink just the long
-  // ones instead of the label font-size in general.
-  if(label.length>4) lb.classList.add('cb-label-long');
-  const nm=document.createElement('span');nm.className='cb-name';
-  const who=document.createElement('b');who.textContent=name;
-  nm.appendChild(who);
-  // "called" fits pon/kan/chi/riichi/kita — a win isn't a call, so tsumo/ron
-  // (see onEnd) get their own wording instead.
-  const isWin=type==='tsumo'||type==='ron';
-  nm.appendChild(document.createTextNode(isWin?' wins':' called'));
-  content.appendChild(lb);content.appendChild(nm);
-  b.appendChild(content);
-  return b;
+// Pon/chi/kan/kita cue — a quick, local signal rather than a full-screen
+// banner, since calls happen constantly: the caller's edge of the felt glows
+// in the call's colour (gold pon, green chi, purple kan, teal kita), behind
+// their tiles. No text — the side says who called and the colour says what.
+// See .cg-edge in style.css. Wins get the cutscene instead (playWinCutscene);
+// riichi just drops its stick (onRiichi).
+function callGlow(type,seat){
+  const felt=document.querySelector('#s-game .felt'); if(!felt||seat==null) return;
+  const side=pid(seat); // 'b' (you) | 'r' | 't' | 'l'
+  // One glow per seat at a time — a second call from the same seat replaces it.
+  felt.querySelectorAll('.cg-'+side).forEach(el=>el.remove());
+  const glow=document.createElement('div'); glow.className='cg-edge cg-'+side+' cg-'+type;
+  felt.prepend(glow); // first child, so the seat's tiles paint over it
+  setTimeout(()=>glow.remove(),1600);
 }
 
-// Call banner (pon/kan/chi/riichi/tsumo/single-winner ron) — slides in from
-// the bottom-left and settles across the felt; see .call-banner / @keyframes
-// cb-slide.
-function callBanner(type,name,label){
-  const layer=$('cb-layer'); if(!layer) return;
-  // .cb-layer is a flex row container, so a second banner appended while the
-  // first is still fading out would sit beside it (split left/right) rather
-  // than replace it. Drop any banner still in flight immediately so only the
-  // newest call is ever shown.
-  layer.querySelectorAll('.call-banner,.cb-stack').forEach(el=>el.remove());
-  const b=buildCallBannerEl(type,name,label);
-  layer.appendChild(b);setTimeout(()=>b.remove(),1800);
-}
-
-// Double/triple ron (see m.extraWinners in onEnd, and _multiRon in
-// room.js) — every simultaneous winner gets their own full banner, in the
-// SAME spot a single-winner ron uses, one at a time rather than stacked or
-// overlapping. Layering two at once (an earlier version tried this, side
-// by side and also directly on top of each other) reads badly either way:
-// .call-banner's background isn't fully opaque, so whichever one is
-// underneath still shows through the one on top, and two names/labels
-// occupying the same space is hard to read regardless of opacity — it's a
-// legibility problem, not a positioning one, so no amount of z-index or
-// transparency tuning fixes it. Instead the previous winner's banner is
-// always fully removed (not just visually covered) before the next one
-// appears, so exactly one is ever on screen. Duration per winner matches
-// a normal single-winner callBanner exactly (RON_BANNER_HOLD, same 1800ms)
-// — see onEnd's WIN_BANNER_DELAY, which waits for the WHOLE sequence
-// rather than just one banner's worth of time. Falls back to a single
-// plain callBanner when there's only one name, so an ordinary (non-multi)
-// ron looks identical to before this existed.
-const RON_BANNER_HOLD=1800;
-function ronBanners(names){
-  const layer=$('cb-layer'); if(!layer) return;
-  if(names.length<=1){ callBanner('ron',names[0]||'Player','ロン'); return; }
-  layer.querySelectorAll('.call-banner,.cb-stack').forEach(el=>el.remove());
-  const showAt=idx=>{
-    if(idx>=names.length) return;
-    // Removing the CURRENT banner (if any) here, in the same tick as
-    // appending the next one, is what actually guarantees the "never both
-    // on screen at once" property — relying on each banner's own
-    // independent removal timer (as callBanner does solo) risks two timers
-    // firing in an order that briefly leaves both present.
-    layer.querySelectorAll('.call-banner').forEach(el=>el.remove());
-    const b=buildCallBannerEl('ron',names[idx],'ロン');
-    layer.appendChild(b);
-    setTimeout(()=>{ b.remove(); showAt(idx+1); },RON_BANNER_HOLD);
-  };
-  showAt(0);
-}
-
-// Round-start title card (wind + round + honba) — see .rs-plate / @keyframes
-// rs-wind-in. Separate from callBanner() since this fires once per hand and
-// is meant to be read together with the "dealing tiles" loading overlay
-// rather than as a reactive notification.
-function roundStartBanner(wind,round,honba){
+// Round-start title card, in the cutscene/standings style (see .rs-plate):
+// the game type, a brush 東二局 stamp with spaced romaji under it, and one
+// ink strip with the dealer and the honba count. wind is 1-4 (東南西北),
+// round 1-4. Separate from callGlow() since this fires once per hand and is
+// meant to be read together with the "dealing tiles" loading overlay rather
+// than as a reactive notification.
+function roundStartBanner(wind,round,honba,dealerName){
   const layer=$('rs-layer'); if(!layer) return;
   layer.innerHTML='';
   const scrim=document.createElement('div');scrim.className='rs-scrim';
   const plate=document.createElement('div');plate.className='rs-plate';
-  const w=document.createElement('div');w.className='rs-wind';w.textContent=wind;
-  const sub=document.createElement('div');sub.className='rs-sub';
-  const r=document.createElement('span');r.textContent=round;
-  const dot=document.createElement('i');dot.textContent='·';
-  const h=document.createElement('span');h.textContent=honba;
-  sub.appendChild(r);sub.appendChild(dot);sub.appendChild(h);
-  const start=document.createElement('div');start.className='rs-start';start.textContent='開始';
-  plate.appendChild(w);plate.appendChild(sub);plate.appendChild(start);
+  const mode=$('tb-mode')?.textContent||'';
+  const kanji=['東','南','西','北'][wind-1]+(['一','二','三','四'][round-1]||round)+'局';
+  const romaji=`${['EAST','SOUTH','WEST','NORTH'][wind-1]} ROUND ${round}`;
+  plate.innerHTML=(mode?`<div class="rs-sub">${escHtml(mode)}</div>`:'')
+    +`<div class="rs-kanji">${kanji}</div><div class="rs-romaji">${romaji}</div>`
+    +'<div class="rs-strip">'
+    +(dealerName?`<span><b>親</b><span class="rs-v">${escHtml(dealerName)}</span></span><i></i>`:'')
+    +`<span><span class="rs-v">${honba}</span><b>本場</b></span></div>`;
   layer.appendChild(scrim);layer.appendChild(plate);
   // Block interaction with the board underneath for exactly as long as
   // this card is visible — otherwise the round becomes playable (game_state
@@ -7896,11 +8519,47 @@ function roundStartBanner(wind,round,honba){
 // ════════════════════════════════════════════════════════════
 // ROUND READY
 // ════════════════════════════════════════════════════════════
+// Between rounds the results panel counts down ROUND_READY_MS in the
+// bottom-right corner (#re-next) and then readies the player by itself;
+// tapping Ready (or Space/Enter) readies them early. The server starts the
+// next round as soon as every human seat is ready (see the round_ready
+// action in room.js), so if everyone taps, it starts right away. The
+// countdown runs on each client from when ITS panel appears, since a win
+// cutscene can be skipped or watched in full.
+const ROUND_READY_MS=8000;
+let roundReadyTimer=null, roundReadySent=false;
+function startRoundReadyCountdown(){
+  clearTimeout(roundReadyTimer);
+  roundReadySent=false;
+  const box=$('re-next'), btn=$('bround-ready'), bar=$('re-next-bar');
+  if(!box||!btn) return;
+  box.hidden=false; box.classList.remove('waiting');
+  btn.disabled=false; btn.textContent='Ready';
+  $('ready-status').textContent='';
+  if(bar){ bar.style.animation='none'; void bar.offsetWidth; bar.style.animation=''; bar.style.animationDuration=ROUND_READY_MS+'ms'; }
+  roundReadyTimer=setTimeout(sendRoundReady,ROUND_READY_MS);
+}
+function hideRoundReady(){
+  clearTimeout(roundReadyTimer);
+  const box=$('re-next'); if(box) box.hidden=true;
+  const status=$('ready-status'); if(status) status.textContent='';
+}
 function sendRoundReady(){
+  if(roundReadySent) return;
+  roundReadySent=true;
+  clearTimeout(roundReadyTimer);
   act({type:'round_ready'});
   const btn=$('bround-ready');
-  if(btn){ btn.disabled=true; btn.textContent='✓ Waiting...'; btn.style.opacity='0.5'; }
+  if(btn){ btn.disabled=true; btn.textContent='Waiting…'; }
+  $('re-next')?.classList.add('waiting');
 }
+document.addEventListener('keydown',e=>{
+  if(e.key!==' '&&e.key!=='Enter') return;
+  const box=$('re-next');
+  if(!box||box.hidden||roundReadySent||$('s-end').classList.contains('hidden')) return;
+  if(e.target.closest?.('input,textarea,button,select')) return; // let focused controls handle their own keys
+  e.preventDefault(); sendRoundReady();
+});
 
 function onReadyStatus(m){
   const status=$('ready-status');
@@ -7922,10 +8581,7 @@ function onRoundStart(m){
   inGame=true;
   discarding=false; pendingDiscardTileId=null; discardRetryArmed=false; suppressDiscardSfxOnce=false; clearTimeout(discardWatchdog);
   show('s-game');
-  // Reset Ready button for next round
-  const btn=$('bround-ready');
-  if(btn){ btn.disabled=false; btn.textContent='✓ Ready'; btn.style.opacity='1'; }
-  const status=$('ready-status'); if(status) status.textContent='';
+  hideRoundReady();
   $('chat-bar').style.display='flex';
   $('dora-panel').style.display='flex';
   // Deliberately NOT showing #game-loading here (unlike startGame()) — the
@@ -7937,14 +8593,9 @@ function onRoundStart(m){
   // game_state hasn't arrived yet — i.e. the loading spinner would visibly
   // appear AFTER the round-start card instead of before/during it.
 
-  // ── Update seat winds based on new dealer ────────────────────────────────
-  const windLabels2=['東','南','西','北'];
+  // ── Update seat winds (nameplate badges) for the new dealer ──────────────
   const dealer=m.dealer??0;
-  for(let i=0;i<numSeats;i++){
-    const abs=(mySeat+i)%numSeats, id=P[i];
-    const wb=$('wb'+id);
-    if(wb) wb.textContent=windLabels2[(abs-dealer+numSeats)%numSeats];
-  }
+  setSeatWinds(dealer);
 
   // ── Full board reset ──────────────────────────────────────────────────────
   // Clear all hand tiles
@@ -7995,7 +8646,7 @@ function onRoundStart(m){
     for(let i=0;i<numSeats;i++){
       const abs=(mySeat+i)%numSeats,id=P[i];
       const ctrEl=$(ctrIds0[id]);
-      if(ctrEl&&m.scores[abs]!==undefined) ctrEl.textContent=m.scores[abs];
+      if(ctrEl&&m.scores[abs]!==undefined) ctrEl.textContent=m.scores[abs].toLocaleString('en-US');
     }
   }
 
@@ -8004,13 +8655,13 @@ function onRoundStart(m){
   const wind=m.displayWind||m.roundWind||1;
   const rnd=m.displayRound||m.round||1;
   $('cw-wind').textContent = windChar[wind-1];
-  // Just the number, no 「局」 — matches what renderState writes here once the
-  // round's first game_state lands (a second or so later). Without this the
-  // centre readout briefly flashes "東2局" during the round-load transition,
-  // then silently drops the 局 when renderState catches up.
+  // The kanji numeral with no 「局」 (東二) — matches what renderState writes
+  // here once the round's first game_state lands, so the hub doesn't change
+  // form during the round-load transition.
   $('cw-kyoku').textContent = rnd;
   $('ci').textContent = '';
-  roundStartBanner(windChar[wind-1], rnd+'局', (m.honba||0)+'本場');
+  const dealerName=m.dealer==null?'':m.dealer===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[m.dealer]||'');
+  roundStartBanner(wind, rnd, m.honba||0, dealerName);
 }
 
 function onGameOver(m){
@@ -8021,7 +8672,7 @@ function onGameOver(m){
   clearTimeout(betweenRoundsTimer);
   const loader=$('game-loading'); if(loader) loader.style.display='none';
   // Hide Ready, show Main Menu — game fully over
-  const btn=$('bround-ready'); if(btn) btn.style.display='none';
+  hideRoundReady();
   const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display='none';
   const menuBtn=$('bend-menu'); if(menuBtn) menuBtn.style.display='';
   const status=$('ready-status'); if(status) status.textContent='';
@@ -8040,7 +8691,7 @@ function onGameOver(m){
   // buttons at once (green Play Again + gold Start + red Leave Room felt
   // cluttered for what's really one decision for the host).
   const isHostRematch=isPrivateRoomGame&&isRoomHost;
-  if(paBtn){ paBtn.style.display=isHostRematch?'none':''; paBtn.disabled=false; paBtn.textContent='↻ Play Again'; }
+  if(paBtn){ paBtn.style.display=isHostRematch?'none':''; paBtn.disabled=false; paBtn.textContent='Play Again'; }
   if(startBtn){ startBtn.style.display=isHostRematch?'':'none'; startBtn.disabled=true; }
   const paStatus=$('play-again-status'); if(paStatus) paStatus.textContent='';
   if(isHostRematch) wss({type:'play_again'});
@@ -8051,6 +8702,11 @@ function onGameOver(m){
   const sorted=[...((m.scores||[]).map((s,i)=>({s,i})))].sort((a,b)=>b.s-a.s);
   $('ret').textContent=m.reason==='tobi'?'飛び - Bankruptcy':'終局 - Game Over';
   $('rehn').textContent='';$('reyl').innerHTML='';$('rewt').innerHTML='';
+  // The standings card's look (see setEndStandings), headed 終局 with how
+  // the game ended underneath.
+  const mode=$('tb-mode')?.textContent||'';
+  setEndStandings(true,{final:true,kanji:'終局',romaji:'FINAL RESULTS',
+    sub:m.reason==='tobi'?'飛び · Bankruptcy':(mode?`${mode} · Game Over`:'Game Over')});
   // Both left over from whatever the FINAL round's own onEnd() call put up
   // (a tenpai reveal if that round was an exhaustive draw, or a double/
   // triple-ron prev/next nav) — neither is redrawn by anything below, so
@@ -8058,16 +8714,13 @@ function onGameOver(m){
   // final standings table instead of this panel starting clean.
   $('re-tenpai').innerHTML='';
   renderWinnerNav(null);
-  // Final standings — each row pairs a medal-coloured ordinal with the
-  // player's actual .up-nameplate/.pnp-* profile plate (same component the
-  // game-start roll call uses — see gameStartIntro) instead of a bare name
-  // string, so "who placed where" reads the same way "who's in this game"
-  // already does. Self's tier class is read straight off the User Profile
-  // hub's own element, same reasoning as gameStartIntro; opponents/bots use
-  // their own m.seats[i].wins (see _seatInfo in room.js) through the same
-  // nameplateTierClass lookup, rather than always falling back to bronze.
-  const ordinalLabels=['1st','2nd','3rd','4th'];
-  const rankColours=['#f0d080','#c0c0c0','#cd7f32','var(--cream)'];
+  // Final standings — laid out like the game-start roll call (.re-final in
+  // style.css): per ink strip, a brush placement numeral where the roll call
+  // has the seat wind, the player's unboxed tag (playerTag), and the final
+  // score; first place in gold, my own row with the gold underline. Self's
+  // tier class is read straight off the User Profile hub's own element;
+  // opponents/bots use their own m.seats[i].wins (see _seatInfo in
+  // room.js) through the same nameplateTierClass lookup.
   const isSelfGuestFinal=$('iname').value==='Guest';
   const selfTierElFinal=document.querySelector('#userprofile-modal .up-nameplate');
   const selfTierClsFinal=selfTierElFinal&&['tier-silver','tier-gold','tier-platinum','tier-diamond'].find(c=>selfTierElFinal.classList.contains(c));
@@ -8077,25 +8730,17 @@ function onGameOver(m){
     const p=m.seats?.[i];
     const name=isMe?($('iname').value.trim()||'You'):(p?.name||m.playerNames?.[i]||`Seat ${i}`);
     const row=document.createElement('tr');
-    row.className=rank===0?'w':'';
-    const cell=document.createElement('td');cell.className='re-final-cell';
-    const ord=document.createElement('span');ord.className='re-final-ordinal';
-    ord.style.color=rankColours[rank]||'var(--cream)';
-    ord.textContent=ordinalLabels[rank]||`${rank+1}th`;
-    const np=document.createElement('div');
-    const tierClsFinal=isMe?selfTierClsFinal:nameplateTierClass(p?.wins||0);
-    np.className='up-nameplate'+(tierClsFinal?' '+tierClsFinal:'');
-    const icon=document.createElement('span');icon.className='pnp-icon';
-    icon.innerHTML=isMe?(isSelfGuestFinal?guestIconSvg:iconSvg(currentPlayerIcon)):iconSvg(p?.icon||'default');
-    const info=document.createElement('span');info.className='pnp-info';
-    const pname=document.createElement('span');pname.className='pnp-name';pname.textContent=name;
-    const ptitle=document.createElement('span');ptitle.className='pnp-title';
-    ptitle.textContent=isMe?(isSelfGuestFinal?'':currentPlayerTitle):(p?.isBot?'CPU':(p?.title||''));
-    info.appendChild(pname);info.appendChild(ptitle);
-    np.appendChild(icon);np.appendChild(info);
-    cell.appendChild(ord);cell.appendChild(np);
+    if(isMe) row.className='re-row-me';
+    const cell=document.createElement('td');
+    cell.innerHTML='<span class="re-ord-jp" aria-hidden="true"></span><span class="re-ord"></span>';
+    cell.appendChild(playerTag({
+      iconHtml:isMe?(isSelfGuestFinal?guestIconSvg:iconSvg(currentPlayerIcon)):iconSvg(p?.icon||'default'),
+      name,
+      title:isMe?(isSelfGuestFinal?'':currentPlayerTitle):(p?.isBot?'CPU':(p?.title||'')),
+      tierCls:isMe?selfTierClsFinal:nameplateTierClass(p?.wins||0)}));
     const scoreCell=document.createElement('td');scoreCell.textContent=s.toLocaleString();
-    row.appendChild(cell);row.appendChild(scoreCell);
+    row.append(cell,scoreCell);
+    setEndRank(row,rank);
     tbl.appendChild(row);
   });
   // Coin payout for this game (see the 'coins' message handler / server
@@ -8120,7 +8765,7 @@ function onPlayAgainClick(){
   if(!isPrivateRoomGame){ playAgain(); return; }
   wss({type:'play_again'});
   const btn=$('bplay-again');
-  if(btn){ btn.disabled=true; btn.textContent='✓ Waiting for others…'; }
+  if(btn){ btn.disabled=true; btn.textContent='Waiting for others…'; }
 }
 
 function onPlayAgainStatus(m){
@@ -8132,7 +8777,7 @@ function onPlayAgainStatus(m){
   }
   if(playAgainSeats.includes(mySeat)){
     const btn=$('bplay-again');
-    if(btn){ btn.disabled=true; btn.textContent='✓ Waiting for others…'; }
+    if(btn){ btn.disabled=true; btn.textContent='Waiting for others…'; }
   }
   if(isRoomHost){
     const startBtn=$('bplay-again-start');
@@ -8209,24 +8854,46 @@ function renderEndTiles(m,winnerIdx=currentEndWinnerIdx){
   // Render melds right of closed hand, separated by a gap
   for(const meld of(melds||[])) appendEndPanelMeld(tileRow,meld,hw,hh);
   wt.appendChild(tileRow);
-  // Tenpai reveal (exhaustive draw only) — name + hand for each tenpai
-  // player; noten hands stay private (server sends null for those seats).
+  // Strip section above the standings rows (#re-tenpai, shown by .re-strips
+  // — see END_CARD_HEADS): one ink strip per line, a brush label then the
+  // player's name, optionally a note under it. --i staggers their slide-in.
+  //   draw:    each tenpai hand (noten hands stay private — the server sends
+  //            null for those seats), or one 全員不聴 strip if none.
+  //   chonbo:  the offender (passed as `winner`, see _chonboPenalty).
+  //   nagashi: each nagashi mangan seat.
   const tp=$('re-tenpai'); if(!tp) return;
   tp.innerHTML='';
-  if(m.reason==='draw'&&Array.isArray(m.tenpaiHands)){
+  const nameOf=seat=>seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
+  let shown=0;
+  const strip=(label,name,note,cls)=>{
+    const row=document.createElement('div');row.className='re-tenpai-row'+(cls?' '+cls:'');
+    row.style.setProperty('--i',shown++);
+    const nameEl=document.createElement('div');nameEl.className='re-tenpai-name';
+    const b=document.createElement('b');b.textContent=label;
+    nameEl.append(b,document.createTextNode(name));
+    row.appendChild(nameEl);
+    if(note){ const n=document.createElement('div');n.className='re-strip-note';n.textContent=note;row.appendChild(n); }
+    tp.appendChild(row);
+    return row;
+  };
+  if(m.reason==='chonbo'&&m.winner!=null){
+    strip('チョンボ',nameOf(m.winner),'Declared a false win · paid the penalty','re-strip-bad');
+  } else if(m.reason==='nagashi'){
+    (m.nagashiSeats||[]).forEach((ok,seat)=>{ if(ok) strip('流し満貫',nameOf(seat),'Only terminals and honours discarded, none called · paid as a mangan tsumo'); });
+  } else if(m.reason==='draw'&&Array.isArray(m.tenpaiHands)){
+    if(!m.tenpaiHands.some(Boolean)) strip('全員不聴','','No one was tenpai');
     m.tenpaiHands.forEach((hand,seat)=>{
       if(!hand) return;
-      const row=document.createElement('div');row.className='re-tenpai-row';
-      const nameEl=document.createElement('div');nameEl.className='re-tenpai-name';
-      nameEl.textContent=seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
-      row.appendChild(nameEl);
+      const row=strip('聴牌',nameOf(seat));
       const tiles=document.createElement('div');tiles.className='re-tile-row';
+      // Placed first, then measured: the tiles are fitted to the strip's
+      // own inner width (.re-tile-row stretches across it), not the whole
+      // section's, so they never run under the strip's padding.
+      row.appendChild(tiles);
       const tpMeldCount=(m.tenpaiMelds?.[seat]||[]).reduce((n,meld)=>n+(meld.kanType==='ankan'?4:meld.tiles.length),0);
-      const {w:tw,h:th}=fitEndTileSize(tp,hand.length+tpMeldCount);
+      const {w:tw,h:th}=fitEndTileSize(tiles,hand.length+tpMeldCount);
       for(const t of hand) tiles.appendChild(mkEl(t,'tmd',tw,th));
       for(const meld of(m.tenpaiMelds?.[seat]||[])) appendEndPanelMeld(tiles,meld,tw,th);
-      row.appendChild(tiles);
-      tp.appendChild(row);
     });
   }
 }
@@ -8299,6 +8966,88 @@ function stepWinnerNav(dir){
   if(wrap){ wrap.style.animation='none'; void wrap.offsetWidth; wrap.style.animation=''; }
 }
 
+// After a tsumo/ron the win cutscene has already shown everything about the
+// hand (who won, who dealt in, hand, dora, yaku, han/fu, payments), so the
+// round-end panel becomes a standings card: placement, score and gain/loss,
+// then Ready. Styled to continue the cutscene (see .re-standings in
+// style.css): a brush 順位 stamp over the hand that just ended, rebuilt
+// each time so its entrance animation replays. Every other end reason
+// (draws, chonbo, nagashi — see END_CARD_HEADS) and game over use the same
+// card with their own heading — o.kanji/o.romaji/o.sub replace 順位/
+// STANDINGS/the round line; o.final adds .re-final, o.strips adds
+// .re-strips (the strip section above the rows).
+// Heading per non-win end reason; strips:true also shows the strip section
+// above the rows (#re-tenpai — see renderEndTiles): tenpai hands, the
+// chonbo offender, or the nagashi mangan seats.
+const END_CARD_HEADS={
+  draw:{kanji:'流局',romaji:'EXHAUSTIVE DRAW',strips:true},
+  kyuushu:{kanji:'九種九牌',romaji:'ABORTIVE DRAW'},
+  suukaikan:{kanji:'四開槓',romaji:'ABORTIVE DRAW'},
+  chonbo:{kanji:'チョンボ',romaji:'CHONBO',strips:true},
+  nagashi:{kanji:'流し満貫',romaji:'NAGASHI MANGAN',strips:true},
+};
+function setEndStandings(on,o={}){
+  const rec=document.querySelector('#s-end .rec'); if(!rec) return;
+  rec.classList.toggle('re-standings',on);
+  rec.classList.toggle('re-final',!!(on&&o.final));
+  rec.classList.toggle('re-strips',!!(on&&o.strips)); // shows #re-tenpai's strips
+  $('s-end').classList.toggle('re-standings-screen',on);
+  rec.querySelector('.re-st-head')?.remove();
+  if(!on) return;
+  const s=lastState||{};
+  const wind=['東','南','西','北'][(s.displayWind||s.roundWind||1)-1]||'東';
+  const round=s.displayRound||s.round;
+  const sub=o.sub??(round?`${wind}${round}局 · ${s.honba||0}本場`:'');
+  const head=document.createElement('div'); head.className='re-st-head'; head.setAttribute('aria-hidden','true');
+  head.innerHTML=`<div class="re-st-text"><div class="re-st-kanji">${escHtml(o.kanji||'順位')}</div><div class="re-st-romaji">${escHtml(o.romaji||'STANDINGS')}</div>`
+    +(sub?`<div class="re-st-round">${escHtml(sub)}</div>`:'')+'</div>';
+  rec.prepend(head);
+}
+
+// Placement label for a results-table row: the ordinal ("1st", medal
+// colour) and the brush numeral (一二三四) the standings card shows.
+const END_ORDINALS=['1st','2nd','3rd','4th'], END_ORD_JP=['一','二','三','四'];
+const END_RANK_COLOURS=['#f0d080','#c0c0c0','#cd7f32','var(--cream)'];
+function setEndRank(row,rank){
+  const ord=row.querySelector('.re-ord'), jp=row.querySelector('.re-ord-jp');
+  ord.textContent=END_ORDINALS[rank]||`${rank+1}th`;
+  ord.style.color=END_RANK_COLOURS[rank]||'var(--cream)';
+  jp.textContent=END_ORD_JP[rank]||'';
+}
+
+// Moves the results rows from the previous placement order into the new
+// one (FLIP: measure, reorder, play each row back from where it was), and
+// relabels and pops the placement of every row that changed. No-op when
+// the order didn't change, or when the table has since been redrawn.
+function reorderEndStandings(tbl,rowsBySeat,newOrder){
+  const rows=[...tbl.children];
+  if(!rows.length||rowsBySeat[newOrder[0]]?.parentNode!==tbl) return;
+  if(rows.every((r,i)=>r===rowsBySeat[newOrder[i]])) return;
+  const before=new Map(rows.map(r=>[r,r.getBoundingClientRect().top]));
+  newOrder.forEach((seat,rank)=>{
+    const r=rowsBySeat[seat]; tbl.appendChild(r);
+    if(rows.indexOf(r)!==rank){
+      setEndRank(r,rank);
+      r.querySelectorAll('.re-ord,.re-ord-jp').forEach(el=>{ el.classList.remove('re-rank-pop'); void el.offsetWidth; el.classList.add('re-rank-pop'); });
+      r.classList.toggle('re-rank-up',rank<rows.indexOf(r));
+    }
+  });
+  const reduce=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  for(const r of rows){
+    // The standings card's entrance animation holds transform/opacity and
+    // would override the inline transform below — it has finished by now.
+    r.style.animation='none'; r.style.opacity='1';
+    const dy=before.get(r)-r.getBoundingClientRect().top;
+    if(!dy||reduce) continue;
+    // Rows cross each other on the way, so climbers draw on top of fallers.
+    r.style.zIndex=dy>0?'2':'1';
+    r.style.transition='none'; r.style.transform=`translateY(${dy}px)`;
+    void r.offsetWidth;
+    r.style.transition='transform .6s cubic-bezier(.2,.9,.3,1)'; r.style.transform='';
+    setTimeout(()=>{ r.style.zIndex=''; },700);
+  }
+}
+
 // Round-end panel (win/draw/abortive-draw/nagashi) — purely presentational,
 // just formats whatever room.js already computed and sent in the round_end
 // message (yakuList, han/fu, dora, scores, ...). No scoring logic lives
@@ -8309,55 +9058,21 @@ function onEnd(m){
   inGame=false;
   lastEndState=m;
   $('coin-reward').textContent=''; // round-result panel never shows a payout
-  // Both set below (tsumo/ron branch), read again much further down by
-  // WIN_BANNER_DELAY — declared up here rather than nested inside that
-  // branch's own block scope, and rather than recomputing ronWinnerCount
-  // a second time down there.
-  let hasYakumanFx=false, winBannerHold=0;
+  const cardHead=END_CARD_HEADS[m.reason];
+  if(cardHead) setEndStandings(true,cardHead);
+  else setEndStandings(m.reason==='tsumo'||m.reason==='ron');
   const loader=$('game-loading'); if(loader) loader.style.display='none';
   $('chat-bar').style.display='none';$('chat-panel').classList.remove('open');chatOpen=false;
   $('dora-panel').style.display='none';
-  const reasonLabels={tsumo:'ツモ - TSUMO',ron:'ロン - RON',draw:'流局 - Exhaustive Draw',suukaikan:'四開槓 - Suukaikan',nagashi:'流し満貫 - Mangan at Draw',kyuushu:'九種九牌 - Kyuushu Kyuuhai',chonbo:'チョンボ - Chonbo'};
-  $('ret').textContent=reasonLabels[m.reason]||'Round Over';
+  const reasonLabels={draw:'流局 - Exhaustive Draw',suukaikan:'四開槓 - Suukaikan',nagashi:'流し満貫 - Mangan at Draw',kyuushu:'九種九牌 - Kyuushu Kyuuhai',chonbo:'チョンボ - Chonbo'};
+  // A win's own title (ツモ/ロン) was the cutscene's opening; the card that
+  // follows it is just the standings.
+  $('ret').textContent=(m.reason==='tsumo'||m.reason==='ron')?'順位 - Standings':(reasonLabels[m.reason]||'Round Over');
   if(m.reason==='tsumo'||m.reason==='ron'){
     if(m.reason==='ron') playSfx('sfx-ron', m.winner);
     if(m.reason==='tsumo') playSfx('sfx-tsumo', m.winner);
-    const seatName=seat=>seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
-    const winnerName=seatName(m.winner);
-    // Reuses the same call-banner (.cb-layer) pon/kan/chi/riichi already
-    // slide in across the felt, with two new accent-colour variants (see
-    // .call-banner[data-type="tsumo"/"ron"] in style.css) — the win itself
-    // gets the same dramatic full-width declaration those calls get, rather
-    // than jumping straight to the results panel. Reveal is deferred below
-    // (WIN_BANNER_DELAY) so the panel doesn't appear underneath/on top of
-    // this while it's still sliding/settling.
-    // Double/triple ron: m.extraWinners (see _multiRon in room.js) carries
-    // every OTHER simultaneous winner beyond the primary m.winner — each
-    // one gets their own banner via ronBanners rather than only the primary
-    // winner ever being shown, same reasoning callBanner's own single-
-    // winner path doesn't apply here. Tsumo can never have more than one
-    // winner, so it always stays on the plain single-banner path.
-    const ronWinnerCount=m.reason==='ron'?1+(m.extraWinners||[]).length:1;
-    winBannerHold=RON_BANNER_HOLD*ronWinnerCount; // matches ronBanners' own sequential-per-winner timing
-    if(m.reason==='tsumo') callBanner('tsumo',winnerName,'ツモ');
-    else ronBanners([winnerName,...(m.extraWinners||[]).map(r=>seatName(r.winSeat))]);
-    // Yakuman/double-yakuman flash (see playYakumanFx) — checked across
-    // EVERY winner in m.winners, not just the primary, since a double/
-    // triple ron could have more than one qualify. Plays once, AFTER the
-    // win banner(s) have had their own full run (tsumo/ron announced first,
-    // then the bigger "something huge just happened" moment on top of it)
-    // rather than once per qualifying winner. hasYakumanFx/bannerHold feed
-    // WIN_BANNER_DELAY below so the results panel waits for both, not just
-    // the banner(s).
-    const yakumanWinners=(m.winners||[]).filter(w=>{
-      const l=limitLabel(w.han||0,w.fu||0);
-      return l&&(l.cls==='lbl-yakuman'||l.cls==='lbl-double-yakuman');
-    });
-    hasYakumanFx=yakumanWinners.length>0;
-    if(hasYakumanFx){
-      const isDouble=yakumanWinners.some(w=>limitLabel(w.han,w.fu).cls==='lbl-double-yakuman');
-      setTimeout(()=>playYakumanFx(isDouble,yakumanWinners.flatMap(w=>(w.yakuList||[]).map(y=>y.name))),winBannerHold);
-    }
+    // The win itself is announced by the cutscene (playWinCutscene, run
+    // at the bottom of onEnd), which also defers the results panel.
     // Winner info (name/limit/han-fu/yaku pills/hand tiles) comes from
     // m.winners (see _endRound in room.js — always populated for tsumo/ron,
     // even a single winner) via renderWinnerNav/renderWinnerInfo below,
@@ -8367,30 +9082,18 @@ function onEnd(m){
     currentEndWinnerIdx=0;
     renderWinnerNav(m);
     renderWinnerInfo(m,0);
-  } else if(m.reason==='draw'){
-    $('rehn').textContent='';
-    $('reyl').innerHTML='';
-    renderWinnerNav(null);
-  } else if(m.reason==='chonbo'){
-    // room.js's _chonboPenalty passes the offender as `winner` (reusing
-    // the same field _endRound already broadcasts for tsumo/ron) — there's
-    // no actual winning hand here, just a penalty payment, which the
-    // score-delta table below already shows generically for any reason.
-    const offenderName=m.winner===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[m.winner]||`Seat ${m.winner}`);
-    $('rehn').innerHTML=`<span class="re-winner re-offender">${escHtml(offenderName)}</span><span class="re-hand"> declared a false win</span>`;
-    $('reyl').innerHTML='';
-    renderWinnerNav(null);
   } else {
+    // Draws, chonbo and nagashi: who did what shows as strips above the
+    // standings (renderEndTiles) and as row tags below.
     $('rehn').textContent='';
     $('reyl').innerHTML='';
     renderWinnerNav(null);
   }
   // Hand/dora/tenpai tile artwork, score table, and the panel reveal itself
   // are grouped into this one closure so a tsumo/ron win can delay all of
-  // it uniformly behind the call-banner declaration above (WIN_BANNER_DELAY
-  // below) instead of the panel popping up underneath/on top of a banner
-  // that's still sliding in. Every other end reason (draw/chonbo/etc, no
-  // banner shown) just calls this immediately.
+  // it uniformly behind the win cutscene (see the bottom of onEnd) instead
+  // of the panel popping up underneath it. Every other end reason (draw/
+  // chonbo/etc, no cutscene) just calls this immediately.
   const reveal=()=>{
   // Hand/dora/tenpai tile artwork — split into its own function (below)
   // since a resize needs to redraw just this part (see scheduleTileRedraw)
@@ -8403,40 +9106,65 @@ function onEnd(m){
   // the uncapped --tmd-w/h size the fit logic exists to override.
   show('s-end');
   renderEndTiles(m);
-  // Score table with delta column
+  // Score table with delta column. Rows start in the PREVIOUS placement
+  // order (by prevScores) with their old placement labels, the scores count
+  // up, then the rows slide into the new order (reorderEndStandings) so a
+  // placement change is something players actually see happen.
   const tbl=$('rest');tbl.innerHTML='';
-  const sorted=[...(m.scores||[]).map((sc,seat)=>({sc,seat}))].sort((a,b)=>b.sc-a.sc);
-  sorted.forEach(({sc,seat},rank)=>{
+  const placeOrder=scores=>(scores||[]).map((sc,seat)=>({sc,seat})).sort((a,b)=>b.sc-a.sc).map(e=>e.seat);
+  const newOrder=placeOrder(m.scores);
+  const startOrder=m.prevScores?placeOrder(m.prevScores):newOrder;
+  const rowsBySeat={};
+  startOrder.forEach((seat,rank)=>{
+    const sc=m.scores[seat];
     const name=seat===mySeat?($('iname').value.trim()||'You'):(m.playerNames?.[seat]||`Seat ${seat}`);
     // reason==='chonbo' reuses the `winner` field for the OFFENDER (see
     // _chonboPenalty in room.js) — they just paid a penalty, not won, so
     // that row gets the loss (red) styling instead of the winner gold.
     const row=document.createElement('tr');
     if(seat===m.winner) row.className=m.reason==='chonbo'?'l':'w';
-    const ordinal=['1st','2nd','3rd','4th'][rank]||`${rank+1}th`;
-    const colours=['#f0d080','#c0c0c0','#cd7f32','var(--cream)'];
-    const colour=colours[rank]||'var(--cream)';
     const delta=m.prevScores?sc-m.prevScores[seat]:null;
     const startScore=m.prevScores?m.prevScores[seat]:sc;
     const scoreSpanId=`re-sc-${seat}`;
     const deltaHtml=delta!=null&&delta!==0
       ?`<span class="re-delta ${delta>0?'re-delta-pos':'re-delta-neg'}">${delta>0?'+':''}${delta.toLocaleString()}</span>`
       :`<span class="re-delta re-delta-nil">—</span>`;
-    row.innerHTML=`<td><span style="color:${colour};font-weight:700;margin-right:10px;">${ordinal}</span>${escHtml(name)}</td><td><span id="${scoreSpanId}">${startScore.toLocaleString()}</span></td><td class="re-td-delta">${deltaHtml}</td>`;
+    // Win tag, so the standings card alone still says who won; the player
+    // who dealt in only gets the row's red underline (.re-row-dealin).
+    const isWinSeat=(m.reason==='tsumo'||m.reason==='ron')&&(m.winners||[]).some(w=>w.winSeat===seat);
+    if(isWinSeat) row.classList.add('re-row-win');
+    else if(m.reason==='ron'&&seat===m.loser) row.classList.add('re-row-dealin');
+    // The other reasons tag the seats their strips above name: gold 聴牌 for
+    // an exhaustive draw's tenpai hands, gold 流満 for nagashi mangan, and a
+    // red 罰 for the chonbo offender (room.js's _chonboPenalty passes the
+    // offender as `winner`).
+    const isTenpai=m.reason==='draw'&&!!m.tenpaiHands?.[seat];
+    const isNagashi=m.reason==='nagashi'&&!!m.nagashiSeats?.[seat];
+    const isChonbo=m.reason==='chonbo'&&seat===m.winner;
+    const tagHtml=isWinSeat?'<span class="re-tag re-tag-win"><b>和了</b>Win</span>'
+      :isTenpai?'<span class="re-tag re-tag-tenpai"><b>聴牌</b>Tenpai</span>'
+      :isNagashi?'<span class="re-tag re-tag-tenpai"><b>流満</b>Nagashi</span>'
+      :isChonbo?'<span class="re-tag re-tag-chonbo"><b>罰</b>Penalty</span>':'';
+    // .re-ord-jp is the brush placement numeral the standings card shows in
+    // place of the plain ordinal (hidden on every other panel).
+    row.innerHTML=`<td><span class="re-ord-jp" aria-hidden="true"></span><span class="re-ord"></span><span class="re-pname">${escHtml(name)}</span>${tagHtml}</td><td><span id="${scoreSpanId}">${startScore.toLocaleString()}</span></td><td class="re-td-delta">${deltaHtml}</td>`;
+    setEndRank(row,rank);
+    rowsBySeat[seat]=row;
     tbl.appendChild(row);
   });
-  // Animate score count-up after a short delay
+  // Animate score count-up after a short delay, then move rows to their
+  // new placements once the numbers have landed.
+  const COUNT_DELAY=400, COUNT_MS=1400;
   setTimeout(()=>{
     (m.scores||[]).forEach((sc,seat)=>{
       const startScore=m.prevScores?m.prevScores[seat]:sc;
       if(startScore===sc) return;
       const span=document.getElementById(`re-sc-${seat}`);
       if(!span) return;
-      const duration=1400;
       const start=performance.now();
       const ease=t=>t<.5?2*t*t:(-1+(4-2*t)*t);
       function frame(now){
-        const t=Math.min((now-start)/duration,1);
+        const t=Math.min((now-start)/COUNT_MS,1);
         const val=Math.round(startScore+(sc-startScore)*ease(t));
         span.textContent=val.toLocaleString();
         if(t<1) requestAnimationFrame(frame);
@@ -8444,37 +9172,36 @@ function onEnd(m){
       }
       requestAnimationFrame(frame);
     });
-  }, 400);
+  }, COUNT_DELAY);
+  setTimeout(()=>reorderEndStandings(tbl,rowsBySeat,newOrder),COUNT_DELAY+COUNT_MS+150);
   // Drop any still-pending re-arm from a previous round_end — a new
   // round_end supersedes it either way (this one either ends the game or
   // schedules its own below).
   clearTimeout(betweenRoundsTimer);
   if(m.gameOver){
-    const btn=$('bround-ready'); if(btn) btn.style.display='none';
+    hideRoundReady();
     const vrBtn=$('bview-results'); if(vrBtn) vrBtn.style.display=pendingGameOver?'':'none';
     // Game's actually over — leave inGame false so "Leave Room" here just
     // leaves (there's no progress left to lose, so no confirm — see
     // goLobby/showLeaveConfirm). Only a BETWEEN-rounds results panel
     // re-arms inGame below, since the game there really is still going.
   } else {
+    startRoundReadyCountdown();
     betweenRoundsTimer=setTimeout(()=>{ inGame=true; },5500);
   }
   };
-  // WIN_BANNER_DELAY — long enough for the call-banner(s) above to slide
-  // in, hold, and clear (winBannerHold — a double/triple ron plays its
-  // banners one after another, see ronBanners, so this already covers the
-  // WHOLE sequence, not just one banner's worth of time), THEN the
-  // yakuman/double-yakuman flash after them (hasYakumanFx) if there is
-  // one, before the results panel takes over. Only tsumo/ron actually
-  // showed a banner above, so every other reason reveals immediately as
-  // before.
-  const WIN_BANNER_DELAY=winBannerHold+(hasYakumanFx?YAKUMAN_FX_HOLD:0);
+  // A tsumo/ron plays the win cutscene first (see playWinCutscene) and
+  // reveals the panel when it ends or is skipped; every other reason
+  // reveals immediately.
   if(m.reason==='tsumo'||m.reason==='ron'){
-    // reveal() firing here is OUTSIDE this function's own try (the timeout
-    // callback runs long after this synchronous block has already
-    // returned), so the outer catch below can't reach it — needs its own,
-    // same show('s-end') fallback.
-    setTimeout(()=>{ try{ reveal(); }catch(e){ show('s-end'); } },WIN_BANNER_DELAY);
+    // reveal() firing here is OUTSIDE this function's own try (it runs
+    // long after this synchronous block has already returned), so the
+    // outer catch below can't reach it — needs its own, same
+    // show('s-end') fallback.
+    // On a ron the cutscene's ロン call (with the sfx-ron voice above) plays
+    // first, then the tile snatch (see playRonSnatch), then the hand
+    // reveal; the snatched copies are cleared once the cutscene ends.
+    playWinCutscene(m,()=>{ clearRonSnatch(); try{ reveal(); }catch(e){ show('s-end'); } });
   } else reveal();
   }catch(e){ show('s-end'); }
 }

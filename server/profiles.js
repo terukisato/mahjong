@@ -176,6 +176,18 @@ function getNameplateSkin(name) {
   return row ? (row.nameplate_skin || 'default') : 'default';
 }
 
+// Same as the nameplate skin above, for the equipped win/riichi call style
+// (see CATALOG.callstyle in cosmetics.js and the cutscene in script.js).
+function setCallStyle(name, style) {
+  getDb().prepare('UPDATE profiles SET call_style = ? WHERE name = ?')
+    .run(String(style || 'default').slice(0, 20), name);
+}
+
+function getCallStyle(name) {
+  const row = getDb().prepare('SELECT call_style FROM profiles WHERE name = ?').get(name);
+  return row ? (row.call_style || 'default') : 'default';
+}
+
 function getNameplateSkinById(id) {
   const row = getDb().prepare('SELECT nameplate_skin FROM profiles WHERE id = ?').get(id);
   return row ? (row.nameplate_skin || 'default') : 'default';
@@ -308,4 +320,4 @@ function setCode(name, code) {
 }
 
 
-module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, getIconById, setNameplateSkin, getNameplateSkin, getNameplateSkinById, renameProfile, setCode, setTitle, getTitle, TITLES, setVoiceTheme, getVoiceTheme, VOICE_THEMES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById };
+module.exports = { listProfiles, createProfile, verifyProfile, deleteProfile, setIcon, getIcon, getIconById, setNameplateSkin, getNameplateSkin, getNameplateSkinById, setCallStyle, getCallStyle, renameProfile, setCode, setTitle, getTitle, TITLES, setVoiceTheme, getVoiceTheme, VOICE_THEMES, createRememberToken, verifyRememberToken, forgetRememberToken, getId, getNameById };

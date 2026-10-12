@@ -96,7 +96,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.16.1</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.17.0</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI and real opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -698,6 +698,10 @@
     <div id="shop-icon-list" class="shop-grid"></div>
     <p class="shop-section-label">Nameplates</p>
     <div id="shop-nameplate-list" class="shop-grid"></div>
+    <!-- How your ツモ/ロン/リーチ is staged in the win/riichi cutscene, seen
+         by everyone at the table (see CALLSTYLE_CATALOG / renderShopCallStyles). -->
+    <p class="shop-section-label">Call Styles</p>
+    <div id="shop-callstyle-list" class="shop-grid"></div>
   </div>
 </div>
 
@@ -953,8 +957,8 @@
   <div class="about-title">Leave Game?</div>
   <div class="about-body"><p>Your progress in this match will be lost.</p></div>
   <div class="leave-actions">
-    <button class="leave-btn-stay" onclick="cancelLeaveConfirm()">Stay</button>
     <button class="leave-btn-confirm" onclick="confirmLeaveGame()">Leave</button>
+    <button class="leave-btn-stay" onclick="cancelLeaveConfirm()">Stay</button>
   </div>
 </div>
 
@@ -1281,7 +1285,7 @@
      ════════════════════════════════════════════════════════════ -->
 <div class="screen hidden" id="s-game">
   <div class="topbar">
-    <div class="tb-title">雀心 Mahjong <span id="tb-mode" class="tb-mode-label"></span></div>
+    <div class="tb-title"><span class="tb-jp">雀心</span> <span class="tb-en">Mahjong</span> <span id="tb-mode" class="tb-mode-label"></span></div>
     <div class="tb-st" id="tst">—</div>
     <div class="tb-right">
       <button class="bl" id="bleave">✕ Leave</button>
@@ -1303,8 +1307,12 @@
   <div class="table">
     <div class="wood-table"></div>
     <div class="felt">
-      <!-- ── Centre info panel ── -->
+      <!-- ── Centre info panel (see .ctr / .cd-* in style.css): the round
+           and remaining wall (.ctr-mid) inside the wall gauge (#cd-arc);
+           each .ctr-score is a full-panel layer rotated toward its seat,
+           holding that seat's score and riichi stick along its edge. ── -->
       <div class="ctr">
+        <div class="cd-arc" id="cd-arc"></div>
         <div class="ctr-score ctr-score-top">
           <span id="ctr-s-t" class="ctr-score-val">—</span>
           <div id="rst" class="rs-top">
@@ -1329,6 +1337,7 @@
             </svg>
           </div>
         </div>
+        
         <div class="ctr-mid ctr-mid-rel">
           <div class="ctr-info">
             <div class="cw" id="cw">
@@ -1518,29 +1527,43 @@
          populated on the game-over view, blank between rounds. -->
     <div class="coin-reward" id="coin-reward"></div>
     <div class="reb">
-      <button id="bround-ready" class="ready-btn reb-btn" onclick="sendRoundReady()">✓ Ready</button>
-      <button id="bview-results" class="bp reb-btn" style="display:none;" onclick="showGameOverResults()">View Results</button>
+      <!-- data-jp is each button's brush kanji label (.reb-btn::before). -->
+      <button id="bview-results" class="bp reb-btn reb-btn-gold" data-jp="結果" style="display:none;" onclick="showGameOverResults()">View Results</button>
       <div class="reb-split">
         <div class="reb-left">
-          <button id="bplay-again" class="bp reb-btn reb-btn-green" style="display:none;" onclick="onPlayAgainClick()">↻ Play Again</button>
-          <button id="bplay-again-start" class="bp reb-btn reb-btn-gold" style="display:none;" onclick="wss({type:'play_again_start'})">▶ Start New Game</button>
+          <button id="bplay-again" class="bp reb-btn reb-btn-green" data-jp="再戦" style="display:none;" onclick="onPlayAgainClick()">Play Again</button>
+          <button id="bplay-again-start" class="bp reb-btn reb-btn-gold" data-jp="開始" style="display:none;" onclick="wss({type:'play_again_start'})">Start New Game</button>
         </div>
-        <button id="bend-menu" class="bp reb-btn reb-btn-red" style="display:none;" onclick="leaveRoomFromGameOver()">Leave Room</button>
+        <button id="bend-menu" class="bp reb-btn reb-btn-red" data-jp="退出" style="display:none;" onclick="leaveRoomFromGameOver()">Leave Room</button>
       </div>
     </div>
-    <div id="ready-status" class="ready-status"></div>
     <div id="play-again-status" class="ready-status"></div>
+  </div>
+  <!-- Between rounds: Ready sits in the bottom-right corner like the win
+       cutscene's "Tap to continue", with a bar that drains over
+       ROUND_READY_MS — when it runs out the player is marked ready
+       automatically, and the next round starts once everyone is (see
+       startRoundReadyCountdown / sendRoundReady in script.js). -->
+  <div class="re-next" id="re-next" hidden>
+    <div id="ready-status" class="ready-status"></div>
+    <button id="bround-ready" class="re-next-btn" type="button" onclick="sendRoundReady()">Ready</button>
+    <i class="re-next-bar" id="re-next-bar"></i>
   </div>
 </div>
 <div class="tc" id="tc"></div>
-<div class="cb-layer" id="cb-layer"></div>
 <div class="rs-layer" id="rs-layer"></div>
 <div class="gs-layer" id="gs-layer"></div>
-<!-- Yakuman/double-yakuman flash — see playYakumanFx in script.js. Sits
-     above every other overlay (round-start/game-start cards, call banners)
-     since it's the single most dramatic moment the game can produce and
-     should never end up hidden behind any of them. -->
-<div class="yakuman-layer" id="yakuman-layer"></div>
+<!-- Win cutscene (and Store call-style previews) — see playWinCutscene / csFlashCall in
+     script.js. Sits above every other overlay (round-start/game-start
+     cards, call banners) since a win, and above all a yakuman, is the most
+     dramatic moment the game can produce. -->
+<div class="cs-layer" id="cs-layer"></div>
+<!-- The default call style's jade band gradient, defined once here so every
+     band the cutscene creates (CS_SLASH_SVG in script.js) can reference it
+     with url(#cs-jade) without carrying duplicate ids of its own. -->
+<svg class="cs-defs" aria-hidden="true" focusable="false"><defs>
+  <linearGradient id="cs-jade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14583c"/><stop offset="1" stop-color="#072117"/></linearGradient>
+</defs></svg>
 <div class="chat-float" id="chat-float"></div>
 <!-- Seat-emoji popups land here (see showEmojiPopup in script.js) — a
      separate unrotated fixed layer rather than nesting inside .pa-t/.pa-l/
