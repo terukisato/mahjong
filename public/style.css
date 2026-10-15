@@ -346,11 +346,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
 /* ── Wood table — sits behind the felt ──
    Picked in the "Table Textures" mockup (2026-10-16): today's frame
-   style, darker (hsl lightness 8%, highlight +10%, shadow 1%). */
+   style, darker (hsl lightness 11%, highlight +10%, shadow -7%). */
 .wood-table{
   width:var(--table-size);
   height:var(--table-size);
-  background:radial-gradient(ellipse at 40% 30%,hsl(20 46% 18%),hsl(20 46% 8%) 50%,hsl(20 46% 1%));
+  background:radial-gradient(ellipse at 40% 30%,hsl(20 46% 21%),hsl(20 46% 11%) 50%,hsl(20 46% 4%));
   box-shadow:0 8px 48px rgba(0,0,0,.8),0 2px 0 rgba(255,255,255,.04) inset;
   border:2px solid #0d0502;
   flex-shrink:0;}
