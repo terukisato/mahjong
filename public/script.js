@@ -753,7 +753,7 @@ function onMsg(m){
     // handler). Always includes the free defaults even before login.
     ownedCosmetics=m.ownedCosmetics||{icons:playerIcons.map(i=>i.id),nameplates:['default'],callStyles:['default']};
     if(!ownedCosmetics.callStyles) ownedCosmetics.callStyles=['default'];
-    renderPlayerIcons();renderNameplateSkins();renderShopIcons();renderShopNameplates();renderShopCallStyles();
+    renderPlayerIcons();renderNameplateSkins();renderShopIcons();renderShopNameplates();renderShopCallStyles();renderCallStyles();
     // Combined wins (both variants — the nameplate is one identity, not
     // split by mode) drive the User Profile hub's nameplate tier — see
     // updateNameplateTier. m.stats.yonma/sanma.gamesWon are lifetime
@@ -871,7 +871,7 @@ function onMsg(m){
         const type=ICON_CATALOG.some(i=>i.id===m.itemId)?'icons':(CALLSTYLE_CATALOG.some(c=>c.id===m.itemId)?'callStyles':'nameplates');
         if(!ownedCosmetics[type]) ownedCosmetics[type]=['default'];
         if(!ownedCosmetics[type].includes(m.itemId)) ownedCosmetics[type].push(m.itemId);
-        renderShopIcons();renderShopNameplates();renderShopCallStyles();renderPlayerIcons();renderNameplateSkins();
+        renderShopIcons();renderShopNameplates();renderShopCallStyles();renderPlayerIcons();renderNameplateSkins();renderCallStyles();
         // If the preview modal is still open on the item that was just
         // bought, refresh it in place too (Buy -> Equip) — it was closed
         // out from under the confirm dialog otherwise stayed open on stale
@@ -1041,7 +1041,7 @@ function toggleUserProfile(){
 // unconditionally clearing every child (not just the caller's own) so this
 // stays correct even if a future setting gets added here.
 function backToUserProfile(){
-  ['friends','notifications','personalisation','playericon','title','voicetheme','nameplate','gamemusic','userstats','playhistory','achievements','changeusername','changecode'].forEach(id=>{
+  ['friends','notifications','personalisation','playericon','title','voicetheme','nameplate','callstyle','gamemusic','userstats','playhistory','achievements','changeusername','changecode'].forEach(id=>{
     $(id+'-modal').classList.remove('visible');
     $(id+'-backdrop').classList.remove('visible');
   });
@@ -1050,12 +1050,12 @@ function backToUserProfile(){
 }
 
 // "← Back" from a leaf reached via Personalisation specifically (Voice
-// Theme, Nameplate, Game Music) — these have no other entry point since
+// Theme, Nameplate, Call Style, Game Music) — these have no other entry point since
 // Personalisation consolidated them (see togglePersonalisationModal), so
 // unlike Player Icon/Title below, their own "← Back" can always return
 // straight here rather than all the way up to the User Profile hub.
 function backToPersonalisation(){
-  ['playericon','title','voicetheme','nameplate','gamemusic'].forEach(id=>{
+  ['playericon','title','voicetheme','nameplate','callstyle','gamemusic'].forEach(id=>{
     $(id+'-modal').classList.remove('visible');
     $(id+'-backdrop').classList.remove('visible');
   });
@@ -1567,6 +1567,17 @@ function toggleNameplateModal(){
   const open=modal.classList.contains('visible');
   if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
   renderNameplateSkins();
+  modal.classList.add('visible');
+  backdrop.classList.add('visible');
+}
+
+// Same again for call styles — OWNED ones only (see renderCallStyles).
+function toggleCallStyleModal(){
+  const modal=$('callstyle-modal');
+  const backdrop=$('callstyle-backdrop');
+  const open=modal.classList.contains('visible');
+  if(open){ modal.classList.remove('visible'); backdrop.classList.remove('visible'); return; }
+  renderCallStyles();
   modal.classList.add('visible');
   backdrop.classList.add('visible');
 }
@@ -4364,6 +4375,9 @@ function applyCallStyle(styleId){
   currentCallStyle=styleId;
   try{ localStorage.setItem('mj-call-style',styleId); }catch(e){}
   wss({type:'equip_callstyle',style:styleId});
+  document.querySelectorAll('.callstyle-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.style===styleId);
+  });
   renderShopCallStyles();
 }
 function applyNameplateSkin(skinId){
@@ -4485,6 +4499,26 @@ function renderNameplateSkins(){
     list.appendChild(btn);
   });
   applyNameplateSkin(currentNameplateSkin);
+}
+
+// Call Style picker (#callstyle-list) — OWNED styles only, same as
+// renderNameplateSkins. Clicking a row equips it; its ▶ plays the style
+// over the panel (previewCallStyle) without equipping.
+function renderCallStyles(){
+  const list=$('callstyle-list'); if(!list) return;
+  list.innerHTML='';
+  const owned=ownedCosmetics.callStyles||['default'];
+  CALLSTYLE_CATALOG.filter(cs=>owned.includes(cs.id)).forEach(cs=>{
+    const btn=document.createElement('button');
+    btn.className='callstyle-btn'+(cs.id===currentCallStyle?' active':'');
+    btn.dataset.style=cs.id;
+    btn.innerHTML='<span class="cs-swatch cs-sw-'+cs.id+'"><b>'+cs.jp+'</b></span>'+
+      '<span class="callstyle-label">'+cs.label+'</span>'+
+      '<span class="callstyle-play" role="button" title="Play preview">▶</span>';
+    btn.onclick=()=>applyCallStyle(cs.id);
+    btn.querySelector('.callstyle-play').onclick=e=>{ e.stopPropagation(); previewCallStyle(cs.id); };
+    list.appendChild(btn);
+  });
 }
 
 // ── Shop ─────────────────────────────────────────────────────────────────
@@ -5043,10 +5077,12 @@ function spawnYakumanMotif(layer,cfg){
 // up and the limit-tier hanko presses in, then onEnd's results panel takes
 // over. Riichi has no banner; its stick just drops onto the table
 // (onRiichi). csFlashCall remains for the Store's call-style preview.
-// A win can be skipped with a tap/click or Space/Enter/Esc. Every pending
-// step checks csRun, so a skip, a newer cutscene or clearCutscene()
-// (leaving the table) cancels whatever is still queued.
-let csRun=0, csSkip=null, csResize=null;
+// A win can't be skipped, and once it has played through only its "Tap to
+// continue" button moves on (see playWinCutscene). Every pending step
+// checks csRun, so a newer cutscene or clearCutscene() (leaving the table)
+// cancels whatever is still queued. csWinActive: a win cutscene owns
+// #cs-layer, so the Store's call-style preview stays out of it.
+let csRun=0, csWinActive=false;
 // The default call (call style 'default'): a deep jade band — gradient
 // #cs-jade, defined once in index.html so every band can reference it —
 // with thin gold hairlines along both edges (.cs-edge).
@@ -5056,13 +5092,10 @@ const CS_SLASH_SVG='<svg class="cs-slash" viewBox="0 0 1000 220" preserveAspectR
   +'<path class="cs-edge" d="M0,164 C140,200 320,190 520,182 C710,176 870,190 1000,168" stroke-width="1.6" vector-effect="non-scaling-stroke"/>'
   +'</svg>';
 function csWait(ms,id){return new Promise((res,rej)=>setTimeout(()=>id===csRun?res():rej(new Error('cs-cancel')),ms));}
-function csKey(e){ if(csSkip&&(e.key===' '||e.key==='Enter'||e.key==='Escape')){ e.preventDefault(); csSkip(); } }
 function clearCutscene(){
-  csRun++; csSkip=null;
-  document.removeEventListener('keydown',csKey);
-  if(csResize){ window.removeEventListener('resize',csResize); csResize=null; }
+  csRun++; csWinActive=false; csEndPreviewBlock();
   const l=$('cs-layer'); if(!l) return;
-  l.innerHTML=''; l.className='cs-layer'; l.removeAttribute('style'); l.onclick=null;
+  l.innerHTML=''; l.className='cs-layer'; l.removeAttribute('style');
 }
 function csShake(l,big){ l.classList.remove('cs-shake','cs-shake-big'); void l.offsetWidth; l.classList.add(big?'cs-shake-big':'cs-shake'); }
 function csDim(l){ const d=document.createElement('div'); d.className='cs-dim'; l.appendChild(d); void d.offsetWidth; return d; }
@@ -5129,24 +5162,33 @@ const CS_STYLES={
 };
 // Store styles hold a little longer than the jade band — they have more to
 // show (a lantern settling, fireworks bursting).
-const csCallHold=style=>style&&style!=='default'&&CS_STYLES[style]?1600:1250;
+const csCallHold=style=>style&&style!=='default'&&CS_STYLES[style]?2000:2000;
 // The call style equipped by the player in a seat — from the last
 // game_state (seatCallStyles, see room.js), 'default' for bots and guests.
 const csSeatStyle=seat=>lastState?.seatCallStyles?.[seat]||'default';
 
-// A call that plays over the table and clears itself (now only the Store
-// preview, which lifts the layer above the Store modal with .cs-preview).
+// Swallows every key while a call-style preview plays (capture phase, so
+// it runs before any other handler) — no Esc closing the panel underneath,
+// no Tab/Enter reaching a focused button. Pointer input is blocked by the
+// layer itself (.blocking covers the whole screen).
+function csPreviewKeyBlock(e){ e.preventDefault(); e.stopImmediatePropagation(); }
+function csEndPreviewBlock(){ window.removeEventListener('keydown',csPreviewKeyBlock,true); }
+
+// A call that plays over the table and clears itself (now only the Store /
+// Personalisation preview, which lifts the layer above the panels with
+// .cs-preview). The preview locks out all input until it has fully cleared.
 function csFlashCall(o,preview){
-  const l=$('cs-layer'); if(!l||csSkip) return; // a win cutscene owns the layer
+  const l=$('cs-layer'); if(!l||csWinActive) return; // a win cutscene owns the layer
   const id=++csRun;
-  l.innerHTML=''; l.className='cs-layer'+(preview?' cs-preview':''); l.removeAttribute('style');
+  l.innerHTML=''; l.className='cs-layer'+(preview?' cs-preview blocking':''); l.removeAttribute('style');
+  if(preview){ document.activeElement?.blur?.(); window.addEventListener('keydown',csPreviewKeyBlock,true); }
   const dim=csDim(l); dim.classList.add('on');
   const c=csCall(o);
   l.appendChild(c);
   const hold=csCallHold(o.style);
   setTimeout(()=>{ if(id===csRun) csShake(l,false); },200);
   setTimeout(()=>{ if(id!==csRun) return; csHideCall(c); dim.classList.remove('on'); },hold);
-  setTimeout(()=>{ if(id===csRun){ l.innerHTML=''; l.className='cs-layer'; } },hold+400);
+  setTimeout(()=>{ if(id===csRun){ l.innerHTML=''; l.className='cs-layer'; csEndPreviewBlock(); } },hold+400);
 }
 function previewCallStyle(style){
   const name=($('iname')?.value||'').trim()||'Player';
@@ -5233,18 +5275,18 @@ function csBonusLine(m,w){
 
 // Limit-tier hanko pressed beside the points (see .cs-stamp in style.css).
 // Built hidden for the animated run (runWinCutscene adds .go) or already
-// printed (.still) for the finished frame. Double yakuman shows the 役満
+// Double yakuman shows the 役満
 // seal with a ×2 tab rather than squeezing ダブル役満 onto it.
 const CS_STAMP_IMPACT=275; // 55% of cs-stamp-press's .5s — when the seal hits
-function csBuildStamp(limit,still){
+function csBuildStamp(limit){
   const tier=limit.cls.replace('lbl-','');
-  return csSeal(tier==='double-yakuman'?'役満':limit.label,tier,still);
+  return csSeal(tier==='double-yakuman'?'役満':limit.label,tier);
 }
 // Any hanko: txt is its characters (stacked top to bottom), tier a .t-*
 // size/style class (the limit tiers).
-function csSeal(txt,tier,still){
+function csSeal(txt,tier){
   const s=document.createElement('div');
-  s.className=`cs-stamp t-${tier}`+(still?' still':'');
+  s.className=`cs-stamp t-${tier}`;
   s.setAttribute('aria-hidden','true');
   const flecks=Array.from({length:9},(_,i)=>
     `<i class="cs-stamp-dot" style="--a:${Math.round(i*40+Math.random()*24)}deg;--r:calc(var(--st) * ${csRand(.75,1.15)});--d:calc(var(--st) * ${csRand(.04,.09)})"></i>`).join('');
@@ -5290,35 +5332,68 @@ function playStampSfx(heavy){
   }catch(e){}
 }
 
+// Yaku badge landing (see runWinCutscene's yaku step): the discard tile
+// clack, played as each badge's press-in (.cs-y.in) hits, with a small bell
+// on top for dora rows. Picked from the "Yaku Badge Sounds" mockup. It's
+// played from a decoded buffer rather than the shared #sfx-discard element,
+// so quick badges can overlap without cutting each other off. Same
+// mute/volume as the stamp thud, at under half its level.
+// CS_BADGE_IMPACT mirrors the 60% keyframe of cs-y-press's .3s.
+const CS_BADGE_GAIN=.45, CS_BADGE_IMPACT=180;
+let csClackBuf=null, csClackLoading=false;
+function csLoadClack(){
+  if(csClackBuf||csClackLoading) return;
+  csClackLoading=true;
+  try{
+    const ctx=getFxAudioCtx().ctx;
+    fetch('/audio/FX/Discard.m4a').then(r=>r.arrayBuffer())
+      .then(b=>new Promise((res,rej)=>ctx.decodeAudioData(b,res,rej)))
+      .then(b=>{ csClackBuf=b; },()=>{ csClackLoading=false; });
+  }catch(e){ csClackLoading=false; }
+}
+function playYakuBadgeSfx(dora){
+  if(!discardSfxEnabled) return;
+  try{
+    const ctx=getFxAudioCtx().ctx;
+    if(ctx.state==='suspended') ctx.resume();
+    const out=ctx.createGain(); out.gain.value=CS_BADGE_GAIN; out.connect(getDiscardGainNode());
+    if(csClackBuf){
+      const s=ctx.createBufferSource(); s.buffer=csClackBuf;
+      s.connect(out); s.start();
+    } else { playDiscardSfx(); csLoadClack(); } // not decoded yet: plain clack this once
+    if(dora){
+      const now=ctx.currentTime;
+      for(const [f,peak,len] of [[1200,.28,.35],[2400,.14,.22]]){
+        const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=f;
+        const e=ctx.createGain(); e.gain.setValueAtTime(peak,now); e.gain.exponentialRampToValueAtTime(.0001,now+len);
+        o.connect(e); e.connect(out); o.start(now); o.stop(now+len+.02);
+      }
+    }
+  }catch(e){}
+}
+
 // One winner's reveal block: name, hand (+ melds), dora/ura dora, yaku and
-// points. Built face-down/hidden for the animated run, or fully shown
-// (o.instant) for the finished frame a tap jumps to. o.onNav adds prev/next
-// arrows for a double/triple ron on that finished frame.
+// points. Built face-down/hidden; runWinCutscene reveals it step by step.
 function csBuildReveal(m,w,o){
   const limit=limitLabel(w.han||0,w.fu||0);
   const gain=m.prevScores&&m.scores?m.scores[w.winSeat]-m.prevScores[w.winSeat]:(w.pay||0);
-  const rv=document.createElement('div'); rv.className='cs-reveal'+(o.instant?' on':'');
+  const rv=document.createElement('div'); rv.className='cs-reveal';
   rv.innerHTML='<div class="cs-who"></div><div class="cs-hand"></div><div class="cs-dora"></div><div class="cs-yaku"></div>'
     +'<div class="cs-pts"><div class="cs-pts-num"><b>0</b></div><span></span><span></span><span></span></div>';
   const who=rv.querySelector('.cs-who');
   const label=document.createElement('span');
   label.textContent=csSeatName(m)(w.winSeat)+(o.count>1?` · ${o.index+1} / ${o.count}`:'');
-  if(o.onNav&&o.count>1){
-    const arrow=(txt,d,aria)=>{ const b=document.createElement('button'); b.type='button'; b.className='cs-nav';
-      b.textContent=txt; b.setAttribute('aria-label',aria);
-      b.onclick=e=>{ e.stopPropagation(); o.onNav(d); }; return b; };
-    who.append(arrow('◀',-1,'Previous winner'),label,arrow('▶',1,'Next winner'));
-  } else who.appendChild(label);
+  who.appendChild(label);
 
   const hand=(w.hand||[]).filter(Boolean), melds=w.melds||[];
   const meldTiles=melds.reduce((n,md)=>n+(md.kanType==='ankan'?4:md.tiles.length),0);
   const {w:tw,h:th}=csTileSize(hand.length+meldTiles+(melds.length?1:0));
   const handEl=rv.querySelector('.cs-hand');
   handEl.style.setProperty('--cs-tw',tw+'px'); handEl.style.setProperty('--cs-th',th+'px');
-  const flips=hand.map(t=>{ const f=csFlipTile(t,tw,th); if(o.instant) f.classList.remove('down'); handEl.appendChild(f); return f; });
+  const flips=hand.map(t=>{ const f=csFlipTile(t,tw,th); handEl.appendChild(f); return f; });
   flips.at(-1)?.classList.add('cs-win-tile'); // the winning tile is always last in w.hand
   if(melds.length){
-    const mg=document.createElement('div'); mg.className='cs-melds'+(o.instant?' on':'');
+    const mg=document.createElement('div'); mg.className='cs-melds';
     for(const md of melds) appendEndPanelMeld(mg,md,tw,th);
     handEl.appendChild(mg);
   }
@@ -5337,7 +5412,7 @@ function csBuildReveal(m,w,o){
   const yk=rv.querySelector('.cs-yaku');
   const rows=(w.yakuList||[]).map(y=>{
     const row=document.createElement('div');
-    row.className='cs-y'+(CS_DORA_ROWS.has(y.name)?' cs-y-dora':'')+(o.instant?' in':'');
+    row.className='cs-y'+(CS_DORA_ROWS.has(y.name)?' cs-y-dora':'');
     row.dataset.han=y.han||0;
     const hanTxt=y.han>=26?'ダブル役満':y.han>=13?'役満':`${y.han} Han`;
     row.innerHTML=`<span class="cs-yj">${escHtml(y.jp||y.name)}</span><span class="cs-yn">${escHtml(y.name)}</span><span class="cs-yh">${hanTxt}</span>`;
@@ -5345,48 +5420,43 @@ function csBuildReveal(m,w,o){
   });
   let hanTotal=null;
   if(!(w.yakuList||[]).some(y=>y.han>=13)){
-    hanTotal=document.createElement('div'); hanTotal.className='cs-han'+(o.instant?' on':'');
-    hanTotal.innerHTML=`<span>合計</span><b>${o.instant?w.han:0}</b><span>Han</span>`;
+    hanTotal=document.createElement('div'); hanTotal.className='cs-han';
+    hanTotal.innerHTML=`<span>合計</span><b>0</b><span>Han</span>`;
     yk.after(hanTotal);
   }
 
   const pts=rv.querySelector('.cs-pts'), [l1,l2,l3]=pts.querySelectorAll(':scope>span');
-  const stamp=limit?csBuildStamp(limit,o.instant):null;
+  const stamp=limit?csBuildStamp(limit):null;
   if(stamp) pts.querySelector('.cs-pts-num').appendChild(stamp);
   l1.textContent=csIsYakuman(limit)?`${limit.en} · ${limit.label}`
     :`${w.han} Han`+(w.fu?` · ${w.fu} Fu`:'')+(limit?` · ${limit.en} ${limit.label}`:'');
   l2.textContent=csPayLine(m,w);
   l3.textContent=csBonusLine(m,w);
-  if(o.instant){ pts.classList.add('on'); pts.querySelector('b').textContent=gain.toLocaleString(); }
   return {rv,flips,rows,hanTotal,pts,gain,limit,stamp};
 }
 
-// done() shows the standings card. A tap (or Space/Enter/Esc) while the
-// sequence is still animating jumps to the finished frame — every winner's
-// hand, yaku and points shown at once — instead of past it, so skipping
-// never hides anything; the next tap continues. Played through on its own,
-// the finished frame holds CS_FINAL_HOLD and continues by itself. Never
-// called after clearCutscene, which means the player left the table.
+// done() shows the standings card. The sequence can't be skipped: the
+// layer swallows taps (so nothing reaches the table underneath) but does
+// nothing with them. Once played through it holds CS_FINAL_HOLD with a
+// "Tap to continue" button — the only thing that continues early — and
+// then continues by itself. Never called after clearCutscene, which means
+// the player left the table.
 function playWinCutscene(m,done){
   const l=$('cs-layer'), winners=m.winners||[];
   if(!l||!winners.length){ done(); return; }
   clearCutscene();
   const id=csRun;
-  let finished=false, final=false;
+  let finished=false;
   const finish=()=>{ if(finished) return; finished=true; clearCutscene(); done(); };
-  const advance=()=>{ if(final) return finish(); final=true; csRun++; csFinalFrame(m,l); };
-  csSkip=advance; l.onclick=advance;
-  document.addEventListener('keydown',csKey);
+  csWinActive=true;
   l.className='cs-layer blocking';
-  l.innerHTML='<div class="cs-skip">Tap to skip</div>';
   runWinCutscene(m,l,id)
     .then(()=>{
-      final=true;
-      const hint=l.querySelector('.cs-skip');
-      hint.textContent='Tap to continue';
+      const btn=document.createElement('button'); btn.type='button'; btn.className='cs-skip';
+      btn.textContent='Tap to continue'; btn.onclick=finish;
       const bar=document.createElement('i'); bar.className='cs-hold-bar';
       bar.style.animationDuration=CS_FINAL_HOLD+'ms';
-      hint.appendChild(bar);
+      btn.appendChild(bar); l.appendChild(btn);
       return csWait(CS_FINAL_HOLD,id);
     })
     .then(finish,e=>{ if(e?.message!=='cs-cancel') finish(); });
@@ -5477,27 +5547,9 @@ function playRonSnatch(m,done){
   },RON_SNATCH_LIFT);
 }
 
-function csFinalFrame(m,l){
-  l.innerHTML='<div class="cs-skip">Tap to continue</div>';
-  l.removeAttribute('style'); l.className='cs-layer blocking';
-  const dim=csDim(l); dim.classList.add('instant','heavy');
-  const order=csWinnerOrder(m);
-  let idx=order.length-1;
-  const show=()=>{
-    l.querySelector('.cs-reveal')?.remove();
-    l.appendChild(csBuildReveal(m,order[idx],{instant:true,index:idx,count:order.length,
-      onNav:d=>{ idx=(idx+d+order.length)%order.length; show(); }}).rv);
-  };
-  show();
-  // Tile sizes are baked in at build time (see csTileSize), so re-fit the
-  // frame if the window resizes or the phone rotates while it's up —
-  // debounced, since resize can fire before the new size has settled.
-  let t=null;
-  csResize=()=>{ clearTimeout(t); t=setTimeout(()=>{ if(csResize) show(); },150); };
-  window.addEventListener('resize',csResize);
-}
 
 async function runWinCutscene(m,l,id){
+  csLoadClack(); // decode the badge clack while the call plays
   const name=csSeatName(m);
   const names=(m.winners||[]).map(x=>name(x.winSeat));
   const order=csWinnerOrder(m);
@@ -5516,7 +5568,7 @@ async function runWinCutscene(m,l,id){
   if(m.reason==='ron'){
     dim.classList.remove('on');
     await new Promise(res=>playRonSnatch(m,res));
-    await csWait(0,id); // a skip during the snatch has moved on to the finished frame
+    await csWait(0,id); // stop here if the player left the table during the snatch
   }
   dim.classList.add('heavy');
 
@@ -5542,8 +5594,12 @@ async function runWinCutscene(m,l,id){
     hanTotal?.classList.add('on');
     let han=0, doraStarted=false;
     for(const row of rows){
-      if(row.classList.contains('cs-y-dora')&&!doraStarted){ doraStarted=true; await csWait(350,id); }
+      const dora=row.classList.contains('cs-y-dora');
+      if(dora&&!doraStarted){ doraStarted=true; await csWait(350,id); }
       row.classList.add('in');
+      // Clack on the press's impact. Yakuman rows stay silent: the themed
+      // band right after brings its own sound.
+      if(!isYm) setTimeout(()=>{ if(id===csRun) playYakuBadgeSfx(dora); },CS_BADGE_IMPACT);
       if(hanTotal){
         han+=Number(row.dataset.han)||0;
         const b=hanTotal.querySelector('b'); b.textContent=han;
@@ -6407,8 +6463,8 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refitAllNamep
 // when a hand runs long with several kans) reaches far enough to visually
 // sit UNDER the nameplate (.np's z-index:20 beats the discard zone's own
 // auto stacking), hiding those tiles rather than just crowding them. Rather
-// than touch the shared 26%-of-felt anchor every discard zone/the round-info
-// panel are positioned off of (risking the whole felt's balance for a rare
+// than touch the shared --ctr-size anchor every discard zone/the round-info
+// panel are positioned off of (see .felt in style.css; risking the whole felt's balance for a rare
 // edge case), this only ever engages once an actual overlap is detected,
 // scaling the WHOLE pile down toward its own anchor corner (transform-
 // origin:left top — already set in CSS for dzt/dzl/dzr, a no-op for dzb
@@ -6808,6 +6864,27 @@ function setSeatWindsBy(windOf){
 }
 // Before a round's first game_state (game/round start), from the dealer.
 function setSeatWinds(dealer){ setSeatWindsBy(abs=>(abs-dealer+numSeats)%numSeats); }
+// Turns the panel's lit wedge (#ctr-turn) to the seat whose turn it is.
+// The angle only ever grows the same way (play passes counter-clockwise:
+// me, right, top, left), so the wedge always sweeps forward, also across
+// a call that jumps the turn. The first placement is instant.
+const CTR_TURN_ROT={b:0,r:-90,t:-180,l:-270};
+let ctrTurnAngle=null;
+function setCtrTurn(m){
+  const el=$('ctr-turn'); if(!el) return;
+  if(m.turn==null){ el.classList.add('off'); return; }
+  el.classList.remove('off');
+  const target=CTR_TURN_ROT[P[(m.turn-mySeat+numSeats)%numSeats]]??0;
+  if(ctrTurnAngle===null){
+    ctrTurnAngle=target;
+    el.classList.add('no-anim'); el.style.transform=`rotate(${target}deg)`;
+    void el.offsetWidth; el.classList.remove('no-anim');
+    return;
+  }
+  const back=(((ctrTurnAngle-target)%360)+360)%360; // how far to turn, always forward
+  if(back) ctrTurnAngle-=back;
+  el.style.transform=`rotate(${ctrTurnAngle}deg)`;
+}
 function updateCenterPanel(m,prev){
   // Server sends seatWinds[absIndex] = wind index (0=East..3=North).
   if(m.seatWinds) setSeatWindsBy(abs=>m.seatWinds[abs]);
@@ -6815,6 +6892,7 @@ function updateCenterPanel(m,prev){
     const abs=(mySeat+i)%numSeats;
     $('ctr-s-'+P[i])?.parentElement.classList.toggle('cd-on',m.turn===abs);
   }
+  setCtrTurn(m);
   const wall=m.wallCount||0;
   if(!prev||wall>(prev.wallCount??-1)) cdWallMax=wall;
   cdWallMax=Math.max(cdWallMax,wall);
@@ -6843,7 +6921,7 @@ function renderState(m, prev){
   $('cw-wind').textContent = windChar[dispWind-1];
   $('cw-kyoku').textContent = dispRound;
   $('ci').textContent = '';
-  $('cwl').textContent=`残 ${m.wallCount}`;
+  $('cwl').innerHTML=`${m.wallCount??0}<span class="cwl-unit">tiles</span>`;
   updateCenterPanel(m,prev);
   const h=m.honba||0,rs=m.riichiSticks||0;
   const riichiCountEl=$('stick-riichi-count'); if(riichiCountEl) riichiCountEl.textContent=rs;
@@ -7082,6 +7160,7 @@ function renderState(m, prev){
         dz.appendChild(row);
       }
       const el=mkElMd(t);
+      pondJitter(el,t.id);
       if(t.riichi){
         // Wrap in a rotated container — the 90° rotation is in player's own perspective
         // CSS class handles the rotation; margin compensates for size change
@@ -7090,6 +7169,7 @@ function renderState(m, prev){
       animatePlaced(el,'d'+t.id,'tile-drop',PLACE_DROP_MS,!!prev&&!prevIds.has(t.id));
       row.appendChild(el);
     });
+    layoutPond(dz);
     fitDiscardZone(dz,id);
   }
 
@@ -7213,8 +7293,10 @@ function optimisticDiscard(tileId){
     // Starts the drop now; the authoritative renderState picks it up
     // mid-flight via the same key rather than replaying it.
     const tEl=mkElMd(tileObj);
+    pondJitter(tEl,tileId);
     animatePlaced(tEl,'d'+tileId,'tile-drop',PLACE_DROP_MS,true);
     row.appendChild(tEl);
+    layoutPond(dz);
   }
   const bar=$('actbar'); if(bar){ bar.innerHTML=''; bar.classList.remove('visible'); }
   ['chi-picker','riichi-picker','ankan-picker','declare-picker'].forEach(id=>$(id)?.remove());
@@ -7926,6 +8008,71 @@ function hint(c,t){const h=document.createElement('span');h.className='hint';h.t
 // "<v><suit>" tile key (e.g. "3m") -> a plain tile object usable by tsvg/mkEl.
 function keyToTile(k){ return {v:parseInt(k), s:k.slice(-1)}; }
 
+// Natural ponds: each discard lands with a slight lean and a small up/down
+// nudge, like a tile set down by hand. Derived from the tile's id, so a tile
+// keeps the same lie on every re-render (no jitter between states) and the
+// optimistic drop in my own pond matches the server's copy. Read by
+// `.dz .tmd` in style.css; delete that rule (and layoutPond's spacing
+// rules beside it) to go back to a grid.
+function pondJitter(el,id){
+  const r=k=>{ const x=Math.sin((id+1)*12.9898+k*78.233)*43758.5453; return x-Math.floor(x)-.5; };
+  el.dataset.rz=(r(1)*2.4).toFixed(2);   // lean, ±1.2°
+  el.dataset.dy=(r(3)*.015).toFixed(4);  // nudge, ±0.75% of its height
+  el.style.setProperty('--rz',el.dataset.rz+'deg');
+  el.style.setProperty('--dy',el.dataset.dy);
+}
+// Tiles are solid: they may touch but never overlap. Instead of a fixed gap,
+// layoutPond spaces each tile from its neighbour (--gx, before the tile) and
+// each row from the one above (--gy) by exactly what their leans need, so
+// straight tiles sit flush. Works in tile widths (a pond tile is 1 wide x H
+// tall), on each tile's real tilted outline. The riichi tile lies sideways
+// along the top of its row.
+function pondQuad(cx,cy,w,h,deg){
+  const t=deg*Math.PI/180, c=Math.cos(t), s=Math.sin(t);
+  return [[-w/2,-h/2],[w/2,-h/2],[w/2,h/2],[-w/2,h/2]].map(([x,y])=>[cx+x*c-y*s,cy+x*s+y*c]);
+}
+// Separating-axis test: true when two convex outlines overlap (touching is fine).
+function pondOverlap(A,B){
+  for(const P of [A,B]) for(let i=0;i<4;i++){
+    const [x1,y1]=P[i],[x2,y2]=P[(i+1)%4], nx=y2-y1, ny=x1-x2;
+    const pa=A.map(([x,y])=>x*nx+y*ny), pb=B.map(([x,y])=>x*nx+y*ny);
+    if(Math.min(Math.max(...pa),Math.max(...pb))-Math.max(Math.min(...pa),Math.min(...pb))<=1e-9) return false;
+  }
+  return true;
+}
+function layoutPond(dz){
+  const EPS=.002; // a hair of rounding room, so "touching" never rounds into overlap
+  const rs=document.documentElement.style, H=(parseFloat(rs.getPropertyValue('--tmd-h'))/parseFloat(rs.getPropertyValue('--tmd-w')))||1.38;
+  let above=null; // the previous row's tiles: {x0,x1,quad(yTop)}
+  [...dz.children].forEach((row,ri)=>{
+    // Across the row: each tile's leaning box reaches out (bw-w)/2 each side.
+    let x=0, prevX=null; const tiles=[];
+    [...row.children].forEach(el=>{
+      if(!el.dataset.rz) return;
+      const deg=+el.dataset.rz||0, side=el.classList.contains('dz-riichi'), t=Math.abs(deg)*Math.PI/180;
+      const fw=side?H:1, bw=side?Math.sin(t)+H*Math.cos(t):Math.cos(t)+H*Math.sin(t), reach=(bw-fw)/2;
+      const gx=prevX===null?0:prevX+reach+EPS;
+      el.style.setProperty('--gx',gx.toFixed(4));
+      x+=gx; const cx=x+fw/2; x+=fw; prevX=reach;
+      const dy=(+el.dataset.dy||0)*H;
+      // Outline with the row's top at yTop: an upright tile is centred in the row,
+      // the sideways riichi tile lies along the row's top.
+      tiles.push({x0:cx-bw/2, x1:cx+bw/2, quad:yTop=>side?pondQuad(cx,yTop+.5+dy,1,H,-90+deg):pondQuad(cx,yTop+H/2+dy,1,H,deg)});
+    });
+    // Down the pond: the least drop below the row above at which no tile that
+    // actually sits over another one overlaps it.
+    let gy=0;
+    if(above) for(const a of above) for(const b of tiles){
+      if(Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0)<=0) continue;
+      const A=a.quad(0); let lo=0, hi=.15;
+      if(!pondOverlap(A,b.quad(H+lo))) continue;
+      for(let k=0;k<14;k++){ const mid=(lo+hi)/2; if(pondOverlap(A,b.quad(H+mid))) lo=mid; else hi=mid; }
+      gy=Math.max(gy,hi+EPS);
+    }
+    row.style.setProperty('--gy',gy.toFixed(4));
+    above=tiles;
+  });
+}
 function mkEl(tile,cls,w,h){
   const el=document.createElement('div');el.className='tile '+cls;
   // If w/h not provided, read from CSS vars
@@ -8030,12 +8177,14 @@ function initColorPicker(){
     sw.onclick=()=>selectChatColor(c);
     picker.appendChild(sw);
   });
-  btn.style.background=myChatColor;
+  // The button is a glass tile; the colour shows as a dot inside it (see
+  // .chat-color-btn::after in style.css).
+  btn.style.setProperty('--chat-col',myChatColor);
 }
 
 function selectChatColor(c){
   myChatColor=c;
-  const btn=$('chat-color-btn'); if(btn) btn.style.background=c;
+  const btn=$('chat-color-btn'); if(btn) btn.style.setProperty('--chat-col',c);
   toggleColorPicker(false);
   initColorPicker();
 }
@@ -8524,8 +8673,8 @@ function roundStartBanner(wind,round,honba,dealerName){
 // tapping Ready (or Space/Enter) readies them early. The server starts the
 // next round as soon as every human seat is ready (see the round_ready
 // action in room.js), so if everyone taps, it starts right away. The
-// countdown runs on each client from when ITS panel appears, since a win
-// cutscene can be skipped or watched in full.
+// countdown runs on each client from when ITS panel appears, since one
+// client can tap past a win cutscene's final hold sooner than another.
 const ROUND_READY_MS=8000;
 let roundReadyTimer=null, roundReadySent=false;
 function startRoundReadyCountdown(){
@@ -9191,7 +9340,7 @@ function onEnd(m){
   }
   };
   // A tsumo/ron plays the win cutscene first (see playWinCutscene) and
-  // reveals the panel when it ends or is skipped; every other reason
+  // reveals the panel when it ends; every other reason
   // reveals immediately.
   if(m.reason==='tsumo'||m.reason==='ron'){
     // reveal() firing here is OUTSIDE this function's own try (it runs

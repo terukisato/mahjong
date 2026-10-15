@@ -96,7 +96,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.17.0</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.17.1</span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI and real opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -443,6 +443,7 @@
     <a href="#" class="hub-link" onclick="leafOpenedFrom='personalisation';togglePersonalisationModal();toggleTitleModal();return false;">Title</a>
     <a href="#" class="hub-link" onclick="togglePersonalisationModal();toggleVoiceThemeModal();return false;">Voice Theme</a>
     <a href="#" class="hub-link" onclick="togglePersonalisationModal();toggleNameplateModal();return false;">Nameplate</a>
+    <a href="#" class="hub-link" onclick="togglePersonalisationModal();toggleCallStyleModal();return false;">Call Style</a>
     <a href="#" class="hub-link" onclick="togglePersonalisationModal();toggleGameMusicModal();return false;">Game Music</a>
   </div>
 </div>
@@ -504,6 +505,19 @@
   <div class="about-title">Nameplate</div>
   <div class="about-body">
     <div id="nameplate-list" class="nameplate-grid"></div>
+  </div>
+</div>
+
+<!-- Call Style — same pattern as Nameplate above. Lists only OWNED styles
+     (renderCallStyles), each with a ▶ to play it; new ones are bought in the
+     Store. -->
+<div id="callstyle-backdrop" class="about-backdrop" onclick="toggleCallStyleModal()"></div>
+<div id="callstyle-modal" class="about-modal">
+  <button class="about-back" onclick="backToPersonalisation()">←</button>
+  <button class="about-close" onclick="toggleCallStyleModal()">✕</button>
+  <div class="about-title">Call Style</div>
+  <div class="about-body">
+    <div id="callstyle-list" class="nameplate-grid"></div>
   </div>
 </div>
 
@@ -1285,7 +1299,7 @@
      ════════════════════════════════════════════════════════════ -->
 <div class="screen hidden" id="s-game">
   <div class="topbar">
-    <div class="tb-title"><span class="tb-jp">雀心</span> <span class="tb-en">Mahjong</span> <span id="tb-mode" class="tb-mode-label"></span></div>
+    <div class="tb-title"><span class="tb-jp">雀心</span> <span class="tb-en">Janshin</span> <span id="tb-mode" class="tb-mode-label"></span></div>
     <div class="tb-st" id="tst">—</div>
     <div class="tb-right">
       <button class="bl" id="bleave">✕ Leave</button>
@@ -1312,6 +1326,10 @@
            each .ctr-score is a full-panel layer rotated toward its seat,
            holding that seat's score and riichi stick along its edge. ── -->
       <div class="ctr">
+        <!-- The current player's section of the panel: one faint gold
+             wedge that turns round to whoever's turn it is (see
+             setCtrTurn in script.js). -->
+        <div class="ctr-turn" id="ctr-turn"></div>
         <div class="cd-arc" id="cd-arc"></div>
         <div class="ctr-score ctr-score-top">
           <span id="ctr-s-t" class="ctr-score-val">—</span>
@@ -1439,22 +1457,24 @@
          hidden automatically with #chat-bar since it's a child of it, no
          separate toggle needed. -->
     <div class="assist-bar" id="assist-bar">
-      <button class="assist-btn" id="bmagnify" onclick="openMagnify()" title="Magnify Hand">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <!-- Line icons, one set at one stroke weight (matching the chat bar's own
+           below): magnifier with +, open book, lightbulb. -->
+      <button class="assist-btn" id="bmagnify" onclick="openMagnify()" title="Magnify Hand" aria-label="Magnify hand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4.5 4.5"/><path d="M10.5 8v5M8 10.5h5"/></svg>
       </button>
-      <button class="assist-btn" id="byakuref" onclick="toggleYakuRef()" title="Yaku Reference">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+      <button class="assist-btn" id="byakuref" onclick="toggleYakuRef()" title="Yaku Reference" aria-label="Yaku reference">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5Z"/><path d="M12 6.5v13"/></svg>
       </button>
-      <button class="assist-btn" id="badvice" onclick="requestAdvice()" title="Help — analyze my hand">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      <button class="assist-btn" id="badvice" onclick="requestAdvice()" title="Help — analyze my hand" aria-label="Analyze my hand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"/></svg>
       </button>
     </div>
     <button class="chat-color-btn" id="chat-color-btn" title="Message colour" aria-label="Choose message colour" aria-expanded="false"></button>
-    <button class="chat-emoji-btn" id="chat-emoji-btn" title="React with an emoji" aria-label="React with an emoji" aria-expanded="false">😀</button>
+    <button class="chat-emoji-btn" id="chat-emoji-btn" title="React with an emoji" aria-label="React with an emoji" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.2c.9 1.3 2.1 1.9 3.5 1.9s2.6-.6 3.5-1.9"/><path d="M9.2 9.6h.01M14.8 9.6h.01" stroke-width="2.4"/></svg></button>
     <input class="chat-input" id="chat-input" placeholder="Say something…" maxlength="40" autocomplete="off" aria-label="Chat message">
-    <button class="chat-send" id="chat-send">Send</button>
-    <button class="chat-hist-btn" id="chat-hist-btn" title="Chat history">
-      History
+    <button class="chat-send" id="chat-send" title="Send" aria-label="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 20 4l-4 16-4.5-6.5L4 12Z"/><path d="m11.5 13.5 4-4"/></svg></button>
+    <button class="chat-hist-btn" id="chat-hist-btn" title="Chat history" aria-label="Chat history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M8 9h8M8 12h5"/></svg>
       <span class="badge" id="chat-badge">0</span>
     </button>
   </div>

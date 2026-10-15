@@ -294,9 +294,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* 雀心 in the START button's gold leaf. */
 .tb-jp{font-weight:900;background:linear-gradient(115deg,#b5903f 0%,#ffe9b0 48%,#cfa74d 100%);-webkit-background-clip:text;background-clip:text;color:transparent;}
 .tb-en{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin) * 1.35);letter-spacing:.28em;}
-/* Whose turn, between two small gold diamond studs. */
+/* Whose turn. */
 .tb-st{font-size:calc(var(--ui-vmin) * 1.944);color:rgba(245,237,216,.5);max-width:40vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.tb-st::before,.tb-st::after{content:'◆';font-size:.5em;color:rgba(201,168,76,.6);margin:0 1em;vertical-align:.25em;}
 .tb-st.my{color:var(--gl);font-weight:700;text-shadow:0 0 8px rgba(240,208,128,.45);animation:pulse 1.5s infinite;}
 /* Leave: a small slanted plate like the action buttons (.ba) — the
    button is the red edge, ::before (same slant, inset) the fill. */
@@ -345,22 +344,41 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   --felt-size: calc(var(--table-size) * 0.86);
 }
 
-/* ── Wood table — sits behind the felt ── */
+/* ── Wood table — sits behind the felt ──
+   Picked in the "Table Textures" mockup (2026-10-16): today's frame
+   style, darker (hsl lightness 8%, highlight +10%, shadow 1%). */
 .wood-table{
   width:var(--table-size);
   height:var(--table-size);
-  background:radial-gradient(ellipse at 40% 30%,#462727,#241006 50%,#1a0a04);
+  background:radial-gradient(ellipse at 40% 30%,hsl(20 46% 18%),hsl(20 46% 8%) 50%,hsl(20 46% 1%));
   box-shadow:0 8px 48px rgba(0,0,0,.8),0 2px 0 rgba(255,255,255,.04) inset;
   border:2px solid #0d0502;
   flex-shrink:0;}
 
-/* ── Felt (green play area) ── */
+/* ── Felt (green play area) ──
+   Same mockup: a smooth, darker green (lightness 17%) lit from directly
+   above (a soft pool in the middle, darker toward the edges), set into
+   the frame with a bevelled step — a faint highlight just outside the
+   felt's top edge, a shadow below, and a shadow cast onto the felt. */
 .felt{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   width:var(--felt-size);
   height:var(--felt-size);
-  background:radial-gradient(ellipse at 40% 35%,#27774a,#155230 60%,#0e3b24);
+  background:radial-gradient(circle at 50% 50%,rgba(255,250,220,.09),rgba(0,0,0,0) 40%,rgba(0,0,0,.35) 100%),hsl(150 48% 17%);
   border:none;
-  box-shadow:inset 0 0 60px rgba(0,0,0,.4);}
+  box-shadow:0 calc(var(--table-size) * -.004) 0 calc(var(--table-size) * .006) rgba(255,230,190,.08),
+    0 calc(var(--table-size) * .004) 0 calc(var(--table-size) * .006) rgba(0,0,0,.35),
+    inset 0 calc(var(--table-size) * .006) calc(var(--table-size) * .012) rgba(0,0,0,.5),
+    inset 0 0 calc(var(--felt-size) * .07) rgba(0,0,0,.45);}
+
+/* ── Centre panel size — shared by .ctr and the four discard ponds (.dz*),
+   which hang off its edges, so the panel and the ponds always move
+   together. It matches the ponds' own width (6 tiles of --tmd-w, which
+   script.js sizes to 26% of the felt). Everything inside the panel is
+   measured in --cu = 1cqw x --ctr-k; --ctr-k stays 1 at this size, and is
+   the knob for keeping the contents' size if --ctr-size ever changes. A
+   bigger panel (28.5% / 33% on phones) was tried and reverted: it pushed
+   the ponds out too far. */
+.felt{--ctr-size:min(26vmin,26%);--ctr-k:1;}
 
 /* ── Centre info panel (round / remaining wall / scores) ──
    A square in the nameplates' own #1a1a1a (see .np), same size as before, sized inside in cqw (container-type)
@@ -375,56 +393,92 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    to the gauge, splitting the panel into one triangular area per seat. */
 .ctr{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   z-index:1;pointer-events:none;container-type:inline-size;
-  width:min(26vmin,26%);height:min(26vmin,26%);
+  width:var(--ctr-size);height:var(--ctr-size);
+  --cu:calc(1cqw * var(--ctr-k));
   padding:0;overflow:hidden;border-radius:2px;
   background:#1a1a1a;
   border:1px solid rgba(201,168,76,.35);}
 .ctr::before{content:'';position:absolute;inset:0;pointer-events:none;
-  --ln:transparent calc(50% - .35cqw),rgba(201,168,76,.45) calc(50% - .35cqw) calc(50% + .35cqw),transparent calc(50% + .35cqw);
+  --ln:transparent calc(50% - calc(.35 * var(--cu))),rgba(201,168,76,.45) calc(50% - calc(.35 * var(--cu))) calc(50% + calc(.35 * var(--cu))),transparent calc(50% + calc(.35 * var(--cu)));
   background:linear-gradient(45deg,var(--ln)),linear-gradient(-45deg,var(--ln));
-  -webkit-mask:radial-gradient(circle,transparent 30cqw,#000 30.2cqw);mask:radial-gradient(circle,transparent 30cqw,#000 30.2cqw);}
+  -webkit-mask:radial-gradient(circle,transparent calc(30 * var(--cu)),#000 calc(30.2 * var(--cu)));mask:radial-gradient(circle,transparent calc(30 * var(--cu)),#000 calc(30.2 * var(--cu)));}
 /* Wall gauge: gold for what's left, a faint track for what's been drawn. */
-.cd-arc{--p:100;position:absolute;left:50%;top:50%;translate:-50% -50%;width:56cqw;height:56cqw;border-radius:50%;
+.cd-arc{--p:100;position:absolute;left:50%;top:50%;translate:-50% -50%;width:calc(56 * var(--cu));height:calc(56 * var(--cu));border-radius:50%;
   background:conic-gradient(from 180deg,var(--gl) calc(var(--p) * 1%),rgba(245,237,216,.1) 0);
-  -webkit-mask:radial-gradient(circle,transparent 25.6cqw,#000 25.8cqw);mask:radial-gradient(circle,transparent 25.6cqw,#000 25.8cqw);}
+  -webkit-mask:radial-gradient(circle,transparent calc(25.6 * var(--cu)),#000 calc(25.8 * var(--cu)));mask:radial-gradient(circle,transparent calc(25.6 * var(--cu)),#000 calc(25.8 * var(--cu)));}
 /* Each seat's layer covers the whole panel, rotated toward that seat (see
    .ctr-score-top/-left/-right below), so all four read from their own
    player's side. */
 .ctr-score{position:absolute;inset:0;z-index:1;}
-/* The seat's own triangle (edge to centre), faintly lit on its turn. */
-.ctr-score::before{content:'';position:absolute;inset:0;clip-path:polygon(0 100%,100% 100%,50% 50%);
-  background:rgba(240,208,128,.1);opacity:0;transition:opacity .3s;
-  -webkit-mask:radial-gradient(circle,transparent 30cqw,#000 30.2cqw);mask:radial-gradient(circle,transparent 30cqw,#000 30.2cqw);}
-.ctr-score.cd-on::before{opacity:1;}
-/* Each edge: the score centred, its riichi stick (.rs-*) just above it,
-   between the score and the gauge. */
-.ctr-score-val{position:absolute;left:14cqw;right:14cqw;bottom:3.5cqw;text-align:center;white-space:nowrap;
-  font-family:'Noto Serif JP',serif;font-weight:700;font-size:7.6cqw;line-height:1.2;font-variant-numeric:tabular-nums;
+/* The current player's triangle (edge to centre), faintly lit. One wedge
+   for the whole panel, turned to the active seat by setCtrTurn in
+   script.js, so it sweeps round to the next player instead of jumping.
+   .no-anim places it instantly (first state, reconnect). */
+.ctr-turn{position:absolute;inset:0;clip-path:polygon(0 100%,100% 100%,50% 50%);
+  background:rgba(240,208,128,.1);transition:transform .35s cubic-bezier(.4,0,.2,1),opacity .3s;
+  -webkit-mask:radial-gradient(circle,transparent calc(30 * var(--cu)),#000 calc(30.2 * var(--cu)));mask:radial-gradient(circle,transparent calc(30 * var(--cu)),#000 calc(30.2 * var(--cu)));}
+.ctr-turn.no-anim{transition:none;}
+.ctr-turn.off{opacity:0;}
+/* Each edge is one row, centred as a pair: the score on the left, a
+   riichi-stick slot on the right (from that seat's own view). The slot
+   (::after) is always there; declaring riichi drops the stick (.rs-*)
+   into it. The score box has a fixed width and is right-aligned, so the
+   slot never shifts as the score's digit count changes. Everything in the
+   row is sized from the score's font size --fs (in --cu), with fixed
+   ratios, so the score and stick keep the same proportions on every
+   screen; phones below only change --fs, --lh and --row-b.
+   --row-b row bottom, --row-h score line height, --sw score box width
+   (fits 7 characters, e.g. -12,300), --gap, --kw/--kh slot size, --stw
+   stick width (its svg is 44:10, with the stick itself drawn 42:8 inside
+   it). The slot hugs the drawn stick with a hairline of room (~.08fs)
+   on each side, so a dropped stick sits snugly in it. */
+.ctr-score{--fs:8.4;--lh:1.2;--row-b:6;
+  --row-h:calc(var(--fs) * var(--lh));--sw:calc(var(--fs) * 3.95);--gap:calc(var(--fs) * .395);
+  --kw:calc(var(--fs) * 3.18);--kh:calc(var(--fs) * .73);--stw:calc(var(--fs) * 3.158);}
+.ctr-score::after{content:'';position:absolute;
+  left:calc(50% + (var(--sw) + var(--gap) - var(--kw)) / 2 * var(--cu));
+  bottom:calc((var(--row-b) + var(--row-h) / 2 - var(--kh) / 2) * var(--cu));
+  width:calc(var(--kw) * var(--cu));height:calc(var(--kh) * var(--cu));border-radius:calc(var(--fs) * .14 * var(--cu));
+  background:rgba(0,0,0,.16);box-shadow:inset 0 calc(.4 * var(--cu)) calc(.8 * var(--cu)) rgba(0,0,0,.35),0 0 0 1px rgba(201,168,76,.1);}
+.table.sanma .ctr-score-top::after{visibility:hidden;}
+.ctr-score-val{position:absolute;left:calc(50% - (var(--sw) + var(--gap) + var(--kw)) / 2 * var(--cu));width:calc(var(--sw) * var(--cu));
+  bottom:calc(var(--row-b) * var(--cu));text-align:right;white-space:nowrap;
+  font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--fs) * var(--cu));line-height:var(--lh);font-variant-numeric:tabular-nums;
   color:rgba(245,237,216,.85);transition:color .3s,text-shadow .3s;}
-.ctr-score.cd-on .ctr-score-val{color:var(--gl);text-shadow:0 0 2cqw rgba(240,208,128,.55);}
+.ctr-score.cd-on .ctr-score-val{color:var(--gl);text-shadow:0 0 calc(2 * var(--cu)) rgba(240,208,128,.55);}
 /* Middle: the round over the remaining wall, inside the gauge. */
 .ctr-mid{position:absolute;z-index:2;left:50%;top:50%;translate:-50% -50%;display:flex;align-items:center;justify-content:center;}
-.ctr-info{display:flex;flex-direction:column;align-items:center;gap:1.4cqw;}
+.ctr-info{display:flex;flex-direction:column;align-items:center;gap:calc(1.4 * var(--cu));}
 .cw{display:flex;align-items:baseline;font-family:'Noto Serif JP',serif;font-weight:900;line-height:1;color:var(--gl);}
-#cw-wind,#cw-kyoku{font-size:16cqw;}
+/* The round number sits as a subscript of the round wind (東₁). */
+#cw-wind{font-size:calc(16 * var(--cu));}
+#cw-kyoku{font-size:calc(8.5 * var(--cu));margin-left:calc(.6 * var(--cu));translate:0 calc(1.6 * var(--cu));}
 .ci:empty{display:none;}
-.cwl{font-family:'Noto Serif JP',serif;font-weight:700;font-size:8.5cqw;line-height:1;letter-spacing:.06em;color:rgba(245,237,216,.85);white-space:nowrap;}
-/* Small panels (phones, where the square is ~80-100px): the same layout
-   with type about 60% larger. The gauge keeps its desktop size so the
-   score + stick stack still fits between it and each edge. */
+/* The wall line: tiles left in the live wall, the number in Noto Serif JP
+   with a small sans "tiles" after it. */
+.cwl{font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(8.5 * var(--cu));line-height:1;letter-spacing:.06em;color:rgba(245,237,216,.85);white-space:nowrap;}
+.cwl-unit{margin-left:.3em;font-family:'Noto Sans JP',sans-serif;font-weight:400;font-size:.62em;letter-spacing:.04em;color:rgba(245,237,216,.65);}
+/* Small panels (phones, where the square is ~100-120px): the same layout
+   with larger type. The gauge keeps its desktop size. The score row is
+   as big as fits across the seat's area between the two diagonals. */
 @container (max-width:150px){
-  .ctr-info{gap:1.6cqw;}
-  #cw-wind,#cw-kyoku{font-size:18cqw;}
-  .cwl{font-size:12.5cqw;letter-spacing:0;}
-  .ctr-score-val{bottom:2cqw;font-size:12.5cqw;line-height:1;}
-  .ctr-score.cd-on .ctr-score-val{text-decoration:underline;text-decoration-thickness:1.2cqw;text-underline-offset:1.6cqw;}
+  .ctr-info{gap:calc(1.6 * var(--cu));}
+  #cw-wind{font-size:calc(18 * var(--cu));}
+  #cw-kyoku{font-size:calc(10 * var(--cu));translate:0 calc(2 * var(--cu));}
+  .cwl{font-size:calc(10 * var(--cu));letter-spacing:0;}
+  .ctr-score{--fs:9.2;--lh:1;--row-b:4.5;}
 }
-@media (prefers-reduced-motion:reduce){.ctr-score-val,.ctr-score::before{transition:none;}}
+@media (prefers-reduced-motion:reduce){.ctr-score-val,.ctr-turn{transition:none;}}
 
 /* ── Dora indicator strip ── */
-.dora-slot{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:5px;border:1px dashed rgba(201,168,76,.25);
-  background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;}
-.dora-slot.filled{border:none;background:none;padding:0;}
+/* Same corner radius as the revealed indicator tile (.tdora), so a tile
+   flipping into its slot lines up with the slot's outline. An empty slot
+   is a faint recess (like the riichi stick slots) rather than a dashed
+   outline. */
+.dora-slot{width:var(--tlg-w,46px);height:var(--tlg-h,64px);border-radius:0.4vmin;
+  background:rgba(0,0,0,.28);box-shadow:inset 0 .25vmin .5vmin rgba(0,0,0,.6),0 0 0 1px rgba(201,168,76,.12);
+  display:flex;align-items:center;justify-content:center;}
+.dora-slot.filled{border:none;background:none;box-shadow:none;padding:0;}
 /* Kan dora reveal (animatePlaced in script.js; durations mirrored there as
    DORA_FLIP_MS / DORA_GLOW_MS). The indicator turns over edge-on: its
    ::after is the tile back (.kan-back's blue) for the first half, then drops
@@ -465,13 +519,23 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    it in place. */
 .dz{position:absolute;display:flex;flex-direction:column;;pointer-events:none;transform-origin:left top;}
 .dz-row{display:flex;flex-direction:row;}
+/* Natural ponds: each discard's slight lean and up/down nudge (set per
+   tile by pondJitter in script.js). Uses the individual rotate/translate
+   properties, so it stacks with the riichi tile's sideways transform and
+   the tile-drop animation's scale. Tiles may touch but never overlap:
+   layoutPond spaces each tile (--gx) and row (--gy) by exactly what the
+   leans need, in tile widths. Remove these rules for a strict grid. */
+.dz .tmd{rotate:var(--rz,0deg);translate:0 calc(var(--tmd-h,36px) * var(--dy,0));margin-left:calc(var(--tmd-w,26px) * var(--gx,0));}
+.dz .tmd.dz-riichi{margin-left:calc(var(--tmd-h,40px) / 2 - var(--tmd-w,30px) / 2 + var(--tmd-w,26px) * var(--gx,0));}
+.dz-row{margin-top:calc(var(--tmd-w,26px) * var(--gy,0));}
 
-/* H = min(13vmin,105px) = panel half-size */
 
-/* H = min(13vmin,105px) — panel half-size. */
+/* Every pond hangs off a corner of the centre panel (--ctr-size, see
+   .felt); --dz-half is half the panel. */
+.dz{--dz-half:calc(var(--ctr-size) / 2);}
 
 /* BOTTOM: top-left of zone at panel bottom-left. No rotation. */
-.dzb{top:calc(50% + calc(min(26vmin,26%) / 2));left:calc(50% - calc(min(26vmin,26%) / 2));}
+.dzb{top:calc(50% + var(--dz-half));left:calc(50% - var(--dz-half));}
 
 /* TOP: their visual top-left (= DOM bottom-right after 180°) at panel top-left.
    Panel top-left = (50%-H, 50%-H). 
@@ -481,8 +545,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    Rows: DOM row-reverse so tiles go their left→right after 180° flip.
    Columns: column-reverse so first row is at visual top (nearest panel). */
 .dzt{
-  top:calc(50% - calc(min(26vmin,26%) / 2));
-  left:calc(50% + calc(min(26vmin,26%) / 2));
+  top:calc(50% - var(--dz-half));
+  left:calc(50% + var(--dz-half));
   transform:rotate(180deg);
   transform-origin:left top;}
 
@@ -492,8 +556,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    bottom=50%-H → element bottom at 50%+H.
    transform-origin: left bottom. */
 .dzl{
-  left:calc(50% - calc(min(26vmin,26%) / 2));
-  top:calc(50% - calc(min(26vmin,26%) / 2));
+  left:calc(50% - var(--dz-half));
+  top:calc(50% - var(--dz-half));
   transform:rotate(90deg);
   transform-origin:left top;}
 
@@ -501,8 +565,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    Panel bottom-right = (50%+H, 50%+H).
    left=50%+H, top=50%+H. transform-origin: left top. */
 .dzr{
-  top:calc(50% + calc(min(26vmin,26%) / 2));
-  left:calc(50% + calc(min(26vmin,26%) / 2));
+  top:calc(50% + var(--dz-half));
+  left:calc(50% + var(--dz-half));
   transform:rotate(-90deg);
   transform-origin:left top;}
 
@@ -870,7 +934,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    dead zone over the felt/hand tiles beneath it. row-gap slightly tighter
    than the button gap itself so two stacked rows read as one group, not
    two separate ones. */
-.act-overlay{display:flex;gap:1vmin;row-gap:0.6vmin;align-items:center;
+.act-overlay{display:flex;row-gap:0.6vmin;align-items:center;
   z-index:40;pointer-events:none;flex-wrap:wrap;}
 .act-overlay.visible{pointer-events:auto;}
 .chi-picker{position:fixed;left:50%;bottom:18vh;transform:translateX(-50%);
@@ -956,12 +1020,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* --ui-vmin: same clamped-scale-unit approach as #s-start/#s-lobby/
    #dora-panel — everything below multiplies this one variable so it
    scales together instead of drifting apart across resolutions. */
-.chat-bar{--ui-vmin:clamp(6px,1vmin,10px);
+/* Glass theme (chosen from the "Chat Bar Themes" mockup): frosted glass
+   that lets the felt show through, square corners, one set of line icons.
+   --cr is the corner radius for the bar and its popups; --cr-in, a step
+   smaller, is for the buttons inside so their corners nest in the bar's.
+   The chat popups below are siblings of .chat-bar, so they restate these. */
+.chat-bar{--ui-vmin:clamp(6px,1vmin,10px);--cr:calc(var(--ui-vmin) * .5);--cr-in:calc(var(--cr) * .7);
   position:fixed;bottom:20px;right:20px;
-  display:none;flex-direction:row;align-items:center;gap:5px;
-  background:rgba(3,12,6,.95);border:1px solid rgba(201,168,76,.25);
-  border-radius:10px;padding:calc(var(--ui-vmin) * .694) calc(var(--ui-vmin) * 1.111);z-index:65;
-  box-shadow:0 4px 16px rgba(0,0,0,.6);}
+  display:none;flex-direction:row;align-items:center;gap:calc(var(--ui-vmin) * .6);
+  background:rgba(10,18,13,.45);-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2);
+  border-radius:var(--cr);padding:calc(var(--ui-vmin) * .6);z-index:65;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 6px 20px rgba(0,0,0,.35);}
 /* Beginner-assist row — a child of .chat-bar (which is itself position:
    fixed, so it's already a containing block for this), absolutely anchored
    to sit directly above the bar's own left edge — left:0 here lines it up
@@ -974,27 +1043,37 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    felt table without needing a frame. */
 .assist-bar{position:absolute;left:0;bottom:calc(100% + 8px);
   display:flex;flex-direction:row;gap:calc(var(--ui-vmin) * 1.111);}
-.assist-btn{background:none;border:none;padding:0;color:rgba(245,237,216,.75);cursor:pointer;
-  display:flex;align-items:center;justify-content:center;transition:color .2s,transform .15s;}
-.assist-btn:hover{color:var(--gold);transform:scale(1.1);}
-.assist-btn svg{width:calc(var(--ui-vmin) * 2.778);height:calc(var(--ui-vmin) * 2.778);display:block;
-  filter:drop-shadow(0 1px 3px rgba(0,0,0,.8));}
-.chat-input{width:calc(var(--ui-vmin) * 22.22);padding:calc(var(--ui-vmin) * .694) calc(var(--ui-vmin) * 1.111);background:rgba(0,0,0,.45);
-  border:1px solid rgba(201,168,76,.2);border-radius:7px;
+.assist-btn{width:calc(var(--ui-vmin) * 3.6);height:calc(var(--ui-vmin) * 3.6);padding:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:rgba(245,237,216,.85);border:none;border-radius:var(--cr-in);
+  background:rgba(10,18,13,.45);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);transition:color .2s,background .2s;}
+.assist-btn:hover{color:var(--gl);background:rgba(10,18,13,.65);}
+.assist-btn svg{width:56%;height:56%;display:block;}
+.chat-input{width:calc(var(--ui-vmin) * 22.22);height:calc(var(--ui-vmin) * 3.611);padding:0 calc(var(--ui-vmin) * 1.111);background:rgba(255,255,255,.06);
+  border:none;border-radius:var(--cr-in);
   color:var(--cream);font-size:calc(var(--ui-vmin) * 1.667);outline:none;font-family:'Noto Sans JP',sans-serif;}
-.chat-input:focus{border-color:var(--jl);}
+.chat-input::placeholder{color:rgba(245,237,216,.42);}
+.chat-input:focus{background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px rgba(240,208,128,.5);}
+/* The square glass buttons in the bar (colour, reactions, history) share
+   this tile; send is the same tile in gold. */
+.chat-color-btn,.chat-emoji-btn,.chat-hist-btn,.chat-send{width:calc(var(--ui-vmin) * 3.611);height:calc(var(--ui-vmin) * 3.611);
+  flex-shrink:0;padding:0;border:none;border-radius:var(--cr-in);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:rgba(245,237,216,.85);background:rgba(255,255,255,.07);
+  transition:background .2s,color .2s;}
+.chat-color-btn:hover,.chat-emoji-btn:hover,.chat-hist-btn:hover{background:rgba(255,255,255,.13);color:var(--gl);}
+.chat-emoji-btn.open,.chat-hist-btn.open,.chat-color-btn.open{background:rgba(240,208,128,.18);color:var(--gl);}
+.chat-emoji-btn svg,.chat-hist-btn svg,.chat-send svg{width:56%;height:56%;display:block;}
 /* Message colour swatch + popup palette */
-.chat-color-btn{width:calc(var(--ui-vmin) * 3.611);height:calc(var(--ui-vmin) * 3.611);
-  border-radius:50%;border:2px solid rgba(201,168,76,.4);background:#fff;
-  cursor:pointer;flex-shrink:0;padding:0;transition:border-color .2s,transform .15s;}
-.chat-color-btn:hover{border-color:var(--gl);transform:scale(1.08);}
-.chat-color-btn.open{border-color:var(--gl);}
-.chat-color-picker{position:fixed;bottom:70px;right:20px;z-index:66;display:none;
+/* The message colour shows as a small dot inside the tile (--chat-col is
+   set by initColorPicker/selectChatColor in script.js). */
+.chat-color-btn::after{content:'';width:42%;height:42%;border-radius:calc(var(--cr-in) * .6);background:var(--chat-col,#fff);box-shadow:0 0 0 1px rgba(0,0,0,.25);}
+.chat-color-picker{--ui-vmin:clamp(6px,1vmin,10px);--cr:calc(var(--ui-vmin) * .5);--cr-in:calc(var(--cr) * .7);
+  position:fixed;bottom:70px;right:20px;z-index:66;display:none;
   grid-template-columns:repeat(4,1fr);gap:8px;padding:10px;
-  background:rgba(3,12,6,.97);border:1px solid rgba(201,168,76,.3);border-radius:10px;
-  box-shadow:0 8px 24px rgba(0,0,0,.7);}
+  background:rgba(10,18,13,.6);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border-radius:var(--cr);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 10px 28px rgba(0,0,0,.4);}
 .chat-color-picker.open{display:grid;}
-.chat-color-swatch{width:24px;height:24px;border-radius:50%;border:2px solid transparent;
+.chat-color-swatch{width:24px;height:24px;border-radius:var(--cr-in);border:2px solid transparent;
   cursor:pointer;padding:0;transition:transform .15s,border-color .15s;}
 .chat-color-swatch:hover{transform:scale(1.12);}
 .chat-color-swatch.selected{border-color:var(--gl);}
@@ -1003,31 +1082,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    flat colour. .chat-emoji-picker reuses .chat-color-picker's grid/popup
    styling wholesale (see the two classes stacked on the div in
    index.html) rather than redefining the popup shell from scratch. */
-.chat-emoji-btn{width:calc(var(--ui-vmin) * 3.611);height:calc(var(--ui-vmin) * 3.611);
-  border-radius:50%;border:2px solid rgba(201,168,76,.4);background:rgba(0,0,0,.35);
-  cursor:pointer;flex-shrink:0;padding:0;font-size:calc(var(--ui-vmin) * 2);line-height:1;
-  transition:border-color .2s,transform .15s;}
-.chat-emoji-btn:hover{border-color:var(--gl);transform:scale(1.08);}
-.chat-emoji-btn.open{border-color:var(--gl);}
-.chat-emoji-picker .emoji-swatch{width:32px;height:32px;border-radius:50%;border:2px solid transparent;
+.chat-emoji-picker .emoji-swatch{width:32px;height:32px;border-radius:var(--cr-in);border:2px solid transparent;
   background:none;font-size:1.4rem;line-height:1;cursor:pointer;padding:0;
   transition:transform .15s,border-color .15s,background .15s;}
-.chat-emoji-picker .emoji-swatch:hover{transform:scale(1.15);background:rgba(201,168,76,.15);}
-.chat-send{padding:0 calc(var(--ui-vmin) * 1.389);height:calc(var(--ui-vmin) * 3.611);background:rgba(26,107,69,.8);
-  border:1px solid var(--jl);border-radius:7px;color:var(--cream);
-  font-size:calc(var(--ui-vmin) * 1.528);cursor:pointer;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;}
-.chat-send:hover{background:rgba(42,158,103,.9);}
-/* History button */
-.chat-hist-btn{position:relative;padding:0 calc(var(--ui-vmin) * 1.389);height:calc(var(--ui-vmin) * 3.611);
-  background:none;border:none;border-left:1px solid rgba(201,168,76,.2);
-  color:rgba(201,168,76,.6);font-size:calc(var(--ui-vmin) * 1.528);letter-spacing:calc(var(--ui-vmin) * .139);cursor:pointer;
-  font-family:'Noto Sans JP',sans-serif;white-space:nowrap;flex-shrink:0;
-  transition:color .2s;}
-.chat-hist-btn:hover{color:var(--gl);}
-.chat-hist-btn.open{color:var(--gl);}
-.chat-hist-btn .badge{position:absolute;top:-5px;right:2px;
-  background:#c02020;color:#fff;font-size:calc(var(--ui-vmin) * 1.111);font-weight:700;
-  min-width:calc(var(--ui-vmin) * 1.944);height:calc(var(--ui-vmin) * 1.944);border-radius:7px;display:none;
+.chat-emoji-picker .emoji-swatch:hover{transform:scale(1.15);background:rgba(255,255,255,.08);}
+.chat-send{background:var(--gl);color:#1a1206;}
+.chat-send:hover{background:#ffe9b0;}
+/* History button: unread count in a small square badge on its corner */
+.chat-hist-btn{position:relative;}
+.chat-hist-btn .badge{position:absolute;top:calc(var(--ui-vmin) * -.6);right:calc(var(--ui-vmin) * -.6);
+  background:#e0503f;color:#fff;font-size:calc(var(--ui-vmin) * 1.111);font-weight:700;
+  min-width:calc(var(--ui-vmin) * 1.944);height:calc(var(--ui-vmin) * 1.944);border-radius:calc(var(--cr-in) * .6);display:none;
   align-items:center;justify-content:center;padding:0 calc(var(--ui-vmin) * .278);}
 .chat-hist-btn .badge.show{display:flex;}
 /* History popup — opens upward from chat bar. A SIBLING of .chat-bar in
@@ -1037,17 +1102,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    window. --ui-vmin here (same clamp as .chat-bar/#s-lobby/etc.) plus
    converting those flat sizes to the calc() pattern brings it back in
    line, especially on small screens where the mismatch was worst. */
-.chat-panel{--ui-vmin:clamp(6px,1vmin,10px);position:fixed;bottom:106px;right:12px;
+.chat-panel{--ui-vmin:clamp(6px,1vmin,10px);--cr:calc(var(--ui-vmin) * .5);--cr-in:calc(var(--cr) * .7);position:fixed;bottom:106px;right:12px;
   width:clamp(220px,35vw,300px);max-height:260px;
-  background:rgba(5,14,8,.97);border:1px solid rgba(201,168,76,.3);
-  border-radius:12px;z-index:74;display:none;flex-direction:column;
-  overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.8);
+  background:rgba(10,18,13,.6);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);
+  border-radius:var(--cr);z-index:74;display:none;flex-direction:column;
+  overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 10px 32px rgba(0,0,0,.45);
   animation:slideUpChat .2s ease;}
 @keyframes slideUpChat{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .chat-panel.open{display:flex;}
-.chat-panel-header{padding:calc(var(--ui-vmin) * .972) calc(var(--ui-vmin) * 1.667);background:rgba(26,107,69,.25);
-  border-bottom:1px solid rgba(201,168,76,.2);font-size:calc(var(--ui-vmin) * 1.389);letter-spacing:2px;
-  color:var(--gold);font-family:'Cinzel Decorative',serif;
+.chat-panel-header{padding:calc(var(--ui-vmin) * .972) calc(var(--ui-vmin) * 1.667);
+  border-bottom:1px solid rgba(255,255,255,.07);font-size:calc(var(--ui-vmin) * 1.389);font-weight:700;letter-spacing:.04em;
+  color:var(--cream);font-family:'Noto Sans JP',sans-serif;
   display:flex;justify-content:space-between;align-items:center;}
 .chat-close{background:none;border:none;color:rgba(245,237,216,.45);
   font-size:calc(var(--ui-vmin) * 2.083);cursor:pointer;line-height:1;padding:0;}
@@ -1061,8 +1126,8 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    attached to the end of THIS message, not a separate block for the
    whole entry — wraps onto its own line only if it doesn't fit. */
 .chat-entry-msg-row{display:flex;align-items:center;flex-wrap:wrap;gap:5px;}
-.chat-entry-text{font-size:calc(var(--ui-vmin) * 1.667);color:var(--cream);background:rgba(255,255,255,.05);
-  border-radius:6px;padding:calc(var(--ui-vmin) * .556) calc(var(--ui-vmin) * 1.111);line-height:1.4;word-break:break-word;}
+.chat-entry-text{font-size:calc(var(--ui-vmin) * 1.667);color:var(--cream);background:rgba(255,255,255,.08);
+  border-radius:var(--cr-in);padding:calc(var(--ui-vmin) * .556) calc(var(--ui-vmin) * 1.111);line-height:1.4;word-break:break-word;}
 .chat-entry-time{font-size:calc(var(--ui-vmin) * 1.111);color:rgba(245,237,216,.3);margin-top:1px;}
 /* Long-press feedback (see attachLongPress in script.js) — a brief
    highlight while the hold timer is counting down, so touch/mouse users
@@ -1082,26 +1147,26 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .reaction-pill{display:inline-flex;align-items:center;
   font-size:calc(var(--ui-vmin) * 1.5);line-height:1.4;cursor:pointer;user-select:none;
   background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.25);
-  border-radius:10px;padding:0 calc(var(--ui-vmin) * .694);}
+  border-radius:var(--cr-in,3px);padding:0 calc(var(--ui-vmin) * .694);}
 .reaction-pill.mine{background:rgba(201,168,76,.3);border-color:var(--gl);}
 /* Long-press reaction picker — same dark/gold popup shell as
    .chat-color-picker/.chat-panel, positioned dynamically (JS, via the
    pressed message's own getBoundingClientRect) rather than pinned to a
    fixed corner like those two, since it needs to appear next to whichever
    message was pressed. */
-.msg-react-picker{position:fixed;z-index:400;display:flex;gap:6px;
+.msg-react-picker{--ui-vmin:clamp(6px,1vmin,10px);--cr:calc(var(--ui-vmin) * .5);--cr-in:calc(var(--cr) * .7);position:fixed;z-index:400;display:flex;gap:6px;
   padding:calc(var(--ui-vmin) * .833) calc(var(--ui-vmin) * 1.111);
-  background:rgba(5,14,8,.97);border:1px solid rgba(201,168,76,.3);border-radius:12px;
-  box-shadow:0 8px 24px rgba(0,0,0,.7);animation:slideUpChat .15s ease;}
+  background:rgba(10,18,13,.6);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border-radius:var(--cr);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 10px 28px rgba(0,0,0,.4);animation:slideUpChat .15s ease;}
 /* Names-behind-a-pill popup (see showReactionNames in script.js) — same
    shell as .msg-react-picker again, just a text label instead of buttons. */
-.reaction-names-popup{position:fixed;z-index:400;
+.reaction-names-popup{--ui-vmin:clamp(6px,1vmin,10px);position:fixed;z-index:400;
   padding:calc(var(--ui-vmin) * .556) calc(var(--ui-vmin) * .972);
   font-size:calc(var(--ui-vmin) * 1.389);color:var(--cream);white-space:nowrap;
-  background:rgba(5,14,8,.97);border:1px solid rgba(201,168,76,.3);border-radius:10px;
-  box-shadow:0 8px 24px rgba(0,0,0,.7);animation:slideUpChat .15s ease;}
+  background:rgba(10,18,13,.6);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border-radius:calc(var(--ui-vmin) * .5);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 10px 28px rgba(0,0,0,.4);animation:slideUpChat .15s ease;}
 .msg-react-picker button{font-size:1.3rem;line-height:1;background:none;border:2px solid transparent;
-  border-radius:50%;width:34px;height:34px;padding:0;cursor:pointer;
+  border-radius:var(--cr-in);width:34px;height:34px;padding:0;cursor:pointer;
   transition:transform .15s,border-color .15s,background .15s;}
 .msg-react-picker button:hover{transform:scale(1.15);background:rgba(201,168,76,.15);}
 .msg-react-picker button.selected{border-color:var(--gl);}
@@ -1115,8 +1180,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    the old centred fade-in-place stack. Default text colour is white;
    see .chat-color-picker for the per-player colour override. */
 .chat-float{position:fixed;inset:0;z-index:300;pointer-events:none;overflow:hidden;}
+/* Glass theme: Noto Sans JP with a dark outline (paint-order keeps the
+   stroke behind the fill) instead of MS Gothic, so messages stay readable
+   over tiles and match the rest of the UI. */
 .chat-msg{position:absolute;left:100%;white-space:nowrap;color:#fff;
-  font-family:'MS Gothic','ＭＳ ゴシック',monospace;font-weight:700;
+  font-family:'Noto Sans JP',sans-serif;font-weight:700;-webkit-text-stroke:.06em rgba(0,0,0,.85);paint-order:stroke fill;
   font-size:clamp(20px,3.2vmin,34px);letter-spacing:1px;
   text-shadow:0 0 6px rgba(0,0,0,.9),0 0 16px rgba(0,0,0,.6),1px 1px 3px rgba(0,0,0,.95);
   animation:chatSlide 7s linear forwards;}
@@ -2435,11 +2503,21 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   color:#e6dcc2;font-family:'Noto Serif JP',serif;font-weight:700;
   font-size:calc(var(--ui-vmin, 7.2px) * 1.5);}
 .shop-balance .coin-icon{display:flex;align-items:center;}
-.shop-section-label{color:var(--gold);font-family:'Cinzel Decorative',serif;
+/* Scoped under .about-body so it outranks the generic `.about-body p`
+   margin (0 top), which otherwise left each heading flush against the
+   previous section's cards. */
+.about-body .shop-section-label{color:var(--gold);font-family:'Cinzel Decorative',serif;
   font-size:calc(var(--ui-vmin, 7.2px) * 1.4);letter-spacing:calc(var(--ui-vmin, 7.2px) * .14);
-  text-transform:uppercase;margin:calc(var(--ui-vmin, 7.2px) * 2) 0 calc(var(--ui-vmin, 7.2px) * .833);}
-.shop-section-label:first-child{margin-top:0;}
-.shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--ui-vmin, 7.2px) * 1.111);}
+  text-transform:uppercase;margin:calc(var(--ui-vmin, 7.2px) * 4) 0 calc(var(--ui-vmin, 7.2px) * 1.111);}
+.about-body .shop-section-label:first-child{margin-top:0;}
+/* minmax(0,1fr), not plain 1fr: a 1fr track can't shrink below its widest
+   card's content, which on a phone pushed the grid past .about-body and
+   gave the whole Store a horizontal scroll. */
+.shop-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:calc(var(--ui-vmin, 7.2px) * 1.111);}
+/* Nameplate cards hold an .np-preview with a fixed rem size, so they can't
+   squeeze into a narrow third: drop to 2 columns (or 1) once a column would
+   be narrower than the preview. The 30% floor keeps it at 3 on desktop. */
+#shop-nameplate-list{grid-template-columns:repeat(auto-fill,minmax(max(7.5rem,30%),1fr));}
 .shop-item{display:flex;flex-direction:column;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .417);
   background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:2px;
   padding:calc(var(--ui-vmin, 7.2px) * .833);cursor:pointer;transition:all .2s;text-align:center;}
@@ -2475,6 +2553,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   padding:calc(var(--ui-vmin, 7.2px) * .556);cursor:pointer;transition:all .2s;display:flex;justify-content:center;}
 .nameplate-btn:hover{border-color:rgba(201,168,76,.5);}
 .nameplate-btn.active{border-color:var(--gold);}
+/* Call Style picker (#callstyle-list) — same card language as .nameplate-btn,
+   laid out as a row: swatch, name, then a ▶ that plays the style. */
+.callstyle-btn{display:flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.111);
+  background:rgba(42,58,42,.3);border:1px solid rgba(201,168,76,.2);border-radius:2px;
+  padding:calc(var(--ui-vmin, 7.2px) * .556) calc(var(--ui-vmin, 7.2px) * 1.111);cursor:pointer;transition:all .2s;text-align:left;}
+.callstyle-btn:hover{border-color:rgba(201,168,76,.5);}
+.callstyle-btn.active{border-color:var(--gold);background:rgba(201,168,76,.2);}
+.callstyle-label{flex:1;font-size:calc(var(--ui-vmin, 7.2px) * 1.389);color:var(--cream);}
+.callstyle-play{display:grid;place-items:center;width:calc(var(--ui-vmin, 7.2px) * 3.333);height:calc(var(--ui-vmin, 7.2px) * 3.333);
+  border:1px solid rgba(201,168,76,.45);border-radius:50%;color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.111);transition:all .2s;}
+.callstyle-play:hover{background:rgba(201,168,76,.2);border-color:var(--gold);}
 .np-preview{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem .9rem;
   border-radius:1px;background:#1a1a1a;box-shadow:0 0 0 1px rgba(255,255,255,.08);}
 .np-preview .npv-wind{width:1.6rem;height:1.6rem;border-radius:50%;flex-shrink:0;
@@ -2911,15 +3000,16 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .ctr-score-left{transform:rotate(90deg);}
 .ctr-score-right{transform:rotate(-90deg);}
 
-/* ── Riichi sticks: centred just above the seat's score, between it and
-   the wall gauge, inside that seat's rotated layer (so .rs-drop's +Y is
-   the player's own side for every seat). ── */
-.rs-bottom,.rs-top,.rs-left,.rs-right{display:none;position:absolute;left:50%;translate:-50% 0;bottom:14cqw;z-index:16;}
-.rs-bottom svg,.rs-top svg,.rs-left svg,.rs-right svg{width:24cqw;height:auto;display:block;}
-@container (max-width:150px){
-  .rs-bottom,.rs-top,.rs-left,.rs-right{bottom:15cqw;}
-  .rs-bottom svg,.rs-top svg,.rs-left svg,.rs-right svg{width:22cqw;}
-}
+/* ── Riichi sticks: centred in the seat's slot (.ctr-score::after, which
+   sets the row geometry vars), inside that seat's rotated layer (so
+   .rs-drop's +Y is the player's own side for every seat). ── */
+.rs-bottom,.rs-top,.rs-left,.rs-right{display:none;position:absolute;z-index:16;translate:-50% 0;
+  left:calc(50% + (var(--sw) + var(--gap)) / 2 * var(--cu));
+  bottom:calc((var(--row-b) + var(--row-h) / 2 - var(--stw) * 5 / 44) * var(--cu));}
+/* aspect-ratio matches the viewBox: the markup's width/height attributes
+   (4vmin x 1vmin) would otherwise make the box 4:1 and letterbox the
+   44:10 drawing inside it, sitting the stick off-centre in its slot. */
+.rs-bottom svg,.rs-top svg,.rs-left svg,.rs-right svg{width:calc(var(--stw) * var(--cu));height:auto;aspect-ratio:44 / 10;display:block;}
 
 /* ── Meld containers ── */
 .ml-b{position:absolute;bottom:0;right:0;display:flex;flex-direction:row;align-items:flex-end;z-index:15;}
@@ -3246,7 +3336,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   --ui-vmin:clamp(6px,1vmin,10px);
   --ym-ink:var(--gl,#f0d080);--ym-glow:255,215,100;--ym-glow2:255,180,40;--ym-accent:255,140,0;
   --ym-scrim-a:rgba(70,45,0,.6);--ym-scrim-b:rgba(0,0,0,.93);}
-.cs-layer.blocking{pointer-events:auto;cursor:pointer;}
+.cs-layer.blocking{pointer-events:auto;}
 .cs-layer.cs-shake{animation:cs-shake .42s ease-out;}
 .cs-layer.cs-shake-big{animation:cs-shake-big .7s ease-out;}
 @keyframes cs-shake{0%,100%{transform:none}20%{transform:translate(-1.2vmin,.6vmin)}40%{transform:translate(1vmin,-.8vmin)}60%{transform:translate(-.6vmin,.4vmin)}80%{transform:translate(.3vmin,-.2vmin)}}
@@ -3335,8 +3425,13 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .cs-dora span{margin:0 .6vmin 0 1.4vmin;}
 .cs-yaku{display:flex;flex-wrap:wrap;justify-content:center;gap:1vmin 1.4vmin;max-width:min(110vmin,92vw);}
 .cs-y{display:flex;align-items:baseline;gap:1vmin;padding:.8vmin 1.6vmin;border:1px solid rgba(201,168,76,.35);border-radius:4px;
-  background:rgba(10,24,16,.7);opacity:0;transform:translateX(-2vmin);transition:opacity .24s,transform .24s cubic-bezier(.2,1.3,.4,1);}
-.cs-y.in{opacity:1;transform:none;}
+  background:rgba(10,24,16,.7);opacity:0;}
+/* Each badge is pressed down onto the table like a light hanko, kept well
+   short of the limit-tier stamp's size so that one still lands hardest.
+   The clack plays at the 60% impact (CS_BADGE_IMPACT in script.js). */
+.cs-y.in{animation:cs-y-press .3s cubic-bezier(.5,0,.6,1) both;}
+@keyframes cs-y-press{0%{opacity:0;transform:scale(1.7) rotate(-5deg)}60%{opacity:1;transform:scale(.95) rotate(0)}100%{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.cs-y.in{animation:none;opacity:1;}}
 .cs-yj{font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--ui-vmin,7.2px) * 2.4);color:var(--cream,#f5edd8);}
 .cs-yn{font-size:calc(var(--ui-vmin,7.2px) * 1.6);color:rgba(245,237,216,.6);}
 .cs-yh{font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--ui-vmin,7.2px) * 2);color:var(--gl,#f0d080);}
@@ -3355,8 +3450,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    up. It sits off to the right of the number so it never pushes the layout.
    Each tier is bigger and lands harder (--st size; ring from haneman,
    splatter from baiman, double border from sanbaiman, gold rim and glow for
-   yakuman). .go plays the press; .still is the finished frame's static
-   impression. The impact lands at 55% of cs-stamp-press, which
+   yakuman). .go plays the press. The impact lands at 55% of cs-stamp-press, which
    CS_STAMP_IMPACT in script.js mirrors to time the shake and thud. */
 .cs-pts-num{position:relative;}
 .cs-stamp{--st:11vmin;--ink:#c8322a;position:absolute;left:100%;top:50%;width:var(--st);height:var(--st);
@@ -3371,7 +3465,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .cs-stamp-face{fill:var(--ink);}
 .cs-stamp-ink text{font-family:'Noto Serif JP',serif;font-weight:900;fill:var(--cream,#f5edd8);
   text-anchor:middle;dominant-baseline:central;}
-.cs-stamp.t-yakuman.go,.cs-stamp.t-double-yakuman.go,.cs-stamp.t-yakuman.still,.cs-stamp.t-double-yakuman.still{
+.cs-stamp.t-yakuman.go,.cs-stamp.t-double-yakuman.go{
   filter:drop-shadow(0 0 2.4vmin rgba(var(--ym-glow),.55));}/* Double yakuman's ×2 tab on the seal's corner. */
 .cs-stamp-x2{position:absolute;right:calc(var(--st) * -.16);bottom:calc(var(--st) * -.1);padding:.2em .45em;opacity:0;
   border-radius:.3em;background:var(--gl,#f0d080);color:#5a1010;font-family:'Noto Serif JP',serif;font-weight:900;font-style:normal;
@@ -3385,7 +3479,6 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 }
 .cs-stamp.go .cs-stamp-x2{animation:cs-stamp-x2 .25s ease .55s forwards;}
 @keyframes cs-stamp-x2{from{opacity:0;scale:1.6}to{opacity:1;scale:1}}
-.cs-stamp.still .cs-stamp-ink,.cs-stamp.still .cs-stamp-x2{opacity:1;}
 /* Impact: an ink ring spreading out from under the seal (haneman up). */
 .cs-stamp-ring{position:absolute;inset:0;border:calc(var(--st) * .05) solid var(--ink);border-radius:calc(var(--st) * .12);opacity:0;transform:rotate(-8deg);}
 .cs-stamp.go:not(.t-mangan) .cs-stamp-ring{animation:cs-stamp-ring .55s ease-out .27s forwards;}
@@ -3420,18 +3513,11 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   .cs-layer.cs-shake,.cs-layer.cs-shake-big,.rs-drop{animation:none;}
   .cs-flip-in{transition:none;}
 }
-/* Win cutscene: double/triple ron arrows on the finished frame, the stacked
-   points lines (score/limit, payment, honba + sticks), the call step's
-   dealt-in line, and a dim that appears without fading in. */
+/* Win cutscene: the stacked points lines (score/limit, payment, honba +
+   sticks). */
 .cs-who{display:flex;align-items:center;gap:calc(var(--ui-vmin,7.2px) * 1.2);}
-.cs-nav{background:rgba(0,0,0,.4);border:1px solid rgba(201,168,76,.35);border-radius:50%;cursor:pointer;
-  width:calc(var(--ui-vmin,7.2px) * 3.2);height:calc(var(--ui-vmin,7.2px) * 3.2);display:grid;place-items:center;
-  color:var(--gold,#c9a84c);font-size:calc(var(--ui-vmin,7.2px) * 1.3);line-height:1;}
-.cs-nav:hover{border-color:var(--gold,#c9a84c);background:rgba(201,168,76,.15);}
-.cs-nav:focus-visible{outline:2px solid var(--gl,#f0d080);outline-offset:2px;}
 .cs-pts span:empty{display:none;}
 .cs-pts span+span{font-size:calc(var(--ui-vmin,7.2px) * 1.7);letter-spacing:.12em;color:rgba(245,237,216,.55);}
-.cs-dim.instant{transition:none;}
 /* Win cutscene: the itemized dora rows (Dora/Ura Dora/Aka Dora/Kita) as
    their own vermilion-edged group, and the running han total that pops
    up as each yaku/dora row lands. */
@@ -3445,9 +3531,17 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .cs-han b.pop{animation:cs-han-pop .32s cubic-bezier(.2,1.6,.4,1);}
 @keyframes cs-han-pop{0%{transform:scale(1.6)}100%{transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.cs-han b.pop{animation:none;}}
-/* Win cutscene: drains under "Tap to continue" over CS_FINAL_HOLD (its
-   duration is set inline), showing when the standings card will take over. */
-.cs-skip{display:flex;flex-direction:column;align-items:flex-end;gap:calc(var(--ui-vmin,7.2px) * .5);}
+/* Win cutscene: "Tap to continue" is a real button, the only way past the
+   finished cutscene (the rest of the layer ignores taps). Padded out for a
+   comfortable tap target on phones. The bar drains under it over
+   CS_FINAL_HOLD (its duration is set inline), showing when the standings
+   card will take over by itself. */
+.cs-skip{display:flex;flex-direction:column;align-items:flex-end;gap:calc(var(--ui-vmin,7.2px) * .5);
+  background:none;border:0;font-family:inherit;cursor:pointer;
+  padding:calc(var(--ui-vmin,7.2px) * 1.2) calc(var(--ui-vmin,7.2px) * 1.5);margin:calc(var(--ui-vmin,7.2px) * -1.2) calc(var(--ui-vmin,7.2px) * -1.5);
+  transition:color .2s;}
+.cs-skip:hover{color:var(--gl,#f0d080);}
+.cs-skip:focus-visible{outline:1px solid var(--gold,#c9a84c);outline-offset:2px;}
 .cs-hold-bar{display:block;width:100%;height:2px;background:var(--gold,#c9a84c);transform-origin:left;
   animation:cs-hold-drain linear forwards;}
 @keyframes cs-hold-drain{from{transform:scaleX(1)}to{transform:scaleX(0)}}
