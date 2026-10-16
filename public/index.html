@@ -12,7 +12,9 @@
 <body>
 <audio id="lobby-music" src="/audio/Music/Mahjong_Table_Tea_Time.mp3" loop preload="auto" style="display:none;"></audio>
 <audio id="game-music-1" src="/audio/Music/Mahjong_Table_Tea.mp3" loop preload="auto" style="display:none;"></audio>
-<audio id="sfx-discard" src="/audio/FX/Discard.m4a" preload="auto" style="display:none;"></audio>
+<!-- WAV, not the original phone-recorded .m4a (AAC in a 3GP container),
+     which some browsers refuse to decode, leaving the discard silent. -->
+<audio id="sfx-discard" src="/audio/FX/Discard.wav" preload="auto" style="display:none;"></audio>
 <audio id="sfx-pon" src="/audio/Voice/Default/Pon.mp3" preload="auto" style="display:none;"></audio>
 <audio id="sfx-chii" src="/audio/Voice/Default/Chii.mp3" preload="auto" style="display:none;"></audio>
 <audio id="sfx-kan" src="/audio/Voice/Default/Kan.mp3" preload="auto" style="display:none;"></audio>
@@ -81,14 +83,68 @@
      START SCREEN
      ════════════════════════════════════════════════════════════ -->
 <div class="screen" id="s-start">
-  <button class="settings-icon-btn" onclick="toggleSettings()" title="Settings">☰</button>
-  <div class="logo">
-    <div class="logo-k">雀 心</div>
-    <div class="logo-s">Janshin</div>
+  <!-- Background art: 雀's left half (set high) and 心's right half (set
+       low) meeting at a hairline cut, in faint silver outline with a
+       glitch — jade/gold copies knocked sideways, a few sliced bands that
+       jump now and then (.st-gj), flickering bars (.st-gb), scanlines.
+       Purely decorative. -->
+  <div class="st-art" aria-hidden="true">
+    <svg class="st-half st-half-l" viewBox="0 0 560 1220">
+      <defs>
+        <linearGradient id="st-sa" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8a9098"/><stop offset=".5" stop-color="#f2f4f7"/><stop offset="1" stop-color="#7c828b"/></linearGradient>
+        <text id="st-ta" x="0" y="1000" font-family="Noto Serif JP" font-weight="900" font-size="1120">雀</text>
+        <mask id="st-ma"><rect width="560" height="1220" fill="#fff"/><rect y="560" width="560" height="34" fill="#000"/><rect y="742" width="560" height="70" fill="#000"/><rect y="1010" width="560" height="16" fill="#000"/></mask>
+        <clipPath id="st-ca1"><rect y="560" width="560" height="34"/></clipPath>
+        <clipPath id="st-ca2"><rect y="742" width="560" height="70"/></clipPath>
+        <clipPath id="st-ca3"><rect y="1010" width="560" height="16"/></clipPath>
+      </defs>
+      <g mask="url(#st-ma)">
+        <use href="#st-ta" fill="none" stroke="#2a9e67" stroke-width="2" opacity=".6" transform="translate(-8 0)"/>
+        <use href="#st-ta" fill="none" stroke="#e8c25c" stroke-width="2" opacity=".45" transform="translate(7 3)"/>
+        <use href="#st-ta" fill="rgba(220,226,232,.035)" stroke="url(#st-sa)" stroke-width="2"/>
+      </g>
+      <g clip-path="url(#st-ca1)"><g class="st-gj"><use href="#st-ta" fill="none" stroke="url(#st-sa)" stroke-width="2" transform="translate(34 0)"/></g></g>
+      <g clip-path="url(#st-ca2)"><g class="st-gj st-gj2"><use href="#st-ta" fill="none" stroke="#2a9e67" stroke-width="2" opacity=".8" transform="translate(-22 0)"/><use href="#st-ta" fill="none" stroke="url(#st-sa)" stroke-width="2" transform="translate(-16 0)"/></g></g>
+      <g clip-path="url(#st-ca3)"><g class="st-gj st-gj3"><use href="#st-ta" fill="none" stroke="url(#st-sa)" stroke-width="2" transform="translate(52 0)"/></g></g>
+      <rect class="st-gb" x="120" y="690" width="320" height="2" fill="#f2f4f7" opacity=".55"/>
+      <rect class="st-gb st-gb2" x="260" y="905" width="180" height="5" fill="#2a9e67" opacity=".5"/>
+    </svg>
+    <svg class="st-half st-half-r" viewBox="0 0 560 1220">
+      <defs>
+        <linearGradient id="st-sb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8a9098"/><stop offset=".5" stop-color="#f2f4f7"/><stop offset="1" stop-color="#7c828b"/></linearGradient>
+        <text id="st-tb" x="-560" y="1000" font-family="Noto Serif JP" font-weight="900" font-size="1120">心</text>
+        <mask id="st-mb"><rect width="560" height="1220" fill="#fff"/><rect y="232" width="560" height="22" fill="#000"/><rect y="418" width="560" height="58" fill="#000"/><rect y="640" width="560" height="12" fill="#000"/></mask>
+        <clipPath id="st-cb1"><rect y="232" width="560" height="22"/></clipPath>
+        <clipPath id="st-cb2"><rect y="418" width="560" height="58"/></clipPath>
+        <clipPath id="st-cb3"><rect y="640" width="560" height="12"/></clipPath>
+      </defs>
+      <g mask="url(#st-mb)">
+        <use href="#st-tb" fill="none" stroke="#2a9e67" stroke-width="2" opacity=".6" transform="translate(-8 0)"/>
+        <use href="#st-tb" fill="none" stroke="#e8c25c" stroke-width="2" opacity=".45" transform="translate(7 3)"/>
+        <use href="#st-tb" fill="rgba(220,226,232,.035)" stroke="url(#st-sb)" stroke-width="2"/>
+      </g>
+      <g clip-path="url(#st-cb1)"><g class="st-gj st-gj2"><use href="#st-tb" fill="none" stroke="url(#st-sb)" stroke-width="2" transform="translate(-40 0)"/></g></g>
+      <g clip-path="url(#st-cb2)"><g class="st-gj st-gj3"><use href="#st-tb" fill="none" stroke="#e8c25c" stroke-width="2" opacity=".7" transform="translate(26 0)"/><use href="#st-tb" fill="none" stroke="url(#st-sb)" stroke-width="2" transform="translate(20 0)"/></g></g>
+      <g clip-path="url(#st-cb3)"><g class="st-gj"><use href="#st-tb" fill="none" stroke="url(#st-sb)" stroke-width="2" transform="translate(-60 0)"/></g></g>
+      <rect class="st-gb st-gb2" x="0" y="350" width="240" height="2" fill="#f2f4f7" opacity=".55"/>
+      <rect class="st-gb" x="60" y="560" width="120" height="4" fill="#e8c25c" opacity=".45"/>
+    </svg>
+    <span class="st-cut"></span>
+    <span class="st-scan"></span>
   </div>
-  <button id="bstart"><i aria-hidden="true">始</i><span>START</span></button>
-  <div class="start-copy">© 2026 雀心 - Janshin</div>
-  <a href="#" class="about-link" onclick="toggleAbout();return false;">About</a>
+
+  <div class="st-main">
+    <h1 class="st-logo">雀心</h1>
+    <div class="st-sub"><span>Janshin</span><i aria-hidden="true"></i></div>
+    <!-- 開始 keeps the old START button's id, so enterLobby() is still
+         wired to it (script.js: $('bstart').onclick). -->
+    <nav class="st-menu" aria-label="Start menu">
+      <button id="bstart" class="st-mi st-default"><b>開始</b><small>Start</small></button>
+      <button class="st-mi" onclick="toggleAbout()"><b>情報</b><small>About</small></button>
+      <button class="st-mi" onclick="toggleSettings()"><b>設定</b><small>Settings</small></button>
+    </nav>
+  </div>
+  <div class="st-foot"><span>© 2026 雀心 - Janshin</span><span id="start-version"></span></div>
 </div>
 
 <!-- About modal -->
@@ -181,7 +237,7 @@
       <a href="#" class="invite-link" onclick="openInviteModal('create');return false;">Invite Players</a>
       <div id="rules-invited-list" class="invite-chip-list"></div>
     </div>
-    <button class="bp" id="rules-modal-create-btn" style="display:none;" onclick="confirmCreateRoom()">+ Create Room</button>
+    <button class="bp" data-kj="卓" id="rules-modal-create-btn" style="display:none;" onclick="confirmCreateRoom()">+ Create Room</button>
   </div>
 </div>
 
@@ -380,7 +436,7 @@
   <button class="about-close" onclick="toggleRoomList()">✕</button>
   <div class="about-title">Room List</div>
   <div class="about-body">
-    <button class="bp" onclick="openCreateRoomRules()">+ Create Room</button>
+    <button class="bp" data-kj="卓" onclick="openCreateRoomRules()">+ Create Room</button>
     <div id="roomlist-body">Loading…</div>
   </div>
 </div>
@@ -593,7 +649,7 @@
       <input type="text" id="changeusername-new" maxlength="20">
     </div>
     <div id="changeusername-error" class="profile-error"></div>
-    <button class="bp" onclick="submitChangeUsername()">Save Username</button>
+    <button class="bp" data-kj="名" onclick="submitChangeUsername()">Save Username</button>
   </div>
 </div>
 
@@ -612,7 +668,7 @@
       <input type="password" id="changecode-new" maxlength="20" placeholder="At least 4 characters">
     </div>
     <div id="changecode-error" class="profile-error"></div>
-    <button class="bp" onclick="submitChangeCode()">Save Key</button>
+    <button class="bp" data-kj="鍵" onclick="submitChangeCode()">Save Key</button>
   </div>
 </div>
 
@@ -660,7 +716,7 @@
         <input type="text" id="friend-id-input" inputmode="numeric" maxlength="16" placeholder="16-digit ID" autocomplete="off">
       </div>
       <div id="friend-add-error" class="profile-error"></div>
-      <button class="bp" onclick="submitFriendRequest()">Send Request</button>
+      <button class="bp" data-kj="友" onclick="submitFriendRequest()">Send Request</button>
     </div>
   </div>
 </div>
@@ -676,7 +732,7 @@
   <div class="about-title">Online Friends</div>
   <div class="about-body">
     <div id="online-list"><p class="friends-empty">Loading…</p></div>
-    <button class="bp" id="online-invite-btn" onclick="inviteSelectedOnline()" disabled>Invite to Game</button>
+    <button class="bp" data-kj="招" id="online-invite-btn" onclick="inviteSelectedOnline()" disabled>Invite to Game</button>
   </div>
 </div>
 
@@ -847,7 +903,7 @@
       <textarea id="feedback-message" maxlength="2000" rows="6" placeholder="What happened? What were you doing when it happened?"></textarea>
     </div>
     <div id="feedback-error" class="profile-error"></div>
-    <button class="bp" id="feedback-send" onclick="submitFeedback()">Send</button>
+    <button class="bp" data-kj="送" id="feedback-send" onclick="submitFeedback()">Send</button>
   </div>
 </div>
 
@@ -881,7 +937,7 @@
         <input type="password" id="dev-secret" maxlength="60">
       </div>
       <div id="devgate-error" class="profile-error"></div>
-      <button class="bp" onclick="submitDevKey()">Unlock</button>
+      <button class="bp" data-kj="解" onclick="submitDevKey()">Unlock</button>
     </div>
 
     <div id="devpanel-content" style="display:none;">
@@ -897,12 +953,12 @@
       <div id="dev-clear-history-confirm-row" style="display:none;margin-top:calc(var(--ui-vmin, 7.2px) * 1.667);">
         <p class="profile-error" style="min-height:auto;">Clear EVERY profile's play history? This can't be undone.</p>
         <div class="leave-actions">
-          <button class="leave-btn-stay" onclick="cancelClearAllHistory()">Cancel</button>
-          <button class="leave-btn-confirm" onclick="confirmClearAllHistory()">Clear</button>
+          <button class="leave-btn-stay" data-kj="戻" onclick="cancelClearAllHistory()">Cancel</button>
+          <button class="leave-btn-confirm" data-kj="消" onclick="confirmClearAllHistory()">Clear</button>
         </div>
       </div>
       <div id="devclearhistory-error" class="profile-error"></div>
-      <button class="bp" id="dev-clear-history-btn" onclick="armClearAllHistory()" style="margin-top:calc(var(--ui-vmin, 7.2px) * 1.667);background:linear-gradient(135deg,#5a1a0a,#9a3a1a);border-color:#ff8040;">Clear All Play History</button>
+      <button class="bp bp-danger" data-kj="消" id="dev-clear-history-btn" onclick="armClearAllHistory()" style="margin-top:calc(var(--ui-vmin, 7.2px) * 1.667);">Clear All Play History</button>
     </div>
   </div>
 </div>
@@ -926,7 +982,7 @@
       <input type="password" id="dev-newcode" maxlength="20" placeholder="At least 4 characters">
     </div>
     <div id="devpanel-error" class="profile-error"></div>
-    <button class="bp" onclick="submitCreateProfile()">Create Profile</button>
+    <button class="bp" data-kj="新" onclick="submitCreateProfile()">Create Profile</button>
   </div>
 </div>
 
@@ -943,12 +999,12 @@
     <div id="dev-delete-confirm-row" style="display:none;">
       <p class="profile-error" style="min-height:auto;">Delete this profile and all its stats? This can't be undone.</p>
       <div class="leave-actions">
-        <button class="leave-btn-stay" onclick="cancelDeleteProfile()">Cancel</button>
-        <button class="leave-btn-confirm" onclick="confirmDeleteProfile()">Delete</button>
+        <button class="leave-btn-stay" data-kj="戻" onclick="cancelDeleteProfile()">Cancel</button>
+        <button class="leave-btn-confirm" data-kj="消" onclick="confirmDeleteProfile()">Delete</button>
       </div>
     </div>
     <div id="devdelete-error" class="profile-error"></div>
-    <button class="bp" id="dev-delete-btn" onclick="armDeleteProfile()" style="background:linear-gradient(135deg,#5a1a0a,#9a3a1a);border-color:#ff8040;">Delete Profile</button>
+    <button class="bp bp-danger" data-kj="消" id="dev-delete-btn" onclick="armDeleteProfile()">Delete Profile</button>
   </div>
 </div>
 
@@ -971,8 +1027,8 @@
   <div class="about-title">Leave Game?</div>
   <div class="about-body"><p>Your progress in this match will be lost.</p></div>
   <div class="leave-actions">
-    <button class="leave-btn-confirm" onclick="confirmLeaveGame()">Leave</button>
-    <button class="leave-btn-stay" onclick="cancelLeaveConfirm()">Stay</button>
+    <button class="leave-btn-confirm" data-kj="退" onclick="confirmLeaveGame()">Leave</button>
+    <button class="leave-btn-stay" data-kj="留" onclick="cancelLeaveConfirm()">Stay</button>
   </div>
 </div>
 
@@ -984,8 +1040,8 @@
   <div class="about-title" id="confirm-title">Confirm</div>
   <div class="about-body"><p id="confirm-message"></p></div>
   <div class="leave-actions">
-    <button class="leave-btn-stay" onclick="closeUiConfirm()">Cancel</button>
-    <button class="leave-btn-confirm" id="confirm-ok-btn">OK</button>
+    <button class="leave-btn-stay" data-kj="戻" onclick="closeUiConfirm()">Cancel</button>
+    <button class="leave-btn-confirm" data-kj="決" id="confirm-ok-btn">OK</button>
   </div>
 </div>
 
@@ -1025,7 +1081,7 @@
   <button class="about-close" onclick="closeRoomInvite()">✕</button>
   <div class="achv-toast-title">Room Invite</div>
   <div id="invite-toast-body"></div>
-  <button class="bp" id="invite-toast-accept" onclick="acceptRoomInvite()">Join Room</button>
+  <button class="bp" data-kj="入" id="invite-toast-accept" onclick="acceptRoomInvite()">Join Room</button>
 </div>
 
 <!-- Daily login bonus notification — same corner-toast pattern as
@@ -1165,7 +1221,7 @@
       </div>
       <label class="profile-remember-row"><input type="checkbox" id="lobby-remember"> Remember me</label>
       <div id="lobby-login-error" class="profile-error"></div>
-      <button class="bp" onclick="submitLobbyLogin()">Log In</button>
+      <button class="bp" data-kj="入" onclick="submitLobbyLogin()">Log In</button>
       <!-- Wrapped in its own block so only the TEXT is clickable
            (.lobby-auth-link is inline-block, sized to its own content)
            rather than the link stretching to fill the whole line the way
@@ -1202,7 +1258,7 @@
         <a href="#" onclick="toggleTermsModal();return false;">Terms of Service</a> and
         <a href="#" onclick="togglePrivacyModal();return false;">Privacy Policy</a></label>
       <div id="lobby-signup-error" class="profile-error"></div>
-      <button class="bp" onclick="submitLobbySignup()">Create Account</button>
+      <button class="bp" data-kj="登" onclick="submitLobbySignup()">Create Account</button>
     </div>
   </div>
 
@@ -1269,8 +1325,8 @@
          deliberately finding/hosting a game with a specific person (see
          toggleRoomList/createRoom/joinRoom in script.js). -->
     <div class="lobby-actions" id="lobby-actions">
-      <button class="bp" id="bfind">Quick Match</button>
-      <button class="bp" onclick="toggleRoomList()">Room List</button>
+      <button class="bp" data-kj="速" id="bfind">Quick Match</button>
+      <button class="bp bp-glass" data-kj="卓" onclick="toggleRoomList()">Room List</button>
     </div>
     <div class="wa" id="wa">
       <div class="wm" id="wmsg">Looking for players...</div>
@@ -1289,7 +1345,7 @@
            rarer, lower-stakes action than either. -->
       <a href="#" class="invite-link" id="binvite" onclick="openInviteModal('waiting');return false;" style="display:none;">✉ Invite Players</a>
       <button class="ready-btn" id="bready">⚔ Ready!</button>
-      <button class="bs" id="bcancel">✕ Cancel</button>
+      <button class="bs" data-kj="戻" id="bcancel">✕ Cancel</button>
     </div>
   </div>
 </div>

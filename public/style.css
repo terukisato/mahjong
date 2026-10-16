@@ -46,7 +46,6 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    other at any resolution instead of each hitting its own px cap at a
    different screen size. */
 #s-lobby{--ui-vmin:clamp(6px,1vmin,10px);flex-direction:column;gap:18px;}
-#s-start{flex-direction:column;align-items:center;justify-content:center;gap:32px;}
 .logo{text-align:center;animation:float 5s ease-in-out infinite;}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 /* Plain vmin (no clamp min/max), same fix as the game banners: logo-k was
@@ -1170,6 +1169,20 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   transition:transform .15s,border-color .15s,background .15s;}
 .msg-react-picker button:hover{transform:scale(1.15);background:rgba(201,168,76,.15);}
 .msg-react-picker button.selected{border-color:var(--gl);}
+/* Portrait phones: --ui-vmin's 6px floor left the chat buttons ~22px — too
+   small to tap. A bigger unit here (buttons ~33px) with the bar stretched
+   across the bottom and the input taking the spare width, so it still fits
+   a 375px screen. The input's text is 16px so iOS doesn't zoom in on focus.
+   The popups move up to clear the taller bar and the help icons above it. */
+@media (max-width:600px){
+  .chat-bar,.chat-color-picker,.chat-panel,.msg-react-picker,.reaction-names-popup{--ui-vmin:9px;}
+  .chat-bar{left:12px;right:12px;bottom:12px;}
+  .chat-input{flex:1;width:auto;min-width:0;font-size:16px;}
+  .chat-color-picker{bottom:118px;right:12px;}
+  .chat-color-swatch{width:32px;height:32px;}
+  .chat-emoji-picker .emoji-swatch{width:38px;height:38px;font-size:1.6rem;}
+  .chat-panel{bottom:118px;right:12px;left:12px;width:auto;max-height:45vh;}
+}
 
 /* Floating chat messages — niconico-style danmaku: each message spawns at
    a random height and slides right-to-left across the full screen at a
@@ -1940,89 +1953,117 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .icon-btn:hover{border-color:rgba(201,168,76,.5);}
 .icon-btn.active{background:rgba(201,168,76,.2);border-color:var(--gold);}
 
-/* ── Start screen button ── */
-/* Raw vmin works for the logo (large coefficients stay legible even at
-   tiny vmin), but these are small text — 1.4vmin on a 320px phone is a
-   4.5px caption. Route them through one clamped scale unit instead: it
-   still tracks vmin (and everything below stays proportional to
-   everything else, since they all multiply the SAME variable — no
-   independent caps to decouple), but never drops below a readable floor
-   or balloons past a sensible ceiling on very large screens. Scoped to
-   #s-start (inherited by its descendants) rather than :root, so it
-   doesn't affect anything outside the start screen. */
-#s-start{--ui-vmin:clamp(6px,1vmin,10px);}
-/* START — the "diagonal stagger" frame from the start-button exploration
-   (the Brushed Silver geometry from the start-frames artifact), static,
-   and recoloured to gold to match the 雀心 logo and the Janshin palette.
-   The button is two nested broken rectangles: the outer rule (::before)
-   is cut at its top-left and bottom-right corners, the inner (::after) at
-   the other two, so neither ever closes. Each is a gold gradient masked
-   to that stroke shape — a gentle static highlight, no sheen animation,
-   biased bright so no part of either frame drops out on the green ground.
-   No fill, no border, no radius — the frame is the button. The 18px
-   corner gap and 1px rule are the artifact's own fixed values. */
-#bstart{position:relative;isolation:isolate;
-  padding:1.15rem 2.9rem;
-  font-family:'Cinzel Decorative',serif;font-weight:700;
-  font-size:1.02rem;letter-spacing:.46em;
-  background:none;border:0;color:var(--gl);cursor:pointer;
-  transition:color .25s ease,letter-spacing .25s ease,transform .18s ease;}
-#bstart>span{position:relative;z-index:1;padding-left:.46em;}
-/* "Hanko" motif (see silver-motifs exploration) — a small tilted vermilion
-   seal, 始 "begin", pressed onto the frame's top-right corner; hover
-   straightens it. Red against the gold, the way a chop sits on a document. */
-#bstart>i{position:absolute;z-index:3;top:-7px;right:-7px;
-  width:19px;height:19px;border-radius:2px;
-  display:flex;align-items:center;justify-content:center;
-  font-family:'Noto Serif JP',serif;font-weight:700;font-size:.66rem;font-style:normal;
-  background:#b23a2e;color:#f8ece4;
-  transform:rotate(-4deg);transition:transform .25s ease;
-  box-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;}
-#bstart:hover{color:#ffe680;}
-#bstart:hover>i{transform:rotate(0deg);}
-#bstart.pressed{transform:scale(.9);}
-#bstart:focus-visible{outline:2px solid var(--gl);outline-offset:8px;}
-#bstart::before,#bstart::after{content:"";position:absolute;pointer-events:none;
-  background-repeat:no-repeat;transition:filter .25s ease;}
-#bstart::before{inset:0;
-  background-image:linear-gradient(115deg,#b5903f 0%,#ffe9b0 48%,#cfa74d 100%);
-  -webkit-mask:
-    linear-gradient(90deg,transparent 0 18px,#000 18px) top/100% 1px no-repeat,
-    linear-gradient(90deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) bottom/100% 1px no-repeat,
-    linear-gradient(180deg,transparent 0 18px,#000 18px) left/1px 100% no-repeat,
-    linear-gradient(180deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) right/1px 100% no-repeat;
-  mask:
-    linear-gradient(90deg,transparent 0 18px,#000 18px) top/100% 1px no-repeat,
-    linear-gradient(90deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) bottom/100% 1px no-repeat,
-    linear-gradient(180deg,transparent 0 18px,#000 18px) left/1px 100% no-repeat,
-    linear-gradient(180deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) right/1px 100% no-repeat;}
-#bstart::after{inset:5px;opacity:.9;
-  background-image:linear-gradient(115deg,#a37f35 0%,#f4e0ac 48%,#bd9740 100%);
-  -webkit-mask:
-    linear-gradient(90deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) top/100% 1px no-repeat,
-    linear-gradient(90deg,transparent 0 18px,#000 18px) bottom/100% 1px no-repeat,
-    linear-gradient(180deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) left/1px 100% no-repeat,
-    linear-gradient(180deg,transparent 0 18px,#000 18px) right/1px 100% no-repeat;
-  mask:
-    linear-gradient(90deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) top/100% 1px no-repeat,
-    linear-gradient(90deg,transparent 0 18px,#000 18px) bottom/100% 1px no-repeat,
-    linear-gradient(180deg,#000 0 calc(100% - 18px),transparent calc(100% - 18px)) left/1px 100% no-repeat,
-    linear-gradient(180deg,transparent 0 18px,#000 18px) right/1px 100% no-repeat;}
-#bstart:hover::before,#bstart:hover::after{filter:brightness(1.12);}
+/* ════════════════════════════════════════════════════════════
+   START SCREEN — "Ink" (D4) on deep green, with the split-kanji glitch art
+   Picked from the Spotlight start-menu mockups (D4 Ink Stroke · G1 Deep
+   Green · R1 split kanji with glitch). Left: the 雀心 logo and a vertical
+   menu, 開始 Start / 情報 About / 設定 Settings, Japanese first. The item
+   under the pointer or keyboard focus gets a ragged ink-brush swash behind
+   it; with neither, 開始 (.st-default) keeps it. Right: decorative art, see
+   .st-art. Everything scales off --ui-vmin (6–10px; 8px at 1280×800, the
+   size the mockup was drawn at, so "N units" = mockup px / 8).
+   ════════════════════════════════════════════════════════════ */
+#s-start{--ui-vmin:clamp(6px,1vmin,10px);overflow:hidden;
+  background:radial-gradient(ellipse 55% 65% at 28% 0%,rgba(255,240,210,.08),transparent 70%),
+    radial-gradient(ellipse 80% 90% at 40% 45%,#0e2b1d,#06160e 60%,#020805 100%);}
 
-/* Start -> lobby transition: press-pulse the button (via .pressed above),
+.st-main{position:absolute;z-index:2;left:calc(var(--ui-vmin) * 16.25);top:50%;translate:0 -54%;}
+.st-logo{margin:0;font-family:'Noto Serif JP',serif;font-weight:900;font-size:calc(var(--ui-vmin) * 14);
+  letter-spacing:calc(var(--ui-vmin) * 1.25);line-height:1.05;
+  background:linear-gradient(135deg,#ffe680,#c9a84c,#8a6b20);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 calc(var(--ui-vmin) * 2.5) rgba(201,168,76,.35));}
+/* Start-press flash (enterLobby() adds .burst), same keyframes as the lobby logo. */
+.st-logo.burst{animation:logoBurst .45s ease;}
+.st-sub{display:flex;align-items:center;gap:calc(var(--ui-vmin) * 1.75);margin-top:calc(var(--ui-vmin) * .75);}
+.st-sub span{font-family:'Cinzel Decorative',serif;font-size:calc(var(--ui-vmin) * 1.75);letter-spacing:.7em;color:rgba(201,168,76,.8);}
+/* a short dry-brush stroke trailing off the name */
+.st-sub i{width:calc(var(--ui-vmin) * 15);height:calc(var(--ui-vmin) * .375);
+  background:linear-gradient(90deg,rgba(201,168,76,.7),rgba(201,168,76,0));clip-path:polygon(0 30%,100% 0,96% 100%,0 80%);}
+
+.st-menu{display:flex;flex-direction:column;gap:calc(var(--ui-vmin) * .25);
+  margin:calc(var(--ui-vmin) * 7.25) 0 0 calc(var(--ui-vmin) * -5);}
+.st-mi{position:relative;isolation:isolate;display:flex;align-items:center;gap:calc(var(--ui-vmin) * 2);
+  width:calc(var(--ui-vmin) * 52.5);height:calc(var(--ui-vmin) * 9);padding:0 0 0 calc(var(--ui-vmin) * 5);
+  background:none;border:0;cursor:pointer;text-align:left;color:rgba(232,240,230,.5);transition:color .15s,transform .15s;}
+.st-mi b{font-family:'Noto Serif JP',serif;font-weight:900;font-size:calc(var(--ui-vmin) * 3.5);letter-spacing:.18em;}
+.st-mi small{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--ui-vmin) * 1.375);letter-spacing:.3em;
+  color:rgba(201,168,76,.45);transition:color .15s;}
+.st-mi:focus-visible{outline:none;}
+/* The ink swash: a near-black green brush mark, ragged at the ends. */
+.st-mi::before{content:'';position:absolute;z-index:-1;
+  left:calc(var(--ui-vmin) * 1.25);right:calc(var(--ui-vmin) * 2.5);top:calc(var(--ui-vmin) * 1.25);bottom:calc(var(--ui-vmin) * 1);
+  background:linear-gradient(90deg,rgba(4,14,9,0),#04110a 10%,#030c07 62%,rgba(3,12,7,0));
+  clip-path:polygon(2% 30%,6% 8%,30% 0,62% 6%,90% 2%,100% 22%,97% 60%,100% 88%,70% 100%,40% 94%,12% 100%,0 76%,4% 55%);
+  opacity:0;transition:opacity .15s;}
+.st-mi:hover,.st-mi:focus-visible,.st-menu:not(:hover):not(:has(:focus-visible)) .st-default{color:#fff6dc;}
+.st-mi:hover small,.st-mi:focus-visible small,.st-menu:not(:hover):not(:has(:focus-visible)) .st-default small{color:#f0d080;}
+.st-mi:hover::before,.st-mi:focus-visible::before,.st-menu:not(:hover):not(:has(:focus-visible)) .st-default::before{opacity:1;}
+#bstart.pressed{transform:scale(.96);}
+
+.st-foot{position:absolute;z-index:2;left:calc(var(--ui-vmin) * 16.25);bottom:calc(var(--ui-vmin) * 5);
+  display:flex;gap:calc(var(--ui-vmin) * 2.25);font-size:calc(var(--ui-vmin) * 1.45);letter-spacing:.04em;color:rgba(232,240,230,.35);}
+
+/* ── Right-hand art ──
+   雀's left half (set high) and 心's right half (set low) meet at a
+   hairline cut (--st-cut across the screen). Each half is an SVG 560×1220
+   (viewBox units) sized off the screen height (--st-h), so it bleeds past
+   the top / bottom / right edges at any size. Faint silver outline, faded
+   toward the menu and the bottom; a left-side shadow keeps the menu clean.
+   The glitch: jade + gold copies offset a few units, three bands per half
+   masked out of the main drawing and redrawn shifted (.st-gj, which jump
+   now and then), flickering bars (.st-gb) and scanlines. */
+.st-art{position:absolute;inset:0;z-index:1;pointer-events:none;--st-cut:72.66%;--st-h:152.5vh;}
+.st-half{position:absolute;display:block;height:var(--st-h);width:calc(var(--st-h) * .459);opacity:.34;overflow:hidden;}
+.st-half-l{left:calc(var(--st-cut) - var(--st-h) * .459);top:calc(var(--st-h) * -.2213);
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 45%),linear-gradient(180deg,transparent 0,#000 30%);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(90deg,transparent 0,#000 45%),linear-gradient(180deg,transparent 0,#000 30%);mask-composite:intersect;}
+.st-half-r{left:var(--st-cut);top:calc(var(--st-h) * -.0164);
+  -webkit-mask-image:linear-gradient(180deg,#000 50%,transparent 85%);mask-image:linear-gradient(180deg,#000 50%,transparent 85%);}
+.st-cut{position:absolute;left:var(--st-cut);top:0;bottom:0;width:1px;
+  background:linear-gradient(180deg,rgba(220,226,232,0),rgba(220,226,232,.2) 30%,rgba(220,226,232,.2) 70%,rgba(220,226,232,0));}
+.st-scan{position:absolute;left:40%;top:0;right:0;bottom:0;
+  background:repeating-linear-gradient(180deg,rgba(255,255,255,.028) 0 1px,transparent 1px 4px);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 40%);mask-image:linear-gradient(90deg,transparent,#000 40%);}
+.st-art::after{content:'';position:absolute;left:0;top:0;bottom:0;width:56%;background:linear-gradient(90deg,rgba(4,14,9,.55),rgba(4,14,9,0));}
+.st-gj{animation:stJit 3.6s steps(1) infinite;}
+.st-gj2{animation-duration:4.4s;animation-delay:-1.3s;}
+.st-gj3{animation-duration:5.2s;animation-delay:-2.6s;}
+.st-gb{animation:stFlick 2.8s steps(1) infinite;}
+.st-gb2{animation-duration:3.7s;animation-delay:-1.1s;}
+@keyframes stJit{0%{transform:translateX(0)}6%{transform:translateX(-26px)}8%{transform:translateX(18px)}10%{transform:translateX(-6px)}12%,100%{transform:translateX(0)}}
+@keyframes stFlick{0%{opacity:.5}20%{opacity:0}23%{opacity:.6}60%{opacity:.15}62%{opacity:.55}100%{opacity:.5}}
+@media (prefers-reduced-motion:reduce){.st-gj,.st-gb{animation:none;}}
+/* Portrait phones: a half is wider than the whole screen here, so the art
+   can't stay clear of the menu — it's drawn smaller, fainter, and under a
+   full-width shade so the logo and menu still read first. The menu moves
+   in from the edge. */
+@media (orientation:portrait){
+  .st-art{--st-cut:70%;--st-h:118vh;}
+  .st-half{opacity:.22;}
+  .st-art::after{width:100%;background:linear-gradient(90deg,rgba(4,14,9,.6),rgba(4,14,9,.15));}
+  .st-main,.st-foot{left:9vw;}
+}
+
+/* Start -> lobby logo hand-off (flyLogoToLobby in script.js): one fixed copy
+   per character, in the logo's gold, moved by the Web Animations API from
+   the start logo's glyph boxes to the lobby logo's. transform-origin 0 0 so
+   translate+scale maps glyph box onto glyph box; line-height:normal makes
+   each copy's box the same as the measured glyph box. .logo-hold freezes
+   the lobby logo's float while it's being measured and landed on. */
+.logo-fly{position:fixed;inset:0;z-index:500;pointer-events:none;}
+.logo-fly span{position:fixed;transform-origin:0 0;line-height:normal;will-change:transform;
+  font-family:'Noto Serif JP',serif;font-weight:900;
+  background:linear-gradient(135deg,#ffe680,#c9a84c,#8a6b20);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 calc(var(--ui-vmin, 7.2px) * 2.5) rgba(201,168,76,.45));}
+.logo.logo-hold{animation:none;}
+
+/* Start -> lobby transition: press-pulse 開始 (via #bstart.pressed above),
    fade+scale the start screen out, then fade+scale the lobby in once
    show() has swapped which screen has display:none — see enterLobby(). */
 #s-start.screen-out{animation:screenOut .27s ease forwards;}
 #s-lobby.screen-in{animation:screenIn .315s ease .045s backwards;}
 @keyframes screenOut{to{opacity:0;transform:scale(.96);}}
 @keyframes screenIn{from{opacity:0;transform:scale(1.03);}to{opacity:1;transform:scale(1);}}
-.start-copy{font-size:calc(var(--ui-vmin) * 1.4);color:rgba(245,237,216,.3);
-  letter-spacing:calc(var(--ui-vmin) * .28);}
-.about-link{font-size:calc(var(--ui-vmin) * 1.4);color:rgba(245,237,216,.4);
-  letter-spacing:calc(var(--ui-vmin) * .14);
-  text-decoration:underline;margin-top:6px;cursor:pointer;transition:color .2s;}
-.about-link:hover{color:var(--gold);}
 /* Rankings/Match Settings — icon-only buttons, a flex item within
    .card-header-row (see index.html) alongside the back button and header,
    rather than absolutely anchored to .card's own corner — that's what
@@ -2950,6 +2991,9 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
    never be needed; nowrap+hidden here is a hard guarantee of that (a
    backstop against a stray rounding pixel), not a fallback layout. */
 .yakuref-tiles{display:flex;flex-wrap:nowrap;overflow:hidden;gap:2px;margin-bottom:calc(var(--ui-vmin, 7.2px) * .694);}
+/* fitYakuRefTiles only budgets the 2px gap, so drop .advice-mini-tile's own
+   right margin here or a 14-tile hand overflows and the last tiles clip. */
+.yakuref-tiles .advice-mini-tile{margin-right:0;}
 /* The tiles that specifically MAKE the yaku (see `highlight` in
    YAKU_REFERENCE) render at full brightness; everything else dims/
    desaturates instead — that contrast alone reads as "this subset is the
@@ -3459,6 +3503,26 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .cs-stamp.t-baiman{--st:14vmin;}
 .cs-stamp.t-sanbaiman{--st:15vmin;}
 .cs-stamp.t-yakuman,.cs-stamp.t-double-yakuman{--st:17vmin;--ink:#b5231c;}
+/* Small screens (the --ui-vmin floor binds below 600px): the han lines
+   under the points can't shrink with the screen, so they run wider than
+   the number and pass under the stamp beside it, which hangs below the
+   number's baseline (it's centred on the number and taller than it). The
+   number's own --st mirrors its stamp's size (via :has, so the space is
+   there before the stamp lands and nothing jumps), and the gap under the
+   number grows to clear the stamp's tilted bottom corner (~0.62 of its
+   size below centre with the -8deg tilt and the face's padding), minus
+   half the number's height, plus a margin. */
+@media (max-width:600px),(max-height:600px){
+  .cs-pts{gap:max(.6vmin,calc(var(--ui-vmin,7.2px) * .5));}
+  .cs-pts-num:has(.cs-stamp){--st:11vmin;}
+  .cs-pts-num:has(.cs-stamp.t-haneman){--st:12.5vmin;}
+  .cs-pts-num:has(.cs-stamp.t-baiman){--st:14vmin;}
+  .cs-pts-num:has(.cs-stamp.t-sanbaiman){--st:15vmin;}
+  .cs-pts-num:has(.cs-stamp.t-yakuman){--st:17vmin;}
+  /* counted a size up: its x2 tab hangs off the seal's lower corner */
+  .cs-pts-num:has(.cs-stamp.t-double-yakuman){--st:24vmin;}
+  .cs-pts-num:has(.cs-stamp) b{margin-bottom:max(2.2vmin,calc(var(--st) * .62 - 4.5vmin + 3vmin));}
+}
 .cs-stamp-ink{position:absolute;inset:0;width:100%;height:100%;overflow:visible;opacity:0;transform:rotate(-8deg);}
 /* Fill set here, not as an svg attribute: var() in a presentation attribute
    isn't supported everywhere. */
@@ -3706,3 +3770,113 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .cs-preview-card{display:flex;flex-direction:column;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.5);}
 .cs-preview-card .cs-swatch{width:calc(var(--ui-vmin, 7.2px) * 9);height:calc(var(--ui-vmin, 7.2px) * 9);}
 .cs-preview-card .cs-swatch b{font-size:calc(var(--ui-vmin, 7.2px) * 3.4);}
+
+/* ════════════════════════════════════════════════════════════
+   MENU THEME · D "Glass"
+   Menus restyled to match the in-game chat bar (.chat-bar): frosted dark
+   glass panels with a faint white hairline, small square-ish corners, a
+   solid gold primary (like .chat-send) and the in-game action buttons'
+   slant + ghost kanji (.ba) on every menu button. Kept as one override
+   block so the whole look can be swapped for another direction later.
+   Covers: .about-modal popups, the lobby .card, #settings-panel, and the
+   buttons / pickers / toggles / fields inside them. The game-over
+   buttons (.reb-btn) keep their own look.
+   ════════════════════════════════════════════════════════════ */
+:root{--glass-bg:rgba(10,18,13,.55);--glass-fx:blur(14px) saturate(1.2);--glass-edge:rgba(255,255,255,.09);
+  --glass-tile:rgba(255,255,255,.05);--glass-tile-hi:rgba(255,255,255,.1);--glass-on:rgba(240,208,128,.15);--glass-on-edge:rgba(240,208,128,.55);}
+
+/* ── Panels ── the stagger gold frame is dropped; the hairline is an inset shadow. */
+.about-modal,.card{background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-fx);backdrop-filter:var(--glass-fx);
+  border:0;border-radius:calc(var(--ui-vmin, 7.2px) * .6);box-shadow:inset 0 0 0 1px var(--glass-edge),0 18px 50px rgba(0,0,0,.45);}
+.about-modal::before,.about-modal::after,.card::before,.card::after{content:none;}
+/* Popups are fully opaque (no see-through, no blur) so nothing behind them
+   competes with their contents. To lift the box off the dimmed page: a
+   surface a step lighter than the page, a thin gold-leaf top edge (the
+   START button's gradient, like the in-game top bar's gold rule), a
+   brighter hairline and a deep drop shadow. The gold edge is a background
+   layer, so it stays put while .about-body scrolls. */
+.about-modal{background:linear-gradient(115deg,#b5903f 0%,#ffe9b0 48%,#cfa74d 100%) top/100% 2px no-repeat,
+    linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,0) 45%),#161e19;
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.13),0 0 0 1px rgba(0,0,0,.6),0 24px 70px rgba(0,0,0,.8);}
+/* Every popup is the lobby card's size: same scale unit (#s-lobby's
+   clamp), same width formula (.card), so the popup and everything in it
+   render at the card's scale. Height fits the content like the card does,
+   capped to the screen; long content scrolls in .about-body. Overrides the
+   fixed 48-unit height, the portrait-phone height and Play History's
+   wider box. */
+.about-modal{--ui-vmin:clamp(6px,1vmin,10px);width:min(calc(var(--ui-vmin) * 61.11),96vw);height:auto;
+  max-width:96vw;max-height:calc(100vh - 48px);}
+#playhistory-modal{width:min(calc(var(--ui-vmin) * 61.11),96vw);}
+/* Never shorter than the lobby card in its profile / Quick Match / Room
+   List state. That card measures 27.73 units + 46.4px (the px part is the
+   card's own fixed spacing — header-row margin, gaps, borders), checked
+   against the real card at --ui-vmin 6/8/9/10 to within 1px. The short
+   confirm dialogs centre their contents in the taller box. */
+.about-modal{min-height:min(calc(var(--ui-vmin) * 27.73 + 46.4px),calc(100vh - 48px));}
+.leave-modal{justify-content:center;}
+.leave-modal .about-body{flex:0 0 auto;}
+/* Behind a popup: a heavy dim plus a soft blur, so the lobby card / logo
+   behind it fade to a quiet haze instead of competing with the popup. */
+.about-backdrop{background:rgba(0,0,0,.7);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);}
+.about-title{color:var(--gl);}
+.about-section{border-top-color:rgba(255,255,255,.07);}
+.about-section-title{font-family:'Noto Sans JP',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:rgba(245,237,216,.5);}
+#settings-panel{background:linear-gradient(90deg,var(--glass-edge) 0 1px,transparent 1px),#0d1410;}
+.sp-title{border-bottom-color:rgba(255,255,255,.08);}
+
+/* ── ✕ / ← ── glass icon tiles, like the chat bar's buttons. */
+.about-close,.about-back{display:flex;align-items:center;justify-content:center;padding:0;
+  width:calc(var(--ui-vmin, 7.2px) * 3.6);height:calc(var(--ui-vmin, 7.2px) * 3.6);top:calc(var(--ui-vmin, 7.2px) * 1.2);
+  border-radius:calc(var(--ui-vmin, 7.2px) * .4);background:rgba(255,255,255,.06);color:rgba(245,237,216,.75);
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.6);line-height:1;z-index:3;transition:background .15s,color .15s;}
+.about-close{right:calc(var(--ui-vmin, 7.2px) * 1.2);}
+.about-back{left:calc(var(--ui-vmin, 7.2px) * 1.2);}
+.about-close:hover,.about-back:hover{background:rgba(255,255,255,.13);color:var(--gl);}
+
+/* ── Pickers & tiles ── glass tile; the chosen one is lit gold. */
+.mode-btn,.theme-btn,.icon-btn,.profile-card,.room-card{background:var(--glass-tile);border:0;border-radius:calc(var(--ui-vmin, 7.2px) * .4);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+.mode-btn{color:rgba(245,237,216,.7);}
+.mode-btn:hover:not(.active),.icon-btn:hover,.profile-card:hover{background:var(--glass-tile-hi);color:var(--cream);}
+.mode-btn.active,.theme-btn.selected,.icon-btn.active,.profile-card.active{background:var(--glass-on);box-shadow:inset 0 0 0 1px var(--glass-on-edge);color:#fff;}
+.mode-btn.active .mode-sub{color:var(--gl);}
+.profile-card-offline:hover{background:var(--glass-tile);}
+
+/* ── Toggles ── rounded-square; on = gold with a dark knob (the chat send colours). */
+.sp-toggle{border:0;border-radius:calc(var(--ui-vmin, 7.2px) * .4);background:var(--gl);}
+.sp-toggle::after{border-radius:calc(var(--ui-vmin, 7.2px) * .25);background:#1a1206;box-shadow:none;}
+.sp-toggle.off{background:rgba(255,255,255,.1);}
+.sp-toggle.off::after{background:rgba(245,237,216,.5);}
+
+/* ── Fields ── */
+.ig input,.ig select,.ig textarea{background:rgba(255,255,255,.06);border:0;border-radius:calc(var(--ui-vmin, 7.2px) * .4);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);transition:background .2s,box-shadow .2s;}
+.ig input:focus,.ig select:focus,.ig textarea:focus{background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px rgba(240,208,128,.5);}
+.ig select option{background:#141a16;color:var(--cream);}
+
+/* ── Buttons ── the .ba slant: the button itself is the edge colour
+   (--sl-bd), ::before (same slant, inset) the fill (--sl-bg), and ::after
+   a ghost kanji from data-kj. clip-path clips box-shadow, so no glow. */
+.bp:not(.reb-btn),.bs,.leave-actions button,.room-card-join{--sl-cut:calc(var(--ui-vmin, 7.2px) * 1.5);
+  position:relative;isolation:isolate;overflow:hidden;border:0;border-radius:0;background:var(--sl-bd);color:var(--sl-fg);
+  clip-path:polygon(var(--sl-cut) 0,100% 0,calc(100% - var(--sl-cut)) 100%,0 100%);transition:filter .2s;}
+.bp:not(.reb-btn)::before,.bs::before,.leave-actions button::before,.room-card-join::before{content:'';position:absolute;z-index:-1;inset:1px 1.5px;
+  background:var(--sl-bg);clip-path:polygon(var(--sl-cut) 0,100% 0,calc(100% - var(--sl-cut)) 100%,0 100%);}
+.bp:not(.reb-btn)::after,.bs::after,.leave-actions button::after{content:attr(data-kj);position:absolute;z-index:-1;
+  right:calc(var(--sl-cut) * .5);top:50%;translate:0 -50%;pointer-events:none;
+  font-family:'Noto Serif JP',serif;font-weight:900;font-size:2em;letter-spacing:0;line-height:1;opacity:.14;}
+/* The lobby's two half-width buttons are too narrow to centre the label
+   clear of the kanji, so the label shifts left a little. */
+.lobby-actions .bp[data-kj]{padding-right:calc(var(--ui-vmin) * 4);}
+.bp:not(.reb-btn):hover,.bs:hover,.leave-actions button:hover,.room-card-join:hover{filter:brightness(1.15);transform:none;box-shadow:none;}
+.bp:not(.reb-btn):focus-visible,.bs:focus-visible,.leave-actions button:focus-visible,.room-card-join:focus-visible{outline:none;filter:brightness(1.3);}
+.bp:not(.reb-btn):disabled,.room-card-join:disabled{opacity:.4;filter:none;}
+/* Primary: solid gold, dark text (= .chat-send). */
+.bp:not(.reb-btn),.room-card-join{--sl-bg:var(--gl);--sl-bd:var(--gl);--sl-fg:#1a1206;font-weight:700;}
+/* Secondary: glass. */
+.bs,.bp.bp-glass,.leave-btn-stay{--sl-bg:rgba(30,36,32,.92);--sl-bd:rgba(255,255,255,.2);--sl-fg:rgba(245,237,216,.88);font-weight:400;}
+.bs:hover{color:var(--sl-fg);}
+/* Danger: red glass. */
+.leave-btn-confirm,.bp.bp-danger{--sl-bg:rgba(150,24,24,.9);--sl-bd:rgba(255,120,120,.6);--sl-fg:#ffe2e2;}
+.room-card-join{--sl-cut:calc(var(--ui-vmin, 7.2px) * 1);padding-left:calc(var(--ui-vmin, 7.2px) * 2.2);padding-right:calc(var(--ui-vmin, 7.2px) * 2.2);}

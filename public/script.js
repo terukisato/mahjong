@@ -4648,7 +4648,7 @@ function renderShopPreview(){
     // A call style is motion, so the preview plays it for real over the
     // Store (previewCallStyle) — the swatch is just its at-a-glance card.
     stage.innerHTML='<div class="cs-preview-card"><span class="cs-swatch cs-sw-'+item.id+'"><b>'+item.jp+'</b></span>'+
-      '<button class="bp" type="button">Play preview</button></div>';
+      '<button class="bp" data-kj="見" type="button">Play preview</button></div>';
     stage.querySelector('button').onclick=()=>previewCallStyle(item.id);
   } else if(isIcon){
     // Same tier this profile's own User Profile header is currently
@@ -4685,13 +4685,13 @@ function renderShopPreview(){
       action.appendChild(msg);
     } else {
       const btn=document.createElement('button');
-      btn.className='bp'; btn.textContent='Buy';
+      btn.className='bp'; btn.dataset.kj='買'; btn.textContent='Buy';
       btn.onclick=()=>confirmBuyCosmetic(item.id,item.label,item.price);
       action.appendChild(btn);
     }
   } else if(state==='owned'){
     const btn=document.createElement('button');
-    btn.className='bp'; btn.textContent='Equip';
+    btn.className='bp'; btn.dataset.kj='装'; btn.textContent='Equip';
     // Re-renders in place (rather than closing) so the successful equip is
     // visibly confirmed — the button becomes the plain "Equipped" label
     // below on the very next render.
@@ -5346,9 +5346,13 @@ function csLoadClack(){
   csClackLoading=true;
   try{
     const ctx=getFxAudioCtx().ctx;
-    fetch('/audio/FX/Discard.m4a').then(r=>r.arrayBuffer())
-      .then(b=>new Promise((res,rej)=>ctx.decodeAudioData(b,res,rej)))
-      .then(b=>{ csClackBuf=b; },()=>{ csClackLoading=false; });
+    // The promise form of decodeAudioData, so a decode failure lands in the
+    // catch below instead of surfacing as an uncaught EncodingError (the
+    // callback form also returns a promise that nobody was handling).
+    fetch('/audio/FX/Discard.wav').then(r=>r.arrayBuffer())
+      .then(b=>ctx.decodeAudioData(b))
+      .then(b=>{ csClackBuf=b; })
+      .catch(()=>{ csClackLoading=false; });
   }catch(e){ csClackLoading=false; }
 }
 function playYakuBadgeSfx(dora){
@@ -9559,13 +9563,69 @@ try{
   }
 }catch(e){}
 updateMatchSummary();
+// Start -> lobby logo hand-off: the start screen's 雀心 (big, top-left) flies
+// to where the lobby's 雀 心 sits (smaller, centred, spaced apart) and lands
+// on it, so the two logos read as one. Each character is its own fixed-
+// position copy (.logo-fly span), moved with translate+scale from its glyph
+// box on the start screen to its glyph box in the lobby; both real logos
+// stay hidden until it lands, then the lobby logo flashes (.burst). The
+// lobby is laid out for one frame, invisible, just to measure its logo
+// (its float animation held still via .logo-hold so the target doesn't
+// bob). Returns false (caller falls back to the old flash) if anything is
+// missing or the player prefers reduced motion.
+function flyLogoToLobby(){
+  const src=document.querySelector('#s-start .st-logo');
+  const lobby=$('s-lobby');
+  const lobbyLogo=lobby.querySelector('.logo');
+  const dst=lobbyLogo&&lobbyLogo.querySelector('.logo-k');
+  if(!src||!dst||matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+  const glyphs=el=>{
+    const t=el.firstChild,out=[];
+    if(!t||t.nodeType!==3) return out;
+    for(let i=0;i<t.data.length;i++){
+      if(!t.data[i].trim()) continue;
+      const r=document.createRange(); r.setStart(t,i); r.setEnd(t,i+1);
+      out.push({ch:t.data[i],rect:r.getBoundingClientRect()});
+    }
+    return out;
+  };
+  lobbyLogo.classList.add('logo-hold');
+  lobby.classList.remove('hidden'); lobby.style.opacity='0'; lobby.style.pointerEvents='none';
+  const to=glyphs(dst);
+  lobby.classList.add('hidden'); lobby.style.opacity=''; lobby.style.pointerEvents='';
+  const from=glyphs(src);
+  if(!from.length||from.length!==to.length){ lobbyLogo.classList.remove('logo-hold'); return false; }
+  const fontSize=getComputedStyle(src).fontSize;
+  const layer=document.createElement('div');
+  layer.className='logo-fly'; layer.setAttribute('aria-hidden','true');
+  const moves=from.map((f,i)=>{
+    const s=document.createElement('span');
+    s.textContent=f.ch;
+    s.style.left=f.rect.left+'px'; s.style.top=f.rect.top+'px'; s.style.fontSize=fontSize;
+    layer.appendChild(s);
+    const t=to[i].rect;
+    return [s,`translate(${t.left-f.rect.left}px,${t.top-f.rect.top}px) scale(${t.height/f.rect.height})`];
+  });
+  document.body.appendChild(layer);
+  src.style.visibility='hidden'; dst.style.visibility='hidden';
+  Promise.all(moves.map(([s,end])=>s.animate([{transform:'none'},{transform:end}],
+    {duration:640,easing:'cubic-bezier(.65,0,.25,1)',fill:'forwards'}).finished)).then(()=>{
+    dst.style.visibility=''; src.style.visibility='';
+    lobbyLogo.classList.remove('logo-hold');
+    layer.remove();
+    dst.classList.add('burst'); setTimeout(()=>dst.classList.remove('burst'),450);
+  });
+  return true;
+}
 // Start music on first user interaction — via Press Start button
 function enterLobby(){
   const btn=$('bstart');
   btn.classList.add('pressed');
   setTimeout(()=>btn.classList.remove('pressed'),135);
-  const logoK=document.querySelector('.logo-k');
-  if(logoK){ logoK.classList.add('burst'); setTimeout(()=>logoK.classList.remove('burst'),450); }
+  if(!flyLogoToLobby()){
+    const logoK=document.querySelector('#s-start .st-logo');
+    if(logoK){ logoK.classList.add('burst'); setTimeout(()=>logoK.classList.remove('burst'),450); }
+  }
   $('s-start').classList.add('screen-out');
   setTimeout(()=>{
     playLobbyMusic();
@@ -9588,6 +9648,8 @@ function backToMenu(){
 }
 $('bstart').onclick=enterLobby;
 $('about-version').onclick=handleVersionTap;
+// The start screen's footer shows the same version string as the About panel.
+$('start-version').textContent=$('about-version').textContent.trim();
 $('bfind').onclick=findMatch;
 $('bready').onclick=pressReady;
 $('bcancel').onclick=()=>{wss({type:'leave'});resetLobby();};

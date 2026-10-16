@@ -2063,7 +2063,13 @@ class Room {
     g.scores[seat]+=gain+g.riichiSticks*1000;
     const akaDora=countAkaDora(doraPool);
     const yl=this._buildYakuList(yakuList,dc,uraDora,akaDora,kitaCount);
-    this._endRound('tsumo',seat,null,hand,yl,totalHan,fu,gain,undefined,prevScores,g.melds[seat],this._isKazoeYakuman(han,totalHan));
+    // Report the hand with the winning (drawn) tile LAST, the same shape a
+    // ron reports ([...hand, ronTile]) — the client's win cutscene marks the
+    // last tile as the winning one. g.hands is re-sorted on every draw, so
+    // without this the drawn tile sat wherever it sorted to.
+    const dt=g.drawTile&&hand.find(t=>t.id===g.drawTile.id);
+    const shownHand=dt?[...hand.filter(t=>t!==dt),dt]:hand;
+    this._endRound('tsumo',seat,null,shownHand,yl,totalHan,fu,gain,undefined,prevScores,g.melds[seat],this._isKazoeYakuman(han,totalHan));
   }
 
   // NOTE: appears unused — _resolveReactions/_checkChankanReacted both route

@@ -102,6 +102,28 @@ test('Tsumo: non-dealer win — dealer pays double, other non-dealers pay single
   assert.strictEqual(gained, dealerPaid + otherNonDealerPaid + (prevScores[3] - g.scores[3]), 'winner gain must equal sum of all payments');
 });
 
+// The win cutscene marks the LAST tile of a winner's hand as the winning
+// tile. Ron reports [...hand, ronTile], but a tsumo used to report the hand
+// as stored — re-sorted on every draw — so the drawn tile sat wherever it
+// sorted to and the cutscene highlighted the wrong tile.
+test('Tsumo: round_end reports the drawn winning tile last, even when it sorts into the middle', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  const sent = [];
+  room._broadcastAll = msg => sent.push(msg);
+  const [m1, m2, m3] = seq(1, 'm');
+  g.drawTile = winTile(); // 6m — sorts between 3m and 7m
+  g.hands[1] = [m1, m2, m3, g.drawTile, T(7, 'm'), T(8, 'm'), ...seq(4, 'p'), ...pairT(9, 'p'), ...seq(2, 's')];
+  g.turn = 1;
+  room._tsumo(1);
+  const end = sent.find(msg => msg.type === 'round_end');
+  assert.ok(end, 'round_end should be broadcast');
+  const shown = end.winners[0].hand;
+  assert.strictEqual(shown.length, 14);
+  assert.strictEqual(shown.at(-1).id, g.drawTile.id, 'the drawn tile must be last');
+  assert.deepStrictEqual(shown.slice(0, 3).map(t => t.id), [m1.id, m2.id, m3.id], 'the rest keeps its order');
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // Furiten must never block tsumo — it's a ron-only restriction. _tsumo used
 // to unconditionally bail out on _isFuriten(seat), silently no-opping a
