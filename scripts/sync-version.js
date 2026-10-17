@@ -1,29 +1,30 @@
 'use strict';
-// Reads the version shown in the about modal (public/index.html) and writes
-// it into package.json so the two never drift. Run automatically by the
-// git pre-commit hook; safe to run manually too.
+// Reads the game's version — the newest published entry in
+// public/release-notes.js — and writes it into package.json so the two never
+// drift. Run automatically by the git pre-commit hook and by
+// `npm run release-notes -- publish`; safe to run manually too.
 
 const fs = require('fs');
 const path = require('path');
+const { loadNotes, currentVersion } = require('./release-notes.js');
 
-const htmlPath = path.join(__dirname, '..', 'public', 'index.html');
 const pkgPath = path.join(__dirname, '..', 'package.json');
 
-const html = fs.readFileSync(htmlPath, 'utf8');
-const match = html.match(/about-version">v?([\d.]+)</);
-if (!match) {
-  console.warn('[sync-version] Could not find a version in public/index.html — skipping.');
-  process.exit(0);
+function syncVersion() {
+  let version;
+  try { version = currentVersion(loadNotes().list); }
+  catch (e) { console.warn(`[sync-version] Could not read public/release-notes.js (${e.message}) — skipping.`); return; }
+  if (!version) {
+    console.warn('[sync-version] No published version in public/release-notes.js — skipping.');
+    return;
+  }
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  if (pkg.version === version) return;
+  pkg.version = version;
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+  console.log(`[sync-version] package.json version updated to ${version} (from release-notes.js)`);
 }
-const htmlVersion = match[1];
 
-const pkgRaw = fs.readFileSync(pkgPath, 'utf8');
-const pkg = JSON.parse(pkgRaw);
+if (require.main === module) syncVersion();
 
-if (pkg.version === htmlVersion) {
-  process.exit(0);
-}
-
-pkg.version = htmlVersion;
-fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-console.log(`[sync-version] package.json version updated to ${htmlVersion} (from index.html)`);
+module.exports = { syncVersion };

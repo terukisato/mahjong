@@ -32,7 +32,10 @@ const MAX_RECENT_OPPONENTS = 30;
 // just re-render them the exact same way.
 // Bots/guests are skipped, same reasoning as stats.js's recordGameResult —
 // only a real unlocked profile has anywhere to persist this.
-function recordGame({ playerIds, isBot, isGuest = [], variant, matchKind, gameMode, numPlayers, playerNames, finalScores, placements, rounds }) {
+//
+// `replay` (optional) is room.js's move log for the whole game (see
+// replay.js) — stored once in game_replays, not per profile row.
+function recordGame({ playerIds, isBot, isGuest = [], variant, matchKind, gameMode, numPlayers, playerNames, finalScores, placements, rounds, replay = null }) {
   const db = getDb();
   const gameId = String(Date.now()) + Math.random().toString(36).slice(2, 8);
   const date = new Date().toISOString();
@@ -51,6 +54,7 @@ function recordGame({ playerIds, isBot, isGuest = [], variant, matchKind, gameMo
       SELECT game_id FROM game_history WHERE profile_id = ? ORDER BY date DESC LIMIT ?
     )
   `);
+  let stored = 0;
   for (let seat = 0; seat < playerIds.length; seat++) {
     if (isBot[seat] || isGuest[seat]) continue;
     const pid = playerIds[seat];
@@ -58,7 +62,13 @@ function recordGame({ playerIds, isBot, isGuest = [], variant, matchKind, gameMo
     insert.run(gameId, pid, date, variant, matchKind, gameMode, numPlayers, seat,
       JSON.stringify(playerNames), JSON.stringify(finalScores), JSON.stringify(placements), JSON.stringify(rounds));
     trim.run(pid, pid, MAX_GAMES_PER_PLAYER);
+    stored++;
   }
+  // Only worth keeping if some profile can actually open it.
+  if (replay && stored) {
+    db.prepare('INSERT OR REPLACE INTO game_replays (game_id, data) VALUES (?,?)').run(gameId, JSON.stringify(replay));
+  }
+  if (stored) _pruneReplays(db);
 
   // "Recently played with" — every ordered pair of real-profile seats gets
   // an upsert bumping last_played, so the Recently Played tab can offer a
@@ -108,14 +118,64 @@ function getRecentOpponents(id, limit = MAX_RECENT_OPPONENTS) {
 // list never pays for data it isn't currently looking at.
 function getHistory(id, limit = MAX_GAMES_PER_PLAYER) {
   const rows = getDb().prepare(`
-    SELECT game_id, date, variant, match_kind, game_mode, num_players, seat, player_names, final_scores, placements
+    SELECT game_id, date, variant, match_kind, game_mode, num_players, seat, player_names, final_scores, placements,
+      EXISTS (SELECT 1 FROM game_replays rp WHERE rp.game_id = game_history.game_id) AS has_replay
     FROM game_history WHERE profile_id = ? ORDER BY date DESC LIMIT ?
   `).all(id, limit);
+  // hasReplay: false for games recorded before replays existed — the list
+  // shows their Replay button disabled rather than opening an empty viewer.
   return rows.map(r => ({
     id: r.game_id, date: r.date, variant: r.variant, matchKind: r.match_kind, gameMode: r.game_mode,
     numPlayers: r.num_players, seat: r.seat,
     playerNames: JSON.parse(r.player_names), finalScores: JSON.parse(r.final_scores), placements: JSON.parse(r.placements),
+    hasReplay: !!r.has_replay,
   }));
+}
+
+// Replays/reviews belong to a game, not a profile — once the per-profile
+// trims above have dropped every game_history row for a game, nobody can
+// open its replay any more, so it goes too.
+function _pruneReplays(db) {
+  db.prepare('DELETE FROM game_replays WHERE game_id NOT IN (SELECT game_id FROM game_history)').run();
+  db.prepare('DELETE FROM game_analysis WHERE game_id NOT IN (SELECT game_id FROM game_history)').run();
+}
+
+// The replay viewer's payload for one game — the summary fields
+// (names/scores/seat), each round's results card (`rounds`, shown at the
+// end of each round in the viewer) and the move log, scoped to a profile that actually
+// played it (same reasoning as getGameDetail below: a client can't open
+// someone else's game by guessing its id). Returns {replay:null} for a game
+// recorded before replays existed, and null when the profile has no such
+// game at all.
+function getReplay(profileId, gameId) {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT game_id, date, variant, match_kind, game_mode, num_players, seat, player_names, final_scores, placements, rounds
+    FROM game_history WHERE profile_id = ? AND game_id = ?
+  `).get(profileId, gameId);
+  if (!row) return null;
+  const rep = db.prepare('SELECT data FROM game_replays WHERE game_id = ?').get(gameId);
+  return {
+    id: row.game_id, date: row.date, variant: row.variant, matchKind: row.match_kind, gameMode: row.game_mode,
+    numPlayers: row.num_players, seat: row.seat,
+    playerNames: JSON.parse(row.player_names), finalScores: JSON.parse(row.final_scores),
+    placements: JSON.parse(row.placements), rounds: JSON.parse(row.rounds),
+    replay: rep ? JSON.parse(rep.data) : null,
+  };
+}
+
+// Cached move review for one seat of one game (see game_analysis in db.js)
+// — null when there's none yet, or it was made by an older analysis
+// version than `version`.
+function getCachedAnalysis(gameId, seat, version) {
+  const row = getDb().prepare('SELECT version, data FROM game_analysis WHERE game_id = ? AND seat = ?').get(gameId, seat);
+  if (!row || row.version !== version) return null;
+  return JSON.parse(row.data);
+}
+
+function saveAnalysis(gameId, seat, version, data) {
+  getDb().prepare('INSERT OR REPLACE INTO game_analysis (game_id, seat, version, data) VALUES (?,?,?,?)')
+    .run(gameId, seat, version, JSON.stringify(data));
 }
 
 // One game's full round-by-round detail, looked up by the same `id`
@@ -146,6 +206,7 @@ function deleteHistory(id) {
   // Both directions — scrub this id out of everyone else's recent list too,
   // not just its own (same shared rows, not a per-side copy).
   db.prepare('DELETE FROM recent_opponents WHERE profile_id = ? OR opponent_id = ?').run(id, id);
+  _pruneReplays(db);
 }
 
 // Developer-only, whole-table wipe — every profile's play history at once,
@@ -156,6 +217,8 @@ function clearAllHistory() {
   const db = getDb();
   db.prepare('DELETE FROM game_history').run();
   db.prepare('DELETE FROM recent_opponents').run();
+  db.prepare('DELETE FROM game_replays').run();
+  db.prepare('DELETE FROM game_analysis').run();
 }
 
-module.exports = { recordGame, getHistory, getGameDetail, getRecentOpponents, deleteHistory, clearAllHistory };
+module.exports = { recordGame, getHistory, getGameDetail, getReplay, getCachedAnalysis, saveAnalysis, getRecentOpponents, deleteHistory, clearAllHistory };

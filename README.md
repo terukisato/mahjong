@@ -36,9 +36,11 @@ public/
   index.html      All screens (lobby, table, results) in one page
   script.js       Client state, WebSocket handling, rendering, SVG tile art
   style.css       Styling
+  release-notes.js What's New entries; the newest published one is the game's version
   audio/          Music, sound effects, and per-theme voice lines
 scripts/
-  sync-version.js Keeps package.json's version in sync with the version shown in the about modal
+  release-notes.js Drafts and publishes entries in public/release-notes.js (npm run release-notes)
+  sync-version.js Keeps package.json's version in sync with the newest release note
 ```
 
 There is no build step — `public/` is served as static files directly.

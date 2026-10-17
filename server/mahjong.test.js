@@ -4,7 +4,7 @@
 
 const assert = require('assert');
 const { test } = require('node:test');
-const { detectYaku, waitFu, isWin, countDora, calcFu, isMenzen, basePoints, waits, shanten, buildWall } = require('./mahjong');
+const { detectYaku, waitFu, isWin, countDora, calcFu, isMenzen, basePoints, waits, shanten, buildWall, shuffle } = require('./mahjong');
 
 // ── Tile helpers ─────────────────────────────────────────────────────────────
 let _id = 0;
@@ -1122,6 +1122,76 @@ test('shanten: open hand (1 pon meld) tenpai on a tanki wait', () => {
   assert.strictEqual(concealed.length, 10); // base13 for 1 pon meld: 13-3+0
   assert.strictEqual(shanten(concealed, melds), 0);
   assert.ok(waits(concealed, melds).includes('7z'));
+});
+
+// Reference oracle for the equivalence test below: the original whole-hand
+// exhaustive backtracking shanten that mahjong.js's suit-by-suit memoised
+// shanten() replaced. Slow (~30x), but simple enough to trust by reading.
+function referenceShanten(hand, melds) {
+  const meldCount = melds ? melds.length : 0;
+  const counts = {};
+  for (const t of hand) { const k = `${t.v}${t.s}`; counts[k] = (counts[k] || 0) + 1; }
+  let best = Infinity;
+  (function rec(sets, partials, hasPair) {
+    const keys = Object.keys(counts).filter(k => counts[k] > 0).sort((a, b) => {
+      const sa = a.slice(-1), sb = b.slice(-1);
+      return sa !== sb ? (sa < sb ? -1 : 1) : parseInt(a) - parseInt(b);
+    });
+    if (!keys.length) {
+      const s = 2 * (4 - sets) - Math.min(partials, Math.max(0, 4 - sets)) - (hasPair ? 1 : 0);
+      if (s < best) best = s;
+      return;
+    }
+    const k = keys[0], suit = k.slice(-1), val = parseInt(k);
+    const canGrow = sets + partials < 4;
+    const k1 = `${val + 1}${suit}`, k2 = `${val + 2}${suit}`;
+    if (canGrow && counts[k] >= 3) { counts[k] -= 3; rec(sets + 1, partials, hasPair); counts[k] += 3; }
+    if (canGrow && suit !== 'z' && counts[k1] > 0 && counts[k2] > 0) {
+      counts[k]--; counts[k1]--; counts[k2]--; rec(sets + 1, partials, hasPair); counts[k]++; counts[k1]++; counts[k2]++;
+    }
+    if (!hasPair && counts[k] >= 2) { counts[k] -= 2; rec(sets, partials, true); counts[k] += 2; }
+    if (canGrow && counts[k] >= 2) { counts[k] -= 2; rec(sets, partials + 1, hasPair); counts[k] += 2; }
+    if (canGrow && suit !== 'z') {
+      for (const kk of [k1, k2]) if (counts[kk] > 0) { counts[k]--; counts[kk]--; rec(sets, partials + 1, hasPair); counts[k]++; counts[kk]++; }
+    }
+    counts[k]--; rec(sets, partials, hasPair); counts[k]++;
+  })(meldCount, 0, false);
+  if (meldCount === 0) {
+    const pairs = Object.values(counts).filter(n => n >= 2).length;
+    best = Math.min(best, 6 - pairs + Math.max(0, 7 - Object.keys(counts).length));
+  }
+  return best;
+}
+
+// Near-complete hand: `size` tiles dealt as runs/triplets/pairs straight off
+// the wall's own tile kinds, then a few swapped for random wall tiles — random
+// deals alone are mostly 3+ shanten and barely exercise tenpai/1-shanten.
+function structuredHand(wall, size, swaps) {
+  const pool = wall.slice(), hand = [];
+  const take = (v, s) => { const i = pool.findIndex(t => t.v === v && t.s === s); if (i < 0) return false; hand.push(pool.splice(i, 1)[0]); return true; };
+  while (hand.length < size) {
+    const t = pool[Math.floor(Math.random() * pool.length)];
+    const r = Math.random(), room = size - hand.length;
+    if (r < 0.45 && room >= 3 && t.s !== 'z' && t.v <= 7) { take(t.v, t.s); take(t.v + 1, t.s); take(t.v + 2, t.s); }
+    else if (r < 0.7 && room >= 3) { take(t.v, t.s); take(t.v, t.s); take(t.v, t.s); }
+    else if (r < 0.9 && room >= 2) { take(t.v, t.s); take(t.v, t.s); }
+    else take(t.v, t.s);
+  }
+  hand.length = size;
+  for (let i = 0; i < swaps && pool.length; i++) hand[Math.floor(Math.random() * size)] = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+  return hand;
+}
+
+test('shanten matches the reference whole-hand search on random hands (closed and open, yonma and sanma)', () => {
+  for (let r = 0; r < 6000; r++) {
+    const sanma = r % 3 === 0;
+    const w = shuffle(buildWall(true, sanma));
+    const melds = r % 4;
+    const size = (r % 2 ? 14 : 13) - 3 * melds;
+    const hand = r < 3000 ? w.slice(0, size) : structuredHand(w, size, r % 3);
+    const m = Array.from({ length: melds }, () => ({ type: 'pon', tiles: [] }));
+    assert.strictEqual(shanten(hand, m), referenceShanten(hand, m), `${hand.map(t => `${t.v}${t.s}`).join(' ')} melds=${melds}`);
+  }
 });
 
 // ══════════════════════════════════════════════════════════════════════════

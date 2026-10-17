@@ -90,96 +90,90 @@ function _dec(counts, groups, results, total) {
   }
 }
 
-// Shanten (tiles-away-from-tenpai) for the standard 4-sets+pair hand shape.
-// Unlike decompose() (which only recognizes *complete* hands), this also
-// scores partial groups (a spare pair held as a proto-triplet, or a
-// two-tile run shape) so it works on any hand size. Exhaustive backtracking
-// search, structurally mirroring _dec above, because a greedy single pass
-// gets the "is this pair the head, or a partial triplet?" choice wrong for
-// some hands — only exploring every branch and keeping the minimum shanten
-// is reliable. `sets`/`partials` count logical groups (a meld — kan
-// included — is exactly ONE set here, same convention decompose/isWin use),
-// never physical tile counts.
-function shantenStandard(hand, meldCount){
-  const counts = {};
-  for(const t of hand){ const k=key(t); counts[k]=(counts[k]||0)+1; }
-  let best = Infinity;
-  _shanten(counts, meldCount||0, 0, false);
-  return best;
+// ── Shanten ─────────────────────────────────────────────────────────────────
+// Tiles-away-from-tenpai: -1 is a complete hand, 0 is tenpai. Suit-by-suit
+// form of the count: each suit's best (sets, partials, pair) options are
+// found once by exhaustive backtracking and memoised by that suit's tile
+// counts, then the four groups are combined — the bots (bot.js) and the
+// replay review (analysis.js) call this thousands of times per decision.
+// `sets`/`partials` count logical groups (a meld — kan included — is exactly
+// ONE set, the same convention decompose/isWin use), never physical tile
+// counts. No kokushi; chiitoitsu only when closed (it can never include a
+// called meld).
+const SH_GROUPS=[[0,9,false],[9,9,false],[18,9,false],[27,7,true]];
+const SUIT_OFF={m:0,p:9,s:18,z:27};
+const _shMemo=new Map();
 
-  function _shanten(counts, sets, partials, hasPair){
-    const keys = Object.keys(counts).filter(k=>counts[k]>0).sort((a,b)=>{
-      const sa=a.slice(-1),sb=b.slice(-1);
-      return sa!==sb ? (sa<sb?-1:1) : parseInt(a)-parseInt(b);
-    });
-    if(!keys.length){
-      const cap = Math.max(0, 4-sets);
-      const usedPartials = Math.min(partials, cap);
-      const s = 2*(4-sets) - usedPartials - (hasPair?1:0);
-      if(s<best) best=s;
-      return;
+function _groupOpts(c,off,len,honor){
+  let k=honor?'h':'';
+  for(let i=0;i<len;i++) k+=c[off+i];
+  let res=_shMemo.get(k);
+  if(res) return res;
+  // res[pair][sets] = most partials reachable with that many sets.
+  res=[new Int8Array(5).fill(-1),new Int8Array(5).fill(-1)];
+  const a=new Array(len);
+  for(let i=0;i<len;i++) a[i]=c[off+i];
+  const rec=(i,m,t,p)=>{
+    while(i<len&&a[i]===0) i++;
+    if(i>=len){ const mm=m>4?4:m; if(t>res[p][mm]) res[p][mm]=t; return; }
+    if(a[i]>=3){ a[i]-=3; rec(i,m+1,t,p); a[i]+=3; }
+    if(!honor&&i+2<len&&a[i+1]&&a[i+2]){ a[i]--;a[i+1]--;a[i+2]--; rec(i,m+1,t,p); a[i]++;a[i+1]++;a[i+2]++; }
+    if(a[i]>=2){ a[i]-=2; if(!p) rec(i,m,t,1); rec(i,m,t+1,p); a[i]+=2; }
+    if(!honor){
+      if(i+1<len&&a[i+1]){ a[i]--;a[i+1]--; rec(i,m,t+1,p); a[i]++;a[i+1]++; }
+      if(i+2<len&&a[i+2]){ a[i]--;a[i+2]--; rec(i,m,t+1,p); a[i]++;a[i+2]++; }
     }
-    const k=keys[0], suit=k.slice(-1), val=parseInt(k);
-    const canGrow = sets+partials < 4;
+    a[i]--; rec(i,m,t,p); a[i]++;
+  };
+  rec(0,0,0,0);
+  if(_shMemo.size>300000) _shMemo.clear();
+  _shMemo.set(k,res);
+  return res;
+}
 
-    // Complete triplet
-    if(canGrow && counts[k]>=3){
-      counts[k]-=3; _shanten(counts,sets+1,partials,hasPair); counts[k]+=3;
-    }
-    // Complete sequence
-    if(canGrow && suit!=='z'){
-      const k2=`${val+1}${suit}`,k3=`${val+2}${suit}`;
-      if(counts[k2]>0&&counts[k3]>0){
-        counts[k]--;counts[k2]--;counts[k3]--;
-        _shanten(counts,sets+1,partials,hasPair);
-        counts[k]++;counts[k2]++;counts[k3]++;
+// 34-slot count array (m1-9, p1-9, s1-9, then winds+dragons) for `tiles`.
+function countsOf(tiles){
+  const c=new Array(34).fill(0);
+  for(const t of tiles) c[SUIT_OFF[t.s]+t.v-1]++;
+  return c;
+}
+
+// shanten() on a count array — for callers that probe many one-tile
+// variations of a hand (ukeire) without rebuilding tile objects each time.
+function shantenCounts(c,meldCount=0){
+  let dp=[new Int8Array(5).fill(-1),new Int8Array(5).fill(-1)];
+  dp[0][Math.min(4,meldCount)]=0;
+  for(const [off,len,honor] of SH_GROUPS){
+    const o=_groupOpts(c,off,len,honor);
+    const nd=[new Int8Array(5).fill(-1),new Int8Array(5).fill(-1)];
+    for(let p1=0;p1<2;p1++) for(let m1=0;m1<5;m1++){
+      const t1=dp[p1][m1]; if(t1<0) continue;
+      for(let p2=0;p2+p1<2;p2++) for(let m2=0;m2<5;m2++){
+        const t2=o[p2][m2]; if(t2<0) continue;
+        const m=Math.min(4,m1+m2), t=t1+t2;
+        if(t>nd[p1+p2][m]) nd[p1+p2][m]=t;
       }
     }
-    // Pair as the head — a separate slot from the 4 sets, so not gated by
-    // canGrow (a hand can already have 4 sets and still need its head pair).
-    if(!hasPair && counts[k]>=2){
-      counts[k]-=2; _shanten(counts,sets,partials,true); counts[k]+=2;
-    }
-    // Pair held as a proto-triplet (partial), distinct from the head-pair
-    // branch above — explored separately since only the search itself can
-    // tell, per hand, which use is better.
-    if(canGrow && counts[k]>=2){
-      counts[k]-=2; _shanten(counts,sets,partials+1,hasPair); counts[k]+=2;
-    }
-    // Partial sequence: ryanmen/penchan (k,k+1) or kanchan (k,k+2)
-    if(canGrow && suit!=='z'){
-      for(const off of [1,2]){
-        const k1=`${val+off}${suit}`;
-        if(counts[k1]>0){
-          counts[k]--;counts[k1]--;
-          _shanten(counts,sets,partials+1,hasPair);
-          counts[k]++;counts[k1]++;
-        }
-      }
-    }
-    // Floater: leave one copy of this tile unused, recurse on the rest
-    counts[k]--; _shanten(counts,sets,partials,hasPair); counts[k]++;
+    dp=nd;
   }
+  let best=99;
+  for(let p=0;p<2;p++) for(let m=0;m<5;m++){
+    const t=dp[p][m]; if(t<0) continue;
+    const s=2*(4-m)-Math.min(t,4-m)-p;
+    if(s<best) best=s;
+  }
+  if(meldCount===0){
+    let pairs=0,kinds=0;
+    for(let i=0;i<34;i++){ if(c[i]) kinds++; if(c[i]>=2) pairs++; }
+    best=Math.min(best,6-pairs+Math.max(0,7-kinds));
+  }
+  return best;
 }
 
-// Chiitoitsu (7 distinct pairs) shanten — doesn't fit the sets+pair shape
-// above, so scored separately. Closed hands only (chiitoitsu can never
-// include a called meld).
-function shantenChiitoi(hand){
-  const c={}; for(const t of hand){ c[key(t)]=(c[key(t)]||0)+1; }
-  const pairs = Object.values(c).filter(n=>n>=2).length;
-  const kinds = Object.keys(c).length;
-  return 6-pairs+Math.max(0,7-kinds);
-}
-
-// Public shanten entry point — minimum tiles-away-from-tenpai across every
-// hand shape that applies (standard, plus chiitoitsu when the hand is
-// closed). -1 means already a complete winning hand, 0 means tenpai.
+// Public entry point: `hand` is tile objects, `melds` the called melds
+// (only their count matters).
 function shanten(hand, melds){
-  const meldCount = melds ? melds.length : 0;
-  let s = shantenStandard(hand, meldCount);
-  if(meldCount===0) s = Math.min(s, shantenChiitoi(hand));
-  return s;
+  return shantenCounts(countsOf(hand), melds ? melds.length : 0);
 }
 
 // Chiitoitsu (7 pairs): 14 tiles, exactly 7 distinct keys, each appearing twice.
@@ -920,4 +914,4 @@ function handLabel(han){
 
 module.exports = {buildWall,shuffle,sort,key,isWin,waits,canPon,canKan,canChi,
   detectYaku,countDora,countAkaDora,calcFu,waitFu,basePoints,handLabel,decompose,isMenzen,
-  shanten,shantenStandard,shantenChiitoi};
+  shanten,shantenCounts,countsOf};

@@ -5,7 +5,8 @@ const WebSocket=require('ws');
 const path=require('path');
 const {Room}=require('./room');
 const {getStats,getLeaderboard,getPeriodLeaderboard,deleteStats}=require('./stats');
-const {getHistory,getGameDetail,getRecentOpponents,deleteHistory,clearAllHistory}=require('./history');
+const {getHistory,getGameDetail,getReplay,getCachedAnalysis,saveAnalysis,getRecentOpponents,deleteHistory,clearAllHistory}=require('./history');
+const {analyzeGame,ANALYSIS_VERSION}=require('./analysis');
 const {listProfiles,createProfile,verifyProfile,deleteProfile,getIcon,renameProfile,setCode,setTitle,getTitle,setVoiceTheme,getVoiceTheme,getNameplateSkin,getCallStyle,createRememberToken,verifyRememberToken,forgetRememberToken,getId,getNameById,getIconById}=require('./profiles');
 const friends=require('./friends');
 const coins=require('./economy');
@@ -563,6 +564,28 @@ wss.on('connection',(ws,req)=>{
       if(unlockedId){
         const game=getGameDetail(unlockedId,String(msg.gameId||''));
         ws.send(JSON.stringify({type:'game_history_detail',gameId:msg.gameId,game}));
+      }
+    }
+
+    // Replay viewer — one game's move log plus this profile's own move
+    // review (analysis.js), scoped to unlockedId the same way as the detail
+    // fetch above. The review is computed on first open and cached (see
+    // history.js's game_analysis), so re-opening a replay is just a read.
+    if(msg.type==='get_game_replay'){
+      if(unlockedId){
+        const gameId=String(msg.gameId||'');
+        const game=getReplay(unlockedId,gameId);
+        let analysis=null;
+        if(game&&game.replay){
+          analysis=getCachedAnalysis(gameId,game.seat,ANALYSIS_VERSION);
+          if(!analysis){
+            try{
+              analysis=analyzeGame(game.replay,game.seat,game.playerNames);
+              saveAnalysis(gameId,game.seat,ANALYSIS_VERSION,analysis);
+            }catch(e){ console.error('[replay analysis error]',e.message,e.stack); }
+          }
+        }
+        ws.send(JSON.stringify({type:'game_replay',gameId:msg.gameId,game,analysis}));
       }
     }
 

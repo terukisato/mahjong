@@ -706,6 +706,7 @@ function onMsg(m){
   // Room.start in room.js) — the lobby-join seat from 'joined' is only a
   // starting guess, this personalized message's `seat` is the real one.
   if(m.type==='game_start'){
+    if(rp) closeReplay(); // a replay on the table would be sharing the board with this game
     if(Number.isInteger(m.seat))mySeat=m.seat;
     if(m.roomId!=null)myRoomId=m.roomId;
     // Stash what a later reconnect needs to slot straight back into this
@@ -765,6 +766,7 @@ function onMsg(m){
   }
   if(m.type==='game_history'){renderPlayHistory(m.games);return;}
   if(m.type==='game_history_detail'){onGameHistoryDetail(m);return;}
+  if(m.type==='game_replay'){onGameReplay(m);return;}
   if(m.type==='leaderboard'){renderLeaderboard(m);return;}
   if(m.type==='period_leaderboard'){renderLeaderboard(m);return;}
   if(m.type==='player_stats'){
@@ -1182,13 +1184,80 @@ $('coin-count')?.addEventListener('keydown',e=>{
   if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleStoreModal(); }
 });
 
+// ── Release notes / What's New ──────────────────────────────────────────
+// RELEASE_NOTES comes from public/release-notes.js (loaded just before this
+// file). Its newest entry without `draft` is the game's version — shown in
+// the About title and the start screen footer, and sent with contact-form
+// messages. Each new version also puts an update row in Notifications
+// (lighting the 人 dot) that opens the What's New popup.
+const RN_LIST=(typeof RELEASE_NOTES!=='undefined'?RELEASE_NOTES:[]).filter(e=>!e.draft);
+const APP_VERSION=RN_LIST.length?'v'+RN_LIST[0].version:'';
+const RN_SECTIONS=[['new','New'],['improved','Improved'],['fixed','Fixed']];
+// Any saved setting means this browser has played before. Read here, before
+// startup code saves anything, so a brand-new player isn't greeted with an
+// "updated" notification for the version they've only just met.
+const RN_RETURNING=(()=>{
+  try{ for(let i=0;i<localStorage.length;i++) if(localStorage.key(i).startsWith('mj-')) return true; }catch(e){}
+  return false;
+})();
+// This browser's update row: {v, ts, read}, saved as 'mj-release-seen'. ts is
+// when the version was first seen here, which places the row among the
+// friend notifications. It lives on the device, not the profile, so the
+// server needs no part in it.
+let rnState=null;
+function rnCmp(a,b){
+  const x=String(a).split('.').map(Number), y=String(b).split('.').map(Number);
+  for(let i=0;i<3;i++){ const d=(x[i]||0)-(y[i]||0); if(d) return d; }
+  return 0;
+}
+function rnSave(){ try{ localStorage.setItem('mj-release-seen',JSON.stringify(rnState)); }catch(e){} }
+function initReleaseNotes(){
+  $('about-version').textContent=APP_VERSION;
+  $('start-version').innerHTML=APP_VERSION?`<a href="#" class="st-whatsnew" onclick="toggleWhatsNew();return false;"><span>${APP_VERSION}</span><i aria-hidden="true">·</i><b>What's new</b></a>`:'';
+  if(!RN_LIST.length) return;
+  const cur=RN_LIST[0].version;
+  let saved=null;
+  try{ saved=JSON.parse(localStorage.getItem('mj-release-seen')||'null'); }catch(e){}
+  if(saved&&saved.v===cur) rnState=saved;
+  // Rolled back to an older version: nothing new to announce.
+  else if(saved&&saved.v&&rnCmp(saved.v,cur)>0) rnState={v:cur,ts:saved.ts||Date.now(),read:true};
+  else rnState={v:cur,ts:Date.now(),read:!saved&&!RN_RETURNING};
+  rnSave();
+}
+function markReleaseRead(){
+  if(!rnState||rnState.read) return;
+  rnState.read=true; rnSave();
+  updateNotifBadge(notifServerUnread);
+}
+function toggleWhatsNew(){
+  const modal=$('whatsnew-modal'), backdrop=$('whatsnew-backdrop');
+  const open=modal.classList.contains('visible');
+  if(!open){ renderWhatsNew(); markReleaseRead(); }
+  modal.classList.toggle('visible',!open);
+  backdrop.classList.toggle('visible',!open);
+  if(!open) $('whatsnew-body').scrollTop=0;
+}
+// Every published version, newest first; older ones dimmed. A section with
+// nothing in it is left out.
+function renderWhatsNew(){
+  const fmt=d=>{ const t=new Date(d+'T00:00:00'); return isNaN(t)?d:t.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}); };
+  $('whatsnew-body').innerHTML=RN_LIST.map((e,i)=>`<section class="wn-rel${i?' wn-old':''}">
+    <div class="wn-ver"><b>v${escHtml(e.version)}</b><span>${escHtml(fmt(e.date))}</span></div>
+    ${RN_SECTIONS.filter(([k])=>(e[k]||[]).length).map(([k,label])=>`<div class="wn-head">${label}</div>
+      <ul class="wn-list">${e[k].map(t=>`<li>${escHtml(t)}</li>`).join('')}</ul>`).join('')}
+  </section>`).join('')||'<p>No release notes yet.</p>';
+}
+
 // ── Friends & notifications ─────────────────────────────────────────────
 
 // Unread-notification indicator: a red dot on the 人 user icon and, once the
 // User Profile hub is open, on its "Notifications" row. Just a boolean —
 // "there's something to read" — the actual count/list is in the panel.
+// n is the server's unread count; an unread update row (rnState) counts too.
+let notifServerUnread=0;
 function updateNotifBadge(n){
-  const has=Math.max(0,n|0)>0;
+  notifServerUnread=Math.max(0,n|0);
+  const has=notifServerUnread>0||!!(rnState&&!rnState.read);
   $('user-icon-btn')?.classList.toggle('has-notif',has);
   $('notif-hub-badge')?.classList.toggle('show',has);
 }
@@ -1204,6 +1273,7 @@ function toggleNotificationsModal(){
   $('notifications-list').textContent='Loading…';
   modal.classList.add('visible');
   backdrop.classList.add('visible');
+  markReleaseRead();
   // mark-read first so the list we then fetch already reflects it (no
   // stale per-row "unread" dots on items you're looking at).
   wss({type:'mark_notifications_read'});
@@ -1212,7 +1282,12 @@ function toggleNotificationsModal(){
 
 function renderNotifications(m){
   const box=$('notifications-list'); if(!box) return;
-  const items=m.items||[];
+  // The update row (see initReleaseNotes) sorts in by when it was first seen.
+  const items=(m.items||[]).slice();
+  if(rnState){
+    items.push({type:'release',ts:rnState.ts,read:rnState.read});
+    items.sort((a,b)=>(b.ts||0)-(a.ts||0));
+  }
   if(!items.length){ box.innerHTML='<p class="friends-empty">No notifications yet.</p>'; return; }
   box.innerHTML='';
   for(const it of items){
@@ -1229,6 +1304,13 @@ function renderNotifications(m){
       row.querySelector('.notif-decline').onclick=()=>{ wss({type:'decline_friend_request',fromId:it.fromId}); row.remove(); };
     } else if(it.type==='accepted'){
       row.innerHTML=`<div class="notif-text"><b>${who}</b> accepted your friend request.</div>`;
+    } else if(it.type==='release'){
+      row.classList.add('notif-row-release');
+      row.setAttribute('role','button'); row.tabIndex=0;
+      row.innerHTML=`<div class="notif-text"><b>Janshin updated to ${escHtml(APP_VERSION)}</b><small>See what changed in this update.</small></div>
+        <span class="notif-go">What's new ›</span>`;
+      row.onclick=()=>{ toggleNotificationsModal(); toggleWhatsNew(); };
+      row.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); row.onclick(); } };
     } else {
       row.innerHTML=`<div class="notif-text">${who}</div>`;
     }
@@ -1636,6 +1718,9 @@ function togglePlayHistoryModal(){
 // which DOM node to fill in once it arrives.
 let phDetailCache={};
 let phPendingDetail=null;
+// gameId -> whether a replay was recorded (from the list's hasReplay) —
+// lets each round card in the dropdown offer "Watch" for that round.
+let phHasReplay={};
 
 const ORDINALS=['1st','2nd','3rd','4th'];
 
@@ -1680,10 +1765,15 @@ function renderPlayHistory(games){
         </span>
         <span class="ph-game-standings">${standingsHtml}</span>
       </span>
+      <button type="button" class="ph-replay-btn"${g.hasReplay?'':' disabled title="Replays are recorded for games played from this version on"'} aria-label="Watch replay with move review"><span class="ph-replay-ic" aria-hidden="true">▶</span>Replay</button>
       <button type="button" class="ph-game-chevron" aria-label="Show round breakdown">▾</button>`;
     const detailWrap=document.createElement('div'); detailWrap.className='ph-game-detail';
     row.appendChild(head); row.appendChild(detailWrap);
+    phHasReplay[g.id]=!!g.hasReplay;
     head.onclick=()=>togglePlayHistoryGame(g.id,row,detailWrap,seat);
+    // The Replay button sits inside the clickable head — it opens the
+    // viewer without also toggling the round dropdown.
+    head.querySelector('.ph-replay-btn').onclick=e=>{ e.stopPropagation(); if(g.hasReplay) openReplay(g.id,0); };
     body.appendChild(row);
   }
 }
@@ -1724,11 +1814,19 @@ function renderPlayHistoryDetail(container,game,mySeat){
   // have until it's actually attached under this (already-visible)
   // container.
   const fills=[];
-  for(const r of rounds){
+  rounds.forEach((r,ri)=>{
     const {card,fill}=buildHistoryRoundCard(r,mySeat);
+    if(game.id&&phHasReplay[game.id]){
+      const watch=document.createElement('button');
+      watch.type='button'; watch.className='ph-round-watch';
+      watch.innerHTML='<span aria-hidden="true">▶</span> Watch';
+      watch.setAttribute('aria-label','Watch this round in the replay viewer');
+      watch.onclick=()=>openReplay(game.id,ri);
+      card.querySelector('.ph-round-head')?.appendChild(watch);
+    }
     container.appendChild(card);
     if(fill) fills.push(fill);
-  }
+  });
   for(const fill of fills) fill();
 }
 
@@ -1889,6 +1987,600 @@ function buildHistoryRoundCard(round,mySeat){
 
   return {card,fill:fills.length?()=>fills.forEach(fn=>fn()):null};
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// REPLAY VIEWER — opened from a Play History row (see renderPlayHistory's
+// Replay button). 'get_game_replay' returns the game's move log (format:
+// server/replay.js), its round results cards, and this profile's own move
+// review (server/analysis.js). The viewer steps through the log one event
+// at a time — frame f is the table after ev[0..f) — and whenever the
+// player made a decision at that point, the Move Review panel shows how it
+// graded and what the stronger play was.
+// ══════════════════════════════════════════════════════════════════════════
+let rp=null;          // {game, analysis, round, frame, timer, tab}
+let rpPending=null;   // {gameId, round} awaiting its 'game_replay' reply
+
+// Same state rebuild as server/replay.js (initialState/applyEvent) — kept
+// as a hand-synced copy, there's no bundler to share one module.
+function rpCodeKey(c){ return c[0]==='0'?'5'+c.slice(-1):c; }
+function rpTile(c){ const v=parseInt(c), s=c.slice(-1); return v===0?{v:5,s,red:true}:{v,s}; }
+const RP_SUIT_ORDER={m:0,p:1,s:2,z:3};
+function rpCmp(a,b){
+  const sa=a.slice(-1),sb=b.slice(-1);
+  if(sa!==sb) return RP_SUIT_ORDER[sa]-RP_SUIT_ORDER[sb];
+  return (parseInt(a)||5)-(parseInt(b)||5)||(a[0]==='0'?-1:b[0]==='0'?1:0);
+}
+function rpSort(codes){ return codes.slice().sort(rpCmp); }
+function rpTake(list,code){
+  let i=list.indexOf(code);
+  if(i===-1) i=list.findIndex(c=>rpCodeKey(c)===rpCodeKey(code));
+  if(i!==-1) list.splice(i,1);
+}
+function rpInitial(round){
+  const n=round.hands.length;
+  return {n,hands:round.hands.map(rpSort),discards:Array.from({length:n},()=>[]),
+    melds:Array.from({length:n},()=>[]),kita:Array.from({length:n},()=>[]),
+    dora:(round.dora||[]).slice(),riichi:new Array(n).fill(false),scores:(round.scores||[]).slice(),
+    riichiSticks:round.riichiSticks||0,drawn:null,turn:round.dealer,wallUsed:0,moved:{}};
+}
+function rpApply(st,e){
+  const s=e.s;
+  switch(e.t){
+    case 'd': st.hands[s].push(e.k); st.hands[s]=rpSort(st.hands[s]); st.drawn=e.k; st.turn=s; if(!e.r) st.wallUsed++; break;
+    case 'x': {
+      rpTake(st.hands[s],e.k);
+      const ri=!!e.ri||!!st.moved[s]; st.moved[s]=false;
+      st.discards[s].push({k:e.k,tg:!!e.tg,ri});
+      if(e.ri){ st.riichi[s]=true; st.scores[s]-=1000; st.riichiSticks++; }
+      st.drawn=null; st.turn=s; break;
+    }
+    case 'pon': case 'chi': case 'mk': {
+      for(const c of e.u) rpTake(st.hands[s],c);
+      const pond=st.discards[e.f], last=pond[pond.length-1];
+      if(last){ last.called=true; if(last.ri) st.moved[e.f]=true; }
+      st.melds[s].push({type:e.t==='mk'?'kan':e.t,kanType:e.t==='mk'?'daiminkan':undefined,
+        tiles:e.t==='chi'?rpSort([...e.u,e.k]):[...e.u,e.k],called:e.k,f:e.f});
+      st.drawn=null; st.turn=s; break;
+    }
+    case 'ak': for(const c of e.u) rpTake(st.hands[s],c); st.melds[s].push({type:'kan',kanType:'ankan',tiles:e.u.slice()}); st.drawn=null; break;
+    case 'kk': {
+      rpTake(st.hands[s],e.k);
+      const m=st.melds[s].find(m=>m.type==='pon'&&rpCodeKey(m.tiles[0])===rpCodeKey(e.k));
+      if(m){ m.type='kan'; m.kanType='kakan'; m.tiles.push(e.k); }
+      st.drawn=null; break;
+    }
+    case 'kita': rpTake(st.hands[s],e.k); st.kita[s].push(e.k); st.drawn=null; break;
+    case 'dora': st.dora.push(e.k); break;
+  }
+}
+function rpStateAt(ri,frame){
+  const round=rp.game.replay.rounds[ri];
+  const st=rpInitial(round);
+  for(let i=0;i<frame&&i<round.ev.length;i++) rpApply(st,round.ev[i]);
+  return st;
+}
+
+// desc: what the grade means, shown under a reviewed move, as the badges'
+// tooltips and in the Game Summary's legend.
+const RP_SEV={
+  best:{label:'Best',sym:'★',desc:'The top-rated choice.'},
+  good:{label:'Good',sym:'✓',desc:'Close to the top choice — the difference barely matters.'},
+  tip:{label:'Tip',sym:'i',desc:'Not a mistake — an option worth knowing about, like a call that would have sped up your hand.'},
+  inaccuracy:{label:'Inaccuracy',sym:'?!',desc:'A small loss of speed, hand value or safety.'},
+  mistake:{label:'Mistake',sym:'?',desc:'A clear error that cost real speed, value or safety.'},
+  blunder:{label:'Blunder',sym:'??',desc:'A costly error — dealing in, or passing up a win.'},
+};
+const rpSevTip=k=>escHtml(`${RP_SEV[k].label}: ${RP_SEV[k].desc}`);
+const RP_FLAGGED=new Set(['tip','inaccuracy','mistake','blunder']);
+const RP_WIND=['東','南','西','北'];
+const RP_OUTCOME={tsumo:'Won by Tsumo',ron:'Won by Ron',dealin:'Dealt in',tsumoed:'Opponent tsumo',otherwin:'Opponent won',
+  tenpai:'Draw · tenpai',noten:'Draw · noten',draw:'Draw',kyuushu:'Abortive draw',suukaikan:'Abortive draw',nagashi:'Nagashi Mangan',chonbo:'Chonbo'};
+
+// SVG strings by (code,w,h) — a frame redraws ~150 tiles, most of them the
+// same handful of faces at the same few sizes.
+const rpSvgCache=new Map();
+function rpTileHtml(code,w,h,cls=''){
+  const k=code+'|'+w+'|'+h;
+  let svg=rpSvgCache.get(k);
+  if(!svg){ svg=tsvg(rpTile(code),w,h); rpSvgCache.set(k,svg); }
+  return `<span class="rp-t ${cls}" style="width:${w}px;height:${h}px;--w:${w}px">${svg}</span>`;
+}
+// Analysis text carries tiles as [[3m]] tokens — drawn inline as mini tiles.
+function rpRichText(s){
+  const w=rp.miniW, h=Math.round(w*1.38);
+  return escHtml(s||'').replace(/\[\[(\d[mpsz])\]\]/g,(_,c)=>rpTileHtml(c,w,h,'rp-t-inline'));
+}
+function rpName(seat){
+  const n=(rp.game.playerNames||[])[seat]||`Seat ${seat+1}`;
+  return seat===rp.game.seat?'You':n;
+}
+function rpRoundLabel(round){
+  const n=round.hands.length;
+  const wind=Math.ceil(round.round/n)||1, num=((round.round-1)%n)+1;
+  return `${RP_WIND[wind-1]}${num}局${round.honba?` ${round.honba}本場`:''}`;
+}
+function rpDecisions(ri){ return rp.analysis?.rounds?.[ri]?.decisions||[]; }
+function rpDecisionAt(ri,frame){ return rpDecisions(ri).find(d=>d.i===frame)||null; }
+
+function openReplay(gameId,round=0){
+  rpPending={gameId,round};
+  const scr=$('replay-screen');
+  scr.classList.add('visible');
+  $('rp-title').textContent='Replay';
+  $('rp-sub').textContent='Loading…';
+  $('rp-table').innerHTML='<p class="rp-empty">Loading replay and analysis…</p>';
+  $('rp-panel-move').innerHTML=''; $('rp-panel-sum').innerHTML='';
+  $('rp-rounds').innerHTML=''; $('rp-timeline').innerHTML='';
+  wss({type:'get_game_replay',gameId});
+}
+
+function onGameReplay(m){
+  if(!rpPending||rpPending.gameId!==m.gameId) return;
+  const startRound=rpPending.round;
+  rpPending=null;
+  if(!m.game||!m.game.replay||!(m.game.replay.rounds||[]).length){
+    $('rp-sub').textContent='';
+    $('rp-table').innerHTML='<p class="rp-empty">No replay was recorded for this game — replays are kept for games played since this feature was added.</p>';
+    return;
+  }
+  // The replay borrows the live game's table (#s-game) — never during a game.
+  if(inGame){
+    $('rp-sub').textContent='';
+    $('rp-table').innerHTML='<p class="rp-empty">Replays can be watched once this game is over.</p>';
+    return;
+  }
+  stopReplayPlay();
+  rpTableLeave(); // a replay opened over another one still on the table
+  const ui=parseFloat(getComputedStyle($('replay-screen')).getPropertyValue('--ui-vmin'))||7.2;
+  rp={game:m.game,analysis:m.analysis,round:Math.min(startRound,m.game.replay.rounds.length-1),frame:0,timer:null,tab:'move',miniW:Math.max(12,Math.round(ui*2.1)),tv:null};
+  const g=m.game;
+  const dateStr=new Date(g.date).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+  $('rp-sub').textContent=`${g.gameMode==='hanchan'?'Hanchan':'Tonpuu'} · ${g.variant==='sanma'?'Sanma':'Yonma'} · ${dateStr}`;
+  const tabs=$('rp-rounds'); tabs.innerHTML='';
+  g.replay.rounds.forEach((round,ri)=>{
+    const b=document.createElement('button');
+    b.type='button'; b.className='rp-round-chip'; b.setAttribute('role','tab');
+    const issues=rpDecisions(ri).filter(d=>d.sev==='mistake'||d.sev==='blunder').length;
+    b.innerHTML=`${escHtml(rpRoundLabel(round))}${issues?`<i class="rp-chip-dot" title="${issues} mistake${issues>1?'s':''}"></i>`:''}`;
+    b.onclick=()=>replayGoto(ri,0);
+    tabs.appendChild(b);
+  });
+  renderReplaySummary();
+  setReplayTab('move');
+  $('replay-screen').classList.add('rp-tv');
+  rpTableEnter();
+  renderReplay();
+}
+
+function closeReplay(){
+  stopReplayPlay();
+  rpTableLeave();
+  rp=null; rpPending=null;
+  $('replay-screen').classList.remove('visible','rp-tv');
+}
+
+function replayGoto(ri,frame){
+  if(!rp) return;
+  const rounds=rp.game.replay.rounds;
+  ri=Math.max(0,Math.min(rounds.length-1,ri));
+  rp.round=ri;
+  rp.frame=Math.max(0,Math.min(rounds[ri].ev.length,frame));
+  renderReplay();
+}
+function replayStep(d){
+  if(!rp) return;
+  const len=rp.game.replay.rounds[rp.round].ev.length;
+  if(d>0&&rp.frame>=len){ if(rp.round<rp.game.replay.rounds.length-1) replayGoto(rp.round+1,0); return; }
+  if(d<0&&rp.frame<=0){ if(rp.round>0) replayGoto(rp.round-1,rp.game.replay.rounds[rp.round-1].ev.length); return; }
+  replayGoto(rp.round,rp.frame+d);
+}
+function replayRound(d){ if(rp) replayGoto(rp.round+d,0); }
+// Jumps to the next/previous flagged decision (tip or worse), crossing
+// round boundaries.
+function replayIssue(dir){
+  if(!rp) return;
+  stopReplayPlay();
+  const rounds=rp.game.replay.rounds;
+  for(let ri=rp.round;ri>=0&&ri<rounds.length;ri+=dir){
+    const ds=rpDecisions(ri).filter(d=>RP_FLAGGED.has(d.sev)).map(d=>d.i);
+    const hit=dir>0?ds.find(i=>ri>rp.round||i>rp.frame):ds.reverse().find(i=>ri<rp.round||i<rp.frame);
+    if(hit!==undefined){ replayGoto(ri,hit); return; }
+  }
+}
+function toggleReplayPlay(){
+  if(!rp) return;
+  if(rp.timer){ stopReplayPlay(); return; }
+  if(rp.frame>=rp.game.replay.rounds[rp.round].ev.length) replayGoto(rp.round,0);
+  $('rp-play').textContent='❚❚'; $('rp-play').setAttribute('aria-label','Pause');
+  rp.timer=setInterval(()=>{
+    if(!rp) return;
+    const len=rp.game.replay.rounds[rp.round].ev.length;
+    if(rp.frame>=len){ stopReplayPlay(); return; }
+    replayGoto(rp.round,rp.frame+1);
+    // Pause on the player's own flagged moves so the review can be read.
+    const d=rpDecisionAt(rp.round,rp.frame);
+    if(d&&RP_FLAGGED.has(d.sev)) stopReplayPlay();
+  },750);
+}
+function stopReplayPlay(){
+  if(rp&&rp.timer){ clearInterval(rp.timer); rp.timer=null; }
+  const b=$('rp-play'); if(b){ b.textContent='▶'; b.setAttribute('aria-label','Play'); }
+}
+function setReplayTab(tab){
+  if(rp) rp.tab=tab;
+  $('rp-tab-move').classList.toggle('active',tab==='move');
+  $('rp-tab-sum').classList.toggle('active',tab==='sum');
+  $('rp-panel-move').hidden=tab!=='move';
+  $('rp-panel-sum').hidden=tab!=='sum';
+}
+
+function renderReplay(){
+  if(!rp) return;
+  const ri=rp.round, round=rp.game.replay.rounds[ri], f=rp.frame, ev=round.ev;
+  const st=rpStateAt(ri,f);
+  const atEnd=f>=ev.length;
+  const last=f>0?ev[f-1]:null;
+  const decision=rpDecisionAt(ri,f);
+
+  $('rp-title').textContent=`${rpRoundLabel(round)} · Replay`;
+  [...$('rp-rounds').children].forEach((c,i)=>{ c.classList.toggle('active',i===ri); c.setAttribute('aria-selected',i===ri); });
+  if(rp.chipRound!==ri){ rp.chipRound=ri; $('rp-rounds').children[ri]?.scrollIntoView({block:'nearest',inline:'nearest'}); }
+
+  renderReplayTable(decision);
+
+  renderReplayTimeline();
+  renderReplayMovePanel(st,decision,last,atEnd);
+  $('rp-pos').textContent=`Move ${f} / ${ev.length}`;
+}
+
+// ── Table view ──────────────────────────────────────────────────────────────
+// The replay played out on the real game table (#s-game): each frame is
+// rebuilt as a game_state-shaped object and handed to renderState, so the
+// replay looks exactly like playing — nameplates, centre panel, ponds,
+// melds, the drop/slide animations and the call voices on a single step.
+// The replay screen goes see-through over it (body.rp-live, style.css),
+// keeping only its header, review panel and transport bar. The table's
+// seat globals (mySeat/numSeats/P) are swapped in only for the length of
+// each synchronous draw (rpAsSeat), so a 'joined' landing meanwhile keeps
+// its seat. Never opened during a live game (onGameReplay refuses), and a
+// game_start closes the replay.
+
+// rpApply's state again, but on tile objects carrying stable ids ({k,id}):
+// renderState matches tiles by id to animate what's new, and a meld finds
+// its called tile by id. Ids only need to be consistent within one
+// rebuild of one round — the same frame always rebuilds the same ids.
+function rpObjState(ri,frame){
+  const round=rp.game.replay.rounds[ri], n=round.hands.length;
+  let nid=1;
+  const T=k=>({k,id:nid++});
+  const take=(list,k)=>{
+    let i=list.findIndex(t=>t.k===k);
+    if(i===-1) i=list.findIndex(t=>rpCodeKey(t.k)===rpCodeKey(k));
+    return i===-1?T(k):list.splice(i,1)[0];
+  };
+  const st={n,hands:round.hands.map(h=>h.map(T)),discards:Array.from({length:n},()=>[]),
+    melds:Array.from({length:n},()=>[]),kita:Array.from({length:n},()=>[]),
+    dora:(round.dora||[]).map(T),riichi:new Array(n).fill(false),scores:(round.scores||[]).slice(),
+    riichiSticks:round.riichiSticks||0,drawn:null,turn:round.dealer,wallUsed:0,moved:{}};
+  for(let i=0;i<frame&&i<round.ev.length;i++){
+    const e=round.ev[i], s=e.s;
+    switch(e.t){
+      case 'd': st.drawn=T(e.k); st.hands[s].push(st.drawn); st.turn=s; if(!e.r) st.wallUsed++; break;
+      case 'x': {
+        const t=take(st.hands[s],e.k);
+        t.tg=!!e.tg; t.ri=!!e.ri||!!st.moved[s]; st.moved[s]=false;
+        st.discards[s].push(t);
+        if(e.ri){ st.riichi[s]=true; st.scores[s]-=1000; st.riichiSticks++; }
+        st.drawn=null; st.turn=s; break;
+      }
+      case 'pon': case 'chi': case 'mk': {
+        const own=e.u.map(k=>take(st.hands[s],k));
+        const pond=st.discards[e.f], called=pond[pond.length-1]||T(e.k);
+        called.called=true; if(called.ri) st.moved[e.f]=true;
+        const tiles=e.t==='chi'?[...own,called].sort((a,b)=>rpCmp(a.k,b.k)):[...own,called];
+        st.melds[s].push({type:e.t==='mk'?'kan':e.t,kanType:e.t==='mk'?'daiminkan':undefined,tiles,calledTileId:called.id,fromSeat:e.f});
+        st.drawn=null; st.turn=s; break;
+      }
+      case 'ak': st.melds[s].push({type:'kan',kanType:'ankan',tiles:e.u.map(k=>take(st.hands[s],k))}); st.drawn=null; break;
+      case 'kk': {
+        const t=take(st.hands[s],e.k);
+        const m=st.melds[s].find(m=>m.type==='pon'&&rpCodeKey(m.tiles[0].k)===rpCodeKey(e.k));
+        if(m){ m.type='kan'; m.kanType='kakan'; m.tiles.push(t); }
+        st.drawn=null; break;
+      }
+      case 'kita': st.kita[s].push(take(st.hands[s],e.k)); st.drawn=null; break;
+      case 'dora': st.dora.push(T(e.k)); break;
+    }
+  }
+  return st;
+}
+
+// The frame as a game_state (the fields renderState reads), from the
+// player's own seat. Also returns the pieces renderReplayTable needs on
+// top: who holds a just-drawn tile, and each seat's sorted hand.
+function rpGameState(ri,frame){
+  const round=rp.game.replay.rounds[ri], ev=round.ev, st=rpObjState(ri,frame), n=st.n, me=rp.game.seat;
+  const atEnd=frame>=ev.length, last=frame>0?ev[frame-1]:null;
+  const tile=t=>({...rpTile(t.k),id:t.id});
+  // A drawn tile sits apart from the hand only until its owner acts.
+  const drawnBy=st.drawn&&last&&last.t==='d'?last.s:-1;
+  const hands=st.hands.map((h,s)=>h.filter(t=>!(s===drawnBy&&t===st.drawn)).sort((a,b)=>rpCmp(a.k,b.k)));
+  const liveWall=(n===3?90:122)-13*n;
+  const m={
+    numPlayers:n,sanma:n===3,round:round.round,dealer:round.dealer,honba:round.honba||0,
+    displayWind:Math.ceil(round.round/n)||1,displayRound:((round.round-1)%n)+1,
+    riichiSticks:st.riichiSticks,wallCount:Math.max(0,liveWall-st.wallUsed),
+    scores:atEnd&&round.res?.scores?round.res.scores:st.scores,
+    turn:atEnd?null:st.turn,
+    seatWinds:Array.from({length:n},(_,s)=>(s-round.dealer+n)%n),
+    riichi:st.riichi,
+    dora:st.dora.map(tile),
+    myHand:hands[me].map(tile),
+    drawTile:drawnBy===me?tile(st.drawn):null,
+    oppHandSizes:st.hands.map(h=>h.length),
+    discards:st.discards.map(p=>p.filter(t=>!t.called).map(t=>({...tile(t),riichi:t.ri}))),
+    melds:st.melds.map(ms=>ms.map(ml=>({...ml,tiles:ml.tiles.map(tile)}))),
+    kita:st.kita.map(ks=>ks.map(tile)),
+  };
+  m.myMelds=m.melds[me];
+  return {m,st,hands,drawnBy,liveWall};
+}
+
+// Runs fn with the table's seat globals set to the replay's own seat.
+function rpAsSeat(fn){
+  const saved=[mySeat,numSeats,P], n=rp.game.replay.rounds[0].hands.length;
+  mySeat=rp.game.seat; numSeats=n; P=n===3?['b','r','l']:['b','r','t','l'];
+  try{ fn(n); } finally{ [mySeat,numSeats,P]=saved; }
+}
+function rpTableEnter(){
+  if(rp.tv) return;
+  const g=rp.game, dp=$('dora-panel');
+  rp.tv={doraHome:[dp.parentNode,dp.nextSibling],last:null};
+  $('rp-dora').appendChild(dp);
+  rpTableClear();
+  rpAsSeat(n=>{
+    document.querySelector('.table')?.classList.toggle('sanma',n===3);
+    for(let i=0;i<n;i++){
+      const abs=(mySeat+i)%n, id=P[i];
+      const pn=$('pn'+id); pn.textContent=(g.playerNames||[])[abs]||`Seat ${abs+1}`; fitNameplateText(pn);
+      const pt=$('pt'+id); if(pt) pt.textContent='';
+      const bt=$('bt'+id); if(bt) bt.textContent='';
+      // Opponents' cosmetics aren't in the game record — only your own skin.
+      applyNameplateSkinClass($('np'+id),i===0?currentNameplateSkin:'default');
+    }
+  });
+  ctrTurnAngle=null;
+  $('s-game').classList.remove('hidden');
+  document.body.classList.add('rp-live');
+  updateTileSizes();
+}
+function rpTableLeave(){
+  if(!rp||!rp.tv) return;
+  const [home,next]=rp.tv.doraHome;
+  home.insertBefore($('dora-panel'),next);
+  rp.tv=null;
+  rpTableClear();
+  document.body.classList.remove('rp-live');
+  $('dora-panel').style.display='none';
+  $('s-game').classList.add('hidden');
+  ctrTurnAngle=null;
+  updateTileSizes();
+}
+// Everything renderState fills, emptied — so a later real game (or the
+// next replay) never inherits this one's board.
+function rpTableClear(){
+  ['hdb','hdt','hdl','hdr','mlb','mlt','mll','mlr','dzb','dzt','dzl','dzr','kb','kt','kl','kr'].forEach(id=>{ const el=$(id); if(el) el.innerHTML=''; });
+  ['b','r','t','l'].forEach(id=>{ const rs=$('rs'+id); if(rs) rs.style.display='none'; $('np'+id)?.classList.remove('active'); $('hd'+id)?.classList.remove('rp-open-row'); });
+}
+
+function renderReplayTable(decision){ rpAsSeat(()=>rpDrawTable(decision)); }
+function rpDrawTable(decision){
+  const ri=rp.round, f=rp.frame, round=rp.game.replay.rounds[ri], ev=round.ev;
+  const {m,st,hands,drawnBy,liveWall}=rpGameState(ri,f);
+  const me=rp.game.seat, n=st.n;
+  // Animate and voice only a single step forward; any other jump (back,
+  // seek, new round) redraws silently, as renderState does for prev===m.
+  const lt=rp.tv.last;
+  const prev=lt&&lt.ri===ri&&lt.f===f-1?lt.m:m;
+  rp.tv.last={ri,f,m};
+  cdWallMax=liveWall;
+  // renderState only ever turns riichi sticks on (a new hand turns them
+  // off in a live game) — a frame before the declaration needs them off.
+  for(let i=0;i<n;i++){ const rs=$('rs'+P[i]); if(rs) rs.style.display='none'; }
+  renderState(m,prev);
+
+  // Show all hands: opponents' concealed tiles face up, in the same rows.
+  // .rp-open-row turns each row to face its owner, as their melds do — the
+  // rows' own rotation is set for the face-down tile-tops (.tsm).
+  const showAll=$('rp-show-hands').checked;
+  for(let i=1;i<n;i++) $('hd'+P[i])?.classList.toggle('rp-open-row',showAll);
+  if(showAll){
+    for(let i=1;i<n;i++){
+      const abs=(me+i)%n, hd=$('hd'+P[i]);
+      if(!hd) continue;
+      hd.innerHTML='';
+      const add=t=>{ const el=mkElMd({...rpTile(t.k),id:t.id}); el.classList.add('rp-open'); hd.appendChild(el); return el; };
+      hands[abs].forEach(add);
+      if(abs===drawnBy){
+        const sep=document.createElement('div'); sep.className='draw-sep'; hd.appendChild(sep);
+        add(st.drawn);
+      }
+    }
+  }
+
+  // At one of your discards: the tile you threw (red) and the stronger
+  // one (green). A discard straight from the
+  // draw (tg) marks the drawn tile, not an identical copy in the hand.
+  if(decision&&decision.kind==='discard'&&decision.chosen){
+    const you=decision.chosen.k, best=decision.best&&decision.best.k!==you?decision.best.k:null;
+    const els=[...$('hdb').children].filter(el=>el.dataset.tid);
+    const byId=new Map([...hands[me],...(drawnBy===me?[st.drawn]:[])].map(t=>[String(t.id),t.k]));
+    const find=(k,skip)=>els.find(el=>el!==skip&&byId.get(el.dataset.tid)===k)||els.find(el=>el!==skip&&rpCodeKey(byId.get(el.dataset.tid)||'')===rpCodeKey(k));
+    const drawnEl=drawnBy===me?els.find(el=>el.dataset.tid===String(st.drawn.id)):null;
+    const youEl=ev[f]?.t==='x'&&ev[f].tg&&drawnEl?drawnEl:find(you,null);
+    youEl?.classList.add('rp-mark-you');
+    if(best) find(best,youEl)?.classList.add('rp-mark-best');
+  }
+}
+
+// The review panel can be put away to give the table the room.
+function toggleReplaySide(){
+  const off=!document.body.classList.contains('rp-side-off');
+  document.body.classList.toggle('rp-side-off',off);
+  $('rp-side-btn').setAttribute('aria-pressed',String(!off));
+  if(rp&&rp.tv){ updateTileSizes(); renderReplay(); }
+}
+
+// One marker per decision of the player's this round, coloured by grade,
+// plus the playhead. Clicking the bar seeks.
+function renderReplayTimeline(){
+  const round=rp.game.replay.rounds[rp.round];
+  const len=Math.max(1,round.ev.length);
+  const tl=$('rp-timeline');
+  const marks=rpDecisions(rp.round).map(d=>`<button type="button" class="rp-mark sev-${d.sev}" style="left:${(d.i/len*100).toFixed(2)}%" data-i="${d.i}" title="${rpSevTip(d.sev)}" aria-label="${RP_SEV[d.sev].label} at move ${d.i}"></button>`).join('');
+  tl.innerHTML=`<div class="rp-track"><div class="rp-fill" style="width:${(rp.frame/len*100).toFixed(2)}%"></div>${marks}<div class="rp-head-dot" style="left:${(rp.frame/len*100).toFixed(2)}%"></div></div>`;
+  tl.onclick=e=>{
+    const mk=e.target.closest('.rp-mark');
+    if(mk){ stopReplayPlay(); replayGoto(rp.round,+mk.dataset.i); return; }
+    const r=tl.querySelector('.rp-track').getBoundingClientRect();
+    const x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+    stopReplayPlay(); replayGoto(rp.round,Math.round(x*len));
+  };
+}
+
+function rpEventText(e){
+  if(!e) return 'The deal. Step forward to watch the round play out.';
+  const who=rpName(e.s);
+  switch(e.t){
+    case 'd': return `${who} drew ${e.r?'a replacement tile ':''}[[${e.k}]].`;
+    case 'x': return `${who} discarded [[${e.k}]]${e.tg?' (straight from the draw)':''}${e.ri?' and declared Riichi!':'.'}`;
+    case 'pon': return `${who} called Pon on ${rpName(e.f)}'s [[${e.k}]].`;
+    case 'chi': return `${who} called Chi on ${rpName(e.f)}'s [[${e.k}]].`;
+    case 'mk': return `${who} called an open Kan on ${rpName(e.f)}'s [[${e.k}]].`;
+    case 'ak': return `${who} declared a concealed Kan of [[${e.u[0]}]].`;
+    case 'kk': return `${who} added [[${e.k}]] to their Pon for a Kan.`;
+    case 'kita': return `${who} set aside North (Kita) for a bonus han.`;
+    case 'dora': return `A new dora indicator is revealed: [[${e.k}]].`;
+    case 'pass': return `${who} passed on ${e.o.map(o=>o==='ron'?'Ron':o==='pon'?'Pon':o==='chi'?'Chi':'Kan').join(' / ')}.`;
+    case 'tsumo': return `${who} won by Tsumo!`;
+    case 'ron': return `${who} won by Ron off ${rpName(e.f)}!`;
+  }
+  return '';
+}
+
+function rpCandTable(d){
+  if(!d.cands||!d.cands.length) return '';
+  const w=rp.miniW+4, h=Math.round(w*1.38);
+  const rows=d.cands.map(c=>{
+    const you=d.chosen&&c.k===d.chosen.k, best=d.best&&c.k===d.best.k;
+    const tags=(best?'<span class="rp-tag best">Best</span>':'')+(you?'<span class="rp-tag you">You</span>':'');
+    const accepts=c.sh<0?'—':`${c.uk} <span class="rp-ukt">${(c.ukt||[]).slice(0,9).map(k=>rpTileHtml(k,Math.round(w*.75),Math.round(h*.75))).join('')}${(c.ukt||[]).length>9?'…':''}</span>`;
+    const risk=d.threat?`<td class="rp-risk ${c.risk>=.08?'hi':c.risk>=.03?'mid':'lo'}">${c.risk<.005?'Safe':Math.round(c.risk*100)+'%'}</td>`:'';
+    return `<tr class="${you?'is-you':''}${best?' is-best':''}"><td class="rp-cand-tile">${rpTileHtml(c.k,w,h)}${tags}</td><td>${c.sh===0?'Tenpai':c.sh<0?'Win':c.sh}</td><td class="rp-accepts">${accepts}</td>${risk}</tr>`;
+  }).join('');
+  return `<table class="rp-cands"><thead><tr><th>Discard</th><th>Shanten</th><th>Tiles that help</th>${d.threat?'<th>Deal-in risk</th>':''}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderReplayMovePanel(st,decision,last,atEnd){
+  const panel=$('rp-panel-move');
+  const ri=rp.round, round=rp.game.replay.rounds[ri];
+  const parts=[];
+  parts.push(`<div class="rp-event">${rpRichText(rpEventText(last))}</div>`);
+  if(decision){
+    const sv=RP_SEV[decision.sev];
+    const title=decision.kind==='discard'?'Your discard':decision.kind==='pass'?'Your pass':'Your call';
+    parts.push(`<div class="rp-review sev-${decision.sev}">
+      <div class="rp-review-head"><span class="rp-sev-badge">${sv.sym}</span><span class="rp-review-title">${title}</span><span class="rp-sev-label">${sv.label}</span></div>
+      <p class="rp-sev-desc">${escHtml(sv.desc)}</p>
+      <p class="rp-review-text">${rpRichText(decision.text)}</p>
+      ${rpCandTable(decision)}
+    </div>`);
+  } else if(!atEnd){
+    const next=rpDecisions(ri).find(d=>d.i>rp.frame);
+    parts.push(`<p class="rp-hint">${rp.analysis?'Your decisions are graded as you reach them.':'Move analysis isn\'t available for this game.'}${next?` <button type="button" class="rp-link" onclick="replayGoto(${ri},${next.i})">Jump to your next move ›</button>`:''}</p>`);
+  }
+  if(atEnd){
+    const sum=rp.analysis?.rounds?.[ri]?.summary;
+    if(sum){
+      const c=sum.counts;
+      const delta=sum.delta;
+      parts.push(`<div class="rp-round-sum">
+        <div class="rp-round-sum-head"><span>${escHtml(RP_OUTCOME[sum.outcome]||'Round over')}</span><span class="rp-delta ${delta>0?'pos':delta<0?'neg':''}">${delta>0?'+':''}${delta.toLocaleString()}</span></div>
+        <div class="rp-chips">${['best','good','inaccuracy','mistake','blunder'].filter(k=>c[k]).map(k=>`<span class="rp-chip sev-${k}" title="${rpSevTip(k)}">${RP_SEV[k].sym} ${c[k]} ${RP_SEV[k].label}${c[k]>1&&k!=='best'&&k!=='good'?'s':''}</span>`).join('')}</div>
+        ${sum.tenpaiAt?`<p class="rp-hint">Reached tenpai on your discard #${sum.tenpaiAt}.</p>`:'<p class="rp-hint">You never reached tenpai this round.</p>'}
+      </div>`);
+    }
+  }
+  panel.innerHTML=parts.join('');
+  // The round's results card — the same one Play History's dropdown shows.
+  if(atEnd){
+    const rr=(rp.game.rounds||[])[ri];
+    if(rr){
+      const {card,fill}=buildHistoryRoundCard(rr,rp.game.seat);
+      card.classList.add('rp-result-card');
+      panel.appendChild(card);
+      if(fill) fill();
+    }
+  }
+}
+
+function renderReplaySummary(){
+  const el=$('rp-panel-sum');
+  const a=rp.analysis;
+  if(!a){ el.innerHTML='<p class="rp-hint">Move analysis isn\'t available for this game.</p>'; return; }
+  const s=a.summary, t=s.tally;
+  const g=rp.game;
+  const place=g.placements?.[g.seat];
+  const rating=s.rating??0;
+  const ringDeg=Math.round(rating*3.6);
+  const verdict=rating>=85?'Excellent':rating>=70?'Strong':rating>=55?'Solid':rating>=40?'Shaky':'Rough';
+  const stat=(k,v)=>`<div class="rp-stat"><span class="rp-stat-v">${v}</span><span class="rp-stat-k">${k}</span></div>`;
+  const rounds=g.replay.rounds.map((round,ri)=>{
+    const rs=a.rounds[ri]?.summary; if(!rs) return '';
+    const bad=(rs.counts.mistake||0)+(rs.counts.blunder||0);
+    return `<tr onclick="setReplayTab('move');replayGoto(${ri},0)"><td>${escHtml(rpRoundLabel(round))}</td><td>${escHtml(RP_OUTCOME[rs.outcome]||'—')}</td>
+      <td class="rp-delta ${rs.delta>0?'pos':rs.delta<0?'neg':''}">${rs.delta>0?'+':''}${rs.delta.toLocaleString()}</td>
+      <td>${bad?`<span class="rp-chip sev-${rs.counts.blunder?'blunder':'mistake'}">${bad}</span>`:'<span class="rp-ok">✓</span>'}</td></tr>`;
+  }).join('');
+  const moments=(s.moments||[]).slice(0,12).map(mo=>{
+    const round=g.replay.rounds[mo.r];
+    const label=mo.type==='win'?`Won the hand (+${(mo.delta||0).toLocaleString()})`:mo.type==='dealin'?`Dealt in (${(mo.delta||0).toLocaleString()})`:RP_SEV[mo.type]?.label||mo.type;
+    const cls=mo.type==='win'?'win':mo.type==='dealin'?'blunder':mo.type;
+    const txt=mo.text?`<span class="rp-moment-txt">${rpRichText(mo.text.split('. ')[0]+'.')}</span>`:'';
+    return `<button type="button" class="rp-moment" onclick="setReplayTab('move');replayGoto(${mo.r},${mo.i})"><span class="rp-chip sev-${cls}">${escHtml(rpRoundLabel(round))}</span><span class="rp-moment-label">${escHtml(label)}</span>${txt}</button>`;
+  }).join('');
+  el.innerHTML=`
+    <div class="rp-sum-top">
+      <div class="rp-ring" style="--deg:${ringDeg}deg"><span class="rp-ring-v">${s.rating??'—'}</span><span class="rp-ring-k">Rating</span></div>
+      <div class="rp-sum-verdict"><div class="rp-verdict">${verdict} game</div>
+        <div class="rp-hint">${place?`Finished ${ORDINALS[place-1]||place+'th'} · `:''}${s.accuracy??'—'}% of your moves were good or best (${s.bestRate??'—'}% matched the top choice).</div></div>
+    </div>
+    <div class="rp-chips">${['best','good','tip','inaccuracy','mistake','blunder'].map(k=>`<span class="rp-chip sev-${k}" title="${rpSevTip(k)}">${RP_SEV[k].sym} ${t[k]||0} ${RP_SEV[k].label}</span>`).join('')}</div>
+    <details class="rp-legend"><summary>What do the grades mean?</summary>
+      <dl>${Object.entries(RP_SEV).map(([k,v])=>`<div class="rp-legend-row"><dt><span class="rp-chip sev-${k}">${v.sym} ${v.label}</span></dt><dd>${escHtml(v.desc)}</dd></div>`).join('')}</dl>
+    </details>
+    <div class="rp-stats">${stat('Wins',s.wins)}${stat('Deal-ins',s.dealIns)}${stat('Riichi',s.riichis)}${stat('Calls',s.calls)}${stat('Avg win',s.avgWin?s.avgWin.toLocaleString():'—')}${stat('Avg deal-in',s.avgDealIn?s.avgDealIn.toLocaleString():'—')}</div>
+    ${moments?`<div class="about-section-title rp-sec">Key moments</div><div class="rp-moments">${moments}</div>`:''}
+    <div class="about-section-title rp-sec">Rounds</div>
+    <table class="rp-round-table"><tbody>${rounds}</tbody></table>
+    <p class="rp-foot-note">Moves are graded against Janshin's Hard AI: tile efficiency (shanten and the tiles that improve your hand), hand value (dora, yakuhai) and deal-in risk once an opponent is threatening. Each decision only uses what you could see at the time.</p>`;
+}
+
+document.addEventListener('keydown',e=>{
+  if(!rp||!$('replay-screen').classList.contains('visible')) return;
+  if(e.target.closest&&e.target.closest('input,textarea,select')) return;
+  if(e.key==='ArrowRight'){ e.preventDefault(); stopReplayPlay(); replayStep(1); }
+  else if(e.key==='ArrowLeft'){ e.preventDefault(); stopReplayPlay(); replayStep(-1); }
+  else if(e.key==='ArrowDown'){ e.preventDefault(); stopReplayPlay(); replayRound(1); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); stopReplayPlay(); replayRound(-1); }
+  else if(e.key===' '&&!e.target.closest?.('button')){ e.preventDefault(); toggleReplayPlay(); }
+  else if(e.key==='Escape'){ e.preventDefault(); closeReplay(); }
+});
+window.addEventListener('resize',()=>{
+  if(!rp||!$('replay-screen').classList.contains('visible')) return;
+  if(rp.tv) updateTileSizes(); // before the redraw — the global resize listener's own call runs after this one
+  renderReplay();
+});
 
 // Same open/fetch pattern as My Stats above — 'stats' carries
 // achievementsInfo alongside the stat blocks (see onMsg), so both panels
@@ -3831,7 +4523,7 @@ function submitFeedback(){
   if(!ws||ws.readyState!==1){ $('feedback-error').style.color=''; $('feedback-error').textContent='Not connected — please try again in a moment.'; return; }
   $('feedback-send').disabled=true;
   wss({type:'submit_feedback',category:$('feedback-category').value,message,
-    version:$('about-version').textContent.trim(),userAgent:navigator.userAgent});
+    version:APP_VERSION,userAgent:navigator.userAgent});
 }
 
 function onSubmitFeedbackResult(m){
@@ -9647,9 +10339,8 @@ function backToMenu(){
   show('s-start');
 }
 $('bstart').onclick=enterLobby;
+initReleaseNotes();
 $('about-version').onclick=handleVersionTap;
-// The start screen's footer shows the same version string as the About panel.
-$('start-version').textContent=$('about-version').textContent.trim();
 $('bfind').onclick=findMatch;
 $('bready').onclick=pressReady;
 $('bcancel').onclick=()=>{wss({type:'leave'});resetLobby();};

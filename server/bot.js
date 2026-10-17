@@ -25,7 +25,7 @@
 // shanten AND — when it would be the hand's FIRST meld — the resulting open
 // hand still has a realistic path to a yaku (otherwise it's a hand that can
 // reach tenpai but never legally win).
-const {key,isWin,waits,canPon,canChi,shanten,detectYaku,countDora,countAkaDora,basePoints,isMenzen} = require('./mahjong');
+const {key,isWin,waits,canPon,canChi,shanten,shantenCounts,countsOf,detectYaku,countDora,countAkaDora,basePoints,isMenzen} = require('./mahjong');
 
 const BOT_NAMES=['Sakura AI','Yuki Bot','Hana CPU','Ryu AI','Kaze Bot','Tsuki AI','Hoshi CPU','Umi Bot'];
 let _bi=0;
@@ -119,19 +119,17 @@ function _visibleCounts(ctx, myHand, myMelds){
 // counts tile TYPES weighted by remaining copies (4 minus everything already
 // visible), so a wait on a tile with 3 copies already gone barely counts.
 // `cur` (the hand's current shanten) is passed in so it isn't recomputed.
-// O(34) shanten() calls, so callers gate it to the few near-tenpai
-// candidates where the tie-break actually matters (see _smartDiscard).
+// 34 probes of one count array — cheap enough to run for every candidate.
 function _ukeire(hand13, melds, vis, cur){
   if(cur<0) return 0;
+  const c=countsOf(hand13), mc=melds?melds.length:0;
   let n=0;
-  for(const s of ['m','p','s','z']){
-    const max=s==='z'?7:9;
-    for(let v=1;v<=max;v++){
-      const k=`${v}${s}`;
-      const live=Math.max(0, 4-(vis[k]||0));
-      if(!live) continue;
-      if(shanten([...hand13,{s,v,id:-2}], melds)<cur) n+=live;
-    }
+  for(let i=0;i<34;i++){
+    const live=Math.max(0, 4-(vis[`${i%9+1}${'mpsz'[(i/9)|0]}`]||0));
+    if(!live) continue;
+    c[i]++;
+    if(shantenCounts(c, mc)<cur) n+=live;
+    c[i]--;
   }
   return n;
 }
@@ -302,12 +300,9 @@ function _smartDiscard(hand14, melds, ctx, difficulty){
   });
   const bestSh=Math.min(...cands.map(c=>c.shanten));
   const {threats, vis}=_assessThreats(ctx, hand14, melds);
-  // The ukeire tie-break (O(34) shanten() calls each) only earns its cost
-  // among a handful of near-tenpai candidates that are otherwise level —
-  // deeper hands are decided by shanten + dora/yakuhai alone.
-  const tiedCount=cands.filter(c=>c.shanten===bestSh).length;
-  const ukeireOK=bestSh<=1 && tiedCount<=6;
-  for(const c of cands) c.shape=_shapeScore(c, bestSh, melds, ctx, vis, ukeireOK && c.shanten===bestSh);
+  // Ukeire only separates candidates at the SAME shanten (a step's
+  // _SHANTEN_STEP cost dwarfs any ukeire difference).
+  for(const c of cands) c.shape=_shapeScore(c, bestSh, melds, ctx, vis, c.shanten===bestSh);
 
   // Nothing to defend against — pure efficiency (value-aware tie-breaking).
   if(!threats.length){
@@ -528,4 +523,10 @@ function botReact(hand, disc, options, melds=[], difficulty='normal', ctx={}){
   return _shantenBotReact(hand, disc, options, melds, ctx||{});
 }
 
-module.exports={botName,bestDiscard,botReact,shouldRiichi:_shouldRiichi,chooseRiichiTile};
+// `internals` — the hard bot's read of the table (threats, per-tile deal-in
+// danger, yaku paths for an open hand), shared with analysis.js so the
+// replay review judges a player's push/fold choices by the same model the
+// strongest bot plays by, rather than a second, drifting copy of it.
+module.exports={botName,bestDiscard,botReact,shouldRiichi:_shouldRiichi,chooseRiichiTile,
+  internals:{assessThreats:_assessThreats,tileDanger:_tileDanger,dealInCost:_dealInCost,
+    yakuhaiSet:_yakuhaiSet,openYakuPossible:_openYakuPossible,estMyValue:_estMyValue,SHANTEN_STEP:_SHANTEN_STEP}};

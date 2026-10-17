@@ -118,6 +118,29 @@ CREATE TABLE IF NOT EXISTS game_history (
 );
 CREATE INDEX IF NOT EXISTS idx_game_history_profile ON game_history(profile_id, date DESC);
 
+-- history.js — one move-by-move replay log per game (see replay.js for
+-- the format), shared by every profile's game_history row for that game
+-- rather than copied into each (it's the biggest thing stored per game,
+-- and identical for every seat). Deleted once no game_history row
+-- references its game_id any more (see history.js's _pruneReplays).
+CREATE TABLE IF NOT EXISTS game_replays (
+  game_id TEXT PRIMARY KEY,
+  data    TEXT NOT NULL
+);
+
+-- history.js — the replay viewer's per-seat move review (analysis.js),
+-- computed the first time a player opens a replay and cached here, since
+-- it's the one expensive step (a full hand evaluation at every decision).
+-- version is analysis.js's ANALYSIS_VERSION: bumping it there makes
+-- every cached review stale, so improved analysis applies to old games too.
+CREATE TABLE IF NOT EXISTS game_analysis (
+  game_id TEXT NOT NULL,
+  seat    INTEGER NOT NULL,
+  version INTEGER NOT NULL,
+  data    TEXT NOT NULL,
+  PRIMARY KEY (game_id, seat)
+);
+
 -- history.js — "recently played with" graph, one row per (me, someone I
 -- shared a table with), last_played bumped every time we play again. A
 -- separate table from game_history on purpose: game_history stores only

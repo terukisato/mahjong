@@ -6,6 +6,7 @@ const {botName,bestDiscard,botReact,shouldRiichi,chooseRiichiTile} = require('./
 const {recordGameResult,getStats} = require('./stats');
 const {recordGame} = require('./history');
 const {awardGameCoins} = require('./economy');
+const {enc,summarizeResult} = require('./replay');
 
 // Cheap composition heuristics for "what's this hand shaping up toward" —
 // not a full search over every possible completion (overkill for a
@@ -786,6 +787,7 @@ class Room {
     g.turnCount=0;       // total discards this round
     g.nagashi=new Array(n).fill(true); // nagashi eligibility per seat
     g.kita=Array.from({length:n},()=>[]); // sanma: banked North-tile bonus draws per seat
+    this._rlStart();
   }
 
   start(){
@@ -834,6 +836,14 @@ class Room {
       // panel's per-game dropdown can show precisely what the round-results
       // screen showed at the time, not a re-derived summary.
       roundHistory:[],
+      // Move-by-move log of every finished round (see replay.js for the
+      // format, and _rlStart/_rl/_rlEnd below for where it's written) —
+      // what Play History's replay viewer and its analysis are built from.
+      // Lives alongside roundHistory (one entry each per round, pushed at
+      // the same moment in _recordRoundHistory) rather than inside it, so
+      // the much larger move log is stored and fetched separately from the
+      // results cards (see history.js's game_replays table).
+      replayRounds:[],
       // Hands dealt this game so far — every _initRound() call is one more
       // hand played (win, draw, or abortive draw all count; nothing about
       // a hand's outcome excludes it). Used as the denominator for
@@ -893,6 +903,7 @@ class Room {
     g.drawTile=t;
     g.hands[g.turn].push(t);
     g.hands[g.turn]=sort(g.hands[g.turn]);
+    this._rl(fromRinshan?{t:'d',s:g.turn,k:enc(t),r:1}:{t:'d',s:g.turn,k:enc(t)});
     g.tempFuriten[g.turn]=false;
     this._sendState();
     // Read+clear unconditionally (not just inside the isBot branch below) —
@@ -1217,11 +1228,15 @@ class Room {
   }
 
   // ── Discard ────────────────────────────────────────────────────────────────
-    _discard(seat,tileId){
+    _discard(seat,tileId,declaringRiichi=false){
     const g=this.game;
     const idx=g.hands[seat].findIndex(t=>t.id===tileId);
     if(idx===-1) return;
     const [tile]=g.hands[seat].splice(idx,1);
+    const rlEv={t:'x',s:seat,k:enc(tile)};
+    if(g.drawTile&&g.drawTile.id===tile.id) rlEv.tg=1;
+    if(declaringRiichi) rlEv.ri=1;
+    this._rl(rlEv);
     // Normally the marker is the tile riichi was declared on. If that tile
     // was since called away by another player, the marker moves to this
     // (the next) discard instead — the sideways tile records *when* riichi
@@ -1353,6 +1368,13 @@ class Room {
     const myOpts=g.pending.options.find(r=>r.seat===seat)?.options||[];
     if(resp.type!=='pass'&&!myOpts.some(o=>o.type===resp.type)) return;
     g.pending.responses[seat]=resp;
+    // Declined offers are invisible in the tile log otherwise — the replay
+    // analysis needs them to review "should you have called / ronned
+    // that". Chonbo-mode "attempt" rons (valid:false) aren't a real offer.
+    if(resp.type==='pass'){
+      const offered=myOpts.filter(o=>o.type!=='ron'||o.valid!==false).map(o=>o.type);
+      if(offered.length) this._rl({t:'pass',s:seat,o:offered});
+    }
 
     // If player passes a valid ron, set temporary furiten. A chonbo-only
     // "attempt anyway" option (valid:false) isn't a real ron opportunity —
@@ -1545,6 +1567,7 @@ class Room {
     }
     g.scores[closestWinner]+=totalRiichiSticks*1000;
 
+    for(const r of results) this._rl({t:'ron',s:r.winSeat,f:loseSeat});
     // Build combined yaku display (show first winner's hand info in round_end, extras in extras)
     const primary=results[0];
     this._endRound('ron',primary.winSeat,loseSeat,primary.hand,primary.yakuList,primary.han,primary.fu,totalLoss,
@@ -1572,6 +1595,7 @@ class Room {
     const used=matches.slice(0,2);
     g.hands[seat]=hand.filter(t=>!used.map(u=>u.id).includes(t.id));
     g.melds[seat].push({type:'pon',tiles:[...used,tile],calledTileId:tile.id,fromSeat});
+    this._rl({t:'pon',s:seat,f:fromSeat,k:enc(tile),u:used.map(enc)});
     this._removeFromDiscards(fromSeat,tile); // called tile leaves their pond
     g.nagashi[seat]=false;
     g.nagashi[fromSeat]=false; // their discard was called — nagashi requires no discard ever be taken
@@ -1588,6 +1612,7 @@ class Room {
     const used=hand.filter(t=>tileIds.includes(t.id));
     g.hands[seat]=hand.filter(t=>!tileIds.includes(t.id));
     g.melds[seat].push({type:'chi',tiles:sort([...used,tile]),calledTileId:tile.id,fromSeat});
+    this._rl({t:'chi',s:seat,f:fromSeat,k:enc(tile),u:used.map(enc)});
     this._removeFromDiscards(fromSeat,tile); // called tile leaves their pond
     g.nagashi[seat]=false;
     g.nagashi[fromSeat]=false; // their discard was called — nagashi requires no discard ever be taken
@@ -1618,6 +1643,7 @@ class Room {
     if(matches.length<3) return;
     g.hands[seat]=hand.filter(t=>!matches.map(u=>u.id).includes(t.id));
     g.melds[seat].push({type:'kan',kanType:'daiminkan',tiles:[...matches,tile],calledTileId:tile.id,fromSeat,open:true});
+    this._rl({t:'mk',s:seat,f:fromSeat,k:enc(tile),u:matches.map(enc)});
     if(fromSeat!=null) this._removeFromDiscards(fromSeat,tile); // called tile leaves their pond
     g.kanCount++;g.kanSeats.push(seat);
     g.nagashi[seat]=false;
@@ -1645,6 +1671,7 @@ class Room {
     }
     g.hands[seat]=hand.filter(t=>key(t)!==tileKey);
     g.melds[seat].push({type:'kan',kanType:'ankan',tiles:[...matches],calledTileId:null,open:false});
+    this._rl({t:'ak',s:seat,u:matches.map(enc)});
     g.kanCount++;g.kanSeats.push(seat);
     this._openNewDora(g);
     g.ippatsu=g.ippatsu.map(()=>false);
@@ -1660,6 +1687,7 @@ class Room {
     if(!addTile) return;
     const ponIdx=g.melds[seat].findIndex(m=>m.type==='pon'&&key(m.tiles[0])===key(addTile));
     if(ponIdx===-1) return;
+    this._rl({t:'kk',s:seat,k:enc(addTile)});
     const reactions=this._checkChankan(seat,addTile);
     if(reactions.length){
       g.pending={tile:addTile,fromSeat:seat,seats:reactions.map(r=>r.seat),
@@ -1745,6 +1773,7 @@ class Room {
     // hidden from the UI, so a hacked client can't bypass it.
     if(g.riichi[seat]&&!this._legalKitaIds(seat).includes(tileId)) return;
     g.hands[seat]=hand.filter(t=>t.id!==tileId);
+    this._rl({t:'kita',s:seat,k:enc(tile)});
     g.nagashi[seat]=false; // self-initiated action, same precedent as calling pon/chi/kan on your own turn
     this._broadcastAll({type:'kita',seat,name:this.seats[seat]?.name,count:g.kita[seat].length+1});
 
@@ -1807,6 +1836,7 @@ class Room {
     g.kitaCount++;
     g.drawTile=draw;
     g.hands[seat]=sort([...g.hands[seat],draw]);
+    this._rl({t:'d',s:seat,k:enc(draw),r:1});
     g.tempFuriten[seat]=false;
     // A real rinshan draw — eligible for Rinshan Kaihou if this tile
     // completes the hand (see g.isRinshan's use in _tsumo/_botTurn's own
@@ -1875,7 +1905,10 @@ class Room {
 
   _openNewDora(g){
     const nextIdx=4+g.dora.length;
-    if(nextIdx<g.deadWall.length) g.dora.push(g.deadWall[nextIdx]);
+    if(nextIdx<g.deadWall.length){
+      g.dora.push(g.deadWall[nextIdx]);
+      this._rl({t:'dora',k:enc(g.deadWall[nextIdx])});
+    }
   }
 
   // Ura dora: indicators at deadWall[9-13], same count as kanDora reveals
@@ -1907,7 +1940,7 @@ class Room {
     if(!g.riichiTile) g.riichiTile={};
     g.riichiTile[seat]=tileId;
     this._broadcastAll({type:'riichi',seat,name:this.seats[seat]?.name,scores:g.scores,isDouble});
-    this._discard(seat,tileId);
+    this._discard(seat,tileId,true);
   }
 
   // ── Chonbo (rules.chonbo only) ───────────────────────────────────────────────
@@ -2069,6 +2102,7 @@ class Room {
     // without this the drawn tile sat wherever it sorted to.
     const dt=g.drawTile&&hand.find(t=>t.id===g.drawTile.id);
     const shownHand=dt?[...hand.filter(t=>t!==dt),dt]:hand;
+    this._rl({t:'tsumo',s:seat});
     this._endRound('tsumo',seat,null,shownHand,yl,totalHan,fu,gain,undefined,prevScores,g.melds[seat],this._isKazoeYakuman(han,totalHan));
   }
 
@@ -2163,6 +2197,40 @@ class Room {
       riichiSeats:g.riichi.slice(),
       openSeats:g.melds.map(ms=>!isMenzen(ms)),
     });
+    this._rlEnd(payload);
+  }
+
+  // ── Replay log (format: see replay.js) ─────────────────────────────────────
+  // Opened fresh by every _initRound (right after the deal), appended to by
+  // each tile-moving action via _rl, and closed into g.replayRounds by
+  // _recordRoundHistory — the single sink every round ending already
+  // funnels through, so the two stay one-to-one. Only a game begun by
+  // start() carries g.replayRounds; a Room whose game object was built by
+  // hand (room.test.js's freshRoom) records nothing. Never allowed to
+  // throw: a replay is a nice-to-have, a stalled table is not.
+  _rlStart(){
+    const g=this.game;
+    if(!g||!Array.isArray(g.replayRounds)){ if(g) g.replayLog=null; return; }
+    try{
+      g.replayLog={dealer:g.dealer,round:g.round,roundWind:g.roundWind,honba:g.honba,
+        riichiSticks:g.riichiSticks,scores:g.scores.slice(),
+        hands:g.hands.map(h=>h.map(enc)),dora:g.dora.map(enc),ev:[]};
+    }catch(e){ g.replayLog=null; console.error('[replay start error]',e.message); }
+  }
+
+  _rl(ev){
+    const g=this.game;
+    if(g&&g.replayLog) g.replayLog.ev.push(ev);
+  }
+
+  _rlEnd(payload){
+    const g=this.game;
+    if(!g||!g.replayLog||!Array.isArray(g.replayRounds)) return;
+    try{
+      g.replayLog.res=summarizeResult(payload);
+      g.replayRounds.push(g.replayLog);
+    }catch(e){ console.error('[replay end error]',e.message); }
+    g.replayLog=null;
   }
 
   _recordHandWin(seat,reason,han,fu,yakuList,payment,isKazoeYakuman=false){
@@ -2265,6 +2333,10 @@ class Room {
       finalScores:g.scores,
       placements:this._computePlacements(g.scores),
       rounds:g.roundHistory||[],
+      // Move log for the replay viewer (see replay.js). Carries the rules
+      // too — the analysis needs them to score hands the way this table did.
+      replay:Array.isArray(g.replayRounds)&&g.replayRounds.length?{v:1,
+        rules:{...this.rules},rounds:g.replayRounds}:null,
     });
     // Each seat only ever hears about ITS OWN newly-earned achievements
     // (see recordGameResult's return shape) — sent directly to that

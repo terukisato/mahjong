@@ -72,3 +72,38 @@ test('deleteHistory scrubs the id from both sides of the graph', () => {
   assert.strictEqual(H.getRecentOpponents(B).length, 0);
   assert.strictEqual(H.getRecentOpponents(A).some(r => r.id === B), false);
 });
+
+// Replays — stored once per game, readable only by a profile that played
+// it, and pruned when the last history row referencing them is trimmed.
+test('a recorded replay is readable by its players only, and flagged in the list', () => {
+  const replay = { v: 1, rules: {}, rounds: [{ dealer: 0, hands: [], ev: [] }] };
+  game([{ id: A, name: 'Ann' }, { id: C, name: 'Cy' }, { id: null, bot: true }, { id: null, bot: true }], { replay });
+  const g = H.getHistory(A)[0];
+  assert.strictEqual(g.hasReplay, true);
+  assert.deepStrictEqual(H.getReplay(A, g.id).replay, replay);
+  assert.strictEqual(H.getReplay(C, g.id).seat, 1);
+  assert.strictEqual(H.getReplay(D, g.id), null, 'a profile that did not play it gets nothing');
+  // A game recorded without a replay lists as such.
+  game([{ id: A, name: 'Ann' }, { id: null, bot: true }, { id: null, bot: true }, { id: null, bot: true }]);
+  const old = H.getHistory(A)[0];
+  assert.strictEqual(old.hasReplay, false);
+  assert.strictEqual(H.getReplay(A, old.id).replay, null);
+});
+
+test('analysis cache is keyed by seat and version', () => {
+  const g = H.getHistory(C)[0];
+  H.saveAnalysis(g.id, 1, 1, { ok: true });
+  assert.deepStrictEqual(H.getCachedAnalysis(g.id, 1, 1), { ok: true });
+  assert.strictEqual(H.getCachedAnalysis(g.id, 1, 2), null, 'an older version is stale');
+  assert.strictEqual(H.getCachedAnalysis(g.id, 0, 1), null);
+});
+
+test('replays are pruned once no history row references them', () => {
+  const g = H.getHistory(C).find(x => x.hasReplay);
+  H.deleteHistory(A);
+  assert.ok(H.getReplay(C, g.id).replay, 'still referenced by Cy');
+  H.deleteHistory(C);
+  const { getDb } = require('./db');
+  assert.strictEqual(getDb().prepare('SELECT COUNT(*) AS n FROM game_replays WHERE game_id = ?').get(g.id).n, 0);
+  assert.strictEqual(getDb().prepare('SELECT COUNT(*) AS n FROM game_analysis WHERE game_id = ?').get(g.id).n, 0);
+});

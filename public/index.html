@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>雀心 - Janshin</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Cinzel+Decorative:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&family=Yuji+Syuku&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=0.15.2">
+<link rel="stylesheet" href="/style.css?v=0.18.0">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
@@ -144,6 +144,7 @@
       <button class="st-mi" onclick="toggleSettings()"><b>設定</b><small>Settings</small></button>
     </nav>
   </div>
+  <!-- #start-version: the version + a "What's new" link (initReleaseNotes). -->
   <div class="st-foot"><span>© 2026 雀心 - Janshin</span><span id="start-version"></span></div>
 </div>
 
@@ -152,7 +153,7 @@
 <div id="about-modal" class="about-modal">
   <button class="about-close" onclick="toggleAbout()">✕</button>
   
-  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version">v0.17.1</span></div>
+  <div class="about-title">雀心 — Janshin <span class="about-version" id="about-version"></span></div>
   <div class="about-body">
     <p>雀心 - Janshin is a riichi mahjong web game built for quick, casual matches against AI and real opponents.</p>
     <p>Designed and developed independently, blending traditional Japanese mahjong rules with a modern browser-based interface.</p>
@@ -173,6 +174,16 @@
       <p><a href="#" onclick="toggleTermsModal();return false;">Terms of Service</a> · <a href="#" onclick="togglePrivacyModal();return false;">Privacy Policy</a></p>
     </div>
   </div>
+</div>
+
+<!-- What's New — release notes from public/release-notes.js, newest first
+     (renderWhatsNew in script.js). Opened from the start screen footer's
+     "What's new" link and the update row in Notifications. -->
+<div id="whatsnew-backdrop" class="about-backdrop" onclick="toggleWhatsNew()"></div>
+<div id="whatsnew-modal" class="about-modal" role="dialog" aria-modal="true" aria-labelledby="whatsnew-title">
+  <button class="about-close" onclick="toggleWhatsNew()" aria-label="Close">✕</button>
+  <div class="about-title" id="whatsnew-title">What's New</div>
+  <div class="about-body" id="whatsnew-body"></div>
 </div>
 
 <!-- Game Music modal — pick which tracks are in the in-game rotation
@@ -612,6 +623,53 @@
   <div class="about-title">Play History</div>
   <div class="about-body">
     <div id="playhistory-list">Loading…</div>
+  </div>
+</div>
+
+<!-- Replay viewer — opened from a Play History row's Replay button (see
+     openReplay in script.js). Plays out on the real game table, with this
+     screen's header, move review panel and transport bar over it. Steps through the game's move log (server/replay.js) and shows
+     the player's own decisions graded by server/analysis.js. -->
+<div id="replay-screen" class="rp-screen" role="dialog" aria-modal="true" aria-labelledby="rp-title">
+  <div class="rp-head">
+    <button type="button" class="rp-icon-btn" onclick="closeReplay()" aria-label="Back to Play History">←</button>
+    <div class="rp-title-wrap">
+      <div class="rp-title" id="rp-title">Replay</div>
+      <div class="rp-sub" id="rp-sub"></div>
+    </div>
+    <div class="rp-rounds" id="rp-rounds" role="tablist" aria-label="Rounds"></div>
+    <button type="button" class="rp-icon-btn rp-side-btn" id="rp-side-btn" onclick="toggleReplaySide()" aria-pressed="true" aria-label="Move review panel" title="Show / hide the move review">☰</button>
+  </div>
+  <div class="rp-main">
+    <!-- Loading / no-replay messages only; the replay itself plays on the
+         game table (#s-game) underneath — see rpTableEnter in script.js. -->
+    <div class="rp-table-wrap">
+      <div class="rp-table" id="rp-table"></div>
+    </div>
+    <!-- The replay docks the game's own #dora-panel here (rpTableEnter). -->
+    <div class="rp-dora" id="rp-dora"></div>
+    <div class="rp-side">
+      <div class="rp-tabs" role="tablist">
+        <button type="button" class="rp-tab active" id="rp-tab-move" onclick="setReplayTab('move')">Move Review</button>
+        <button type="button" class="rp-tab" id="rp-tab-sum" onclick="setReplayTab('sum')">Game Summary</button>
+      </div>
+      <div class="rp-panel" id="rp-panel-move"></div>
+      <div class="rp-panel" id="rp-panel-sum" hidden></div>
+    </div>
+  </div>
+  <div class="rp-foot">
+    <div class="rp-timeline" id="rp-timeline" aria-label="Round timeline"></div>
+    <div class="rp-controls">
+      <button type="button" class="rp-ctl" onclick="replayRound(-1)" aria-label="Previous round" title="Previous round">«</button>
+      <button type="button" class="rp-ctl" onclick="replayIssue(-1)" aria-label="Previous flagged move" title="Previous flagged move">‹ ⚑</button>
+      <button type="button" class="rp-ctl" onclick="replayStep(-1)" aria-label="Step back" title="Step back (←)">‹</button>
+      <button type="button" class="rp-ctl rp-play" id="rp-play" onclick="toggleReplayPlay()" aria-label="Play" title="Play / pause (Space)">▶</button>
+      <button type="button" class="rp-ctl" onclick="replayStep(1)" aria-label="Step forward" title="Step forward (→)">›</button>
+      <button type="button" class="rp-ctl" onclick="replayIssue(1)" aria-label="Next flagged move" title="Next flagged move">⚑ ›</button>
+      <button type="button" class="rp-ctl" onclick="replayRound(1)" aria-label="Next round" title="Next round">»</button>
+      <span class="rp-pos" id="rp-pos"></span>
+      <label class="rp-toggle"><input type="checkbox" id="rp-show-hands" checked onchange="renderReplay()"> Show all hands</label>
+    </div>
   </div>
 </div>
 
@@ -1670,6 +1728,7 @@
   </div>
 </div>
 
-<script src="/script.js?v=0.15.2"></script>
+<script src="/release-notes.js?v=0.18.0"></script>
+<script src="/script.js?v=0.18.0"></script>
 </body>
 </html>

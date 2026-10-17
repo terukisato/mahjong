@@ -2002,6 +2002,12 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 
 .st-foot{position:absolute;z-index:2;left:calc(var(--ui-vmin) * 16.25);bottom:calc(var(--ui-vmin) * 5);
   display:flex;gap:calc(var(--ui-vmin) * 2.25);font-size:calc(var(--ui-vmin) * 1.45);letter-spacing:.04em;color:rgba(232,240,230,.35);}
+/* "v0.18.0 · What's new" — opens the release notes (toggleWhatsNew). */
+.st-whatsnew{display:inline-flex;align-items:baseline;gap:calc(var(--ui-vmin) * .8);color:inherit;text-decoration:none;}
+.st-whatsnew i{font-style:normal;}
+.st-whatsnew b{font-weight:400;color:rgba(240,208,128,.85);transition:color .15s;}
+.st-whatsnew:hover b,.st-whatsnew:focus-visible b{color:var(--gl);}
+.st-whatsnew:focus-visible{outline:none;}
 
 /* ── Right-hand art ──
    雀's left half (set high) and 心's right half (set low) meet at a
@@ -2777,6 +2783,25 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
   color:var(--gold);font-size:calc(var(--ui-vmin, 7.2px) * 1.389);cursor:pointer;font-family:'Noto Sans JP',sans-serif;
   padding:calc(var(--ui-vmin, 7.2px) * .556) calc(var(--ui-vmin, 7.2px) * 1.389);}
 .notif-actions .notif-decline{border-color:rgba(224,96,96,.4);color:#e06060;}
+/* The update row (renderNotifications): opens What's New. */
+.notif-row-release{flex-direction:row;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * 1.2);cursor:pointer;}
+.notif-row-release .notif-text{flex:1;min-width:0;}
+.notif-row-release .notif-text small{display:block;margin-top:calc(var(--ui-vmin, 7.2px) * .3);font-size:calc(var(--ui-vmin, 7.2px) * 1.25);color:rgba(245,237,216,.5);}
+.notif-row-release .notif-go{flex:0 0 auto;color:var(--gl);font-size:calc(var(--ui-vmin, 7.2px) * 1.389);white-space:nowrap;}
+.notif-row-release:hover .notif-go{text-decoration:underline;}
+.notif-row-release:focus-visible{outline:2px solid var(--gl);outline-offset:2px;}
+
+/* What's New (#whatsnew-modal): one block per version, its changes under
+   New / Improved / Fixed headings. Older versions dimmed. */
+.wn-rel+.wn-rel{margin-top:calc(var(--ui-vmin) * 2.4);padding-top:calc(var(--ui-vmin) * 2);border-top:1px solid rgba(255,255,255,.07);}
+.wn-ver{display:flex;align-items:baseline;gap:calc(var(--ui-vmin) * 1);}
+.wn-ver b{font-family:'Cinzel Decorative',serif;color:var(--gl);font-size:calc(var(--ui-vmin) * 1.8);letter-spacing:.06em;}
+.wn-ver span{font-size:calc(var(--ui-vmin) * 1.2);color:rgba(245,237,216,.45);}
+.wn-head{margin:calc(var(--ui-vmin) * 1.4) 0 calc(var(--ui-vmin) * .5);font-family:'Noto Sans JP',sans-serif;font-weight:700;
+  font-size:calc(var(--ui-vmin) * 1.15);letter-spacing:.2em;text-transform:uppercase;color:rgba(245,237,216,.5);}
+.about-body .wn-list{margin:0;padding-left:calc(var(--ui-vmin) * 2);display:flex;flex-direction:column;gap:calc(var(--ui-vmin) * .5);line-height:1.5;}
+.wn-list li::marker{color:rgba(240,208,128,.6);}
+.wn-old{opacity:.7;}
 
 /* ＋ Add Friend inside the in-game nameplate popover */
 .pp-addfriend{margin-top:calc(var(--ui-vmin, 7.2px) * 1.111);width:100%;
@@ -3880,3 +3905,260 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 /* Danger: red glass. */
 .leave-btn-confirm,.bp.bp-danger{--sl-bg:rgba(150,24,24,.9);--sl-bd:rgba(255,120,120,.6);--sl-fg:#ffe2e2;}
 .room-card-join{--sl-cut:calc(var(--ui-vmin, 7.2px) * 1);padding-left:calc(var(--ui-vmin, 7.2px) * 2.2);padding-right:calc(var(--ui-vmin, 7.2px) * 2.2);}
+
+/* ════════════════════════════════════════════════════════════
+   REPLAY VIEWER — #replay-screen (see openReplay in script.js).
+   Full-screen on the popups' deep-green surface while loading; the
+   replay itself plays on the real game table (.rp-tv, below). Grades
+   use one colour per severity, set as --sev by a .sev-* class.
+   ════════════════════════════════════════════════════════════ */
+.rp-screen{--ui-vmin:clamp(6px,1vmin,10px);--u:var(--ui-vmin);display:none;position:fixed;inset:0;z-index:360;flex-direction:column;
+  background:linear-gradient(115deg,#b5903f 0%,#ffe9b0 48%,#cfa74d 100%) top/100% 2px no-repeat,
+    radial-gradient(120% 80% at 30% 0%,#1a2a20 0%,#0f1813 55%,#0a0f0c 100%);
+  color:var(--cream);font-family:'Noto Sans JP',sans-serif;font-size:calc(var(--u) * 1.5);}
+.rp-screen.visible{display:flex;}
+.sev-best{--sev:#7fd18b;}.sev-good{--sev:#a9cf8e;}.sev-tip{--sev:#7fb6e0;}
+.sev-inaccuracy{--sev:#e8c25c;}.sev-mistake{--sev:#f08a4b;}.sev-blunder{--sev:#e86060;}.sev-win{--sev:#f0d080;}
+
+/* ── Header ── */
+.rp-head{display:flex;align-items:center;gap:calc(var(--u) * 1.4);padding:calc(var(--u) * 1.2) calc(var(--u) * 1.6);
+  border-bottom:1px solid rgba(201,168,76,.16);flex-wrap:wrap;}
+.rp-icon-btn{flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:calc(var(--u) * 3.8);height:calc(var(--u) * 3.8);
+  border:0;border-radius:calc(var(--u) * .4);background:rgba(255,255,255,.06);color:rgba(245,237,216,.8);font-size:calc(var(--u) * 1.8);cursor:pointer;}
+.rp-icon-btn:hover{background:rgba(255,255,255,.13);color:var(--gl);}
+.rp-title-wrap{min-width:0;}
+.rp-title{font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--u) * 2.1);color:var(--gl);letter-spacing:.04em;white-space:nowrap;}
+.rp-sub{font-size:calc(var(--u) * 1.2);color:rgba(245,237,216,.5);white-space:nowrap;}
+.rp-rounds{margin-left:auto;display:flex;gap:calc(var(--u) * .5);overflow-x:auto;max-width:62%;padding-bottom:2px;scrollbar-width:thin;}
+.rp-round-chip{position:relative;flex:0 0 auto;border:0;cursor:pointer;padding:calc(var(--u) * .6) calc(var(--u) * 1.1);
+  border-radius:calc(var(--u) * .4);background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);
+  color:rgba(245,237,216,.7);font-family:'Noto Serif JP',serif;font-weight:700;font-size:calc(var(--u) * 1.3);}
+.rp-round-chip:hover{background:rgba(255,255,255,.1);color:var(--cream);}
+.rp-round-chip.active{background:rgba(240,208,128,.15);box-shadow:inset 0 0 0 1px rgba(240,208,128,.55);color:#fff;}
+.rp-chip-dot{position:absolute;top:calc(var(--u) * .3);right:calc(var(--u) * .3);width:calc(var(--u) * .6);height:calc(var(--u) * .6);border-radius:50%;background:#f08a4b;}
+
+/* ── Main: table + review side panel ── */
+.rp-main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(calc(var(--u) * 34),calc(var(--u) * 46));
+  gap:calc(var(--u) * 1.4);padding:calc(var(--u) * 1.4) calc(var(--u) * 1.6);}
+.rp-table-wrap{display:flex;flex-direction:column;gap:calc(var(--u) * .9);min-width:0;min-height:0;}
+.rp-table{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:calc(var(--u) * .8);padding-right:2px;}
+.rp-empty{color:rgba(245,237,216,.6);padding:calc(var(--u) * 3);text-align:center;}
+
+.rp-delta{font-weight:700;font-variant-numeric:tabular-nums;}
+.rp-delta.pos{color:#8fe0a0;}.rp-delta.neg{color:#ef8a8a;}
+/* Tile face: the .tmd look, with the gold edge drawn as inset shadows
+   rather than borders so the SVG keeps its exact size and the You/Best
+   labels (::after) can sit outside the box unclipped. */
+.rp-t{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;border-radius:2px;
+  background:linear-gradient(170deg,#fffdf4,#f8edd8);box-shadow:inset 0 0 0 1px #c8a84a,inset 0 -2px 0 #7a5c10;}
+.rp-t svg{display:block;}
+/* The player's own hand at a discard decision: their tile (red) vs the
+   recommended one (green), each with a small label above it. */
+.rp-mark-you,.rp-mark-best{translate:0 calc(var(--u) * -.6);}
+.rp-mark-you{outline:2px solid #e86060;outline-offset:1px;}
+.rp-mark-best{outline:2px solid #7fd18b;outline-offset:1px;}
+.rp-mark-you::after,.rp-mark-best::after{position:absolute;left:50%;bottom:100%;translate:-50% calc(var(--u) * -.35);white-space:nowrap;
+  font-size:calc(var(--u) * 1);font-weight:700;letter-spacing:.06em;padding:0 calc(var(--u) * .4);color:#111;}
+.rp-mark-you::after{content:"You";background:#e86060;}
+.rp-mark-best::after{content:"Best";background:#7fd18b;}
+
+/* ── Side panel ── */
+.rp-side{display:flex;flex-direction:column;min-height:0;min-width:0;background:#141a16;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09);}
+.rp-tabs{display:flex;border-bottom:1px solid rgba(255,255,255,.08);}
+.rp-tab{flex:1;border:0;background:none;cursor:pointer;padding:calc(var(--u) * 1.1) calc(var(--u) * .6);color:rgba(245,237,216,.55);
+  font-family:'Noto Sans JP',sans-serif;font-weight:700;font-size:calc(var(--u) * 1.2);letter-spacing:.14em;text-transform:uppercase;
+  box-shadow:inset 0 -2px 0 transparent;}
+.rp-tab:hover{color:var(--cream);}
+.rp-tab.active{color:var(--gl);box-shadow:inset 0 -2px 0 var(--gl);}
+.rp-panel{flex:1;min-height:0;overflow-y:auto;padding:calc(var(--u) * 1.4);display:flex;flex-direction:column;gap:calc(var(--u) * 1.2);}
+.rp-panel[hidden]{display:none;}
+.rp-event{font-size:calc(var(--u) * 1.45);line-height:1.6;color:rgba(245,237,216,.85);}
+.rp-t-inline{vertical-align:middle;margin:0 1px;translate:0 -1px;}
+.rp-hint{margin:0;font-size:calc(var(--u) * 1.25);line-height:1.6;color:rgba(245,237,216,.55);}
+.rp-link{border:0;background:none;padding:0;cursor:pointer;color:var(--gl);font:inherit;text-decoration:underline;text-underline-offset:2px;}
+.rp-review{padding:calc(var(--u) * 1.1) calc(var(--u) * 1.2);border-left:calc(var(--u) * .35) solid var(--sev);
+  background:linear-gradient(90deg,color-mix(in srgb,var(--sev) 14%,transparent),transparent 80%);
+  display:flex;flex-direction:column;gap:calc(var(--u) * .9);}
+.rp-review-head{display:flex;align-items:center;gap:calc(var(--u) * .8);}
+.rp-sev-badge{display:flex;align-items:center;justify-content:center;flex:0 0 auto;width:calc(var(--u) * 2.6);height:calc(var(--u) * 2.6);border-radius:50%;
+  background:var(--sev);color:#111;font-weight:900;font-size:calc(var(--u) * 1.2);}
+.rp-review-title{font-weight:700;color:var(--cream);}
+.rp-sev-label{margin-left:auto;font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:calc(var(--u) * 1.15);color:var(--sev);}
+.rp-sev-desc{margin:calc(var(--u) * -.4) 0 0;font-size:calc(var(--u) * 1.15);line-height:1.5;color:var(--sev);opacity:.85;}
+.rp-review-text{margin:0;line-height:1.65;color:rgba(245,237,216,.88);}
+.rp-cands{width:100%;border-collapse:collapse;font-size:calc(var(--u) * 1.2);}
+.rp-cands th{text-align:left;font-weight:400;color:rgba(245,237,216,.45);font-size:calc(var(--u) * 1.05);letter-spacing:.08em;text-transform:uppercase;
+  padding:0 calc(var(--u) * .5) calc(var(--u) * .4);}
+.rp-cands td{padding:calc(var(--u) * .45) calc(var(--u) * .5);border-top:1px solid rgba(255,255,255,.06);vertical-align:middle;color:rgba(245,237,216,.8);}
+.rp-cands tr.is-best td{background:rgba(127,209,139,.1);}
+.rp-cands tr.is-you:not(.is-best) td{background:rgba(232,96,96,.1);}
+.rp-cand-tile{white-space:nowrap;}
+.rp-tag{display:inline-block;margin-left:calc(var(--u) * .4);padding:0 calc(var(--u) * .4);font-size:calc(var(--u) * .95);font-weight:700;color:#111;vertical-align:middle;}
+.rp-tag.best{background:#7fd18b;}.rp-tag.you{background:#e86060;}
+.rp-accepts{font-variant-numeric:tabular-nums;}
+.rp-ukt{display:inline-flex;gap:1px;vertical-align:middle;margin-left:calc(var(--u) * .3);flex-wrap:wrap;}
+.rp-risk.hi{color:#ef8a8a;}.rp-risk.mid{color:#e8c25c;}.rp-risk.lo{color:#8fe0a0;}
+.rp-round-sum{padding:calc(var(--u) * 1) calc(var(--u) * 1.2);background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);
+  display:flex;flex-direction:column;gap:calc(var(--u) * .7);}
+.rp-round-sum-head{display:flex;justify-content:space-between;font-weight:700;color:var(--cream);}
+.rp-chips{display:flex;flex-wrap:wrap;gap:calc(var(--u) * .5);}
+.rp-chip{display:inline-flex;align-items:center;gap:calc(var(--u) * .3);padding:calc(var(--u) * .2) calc(var(--u) * .7);font-size:calc(var(--u) * 1.1);
+  white-space:nowrap;color:var(--sev);background:color-mix(in srgb,var(--sev) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--sev) 45%,transparent);}
+.rp-ok{color:#8fe0a0;}
+.rp-result-card{margin:0;}
+
+/* ── Summary tab ── */
+.rp-sum-top{display:flex;align-items:center;gap:calc(var(--u) * 1.6);}
+.rp-ring{position:relative;flex:0 0 auto;width:calc(var(--u) * 9);height:calc(var(--u) * 9);border-radius:50%;
+  background:conic-gradient(var(--gl) var(--deg),rgba(255,255,255,.08) 0);display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.rp-ring::before{content:"";position:absolute;inset:calc(var(--u) * .8);border-radius:50%;background:#141a16;}
+.rp-ring-v,.rp-ring-k{position:relative;}
+.rp-ring-v{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--u) * 2.8);color:var(--gl);line-height:1;}
+.rp-ring-k{font-size:calc(var(--u) * 1);letter-spacing:.16em;text-transform:uppercase;color:rgba(245,237,216,.5);}
+.rp-verdict{font-family:'Cinzel Decorative',serif;font-weight:700;font-size:calc(var(--u) * 1.9);color:var(--cream);margin-bottom:calc(var(--u) * .4);}
+.rp-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--u) * .6);}
+.rp-stat{display:flex;flex-direction:column;align-items:center;padding:calc(var(--u) * .8) calc(var(--u) * .4);background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+.rp-stat-v{font-weight:700;font-size:calc(var(--u) * 1.7);color:var(--cream);font-variant-numeric:tabular-nums;}
+.rp-stat-k{font-size:calc(var(--u) * 1);letter-spacing:.12em;text-transform:uppercase;color:rgba(245,237,216,.5);}
+.rp-sec{margin-top:calc(var(--u) * .4);}
+/* Grade legend under the tally: a chip and one line per grade. */
+.rp-legend{font-size:calc(var(--u) * 1.2);color:rgba(245,237,216,.7);}
+.rp-legend summary{cursor:pointer;width:max-content;color:var(--gl);text-decoration:underline;text-underline-offset:.2em;}
+.rp-legend summary:focus-visible{outline:2px solid var(--gl);outline-offset:2px;}
+.rp-legend dl{margin:calc(var(--u) * .8) 0 0;display:flex;flex-direction:column;gap:calc(var(--u) * .6);}
+.rp-legend-row{display:grid;grid-template-columns:calc(var(--u) * 11) 1fr;align-items:baseline;gap:calc(var(--u) * .8);}
+.rp-legend dt,.rp-legend dd{margin:0;}
+.rp-legend dd{line-height:1.5;}
+.rp-moments{display:flex;flex-direction:column;gap:calc(var(--u) * .4);}
+.rp-moment{display:flex;flex-wrap:wrap;align-items:center;gap:calc(var(--u) * .3) calc(var(--u) * .8);text-align:left;border:0;cursor:pointer;
+  padding:calc(var(--u) * .7) calc(var(--u) * .9);background:rgba(255,255,255,.04);color:var(--cream);font:inherit;font-size:calc(var(--u) * 1.25);}
+.rp-moment:hover{background:rgba(255,255,255,.09);}
+.rp-moment-label{font-weight:700;}
+.rp-moment-txt{flex:1 1 100%;color:rgba(245,237,216,.65);line-height:1.6;}
+.rp-round-table{width:100%;border-collapse:collapse;font-size:calc(var(--u) * 1.25);}
+.rp-round-table tr{cursor:pointer;}
+.rp-round-table tr:hover td{background:rgba(255,255,255,.05);}
+.rp-round-table td{padding:calc(var(--u) * .55) calc(var(--u) * .5);border-top:1px solid rgba(255,255,255,.06);}
+.rp-round-table td:first-child{font-family:'Noto Serif JP',serif;font-weight:700;color:var(--gold);white-space:nowrap;}
+.rp-round-table td:nth-child(3),.rp-round-table td:nth-child(4){text-align:right;}
+.rp-foot-note{margin:0;font-size:calc(var(--u) * 1.1);line-height:1.6;color:rgba(245,237,216,.4);}
+
+/* ── Footer: timeline + transport ── */
+.rp-foot{display:flex;flex-direction:column;gap:calc(var(--u) * .9);padding:calc(var(--u) * 1) calc(var(--u) * 1.6) calc(var(--u) * 1.3);
+  border-top:1px solid rgba(201,168,76,.16);background:rgba(0,0,0,.25);}
+.rp-timeline{cursor:pointer;padding:calc(var(--u) * .6) 0;}
+.rp-track{position:relative;height:calc(var(--u) * .8);background:rgba(255,255,255,.08);}
+.rp-fill{position:absolute;left:0;top:0;bottom:0;background:rgba(240,208,128,.28);}
+.rp-mark{position:absolute;top:50%;width:calc(var(--u) * 1.3);height:calc(var(--u) * 1.3);translate:-50% -50%;border-radius:50%;
+  border:0;padding:0;cursor:pointer;background:var(--sev);box-shadow:0 0 0 2px #0d1410;}
+.rp-mark.sev-best,.rp-mark.sev-good{width:calc(var(--u) * .7);height:calc(var(--u) * .7);opacity:.6;}
+.rp-mark:hover{scale:1.3;}
+.rp-head-dot{position:absolute;top:calc(var(--u) * -.7);bottom:calc(var(--u) * -.7);width:2px;translate:-1px 0;background:var(--gl);pointer-events:none;}
+.rp-controls{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:calc(var(--u) * .6);}
+.rp-ctl{min-width:calc(var(--u) * 4.6);height:calc(var(--u) * 4);padding:0 calc(var(--u) * .9);border:0;cursor:pointer;
+  border-radius:calc(var(--u) * .4);background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+  color:rgba(245,237,216,.85);font-size:calc(var(--u) * 1.7);line-height:1;white-space:nowrap;}
+.rp-ctl:hover{background:rgba(255,255,255,.13);color:var(--gl);}
+.rp-ctl:focus-visible,.rp-tab:focus-visible,.rp-round-chip:focus-visible,.rp-icon-btn:focus-visible{outline:2px solid var(--gl);outline-offset:2px;}
+.rp-play{background:var(--gl);color:#1a1206;box-shadow:none;min-width:calc(var(--u) * 6);font-size:calc(var(--u) * 1.5);}
+.rp-play:hover{background:#ffe3a0;color:#1a1206;}
+.rp-pos{min-width:calc(var(--u) * 11);text-align:center;font-size:calc(var(--u) * 1.2);color:rgba(245,237,216,.55);font-variant-numeric:tabular-nums;}
+.rp-toggle{display:flex;align-items:center;gap:calc(var(--u) * .5);font-size:calc(var(--u) * 1.2);color:rgba(245,237,216,.7);cursor:pointer;}
+.rp-toggle input{accent-color:var(--gl);width:calc(var(--u) * 1.6);height:calc(var(--u) * 1.6);}
+
+/* ── Narrow / portrait: one column, the whole body scrolls ── */
+@media (max-width:820px),(orientation:portrait){
+  .rp-head{padding:calc(var(--u) * 1) calc(var(--u) * 1.2);gap:calc(var(--u) * 1);}
+  .rp-rounds{order:3;margin-left:0;max-width:100%;flex:1 1 100%;}
+  .rp-main{display:flex;flex-direction:column;overflow-y:auto;padding:calc(var(--u) * 1) calc(var(--u) * 1.2);}
+  .rp-table-wrap,.rp-table{flex:0 0 auto;overflow:visible;}
+  .rp-side{flex:0 0 auto;}
+  .rp-panel{overflow:visible;}
+  .rp-foot{padding:calc(var(--u) * .8) calc(var(--u) * 1.2) calc(var(--u) * 1);}
+  .rp-ctl{min-width:calc(var(--u) * 4.2);}
+  .rp-pos{min-width:0;}
+}
+
+/* ── Header: review-panel toggle ── */
+.rp-side-btn{display:none;}
+.rp-side-btn[aria-pressed="true"]{color:var(--gl);}
+
+/* ── Table view (.rp-tv, body.rp-live) ──
+   The replay on the real game table: #s-game shows underneath, raised
+   above the menus, and the replay screen goes see-through except for its
+   header (in the topbar's place), the review panel (docked right) and
+   the transport bar (in the chat bar's place). .table gives up the
+   panel's and bar's room, and --table-size/--felt-size are re-derived
+   from what's left the same way :root derives them from the viewport —
+   both redefined, since --felt-size is resolved where it's declared. */
+body.rp-live{--rp-u:clamp(6px,1vmin,10px);--rp-foot-h:calc(var(--rp-u) * 9.6);--rp-sheet-h:0px;
+  --rp-side-w:clamp(calc(var(--rp-u) * 34),27vw,calc(var(--rp-u) * 46));
+  --table-size:min(calc((100vw - var(--rp-side-w)) * 1.1),calc((100vh - 36px - var(--rp-foot-h) - var(--rp-sheet-h)) * 1.1));
+  --felt-size:calc(var(--table-size) * .86);}
+body.rp-live.rp-side-off{--rp-side-w:0px;}
+body.rp-live #s-game{z-index:350;pointer-events:none;background:#0a0f0c;}
+body.rp-live #s-game .topbar,body.rp-live #chat-bar,body.rp-live #actbar,body.rp-live #game-loading{display:none!important;}
+body.rp-live .table{right:var(--rp-side-w);bottom:calc(var(--rp-foot-h) + var(--rp-sheet-h));}
+body.rp-live #dora-panel{z-index:355;}
+/* Your discard (red) and the stronger one (green), lifted out of the hand. */
+body.rp-live .tlg.rp-mark-you,body.rp-live .tlg.rp-mark-best{translate:none;transform:translateY(-1.4vmin);outline-width:.35vmin;outline-offset:0;z-index:25;}
+body.rp-live .tlg.rp-mark-you{box-shadow:0 0 1.6vmin rgba(232,96,96,.75);}
+body.rp-live .tlg.rp-mark-best{box-shadow:0 0 1.6vmin rgba(127,209,139,.75);}
+/* Show all hands: each opponent's face-up row turned to face its owner
+   (tops toward the table centre, like their melds) — the 180deg those
+   rows carry for the face-down .tsm tile-tops is undone. */
+#hdl.rp-open-row,#hdt.rp-open-row{transform:none;}
+#hdr.rp-open-row{transform:rotate(180deg);}
+
+.rp-screen.rp-tv{background:none;pointer-events:none;}
+.rp-tv .rp-head,.rp-tv .rp-main,.rp-tv .rp-foot{pointer-events:auto;}
+.rp-tv .rp-head{--u:clamp(6px,1vmin,7.5px);position:fixed;top:0;left:0;right:0;height:36px;box-sizing:border-box;flex-wrap:nowrap;
+  padding:0 calc(var(--u) * 1.4);gap:calc(var(--u) * 1.2);border:0;
+  background:linear-gradient(#0d110e,#050806);box-shadow:inset 0 -1px 0 rgba(201,168,76,.65);}
+.rp-tv .rp-icon-btn{width:calc(var(--u) * 3.6);height:calc(var(--u) * 3.6);}
+.rp-tv .rp-side-btn{display:flex;}
+.rp-tv .rp-title{font-size:calc(var(--u) * 1.944);}
+.rp-tv .rp-sub{display:none;}
+.rp-tv .rp-rounds{flex:0 1 auto;min-width:0;max-width:none;}
+.rp-dora{display:none;}
+.rp-tv .rp-main{position:fixed;top:36px;right:0;bottom:var(--rp-foot-h);width:var(--rp-side-w);display:flex;flex-direction:column;gap:0;padding:0;
+  background:rgba(13,17,14,.97);box-shadow:inset 1px 0 0 rgba(201,168,76,.4);}
+.rp-tv .rp-table-wrap{display:none;}
+.rp-tv .rp-side{flex:1;background:none;box-shadow:none;}
+/* The game's dora panel, docked at the top of the column instead of
+   floating over the table's corner (the table has moved left for the panel). */
+.rp-tv .rp-dora{display:flex;justify-content:center;padding:calc(var(--u) * 1) calc(var(--u) * 1) 0;}
+.rp-dora #dora-panel{position:static;max-height:none;box-shadow:none;}
+/* Panel put away: just the dora card stays, top right. */
+body.rp-side-off .rp-tv .rp-main{bottom:auto;width:auto;background:none;box-shadow:none;}
+body.rp-side-off .rp-tv .rp-side{display:none;}
+.rp-tv .rp-foot{position:fixed;left:0;right:0;bottom:0;height:var(--rp-foot-h);box-sizing:border-box;justify-content:center;border:0;
+  background:linear-gradient(#0d110e,#050806);box-shadow:inset 0 1px 0 rgba(201,168,76,.65);}
+
+/* Portrait: the review panel becomes a sheet between the table and the
+   transport bar, taking whatever height a square table leaves over. */
+@media (orientation:portrait){
+  body.rp-live{--rp-side-w:0px;--rp-sheet-h:clamp(24vh,calc(100vh - 36px - var(--rp-foot-h) - 100vw),55vh);}
+  body.rp-live.rp-side-off{--rp-sheet-h:0px;}
+  .rp-tv .rp-title{display:none;}
+  .rp-tv .rp-rounds{order:0;flex:1 1 auto;margin-left:0;}
+  .rp-tv .rp-main{top:auto;left:0;width:auto;height:var(--rp-sheet-h);overflow:hidden;flex-direction:row;box-shadow:inset 0 1px 0 rgba(201,168,76,.4);}
+  .rp-tv .rp-dora{padding:calc(var(--u) * 1) 0 calc(var(--u) * 1) calc(var(--u) * 1);align-items:flex-start;}
+  .rp-tv .rp-side{flex:1 1 auto;min-height:0;min-width:0;}
+  /* Panel put away: the dora card goes top left, above the table, as in a game. */
+  body.rp-side-off .rp-tv .rp-main{top:36px;bottom:auto;right:auto;height:auto;}
+  .rp-tv .rp-panel{overflow-y:auto;}
+}
+
+/* ── Play History entry points ── */
+.ph-replay-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:calc(var(--ui-vmin, 7.2px) * .5);border:0;cursor:pointer;
+  padding:calc(var(--ui-vmin, 7.2px) * .6) calc(var(--ui-vmin, 7.2px) * 1.6);font-family:'Noto Sans JP',sans-serif;font-weight:700;
+  font-size:calc(var(--ui-vmin, 7.2px) * 1.2);color:#1a1206;background:var(--gl);
+  clip-path:polygon(calc(var(--ui-vmin, 7.2px) * .9) 0,100% 0,calc(100% - var(--ui-vmin, 7.2px) * .9) 100%,0 100%);transition:filter .2s;}
+.ph-replay-btn:hover{filter:brightness(1.12);}
+.ph-replay-btn:focus-visible{outline:none;filter:brightness(1.3);}
+.ph-replay-btn:disabled{cursor:default;background:rgba(255,255,255,.1);color:rgba(245,237,216,.35);filter:none;}
+.ph-replay-ic{font-size:.8em;}
+.ph-round-watch{border:0;background:rgba(240,208,128,.12);box-shadow:inset 0 0 0 1px rgba(240,208,128,.4);color:var(--gl);cursor:pointer;
+  padding:calc(var(--ui-vmin, 7.2px) * .2) calc(var(--ui-vmin, 7.2px) * .8);font-size:calc(var(--ui-vmin, 7.2px) * 1.05);font-weight:700;white-space:nowrap;}
+.ph-round-watch:hover{background:rgba(240,208,128,.22);}
