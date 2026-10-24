@@ -14,6 +14,15 @@
 // no comments inside the list).
 const RELEASE_NOTES=[
   {
+    version:"0.18.1",
+    date:"2026-10-24",
+    draft:true,
+    improved:[
+      "The waiting room's Ready button matches the new look, and shows a clear ✓ Ready once you've pressed it.",
+      "Tighter security on the game server.",
+    ],
+  },
+  {
     version:"0.18.0",
     date:"2026-10-17",
     new:[

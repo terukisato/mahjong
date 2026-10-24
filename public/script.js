@@ -6935,6 +6935,7 @@ function pressReady(){
   isReady=true;
   $('bready').classList.add('pressed');
   $('bready').disabled=true;
+  $('bready').textContent='✓ Ready';
   wss({type:'ready'});
 }
 
@@ -6979,6 +6980,7 @@ function resetLobby(){
   $('cdiv').textContent='';
   $('bready').classList.remove('pressed');
   $('bready').disabled=false;
+  $('bready').textContent='Ready';
   document.querySelectorAll('.slot').forEach(sl=>{sl.innerHTML='<span class="si">🀄</span>';sl.className='slot';sl.style.display='';});
   updateSlotCount();
   // Hide dora panel and reset chat badge

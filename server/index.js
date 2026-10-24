@@ -44,9 +44,15 @@ const VALID_PERIODS=['week','month'];
 // Gates 'create_profile'/'delete_profile' only — everything else
 // (unlocking/playing as an existing profile) only ever needs that
 // profile's own code, never this.
-// Set a real value via the DEV_SECRET env var for any deployment that
-// isn't just localhost — the fallback below is fine for local dev only.
-const DEV_SECRET=process.env.DEV_SECRET||'changeme';
+// Set via the DEV_SECRET env var, locally as well as on Railway. No
+// fallback on purpose: it used to default to 'changeme', which is public
+// in this repo, so a deploy that lost the variable would silently accept
+// that. Unset now means every developer action is refused (devKeyOk), and
+// the warning below shows up in the server log.
+const DEV_SECRET=process.env.DEV_SECRET||null;
+if(!DEV_SECRET) console.warn('[DEV_SECRET] not set — developer tools are disabled until it is.');
+// typeof check so a client can't match an unset key by sending null.
+function devKeyOk(key){ return !!DEV_SECRET&&typeof key==='string'&&key===DEV_SECRET; }
 
 app.use(express.static(path.join(__dirname,'../public')));
 
@@ -1058,14 +1064,14 @@ wss.on('connection',(ws,req)=>{
     // hidden until a correct key is entered, without performing an action
     // just to test the key.
     if(msg.type==='verify_dev_key'){
-      ws.send(JSON.stringify({type:'dev_key_result',ok:msg.devSecret===DEV_SECRET}));
+      ws.send(JSON.stringify({type:'dev_key_result',ok:devKeyOk(msg.devSecret)}));
     }
 
     // Developer-only — creating a profile needs DEV_SECRET, not any
     // profile's own code. Unrelated to unlockedName; doesn't unlock the
     // new profile for this connection, it just creates it.
     if(msg.type==='create_profile'){
-      if(msg.devSecret!==DEV_SECRET){
+      if(!devKeyOk(msg.devSecret)){
         ws.send(JSON.stringify({type:'create_profile_result',ok:false,error:'Invalid developer key'}));
       } else {
         ws.send(JSON.stringify({type:'create_profile_result',...createProfile(msg.name,msg.code)}));
@@ -1079,7 +1085,7 @@ wss.on('connection',(ws,req)=>{
     // id, so it could never see the old stats record even if this were
     // skipped, but leaving it behind would just be an orphaned row.
     if(msg.type==='delete_profile'){
-      if(msg.devSecret!==DEV_SECRET){
+      if(!devKeyOk(msg.devSecret)){
         ws.send(JSON.stringify({type:'delete_profile_result',ok:false,error:'Invalid developer key'}));
       } else {
         const result=deleteProfile(msg.name);
@@ -1095,7 +1101,7 @@ wss.on('connection',(ws,req)=>{
     // record untouched, for a "reset what Play History shows" tool rather
     // than a "remove these players" one.
     if(msg.type==='clear_all_history'){
-      if(msg.devSecret!==DEV_SECRET){
+      if(!devKeyOk(msg.devSecret)){
         ws.send(JSON.stringify({type:'clear_all_history_result',ok:false,error:'Invalid developer key'}));
       } else {
         clearAllHistory();
@@ -1120,7 +1126,7 @@ wss.on('connection',(ws,req)=>{
     // Developer-only, same DEV_SECRET gate as create/delete_profile —
     // read and dismiss Contact-form reports.
     if(msg.type==='list_feedback'||msg.type==='delete_feedback'){
-      if(msg.devSecret!==DEV_SECRET){
+      if(!devKeyOk(msg.devSecret)){
         ws.send(JSON.stringify({type:'feedback_list',ok:false,error:'Invalid developer key'}));
       } else {
         if(msg.type==='delete_feedback') feedback.remove(msg.id);

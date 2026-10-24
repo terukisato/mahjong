@@ -264,10 +264,7 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .mode-btn{flex:1;padding:calc(var(--ui-vmin, 7.2px) * 1.389) calc(var(--ui-vmin, 7.2px) * .833);background:rgba(0,0,0,.3);border:1px solid rgba(201,168,76,.2);border-radius:2px;color:rgba(245,237,216,.9);font-size:calc(var(--ui-vmin, 7.2px) * 1.806);font-family:'Noto Serif JP',serif;font-weight:700;cursor:pointer;transition:all .2s;line-height:1.6;text-align:center;}
 .mode-btn.active{background:rgba(26,107,69,.4);border-color:var(--jl);color:var(--cream);box-shadow:0 0 12px rgba(42,158,103,.3);}
 .mode-btn:hover:not(.active){border-color:rgba(201,168,76,.4);color:var(--cream);}
-.ready-btn{width:100%;padding:calc(var(--ui-vmin) * 1.667);background:linear-gradient(135deg,#0a5a2a,#1a8840);border:2px solid #4eff9a;border-radius:2px;color:#c0ffd8;font-size:calc(var(--ui-vmin) * 1.944);font-family:'Cinzel Decorative',serif;letter-spacing:calc(var(--ui-vmin) * .417);cursor:pointer;transition:all .25s;margin-top:12px;position:relative;overflow:hidden;}
-.ready-btn:hover{transform:translateY(-2px);box-shadow:0 0 20px rgba(78,255,154,.4);}
-.ready-btn.pressed{opacity:.6;cursor:default;transform:none;}
-.ready-btn.pressed::after{content:'✓ Ready!';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a5a2a,#1a8840);font-size:calc(var(--ui-vmin) * 1.944);letter-spacing:calc(var(--ui-vmin) * .417);}
+.ready-btn{margin-top:calc(var(--ui-vmin) * 1.667);}
 
 /* ════════════════════════════════════════════════════════════
    GAME SCREEN — LAYOUT
@@ -3904,6 +3901,10 @@ body{background:#060c07;color:var(--cream);font-family:'Noto Sans JP',sans-serif
 .bs:hover{color:var(--sl-fg);}
 /* Danger: red glass. */
 .leave-btn-confirm,.bp.bp-danger{--sl-bg:rgba(150,24,24,.9);--sl-bd:rgba(255,120,120,.6);--sl-fg:#ffe2e2;}
+/* Waiting room's Ready (#bready): gold primary; once pressed it's a green
+   glass "✓ Ready" — done, not unavailable, so it isn't dimmed like other
+   disabled buttons. */
+.ready-btn.pressed,.ready-btn.pressed:disabled{--sl-bg:rgba(30,36,32,.92);--sl-bd:rgba(127,209,139,.6);--sl-fg:#8fe0a0;opacity:1;cursor:default;filter:none;}
 .room-card-join{--sl-cut:calc(var(--ui-vmin, 7.2px) * 1);padding-left:calc(var(--ui-vmin, 7.2px) * 2.2);padding-right:calc(var(--ui-vmin, 7.2px) * 2.2);}
 
 /* ════════════════════════════════════════════════════════════
