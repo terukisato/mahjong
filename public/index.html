@@ -8,6 +8,13 @@
 <link rel="stylesheet" href="/style.css?v=0.18.1">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<!-- Without a manifest the home-screen/installed app is only a bookmark and
+     opens with browser chrome; this makes it launch standalone. -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0e3b24">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Janshin">
 </head>
 <body>
 <audio id="lobby-music" src="/audio/Music/Mahjong_Table_Tea_Time.mp3" loop preload="auto" style="display:none;"></audio>

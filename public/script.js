@@ -173,49 +173,135 @@ function pinPos(v,w,h){
 // SOU (ソウズ) — Bamboo hourglass/bobbin sticks
 // From image: wider top+bottom, narrow waist — like a bobbin/spool
 // Green with red band at waist. 5-sou centre = red.
-// 1-sou: kiwi bird
+// 1-sou: kiwi bird, drawn in the reference set's peacock style — white body
+// with a green outline, cross-hatched mantle, red beak, eye and feet. Faces
+// left. Authored in its own local units (body ~x 5–40, y 3–29, beak tip
+// ~(-6,24), toes ~y 37) and fitted onto the tile by souBird().
+const KIWI_BODY='M11,4.6 C7.4,4.6 5.2,7.4 5.6,10.6 C6,14 8.2,17.4 11.4,21 C15,25.8 20.4,28.8 26.4,28.8 C34.6,28.8 40,23.4 40,16.4 C40,8.6 33.6,3.4 25.6,3.4 C21.4,3.4 18.6,6.6 16,6.8 C14.4,5.4 13,4.6 11,4.6 Z';
+const KIWI_BEAK='M6,9.4 C1.5,11.5 -3,16.5 -6.2,23.2 C-6.5,23.9 -5.6,24.2 -5.2,23.6 C-2,17.8 2.2,13.8 6.4,12.6 Z';
+const KIWI_MANTLE='M16,7.2 C21,3.2 33,2.6 39,10.5 C40.6,16 39,21.5 34.6,24.5 C28,20.5 21.5,14.6 16,7.2 Z';
+// Static detail strokes, built once. The mantle's cross-hatch is clipped
+// against the mantle outline here in JS rather than with an SVG <clipPath>:
+// tile SVG strings get cached and repeated across the page, and duplicate
+// clip ids resolve to whichever copy comes first in the document.
+const KIWI_DETAIL=(()=>{
+  const f=n=>n.toFixed(2);
+  // Mantle outline as a polygon (its three cubics, sampled).
+  const segs=[[[16,7.2],[21,3.2],[33,2.6],[39,10.5]],[[39,10.5],[40.6,16],[39,21.5],[34.6,24.5]],[[34.6,24.5],[28,20.5],[21.5,14.6],[16,7.2]]];
+  const poly=[];
+  for(const [a,b,c,d] of segs) for(let i=0;i<12;i++){
+    const t=i/12,u=1-t;
+    poly.push([0,1].map(k=>u*u*u*a[k]+3*u*u*t*b[k]+3*u*t*t*c[k]+t*t*t*d[k]));
+  }
+  // Keep the parts of segment p→q that fall inside the polygon (even-odd).
+  function clip(p,q){
+    const ts=[];
+    for(let i=0;i<poly.length;i++){
+      const a=poly[i],b=poly[(i+1)%poly.length];
+      const rx=q[0]-p[0],ry=q[1]-p[1],sx=b[0]-a[0],sy=b[1]-a[1],den=rx*sy-ry*sx;
+      if(!den) continue;
+      const t=((a[0]-p[0])*sy-(a[1]-p[1])*sx)/den, v=((a[0]-p[0])*ry-(a[1]-p[1])*rx)/den;
+      if(t>=0&&t<=1&&v>=0&&v<1) ts.push(t);
+    }
+    ts.sort((x,y)=>x-y);
+    let d='';
+    for(let i=0;i+1<ts.length;i+=2){
+      const P=t=>f(p[0]+(q[0]-p[0])*t)+','+f(p[1]+(q[1]-p[1])*t);
+      d+=`M${P(ts[i])}L${P(ts[i+1])}`;
+    }
+    return d;
+  }
+  let hatch='';
+  for(let i=0;i<14;i++) hatch+=clip([8+i*3,30],[20+i*3,0])+clip([8+i*3,0],[20+i*3,30]);
+  // Shaggy belly plumage: short curved strokes leaning back, seeded so the
+  // tile looks the same every render.
+  let seed=7, ticks='';
+  const rnd=()=>{seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+  for(let i=0;i<8;i++){
+    const th=rnd()*Math.PI*2,m=Math.sqrt(rnd()),x=21+Math.cos(th)*6.5*m,y=22.5+Math.sin(th)*3.2*m;
+    const a=(62+(rnd()-.5)*24)*Math.PI/180,l=2.2*(.7+rnd()*.6),c=Math.cos(a),s=Math.sin(a);
+    ticks+=`M${f(x)},${f(y)}q${f(c*l*.5+s*l*.15)},${f(s*l*.5-c*l*.15)} ${f(c*l)},${f(s*l)}`;
+  }
+  return {hatch,ticks};
+})();
+// Behind the kiwi: one large tree-fern frond rising from its back and
+// arching over to the right. Drawn bipinnate like the real plant — each
+// pinna (leaflet) is itself a small frond of pinnules — so it holds up at
+// full size and still reads as one fern shape in the pond. Built once, in a
+// fixed 60x84 tile frame that souBird() scales onto the tile.
+const SOU1_FERN=(()=>{
+  const G='#1f7a3a', GD='#145c2a', f=n=>+n.toFixed(1);
+  const bez=(p0,p1,p2,p3,n)=>Array.from({length:n+1},(_,i)=>{const t=i/n,u=1-t;
+    return [0,1].map(k=>u*u*u*p0[k]+3*u*u*t*p1[k]+3*u*t*t*p2[k]+t*t*t*p3[k]);});
+  // Walks a polyline by arc length: at(s) → [x,y,heading].
+  function walker(pts){
+    const L=[0]; for(let i=1;i<pts.length;i++) L.push(L[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
+    const at=s=>{let i=1; while(i<L.length-1&&L[i]<s) i++;
+      const a=pts[i-1],b=pts[i],q=(s-L[i-1])/((L[i]-L[i-1])||1);
+      return [a[0]+(b[0]-a[0])*q, a[1]+(b[1]-a[1])*q, Math.atan2(b[1]-a[1],b[0]-a[0])];};
+    return {at,total:L[L.length-1]};
+  }
+  const poly=pts=>'M'+pts.map(p=>f(p[0])+','+f(p[1])).join('L');
+  // Pointed leaf from (x,y) along angle a: widest near the base, long taper.
+  function leaf(x,y,len,a,wid){
+    const dx=Math.cos(a),dy=Math.sin(a),nx=-dy,ny=dx,P=(t,o)=>f(x+dx*len*t+nx*o)+','+f(y+dy*len*t+ny*o);
+    return `M${f(x)},${f(y)} C${P(.15,wid*.55)} ${P(.6,wid*.55)} ${P(1,0)} C${P(.6,-wid*.55)} ${P(.15,-wid*.55)} ${f(x)},${f(y)}Z`;
+  }
+  // One pinna: pinnules along its stem, leaning toward its tip, longest a
+  // quarter of the way out.
+  function pinna(pts,n,len,fill,fill2){
+    const {at,total}=walker(pts), side={1:'',[-1]:''};
+    for(let i=1;i<=n;i++){
+      const t=i/(n+1), [x,y,th]=at(t*total), l=len*(t<.25?.6+.4*t/.25:1-.9*(t-.25)/.75);
+      for(const s of [1,-1]) side[s]+=leaf(x,y,l,th+s*60*Math.PI/180,l*.44);
+    }
+    return `<path d="${side[-1]}" fill="${fill2}"/><path d="${side[1]}" fill="${fill}"/>`+
+      `<path d="${poly(pts)}" fill="none" stroke="${GD}" stroke-width=".45" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  const rachis=bez([27,57],[17,35],[21,13],[46,6],40), {at,total}=walker(rachis), n=14, max=20, ang=74*Math.PI/180, lift=.12;
+  let out='';
+  for(let i=1;i<=n;i++){
+    const t=i/(n+1); if(t<.06) continue;
+    const [x,y,th]=at(t*total), l=max*(t<.22?.72+.28*t/.22:1-.9*(t-.22)/.78), tx=Math.cos(th), ty=Math.sin(th);
+    for(const sd of [1,-1]){
+      const dx=Math.cos(th+sd*ang), dy=Math.sin(th+sd*ang);
+      // Each pinna bows gently back toward the frond's tip.
+      const pp=bez([x,y],[x+dx*l*.35,y+dy*l*.35],[x+dx*l*.7+tx*l*lift*.5,y+dy*l*.7+ty*l*lift*.5],[x+dx*l+tx*l*lift,y+dy*l+ty*l*lift],14);
+      out+=pinna(pp,Math.max(4,Math.round(l*.95)),Math.min(2.9,.14*l+.8),sd>0?G:GD,sd>0?GD:G);
+    }
+  }
+  return out+`<path d="${poly(rachis)}" fill="none" stroke="${GD}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>`;
+})();
 function souBird(w,h){
-  const cx=w/2, cy=h/2;
-  // Large round body — dominates tile
-  const bx=cx*0.82, by=cy*0.92, br=Math.min(w,h)*0.342;
-  // Small head — tucked right
-  const hx=bx+br*0.82, hy=by-br*0.28, hr=br*0.38;
-  // Beak tip
-  const beakX1=hx+hr*0.72, beakY1=hy+hr*0.14;
-  const beakX2=hx+hr*1.38, beakY2=hy+hr*1.38;
-  const beakW=hr*0.18;
-  // Back leg
-  const lbx=bx-br*0.28, lby=by+br*0.82;
-  // Front leg
-  const lfx=bx+br*0.12, lfy=by+br*0.82;
-
-  const clipId=`kb${Math.floor(Math.random()*9999)}`;
-
-  return [
-    `<clipPath id="${clipId}"><rect x="0" y="0" width="${w}" height="${h}"/></clipPath>`,
-    // Body
-    `<circle cx="${bx}" cy="${by}" r="${br}" fill="#1c7530" clip-path="url(#${clipId})"/>`,
-    // Highlight
-    `<ellipse cx="${bx+br*0.3}" cy="${by-br*0.42}" rx="${br*0.42}" ry="${br*0.28}" fill="#2db848" opacity="0.3" transform="rotate(15,${bx+br*0.3},${by-br*0.42})"/>`,
-    // Head
-    `<circle cx="${hx}" cy="${hy}" r="${hr}" fill="#1c7530"/>`,
-    // Eye
-    `<circle cx="${hx+hr*0.38}" cy="${hy-hr*0.28}" r="${hr*0.23}" fill="#1a1a1a"/>`,
-    `<circle cx="${hx+hr*0.42}" cy="${hy-hr*0.31}" r="${hr*0.08}" fill="#fff" opacity="0.8"/>`,
-    // Beak — long thin, angling down
-    `<path d="M${beakX1},${beakY1} L${beakX2},${beakY2} L${beakX2-beakW},${beakY2+beakW*0.5} L${beakX1-beakW*0.3},${beakY1+beakW*0.5} Z" fill="#c8a020" clip-path="url(#${clipId})"/>`,
-    `<path d="M${beakX1},${beakY1} L${beakX2},${beakY2} L${beakX2-beakW*0.2},${beakY2} L${beakX1-beakW*0.1},${beakY1} Z" fill="#e8d060" opacity="0.4" clip-path="url(#${clipId})"/>`,
-    // Back leg
-    `<rect x="${lbx-w*.04}" y="${lby}" width="${w*.07}" height="${h*.12}" rx="${w*.03}" fill="#0e4018" opacity="0.55"/>`,
-    `<path d="M${lbx},${lby+h*.12} L${lbx+w*.14},${lby+h*.13} L${lbx+w*.14},${lby+h*.16} L${lbx-w*.01},${lby+h*.15} Z" fill="#0e4018" opacity="0.5"/>`,
-    `<path d="M${lbx},${lby+h*.12} L${lbx+w*.13},${lby+h*.10} L${lbx+w*.14},${lby+h*.13} L${lbx},${lby+h*.14} Z" fill="#0e4018" opacity="0.45"/>`,
-    `<path d="M${lbx},${lby+h*.12} L${lbx+w*.13},${lby+h*.15} L${lbx+w*.12},${lby+h*.18} L${lbx-w*.01},${lby+h*.15} Z" fill="#0e4018" opacity="0.4"/>`,
-    // Front leg
-    `<path d="M${lfx},${lfy} L${lfx+w*.06},${lfy+h*.10} L${lfx+w*.10},${lfy+h*.09} L${lfx+w*.04},${lfy-h*.01} Z" fill="#c82020"/>`,
-    `<path d="M${lfx+w*.06},${lfy+h*.10} L${lfx+w*.20},${lfy+h*.11} L${lfx+w*.20},${lfy+h*.14} L${lfx+w*.05},${lfy+h*.13} Z" fill="#c82020"/>`,
-    `<path d="M${lfx+w*.06},${lfy+h*.10} L${lfx+w*.19},${lfy+h*.08} L${lfx+w*.20},${lfy+h*.11} L${lfx+w*.07},${lfy+h*.12} Z" fill="#c82020"/>`,
-    `<path d="M${lfx+w*.06},${lfy+h*.10} L${lfx+w*.19},${lfy+h*.13} L${lfx+w*.18},${lfy+h*.16} L${lfx+w*.05},${lfy+h*.13} Z" fill="#c82020"/>`,
-  ].join('');
+  // Fern and kiwi share the 60x84 frame, fitted onto the tile and centred.
+  const s=Math.min(w/60,h/84);
+  return `<g transform="translate(${(w-60*s)/2},${(h-84*s)/2}) scale(${s})">${SOU1_FERN}`+
+    `<g transform="translate(3,36)">${souKiwi(54,43)}</g></g>`;
+}
+// The kiwi alone, fitted into a bw x bh box.
+function souKiwi(w,h){
+  const G='#1c7530', R='#c82020';
+  // Fit the kiwi's local bounding box (x -6.6..40.7, y 2.7..37.3) onto the
+  // box, centred.
+  const k=Math.min(w*.9/47.3, h*.8/34.6);
+  const tx=w/2-17*k, ty=h/2-20*k;
+  // Three forward toes and a short hind toe off each ankle.
+  const toes=(x,y)=>`M${x},${y}l-4.8,1.4M${x},${y}l-3.8,2.9M${x},${y}l-1,3.3M${x},${y}l2.1,.9`;
+  return `<g transform="translate(${tx},${ty}) scale(${k})">`+
+    // Cream halo so the green outline stays clear of the fern behind it.
+    `<path d="${KIWI_BODY}" fill="#fffaf0" stroke="#fffaf0" stroke-width="3.4" stroke-linejoin="round"/>`+
+    `<path d="${KIWI_BODY}" fill="#fff"/>`+
+    `<path d="${KIWI_DETAIL.hatch}" stroke="${G}" stroke-width=".7" fill="none"/>`+
+    `<path d="${KIWI_MANTLE}" fill="none" stroke="${G}" stroke-width="1"/>`+
+    `<path d="${KIWI_DETAIL.ticks}" stroke="${G}" stroke-width=".6" stroke-linecap="round" fill="none"/>`+
+    `<path d="${KIWI_BODY}" fill="none" stroke="${G}" stroke-width="1.4" stroke-linejoin="round"/>`+
+    `<path d="${KIWI_BEAK}" fill="${R}"/>`+
+    // Whiskers at the base of the beak
+    `<path d="M6.4,11 L1.8,8.6 M6.6,11.6 L1.6,11.2 M6.8,12.2 L2.6,14" stroke="${G}" stroke-width=".35" stroke-linecap="round"/>`+
+    `<circle cx="9.8" cy="8.4" r="1.45" fill="${R}"/><circle cx="9.8" cy="8.4" r=".55" fill="#fff"/>`+
+    `<path d="M20.5,27 L19.6,33.6 M28.6,27.4 L28.8,33.8" stroke="${R}" stroke-width="1.7" stroke-linecap="round"/>`+
+    `<path d="${toes(19.6,33.6)}${toes(28.8,33.8)}" stroke="${R}" stroke-width="1.05" stroke-linecap="round" fill="none"/>`+
+    `</g>`;
 }
 
 function svgSou(v,w,h,red=false){
