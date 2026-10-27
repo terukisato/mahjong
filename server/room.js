@@ -1387,14 +1387,14 @@ class Room {
       g.tempFuriten[seat]=true;
     }
 
-    if(resp.type==='ron'){this._resolveReactions();return;}
-    if(resp.type==='kan'){const tile=g.pending.tile,fromSeat=g.pending.fromSeat;this._clearPending();this._daiminkan(seat,tile,fromSeat);return;}
-
-    // A human just called pon/chi/pass — any other pending seat here is a bot
-    // whose only role is to settle priority (a hidden ron always outranks a
-    // pon/chi). There's no bot move being displayed to pace for readability,
-    // so decide immediately instead of parking behind BOT_DELAY — that pause
-    // exists for the bots'-own-turn path in _discard(), not this one.
+    // A human just responded — any other pending seat here that's a bot
+    // only matters for priority (a bot ron alongside a human ron is a
+    // double ron; a hidden bot ron outranks a human pon/kan/chi). There's no
+    // bot move being displayed to pace for readability, so decide
+    // immediately instead of parking behind BOT_DELAY — that pause exists
+    // for the bots'-own-turn path in _discard(), not this one. Ron and kan
+    // used to short-circuit past this: ron then never heard a bot's double
+    // ron, and kan executed on the spot even when another seat could ron it.
     const tile=g.pending.tile;
     for(const r of g.pending.options){
       const s=r.seat;
@@ -1402,7 +1402,9 @@ class Room {
         g.pending.responses[s]=this._safeBotReact(s,g.hands[s],tile,r.options,g.melds[s],this.seats[s].difficulty);
       }
     }
-    if(g.pending.seats.every(s=>g.pending.responses[s])) this._resolveReactions();
+    // Only humans can still be outstanding now; _resolveReactions decides
+    // which of them (if any) are still worth waiting on.
+    this._resolveReactions();
   }
 
   // Once every reacting seat has responded (or we've at least heard back
@@ -1433,8 +1435,14 @@ class Room {
     const g=this.game;
     if(!g.pending) return;
     const {tile,fromSeat,seats,options,responses,kita,isChankan,ponIdx}=g.pending;
-    const humanResponded=seats.filter(s=>!this.seats[s]?.isBot).every(s=>responses[s]);
-    if(!humanResponded) return;
+    // Once anyone has declared ron, only a seat that could ALSO ron (double/
+    // triple ron) is worth waiting on — pon/kan/chi can never outrank a ron,
+    // so a human still deciding on one of those mustn't hold the win up.
+    // Without a ron yet, every human's answer can still change the outcome.
+    const anyRon=seats.some(s=>responses[s]?.type==='ron');
+    const canRon=s=>options.find(r=>r.seat===s)?.options.some(o=>o.type==='ron');
+    const waitingOn=seats.filter(s=>!this.seats[s]?.isBot&&!responses[s]&&(!anyRon||canRon(s)));
+    if(waitingOn.length) return;
 
     this._clearPending();
 
@@ -1471,14 +1479,16 @@ class Room {
       return;
     }
 
-    let ponSeat=null,chiSeat=null;
-    for(const seat of seats){
-      const r=responses[seat]||{type:'pass'};
-      if(r.type==='pon'){ponSeat=seat;break;}
-      if(r.type==='chi'){chiSeat=seat;break;}
+    // Pon/kan over chi regardless of seat order — the chi seat (discarder's
+    // shimocha) can sit at a lower index than the pon seat, so a single
+    // first-match scan would let chi win.
+    const ponSeat=seats.find(s=>responses[s]?.type==='pon'||responses[s]?.type==='kan');
+    const chiSeat=seats.find(s=>responses[s]?.type==='chi');
+    if(ponSeat!==undefined){
+      if(responses[ponSeat].type==='kan') this._daiminkan(ponSeat,tile,fromSeat);
+      else this._pon(ponSeat,tile,fromSeat);
     }
-    if(ponSeat!==null) this._pon(ponSeat,tile,fromSeat);
-    else if(chiSeat!==null) this._chi(chiSeat,tile,responses[chiSeat].tileIds,fromSeat);
+    else if(chiSeat!==undefined) this._chi(chiSeat,tile,responses[chiSeat].tileIds,fromSeat);
     else {
       if(this._checkSuukaikan()) return;
       this._nextTurn();

@@ -609,6 +609,108 @@ test('_reactResponse: a response type never offered to this seat in the CURRENT 
   assert.strictEqual(g.melds[1][0].type, 'chi');
 });
 
+// ══════════════════════════════════════════════════════════════════════════
+// Reaction priority: a declared ron only waits on other seats that could
+// also ron — a human still sitting on a pon/chi offer used to hold the win
+// up until they answered. Kan used to skip priority entirely (executing on
+// the spot over a pending ron), and a chi seat at a lower index than the
+// pon seat used to win the tile.
+// ══════════════════════════════════════════════════════════════════════════
+
+// Seat 0 discards 6m. Seat 1 (pinfu tenpai on 6m/9m) can ron; seat 2 can
+// pon (or kan with `kan`); seat 3 can't react.
+function ronVsCallRoom({ seat1Bot = false, seat2Bot = false, kan = false } = {}) {
+  const room = freshRoom(0);
+  const g = room.game;
+  if (!seat1Bot) room.seats[1] = { id: 'h1', name: 'Human1', isBot: false, seat: 1 };
+  if (!seat2Bot) room.seats[2] = { id: 'h2', name: 'Human2', isBot: false, seat: 2 };
+  g.hands[1] = pinfuTenpai13();
+  g.hands[2] = kan
+    ? [...tri(6, 'm'), ...seq(1, 'p'), ...seq(1, 's'), ...seq(4, 's'), T(2, 'z')]
+    : [T(6, 'm'), T(6, 'm'), ...seq(1, 'p'), ...seq(1, 's'), ...seq(4, 's'), T(2, 'z'), T(3, 'z')];
+  g.hands[3] = [...seq(1, 'p'), ...seq(4, 'p'), ...seq(1, 's'), ...seq(4, 's'), T(1, 'z')];
+  g.hands[0] = [...seq(7, 'p'), ...seq(7, 's'), T(6, 'm')];
+  g.turn = 0;
+  room._discard(0, g.hands[0].find(t => t.v === 6 && t.s === 'm').id);
+  return room;
+}
+
+test('Reactions: a human ron resolves at once, without waiting on another human\'s pon offer', () => {
+  const room = ronVsCallRoom();
+  const g = room.game;
+  assert.deepStrictEqual(g.pending.seats, [1, 2]);
+  room._reactResponse(1, { type: 'ron' });
+  assert.strictEqual(g.pending, null, 'the ron must not wait for seat 2 to answer its pon offer');
+  assert.ok(g.scores[1] > 25000, `seat 1 should have won, got ${g.scores[1]}`);
+  assert.strictEqual(g.melds[2].length, 0);
+});
+
+test('Reactions: a human pon still waits on a human who could ron, and goes through if they pass', () => {
+  const room = ronVsCallRoom();
+  const g = room.game;
+  room._reactResponse(2, { type: 'pon' });
+  assert.ok(g.pending, 'pon must wait — seat 1 could still ron');
+  room._reactResponse(1, { type: 'pass' });
+  assert.strictEqual(g.pending, null);
+  assert.strictEqual(g.melds[2][0]?.type, 'pon');
+});
+
+test('Reactions: a human ron still waits on another human who could also ron (double ron)', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  room.seats[1] = { id: 'h1', name: 'Human1', isBot: false, seat: 1 };
+  room.seats[2] = { id: 'h2', name: 'Human2', isBot: false, seat: 2 };
+  g.hands[1] = pinfuTenpai13();
+  g.hands[2] = pinfuTenpai13();
+  g.hands[3] = [...seq(1, 'p'), ...seq(4, 'p'), ...seq(1, 's'), ...seq(4, 's'), T(1, 'z')];
+  g.hands[0] = [...seq(7, 'p'), ...seq(7, 's'), T(6, 'm')];
+  g.turn = 0;
+  room._discard(0, g.hands[0].find(t => t.v === 6 && t.s === 'm').id);
+  room._reactResponse(2, { type: 'ron' });
+  assert.ok(g.pending, 'seat 1 could also ron — must be heard before scoring');
+  room._reactResponse(1, { type: 'ron' });
+  assert.strictEqual(g.pending, null);
+  assert.ok(g.scores[1] > 25000 && g.scores[2] > 25000, 'both should be paid');
+});
+
+test('Reactions: a human daiminkan yields to a bot that can ron the same tile', () => {
+  const room = ronVsCallRoom({ seat1Bot: true, kan: true });
+  const g = room.game;
+  room._reactResponse(2, { type: 'kan' });
+  assert.strictEqual(g.pending, null);
+  assert.strictEqual(g.melds[2].length, 0, 'the kan must not go through over a ron');
+  assert.ok(g.scores[1] > 25000, `bot seat 1 should have ronned, got ${g.scores[1]}`);
+});
+
+test('Reactions: a human daiminkan with nobody able to ron still executes', () => {
+  const room = ronVsCallRoom({ kan: true });
+  const g = room.game;
+  g.pending.options = g.pending.options.filter(r => r.seat !== 1); // seat 1 out of the picture
+  g.pending.seats = [2];
+  room._reactResponse(2, { type: 'kan' });
+  assert.strictEqual(g.pending, null);
+  assert.strictEqual(g.melds[2][0]?.kanType, 'daiminkan');
+});
+
+test('Reactions: pon beats chi even when the chi seat has the lower seat index', () => {
+  const room = freshRoom(0);
+  const g = room.game;
+  room.seats[1] = { id: 'h1', name: 'Human1', isBot: false, seat: 1 };
+  room.seats[2] = { id: 'h2', name: 'Human2', isBot: false, seat: 2 };
+  g.hands[1] = [T(4, 'p'), T(6, 'p'), ...seq(1, 'm'), ...seq(2, 's'), ...seq(7, 'm'), T(1, 'z'), T(2, 'z')];
+  g.hands[2] = [T(5, 'p'), T(5, 'p'), ...seq(1, 'm'), ...seq(2, 's'), ...seq(7, 's'), T(3, 'z'), T(4, 'z')];
+  g.hands[3] = [...seq(1, 'm'), ...seq(4, 'm'), ...seq(1, 's'), ...seq(4, 's'), T(5, 'z')];
+  g.hands[0] = [...seq(1, 'p'), ...seq(7, 's'), T(2, 'm'), T(3, 'm'), T(5, 'p')];
+  g.turn = 0;
+  room._discard(0, g.hands[0].find(t => t.v === 5 && t.s === 'p').id);
+  const chiSeq = g.pending.options.find(r => r.seat === 1).options.find(o => o.type === 'chi').sequences[0];
+  room._reactResponse(1, { type: 'chi', tileIds: chiSeq });
+  room._reactResponse(2, { type: 'pon' });
+  assert.strictEqual(g.pending, null);
+  assert.strictEqual(g.melds[2][0]?.type, 'pon');
+  assert.strictEqual(g.melds[1].length, 0);
+});
+
 function waitingRoomWithHuman() {
   const room = freshRoom(0);
   room.phase = 'waiting';
