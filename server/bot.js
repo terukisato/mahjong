@@ -147,14 +147,60 @@ const _SHANTEN_STEP=[1800,1000,400,120,50];
 function _shapeScore(c, bestSh, melds, ctx, vis, withUkeire){
   let s=0;
   for(let i=bestSh;i<c.shanten;i++) s+=_SHANTEN_STEP[Math.min(i,4)];
-  const rem=c.rem;
-  s-=40*(countDora(rem, ctx.dora||[], ctx.sanma)+countAkaDora(rem));
+  s+=_valueScore(c.rem, melds, ctx, bestSh);
+  if(withUkeire) s-=6*_ukeire(c.rem, melds, vis, c.shanten);
+  return s;
+}
+
+// Hand-value side of a candidate 13-tile remainder (lower is better), so the
+// bot builds toward a hand worth winning rather than racing to the cheapest
+// legal finish. Weights are sized against _SHANTEN_STEP: none of them ever
+// outweighs a step near tenpai (1000/1800), but far out (3+ shanten, a step
+// costs 120 or less) they will trade a step for real value — keeping dora,
+// a yakuhai pair, or pruning toward a flush.
+const _VALUE_W={dora:70, yakuhaiPair:60, flushOff:55, flushDone:120, yaochu:8};
+function _valueScore(rem, melds, ctx, bestSh){
+  const W=_VALUE_W;
+  let s=0;
+  s-=W.dora*(countDora(rem, ctx.dora||[], ctx.sanma)+countAkaDora(rem));
   const yh=_yakuhaiSet(ctx);
   const cnt={};
   for(const t of rem){ const k=key(t); cnt[k]=(cnt[k]||0)+1; }
-  for(const k of Object.keys(cnt)) if(yh.has(k)&&cnt[k]===2) s-=35;
-  if(withUkeire) s-=6*_ukeire(rem, melds, vis, c.shanten);
+  for(const k of Object.keys(cnt)) if(yh.has(k)&&cnt[k]>=2) s-=W.yakuhaiPair;
+  // Flush lean: when one suit (plus honours) already dominates the hand and
+  // every meld agrees, each off-suit tile left in hand costs `flushOff` —
+  // so the bot sheds them first and, far from tenpai, will even break an
+  // off-suit shape to stay on course. Honitsu is 2-3 han, chinitsu 5-6.
+  const fl=_flushRead(rem, melds);
+  if(fl && fl.off<=4){
+    s+=W.flushOff*fl.off;
+    if(fl.off===0) s-=W.flushDone;
+  } else {
+    // Otherwise lean tanyao (open-able, and +1 han under riichi): a mild
+    // nudge to shed lone terminals/non-yakuhai honours early.
+    const meldYaochu=(melds||[]).some(m=>(m.tiles||[]).some(t=>t.s==='z'||t.v===1||t.v===9));
+    if(!meldYaochu) for(const k of Object.keys(cnt)){
+      if(yh.has(k)&&cnt[k]>=2) continue;
+      if(k.endsWith('z')||/^[19]/.test(k)) s+=W.yaochu*cnt[k];
+    }
+  }
   return s;
+}
+
+// Dominant-suit read for a flush: {suit, off} where `off` counts tiles of the
+// other two suits (hand + melds). null when no suit has a realistic lead, or
+// a meld already commits the hand to a second suit.
+function _flushRead(rem, melds){
+  const all=[...rem, ...(melds||[]).flatMap(m=>m.tiles||[])];
+  const sc={m:0,p:0,s:0};
+  for(const t of all) if(t.s!=='z') sc[t.s]++;
+  const suit=Object.keys(sc).sort((a,b)=>sc[b]-sc[a])[0];
+  if(sc[suit]<7) return null;
+  const meldSuits=new Set((melds||[]).flatMap(m=>(m.tiles||[]).filter(t=>t.s!=='z').map(t=>t.s)));
+  if([...meldSuits].some(x=>x!==suit)) return null;
+  const off=all.filter(t=>t.s!=='z'&&t.s!==suit).length;
+  const honors=all.filter(t=>t.s==='z').length;
+  return {suit, off, honors};
 }
 
 function _yakuhaiSet(ctx){
@@ -420,24 +466,65 @@ function _openYakuPossible(concealed, melds, ctx){
 function _shantenBotReact(hand, disc, options, melds, ctx){
   const before=shanten(hand, melds);
   const firstMeld=melds.length===0;
+  const ok=(after,newMelds)=>{
+    const sh=shanten(after,newMelds);
+    if(sh>=before) return false;
+    if(!firstMeld) return true;
+    return _openYakuPossible(after,newMelds,ctx) && _openWorthIt(after,newMelds,ctx,sh);
+  };
   if(before>0 && options.some(o=>o.type==='pon')){
     const used=hand.filter(t=>key(t)===key(disc)).slice(0,2);
     const after=hand.filter(t=>!used.map(u=>u.id).includes(t.id));
     // shanten() only reads melds.length, but _openYakuPossible reads tiles.
-    const newMelds=[...melds,{type:'pon',tiles:[disc,disc,disc]}];
-    if(shanten(after,newMelds)<before && (!firstMeld || _openYakuPossible(after,newMelds,ctx)))
-      return {type:'pon'};
+    const newMelds=[...melds,{type:'pon',tiles:[...used,disc]}];
+    if(ok(after,newMelds)) return {type:'pon'};
   }
   if(before>0 && options.some(o=>o.type==='chi')){
     const chi=options.find(o=>o.type==='chi');
     const after=hand.filter(t=>!chi.sequences[0].includes(t.id));
     const seqTiles=hand.filter(t=>chi.sequences[0].includes(t.id)).concat([disc]);
     const newMelds=[...melds,{type:'chi',tiles:seqTiles}];
-    if(shanten(after,newMelds)<before && (!firstMeld || _openYakuPossible(after,newMelds,ctx)))
-      return {type:'chi',tileIds:chi.sequences[0]};
+    if(ok(after,newMelds)) return {type:'chi',tileIds:chi.sequences[0]};
   }
   return {type:'pass'};
 }
+
+// Rough han an OPEN hand can count on: yakuhai melds/pairs, a flush lean,
+// tanyao, plus dora. Deliberately conservative — only yaku the hand is
+// visibly on course for.
+function _openHanEstimate(concealed, melds, ctx){
+  const c=ctx||{};
+  const yh=_yakuhaiSet(c);
+  const mk=melds.flatMap(m=>(m.tiles||[]).map(key));
+  const all=[...concealed.map(key), ...mk];
+  let han=0;
+  for(const m of melds){ const k=key((m.tiles||[])[0]||{}); if(yh.has(k) && m.type!=='chi') han++; }
+  const cnt={};
+  for(const t of concealed){ const k=key(t); cnt[k]=(cnt[k]||0)+1; }
+  // An unmelded yakuhai pair is only half a yaku (it still needs the third).
+  let pairs=0; for(const k of Object.keys(cnt)) if(yh.has(k)&&cnt[k]>=2) pairs++;
+  han+=pairs?0.5:0;
+  const fl=_flushRead(concealed, melds);
+  if(fl && fl.off<=2) han+= fl.honors===0 ? 5 : 2;
+  else if(c.kuitanAri!==false && all.every(k=>!/^[19]/.test(k)&&!k.endsWith('z'))) han+=1;
+  const tiles=[...concealed, ...melds.flatMap(m=>m.tiles||[])];
+  han+=countDora(tiles, c.dora||[], c.sanma)+countAkaDora(tiles);
+  return han;
+}
+
+// First-meld value gate: opening throws away riichi (+1 han, ura, ippatsu)
+// and menzen tsumo, so only open a hand that stays worth something — 2+ han
+// — or, late in the hand, a 1-han hand that the call puts within a tile of
+// tenpai (a quick cheap win beats a likely exhaustive draw by then).
+function _openWorthIt(concealed, melds, ctx, shAfter){
+  const han=_openHanEstimate(concealed, melds, ctx);
+  if(han>=2) return true;
+  const c=ctx||{};
+  const seats=(c.opponents&&c.opponents.length) ? c.opponents.length+1 : (c.sanma?3:4);
+  const perPlayerTurn=(c.turnCount||0)/seats;
+  return han>=1 && shAfter<=1 && perPlayerTurn>=_LATE_TURN;
+}
+const _LATE_TURN=9;
 
 // HARD only: riichi vs damaten (silent tenpai). Real players don't riichi on
 // every tenpai — damaten is chosen when the hand already carries its own
@@ -529,4 +616,5 @@ function botReact(hand, disc, options, melds=[], difficulty='normal', ctx={}){
 // strongest bot plays by, rather than a second, drifting copy of it.
 module.exports={botName,bestDiscard,botReact,shouldRiichi:_shouldRiichi,chooseRiichiTile,
   internals:{assessThreats:_assessThreats,tileDanger:_tileDanger,dealInCost:_dealInCost,
-    yakuhaiSet:_yakuhaiSet,openYakuPossible:_openYakuPossible,estMyValue:_estMyValue,SHANTEN_STEP:_SHANTEN_STEP}};
+    yakuhaiSet:_yakuhaiSet,openYakuPossible:_openYakuPossible,estMyValue:_estMyValue,SHANTEN_STEP:_SHANTEN_STEP,
+    valueScore:_valueScore,flushRead:_flushRead,openHanEstimate:_openHanEstimate,openWorthIt:_openWorthIt}};

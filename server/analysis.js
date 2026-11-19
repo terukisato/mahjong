@@ -18,7 +18,7 @@ const R=require('./replay');
 
 // Bump whenever the grading changes — cached reviews (history.js's
 // game_analysis) made by an older version are recomputed on next open.
-const ANALYSIS_VERSION=1;
+const ANALYSIS_VERSION=2;
 
 const SUIT_OFF={m:0,p:9,s:18,z:27};
 function idxCode(i){
@@ -106,6 +106,11 @@ function sevForLoss(loss){
   return 'blunder';
 }
 
+// Did `best` keep the flush lean better than `chosen` (fewer off-suit tiles)?
+function flushGain(best,chosen){
+  return best.flushOff!=null&&(chosen.flushOff==null||best.flushOff<chosen.flushOff);
+}
+
 // ── Discard decision ───────────────────────────────────────────────────────
 function analyzeDiscard(st,e,round,rules,names,nextEv){
   const seat=e.s;
@@ -154,12 +159,15 @@ function analyzeDiscard(st,e,round,rules,names,nextEv){
   for(const x of cands){
     let s=0;
     for(let i=bestSh;i<x.sh;i++) s+=B.SHANTEN_STEP[Math.min(i,4)];
+    // Hand value (dora, yakuhai pairs, flush/tanyao lean) — bot.js's own
+    // scoring, so the review rewards the same value play the bots now make.
+    s+=B.valueScore(x.rem,melds,ctx,bestSh);
     x.dora=countDora(x.rem,ctx.dora,sanma)+countAkaDora(x.rem);
-    s-=40*x.dora;
     const cnt={};
     for(const t of x.rem){ const k=`${t.v}${t.s}`; cnt[k]=(cnt[k]||0)+1; }
-    x.yhPairs=Object.keys(cnt).filter(k=>yh.has(k)&&cnt[k]===2).length;
-    s-=35*x.yhPairs;
+    x.yhPairs=Object.keys(cnt).filter(k=>yh.has(k)&&cnt[k]>=2).length;
+    const fl=B.flushRead(x.rem,melds);
+    x.flushOff=fl&&fl.off<=4?fl.off:null;
     // Ukeire only separates candidates at the SAME shanten — a hand one
     // step further back naturally "accepts" more tiles, which says nothing
     // about it being better (same reason bot.js gates its own tie-break).
@@ -236,7 +244,8 @@ function analyzeDiscard(st,e,round,rules,names,nextEv){
     if(chosen.noYaku&&!best.noYaku){
       lines.push(`${T(chosen.k)} leaves you tenpai, but with no yaku on any wait — an open hand can't win like that. ${T(best.k)} keeps a hand that can.`);
     } else if(best.sh>chosen.sh&&!threats.length){
-      const kept=[best.dora>chosen.dora?'a dora':null,best.yhPairs>chosen.yhPairs?'a yakuhai pair':null].filter(Boolean).join(' and ')||'more value';
+      const kept=[best.dora>chosen.dora?'a dora':null,best.yhPairs>chosen.yhPairs?'a yakuhai pair':null,
+        flushGain(best,chosen)?'your flush on course':null].filter(Boolean).join(' and ')||'more value';
       lines.push(`At ${shName(chosen.sh)} it's still early — keeping ${kept} is worth more than one step of speed.`);
     } else if(best.sh>chosen.sh){
       lines.push(`Folding is the stronger play: you're only ${shName(chosen.sh)} against ${against}, so the safer ${T(best.k)} (${riskTxt(best)}) is worth more than hand speed — ${T(chosen.k)} carries ${riskTxt(chosen)}.`);
@@ -246,6 +255,7 @@ function analyzeDiscard(st,e,round,rules,names,nextEv){
       if(threats.length&&chosen.risk-best.risk>=0.02) lines.push(`${T(chosen.k)} is risky against ${against} (${riskTxt(chosen)}); ${T(best.k)} is ${riskTxt(best).replace(/^about /,'only about ')}.`);
       if(chosen.dora<best.dora) lines.push(`${T(chosen.k)} is a dora — keeping it is worth more than the small gain.`);
       if(chosen.yhPairs<best.yhPairs) lines.push(`Discarding ${T(chosen.k)} breaks a yakuhai pair, one of your sources of yaku.`);
+      if(flushGain(best,chosen)) lines.push(`Your hand is leaning toward a flush — ${T(best.k)} is off-suit, so letting it go first keeps that 2+ han on the table.`);
     }
   }
   if(dealtIn) lines.push(`This tile dealt in.`);
@@ -320,6 +330,9 @@ function analyzeCall(st,e,round,rules,names,offer){
   const ctx=botCtx(st,seat,round,rules);
   const firstOpen=!isOpen(melds);
   const yakuOK=r=>!firstOpen||B.openYakuPossible(R.toTiles(r.rem),[...melds.map(meldTiles),r.meld],ctx);
+  // Same first-meld value gate the bots use: opening gives up riichi, so it
+  // should leave a hand worth ~2 han (or be a late push to tenpai).
+  const worthOK=r=>!firstOpen||B.openWorthIt(R.toTiles(r.rem),[...melds.map(meldTiles),r.meld],ctx,r.sh);
   const label={pon:'Pon',chi:'Chi',mk:'Kan'};
 
   if(e.t==='pass'){
@@ -335,7 +348,7 @@ function analyzeCall(st,e,round,rules,names,offer){
       if(!e.o.includes(type)) continue;
       for(const use of callOptions(codes,offer.k,type)){
         const r=shAfterCall(codes,melds,use,offer.k,type);
-        if(r&&r.sh<before&&yakuOK(r)&&(!bestOpt||r.sh<bestOpt.sh)) bestOpt={...r,type,use};
+        if(r&&r.sh<before&&yakuOK(r)&&worthOK(r)&&(!bestOpt||r.sh<bestOpt.sh)) bestOpt={...r,type,use};
       }
     }
     if(!bestOpt) return null;
@@ -356,6 +369,11 @@ function analyzeCall(st,e,round,rules,names,offer){
   if(r.sh>=before&&before>0){
     return {kind:'call',sev:'inaccuracy',
       text:`This ${label[e.t]} didn't bring you closer to tenpai (${shName(before)} either way) and gave up your closed hand.`};
+  }
+  if(!worthOK(r)){
+    const han=Math.floor(B.openHanEstimate(R.toTiles(r.rem),[...melds.map(meldTiles),r.meld],ctx));
+    return {kind:'call',sev:'tip',
+      text:`This ${label[e.t]} takes you from ${shName(before)} to ${shName(r.sh)}, but the open hand ${han>=1?`is only worth about ${han} han`:'has almost no value locked in'}. Staying closed keeps riichi available — usually worth more this early.`};
   }
   return {kind:'call',sev:'good',text:`Good call — ${label[e.t]} takes you from ${shName(before)} to ${shName(r.sh)}.`};
 }

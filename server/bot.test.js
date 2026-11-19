@@ -103,14 +103,42 @@ test("bestDiscard: 'normal' keeps a dragon pair when an equally-efficient non-ho
 
 test('botReact: pon accepted when it strictly reduces shanten AND the open hand can still have a yaku', () => {
   _id = 0;
-  // Concealed 5z pair keeps a yakuhai path alive after the hand opens.
+  // Concealed 5z pair keeps a yakuhai path alive after the hand opens; the
+  // 8p indicator makes the ponned 9p triple dora, so it's worth opening.
   const hand = [...seq(1, 'm'), ...seq(4, 'm'), ...pairT(9, 'p'), T(2, 's'), T(4, 's'), T(5, 'z'), T(5, 'z'), T(6, 'z')];
   assert.strictEqual(hand.length, 13);
   const before = shanten(hand, []);
   assert.ok(before > 0, 'fixture should not already be tenpai');
   const disc = T(9, 'p');
-  const dec = botReact(hand, disc, [{ type: 'pon' }], [], 'normal', ctx());
+  const dec = botReact(hand, disc, [{ type: 'pon' }], [], 'normal', ctx({ dora: [T(8, 'p')] }));
   assert.deepStrictEqual(dec, { type: 'pon' });
+});
+
+test("bestDiscard: 'normal' leans into a flush — sheds a stray off-suit tile, keeps honours (speed-only picked a lone honour)", () => {
+  _id = 0;
+  const hand = [T(1, 'p'), T(2, 'p'), T(4, 'p'), T(6, 'p'), T(7, 'p'), T(8, 'p'), T(9, 'p'), T(2, 'z'), T(2, 'z'), T(3, 'z'),
+    T(5, 'm'), T(6, 'm'), T(3, 's'), T(1, 'z')];
+  const id = bestDiscard(hand, [], 'normal', ctx({ turnCount: 8 }));
+  assert.strictEqual(keyOf(hand, id), '3s');
+});
+
+test('botReact: first pon declined when the open hand would be cheap (<2 han) — keep it closed for riichi', () => {
+  _id = 0;
+  // Same shape as above with no dora: opening on 9p leaves only an unmelded
+  // dragon pair as a yaku hope.
+  const hand = [...seq(1, 'm'), ...seq(4, 'm'), ...pairT(9, 'p'), T(2, 's'), T(4, 's'), T(5, 'z'), T(5, 'z'), T(6, 'z')];
+  const dec = botReact(hand, T(9, 'p'), [{ type: 'pon' }], [], 'normal', ctx());
+  assert.deepStrictEqual(dec, { type: 'pass' });
+});
+
+test('botReact: a 1-han yakuhai pon is declined early but taken late when it reaches tenpai', () => {
+  _id = 0;
+  const hand = [...seq(1, 'm'), ...seq(4, 'm'), ...seq(7, 'p'), ...pairT(5, 'z'), T(2, 's'), T(9, 's')];
+  assert.strictEqual(hand.length, 13);
+  const early = botReact(hand, T(5, 'z'), [{ type: 'pon' }], [], 'normal', ctx({ turnCount: 12 }));
+  assert.deepStrictEqual(early, { type: 'pass' });
+  const late = botReact(hand, T(5, 'z'), [{ type: 'pon' }], [], 'normal', ctx({ turnCount: 40 }));
+  assert.deepStrictEqual(late, { type: 'pon' });
 });
 
 test('botReact: pon REJECTED when it would open a hand with no possible yaku (reaches tenpai but can never win)', () => {

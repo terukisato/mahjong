@@ -132,6 +132,41 @@ test('passing an offered ron is flagged', () => {
   assert.match(d.text, /Ron/);
 });
 
+test('a flush-leaning hand is graded for value: shed the off-suit tile, not the honour', () => {
+  const round = {
+    dealer: 0, round: 1, roundWind: 1, honba: 0, riichiSticks: 0, scores: [25000, 25000, 25000, 25000],
+    hands: [['1p', '2p', '4p', '6p', '7p', '8p', '9p', '2z', '2z', '3z', '5m', '6m', '3s'],
+      ['1z', '1z', '1z', '3z', '3z', '3z', '9p', '9p', '9p', '1s', '1s', '4z', '4z'],
+      ['1p', '1p', '2p', '2p', '3p', '3p', '7p', '7p', '8p', '8p', '9s', '9s', '6z'],
+      ['2s', '2s', '3s', '3s', '4s', '4s', '6s', '6s', '7z', '7z', '5z', '5z', '4m']],
+    dora: ['9m'],
+    ev: [{ t: 'd', s: 0, k: '1z' }, { t: 'x', s: 0, k: '3z' }],
+    res: { reason: 'draw', winners: [], scores: [25000, 25000, 25000, 25000] },
+  };
+  const a = analyzeGame({ rules: {}, rounds: [round] }, 0, ['Me', 'A', 'B', 'C']);
+  const d = a.rounds[0].decisions.find(x => x.i === 1);
+  assert.notStrictEqual(d.sev, 'best');
+  assert.strictEqual(d.best.k, '3s');
+  assert.match(d.text, /flush/);
+});
+
+test('an early cheap first call is a tip: the open hand has almost no value', () => {
+  const round = {
+    dealer: 1, round: 1, roundWind: 1, honba: 0, riichiSticks: 0, scores: [25000, 25000, 25000, 25000],
+    hands: [['1m', '2m', '3m', '4m', '5m', '6m', '9p', '9p', '2s', '4s', '5z', '5z', '6z'],
+      ['1z', '1z', '1z', '3z', '3z', '3z', '7p', '7p', '7p', '1s', '1s', '4z', '4z'],
+      ['1p', '1p', '2p', '2p', '3p', '3p', '7s', '7s', '8p', '8p', '9s', '9s', '6z'],
+      ['2s', '2s', '3s', '3s', '6s', '6s', '7z', '7z', '4m', '4m', '5p', '5p', '6p']],
+    dora: ['7s'],
+    ev: [{ t: 'd', s: 1, k: '9p' }, { t: 'x', s: 1, k: '9p' }, { t: 'pon', s: 0, f: 1, k: '9p', u: ['9p', '9p'] }],
+    res: { reason: 'draw', winners: [], scores: [25000, 25000, 25000, 25000] },
+  };
+  const a = analyzeGame({ rules: { kuitanAri: true }, rounds: [round] }, 0, ['Me', 'A', 'B', 'C']);
+  const d = a.rounds[0].decisions.find(x => x.i === 2);
+  assert.strictEqual(d.sev, 'tip');
+  assert.match(d.text, /no value locked in/);
+});
+
 test('a pure-efficiency mistake recommends the better tile', () => {
   // 1-shanten with an isolated 9p: cutting 9p is clearly best, cutting into
   // the 2m-3m ryanmen is a step back in acceptance.
